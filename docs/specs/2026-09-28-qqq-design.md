@@ -1,0 +1,11 @@
+# qqq CLI design
+
+Rust CLI for local project tasks. `qqq init` creates `qqq.sqlite` in current directory. Other commands search current directory and parents; no configurable DB filename. SQLite stores image bytes so moving project DB preserves attachments. JSON stdout supports agent consumers; errors go to stderr with nonzero exit.
+
+Tasks have integer IDs, title, description, status (pending/in_progress/completed), owner session, timestamps. FIFO `next` runs under an immediate transaction: return caller's active task or claim oldest pending task. Unique partial index allows one active task per session. Locks never expire. Only owner can complete/release. Release returns task to pending. Claim events retain history. Session comes from `--session`, `QQQ_SESSION`, or exact Herdr pane agent-session identity. Missing identity fails before claiming.
+
+Commands: init, add, list, show, describe, next, complete, release, message, image add/export, herdr link/find. Messages append with optional session author. Image signatures validated for PNG/JPEG/GIF/WebP; bytes limited to 20 MiB. Export uses create-new to avoid clobbering files.
+
+Herdr adapter invokes CLI without shell. `herdr link` stores explicit agent session ID/kind plus pane/workspace/tab identity and optional named server. Automatic linking only when HERDR_ENV=1 and HERDR_PANE_ID resolves to exact session; never use focused pane fallback. Find queries agent list and matches agent session identity, not cwd. Saved link retained after completion. Missing/offline/ambiguous live match reported without changing task. No automatic agent spawning or prompt submission.
+
+SQLite foreign keys, schema version, busy timeout, immediate transactions protect integrity. Tests use temporary project dirs, multiple CLI processes, fake Herdr executable with real documented JSON contract. Validate cargo test, fmt, clippy, manual CLI walkthrough.
