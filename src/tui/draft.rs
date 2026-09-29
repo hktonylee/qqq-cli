@@ -9,16 +9,21 @@ pub struct Composition {
 }
 enum Atom {
     Text(String),
-    Paste { id: usize, text: String },
-    Image { id: usize, input: ImageInput },
+    Paste {
+        id: usize,
+        text: String,
+        chars: usize,
+    },
+    Image {
+        id: usize,
+        input: ImageInput,
+    },
 }
 impl Atom {
     fn label(&self) -> String {
         match self {
             Self::Text(text) => text.clone(),
-            Self::Paste { id, text } => {
-                format!("[Pasted text #{id}: {} chars]", text.chars().count())
-            }
+            Self::Paste { id, chars, .. } => format!("[Pasted text #{id}: {chars} chars]"),
             Self::Image { id, input } => format!("[Image #{id}: {}]", input.name),
         }
     }
@@ -37,7 +42,8 @@ impl Draft {
             next_paste: 1,
             next_image: 1,
         };
-        draft.insert(&format!("{title}\n\n{description}"));
+        draft.insert(&format!("{title}\n\n"));
+        draft.paste(description);
         if title.is_empty() {
             draft.cursor = 0;
         }
@@ -63,12 +69,14 @@ impl Draft {
     }
     pub fn paste(&mut self, text: &str) {
         let text = text.replace("\r\n", "\n").replace('\r', "\n");
-        if text.chars().count() > 1000 {
+        let chars = text.chars().count();
+        if chars > 1000 {
             self.atoms.insert(
                 self.cursor,
                 Atom::Paste {
                     id: self.next_paste,
                     text,
+                    chars,
                 },
             );
             self.next_paste += 1;
@@ -129,9 +137,6 @@ impl Draft {
     }
     pub fn fragments(&self) -> Vec<String> {
         self.atoms.iter().map(Atom::label).collect()
-    }
-    pub fn visible(&self) -> String {
-        self.fragments().concat()
     }
     pub fn finish(&self) -> Result<Composition> {
         let mut text = String::new();

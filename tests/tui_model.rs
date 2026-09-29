@@ -9,12 +9,20 @@ use draft::Draft;
 use images::ImageInput;
 
 #[test]
+fn existing_large_description_starts_collapsed_and_saves_unchanged() {
+    let text = "Large existing body\n".repeat(100);
+    let draft = Draft::new("Title", &text);
+    assert!(draft.fragments().concat().contains("[Pasted text #1:"));
+    assert_eq!(draft.finish().unwrap().description, text.trim());
+}
+
+#[test]
 fn large_pastes_expand_losslessly_and_delete_atomically() {
     let mut draft = Draft::new("Title", "");
     let text = "🦀".repeat(1001);
     draft.paste(&text);
-    assert!(draft.visible().contains("1001 chars"));
-    assert!(!draft.visible().contains('🦀'));
+    assert!(draft.fragments().concat().contains("1001 chars"));
+    assert!(!draft.fragments().concat().contains('🦀'));
     assert_eq!(draft.finish().unwrap().description, text);
     draft.backspace();
     assert_eq!(draft.finish().unwrap().description, "");
@@ -72,7 +80,12 @@ fn image_placeholders_attach_only_while_present() {
             data: b"\x89PNG\r\n\x1a\nimage".to_vec(),
         })
         .unwrap();
-    assert!(draft.visible().contains("[Image #1: pasted.png]"));
+    assert!(
+        draft
+            .fragments()
+            .concat()
+            .contains("[Image #1: pasted.png]")
+    );
     let composition = draft.finish().unwrap();
     assert_eq!(composition.images.len(), 1);
     assert_eq!(composition.description, "Details [Image: pasted.png]");

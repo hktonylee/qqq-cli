@@ -58,11 +58,11 @@ enum Commands {
     Init,
     /// Create a new task.
     Add {
-        /// Task title. Omit to compose title and description in $EDITOR.
+        /// Task title. Omit to compose title and description interactively.
         title: Option<String>,
         #[arg(short, long, default_value = "")]
         description: String,
-        /// Open $EDITOR with the supplied title and description prefilled.
+        /// Use $EDITOR with the supplied title and description prefilled.
         #[arg(short, long)]
         edit: bool,
         /// Existing task that must complete before this task can be claimed.
@@ -83,7 +83,7 @@ enum Commands {
     },
     /// Show task, messages, image metadata, ownership history and Herdr link.
     Show { id: i64 },
-    /// Edit title and description in $EDITOR, or update supplied fields directly.
+    /// Edit title and description interactively, or update supplied fields directly.
     Edit {
         /// Task ID, or negative creation index: -1 is newest, -2 second newest.
         #[arg(allow_negative_numbers = true)]
@@ -92,6 +92,9 @@ enum Commands {
         title: Option<String>,
         #[arg(short, long)]
         description: Option<String>,
+        /// Use $EDITOR instead of the terminal editor; supplied fields prefill the draft.
+        #[arg(short, long, conflicts_with = "set_status")]
+        edit: bool,
         /// Return claimed task to new; session ID must match recorded owner. Skips editor.
         #[arg(long, value_enum)]
         set_status: Option<EditStatus>,
@@ -174,11 +177,14 @@ fn execute(cli: Cli, display_limit: Option<i64>) -> Result<Value> {
             if let Some(id) = parent {
                 db.task(id)?;
             }
-            let (title, description) = match title {
-                Some(title) if !edit => (title, description),
-                title => editor::compose(title.as_deref().unwrap_or(""), &description)?,
-            };
-            json!(db.add(&title, &description, parent)?)
+            match title {
+                Some(title) if !edit => json!(db.add(&title, &description, parent)?),
+                title => {
+                    let draft =
+                        editor::compose(title.as_deref().unwrap_or(""), &description, edit)?;
+                    json!(db.save_composition(None, parent, &draft)?)
+                }
+            }
         }
         Commands::List { max_completed, .. } => json!(db.list(max_completed.or(display_limit))?),
         Commands::Show { id } => db.show(id)?,
@@ -186,17 +192,20 @@ fn execute(cli: Cli, display_limit: Option<i64>) -> Result<Value> {
             id,
             title,
             description,
+            edit,
             set_status,
         } => {
             let id = db.resolve_edit_id(id)?;
-            if title.is_none() && description.is_none() && set_status.is_none() {
+            if edit || (title.is_none() && description.is_none() && set_status.is_none()) {
                 let task = db.task(id)?;
+                let title = title.as_deref().unwrap_or(&task.title);
+                let description = description.as_deref().unwrap_or(&task.description);
                 ensure!(
-                    !task.title.contains(['\n', '\r']),
+                    !title.contains(['\n', '\r']),
                     "Cannot edit a multiline title in EDITOR; use --title or --description"
                 );
-                let (title, description) = editor::compose(&task.title, &task.description)?;
-                json!(db.edit(id, Some(&title), Some(&description), None)?)
+                let draft = editor::compose(title, description, edit)?;
+                json!(db.save_composition(Some(id), None, &draft)?)
             } else {
                 let release_session = match set_status {
                     Some(EditStatus::New) => {

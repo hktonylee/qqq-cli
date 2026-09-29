@@ -1,10 +1,26 @@
 use anyhow::{Context, Result, ensure};
 use std::{
     fs,
+    io::IsTerminal,
     process::{Command, Stdio},
 };
 
-pub fn compose(title: &str, description: &str) -> Result<(String, String)> {
+pub fn compose(
+    title: &str,
+    description: &str,
+    external: bool,
+) -> Result<crate::tui::draft::Composition> {
+    if !external && std::io::stdin().is_terminal() && std::io::stderr().is_terminal() {
+        return crate::tui::compose(title, description);
+    }
+    let (title, description) = compose_external(title, description)?;
+    Ok(crate::tui::draft::Composition {
+        title,
+        description,
+        images: Vec::new(),
+    })
+}
+fn compose_external(title: &str, description: &str) -> Result<(String, String)> {
     let editor = std::env::var("EDITOR")
         .context("Set EDITOR to compose or edit a task, or provide fields inline")?;
     ensure!(

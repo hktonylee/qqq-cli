@@ -385,3 +385,48 @@ printf 'Edited original\n\nNew details\n' > "$2"
         "Created during edit"
     );
 }
+
+#[test]
+fn explicit_edit_flag_opens_external_editor_with_field_prefills() {
+    let dir = project();
+    run_json(dir.path(), &["add", "Original", "-d", "Original details"]);
+    let editor = editor(
+        dir.path(),
+        "cat \"$2\" > prefilled\nprintf 'Edited\\n\\nSaved\\n' > \"$2\"",
+    );
+    let output = command(dir.path())
+        .args([
+            "edit",
+            "1",
+            "--edit",
+            "--title",
+            "Prefill",
+            "-d",
+            "Prefilled details",
+        ])
+        .env("EDITOR", editor)
+        .output()
+        .unwrap();
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert_eq!(
+        fs::read_to_string(dir.path().join("prefilled")).unwrap(),
+        "Prefill\n\nPrefilled details\n"
+    );
+    let task: Value = serde_json::from_slice(&output.stdout).unwrap();
+    assert_eq!(task["title"], "Edited");
+}
+
+#[test]
+fn external_editor_flag_conflicts_with_status_update() {
+    let dir = project();
+    let output = command(dir.path())
+        .args(["edit", "1", "--edit", "--set-status", "new"])
+        .output()
+        .unwrap();
+    assert_eq!(output.status.code(), Some(2));
+    assert!(String::from_utf8_lossy(&output.stderr).contains("cannot be used with"));
+}

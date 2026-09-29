@@ -97,17 +97,44 @@ qqq list
 qqq show 1
 ```
 
-Run `qqq add` without a title to compose a task in `$EDITOR`. First line becomes
-the title; remaining lines become the description. Surrounding whitespace is
-trimmed. Use `--edit` (`-e`) to edit prefilled content:
+Run `qqq add` without a title to compose a task in the terminal editor. First line
+becomes the title; remaining lines become the description. Surrounding whitespace
+is trimmed. `qqq edit <id>` opens the same editor with existing content.
+
+Ctrl-S saves; Esc or Ctrl-C cancels. Enter inserts a newline. Arrows, Home/End
+(also Ctrl-A/Ctrl-E), Backspace and Delete edit the draft. The viewport follows
+the cursor and adapts to terminal resizing. Editor UI uses stderr; stdout contains
+only the final command result, including JSON when `--json` is supplied.
+
+Paste text normally through a terminal supporting bracketed paste, or use Ctrl-V
+to read the desktop clipboard. Pastes over 1,000 Unicode characters show a compact
+`[Pasted text #N: X chars]` placeholder. Full text expands on save; existing large
+descriptions start collapsed too. Ctrl-V prefers clipboard images, encoding them
+as PNG. Pasting a local image path (including a shell-quoted path with spaces)
+adds an image attachment and shows `[Image #N: filename]`. Place images below the
+title line. Left/Right cross placeholders as one unit; Backspace/Delete removes
+the whole placeholder and its payload. Saved descriptions use `[Image: filename]`
+markers; image bytes are stored in `qqq.db` and remain exportable.
+
+Task fields and newly pasted images save in one transaction. Cancel and errors
+leave task data unchanged. Existing attachments stay attached when editing.
+Clipboard access requires a desktop clipboard (macOS, X11 or supported Wayland);
+clipboard errors appear in the editor and keep the draft. Terminals without
+bracketed paste can use Ctrl-V for collapsed text pastes.
+
+Use `--edit` (`-e`) on `add` or `edit` to open `$EDITOR` instead, including prefilled
+field flags:
 
 ```sh
 export EDITOR='vim'
 qqq add
 qqq add "Fix login" --description "Reproduce expiry" --edit
+qqq edit 1 --edit
+qqq edit 1 --edit --title "Prefilled title"
 ```
 
-`EDITOR` is required for editor input and runs through `sh`, supporting quoted
+Nonterminal interactive calls also use `$EDITOR`. `EDITOR` is required for this
+external-editor input and runs through `sh`, supporting quoted
 executable paths and arguments such as `EDITOR='code --wait'`. Use an editor that
 waits until editing finishes. Editor output goes to stderr; stdout contains only
 the command result (JSON when `--json` is supplied).
@@ -116,9 +143,9 @@ Temporary drafts are removed on success or error. Inline `qqq add "Title"` works
 without an editor.
 
 Edit an existing task with `qqq edit <id>` (replaces `describe`). With no update
-flags, `$EDITOR` opens with the current title on the first line and description
-below. Save to update both fields. The same draft format and error handling as
-`add` apply; editor failures leave the task unchanged.
+flags, the terminal editor opens with the current title on the first line and
+description below. Save to update both fields. `--edit` forces the external editor.
+The same draft format and error handling as `add` apply.
 
 ```sh
 qqq edit 1
@@ -160,7 +187,7 @@ Add a dependency with `--parent <task-id>`:
 ```sh
 qqq add "Build API"                         # returns task ID, e.g. 1
 qqq add "Build client" --parent 1
-qqq add --parent 1                          # compose dependent task in $EDITOR
+qqq add --parent 1                          # compose dependent task interactively
 ```
 
 Parent must already exist. Each task has one optional parent, fixed at creation.
