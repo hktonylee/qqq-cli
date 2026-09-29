@@ -37,6 +37,12 @@ impl From<&Commands> for Format {
     }
 }
 
+pub fn color_enabled(terminal: bool) -> bool {
+    terminal
+        && std::env::var_os("NO_COLOR").is_none_or(|value| value.is_empty())
+        && std::env::var_os("TERM").is_none_or(|value| value != "dumb")
+}
+
 // Keep user text on one line and prevent terminal control sequences in text output.
 fn clean(text: &str) -> String {
     let mut result = String::with_capacity(text.len());

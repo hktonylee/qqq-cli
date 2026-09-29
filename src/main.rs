@@ -5,6 +5,7 @@ mod dispatch;
 mod editor;
 mod herdr;
 mod output;
+mod watch;
 use anyhow::{Context, Result, ensure};
 use clap::{Parser, Subcommand, ValueEnum};
 use serde_json::{Value, json};
@@ -52,6 +53,9 @@ enum Commands {
         /// Maximum completed tasks to show; retain most recent completions. Omit for all; 0 hides them.
         #[arg(long, value_parser = clap::value_parser!(i64).range(0..))]
         max_completed: Option<i64>,
+        /// Keep watching database commits and refresh the task list. Ctrl-C stops.
+        #[arg(long)]
+        watch: bool,
     },
     /// Show task, messages, image metadata, ownership history and Herdr link.
     Show { id: i64 },
@@ -135,7 +139,7 @@ fn execute(cli: Cli) -> Result<Value> {
             };
             json!(db.add(&title, &description, parent)?)
         }
-        Commands::List { max_completed } => json!(db.list(max_completed)?),
+        Commands::List { max_completed, .. } => json!(db.list(max_completed)?),
         Commands::Show { id } => db.show(id)?,
         Commands::Edit {
             id,
@@ -220,23 +224,30 @@ fn execute(cli: Cli) -> Result<Value> {
         },
     })
 }
-fn run() -> Result<String> {
+fn run() -> Result<Option<String>> {
     let cli = Cli::parse_from(aliases::expand(std::env::args_os().collect())?);
+    if let Commands::List {
+        watch: true,
+        max_completed,
+    } = &cli.command
+    {
+        watch::run(cli.json, *max_completed)?;
+        return Ok(None);
+    }
     let json = cli.json;
     let format = output::Format::from(&cli.command);
     let value = execute(cli)?;
-    Ok(if json {
+    Ok(Some(if json {
         serde_json::to_string_pretty(&value).expect("JSON value is serializable")
     } else {
-        let color = std::io::stdout().is_terminal()
-            && std::env::var_os("NO_COLOR").is_none_or(|value| value.is_empty())
-            && std::env::var_os("TERM").is_none_or(|value| value != "dumb");
+        let color = output::color_enabled(std::io::stdout().is_terminal());
         output::render(format, &value, color)
-    })
+    }))
 }
 fn main() {
     match run() {
-        Ok(output) => println!("{output}"),
+        Ok(Some(output)) => println!("{output}"),
+        Ok(None) => (),
         Err(error) => {
             eprintln!("error: {error:#}");
             std::process::exit(1);

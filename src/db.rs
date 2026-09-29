@@ -115,6 +115,11 @@ impl Db {
              ORDER BY id"
         )?.query_map([max_completed],task_row)?.collect::<rusqlite::Result<_>>()?)
     }
+    pub fn data_version(&self) -> Result<i64> {
+        Ok(self
+            .conn
+            .pragma_query_value(None, "data_version", |row| row.get(0))?)
+    }
     pub fn edit(
         &mut self,
         id: i64,

@@ -46,6 +46,14 @@ qqq --json list
 qqq next --json --session agent-session-123
 ```
 
+Use `qqq list --watch` to keep the list open and refresh after SQLite commits,
+including changes made by another qqq process or a direct SQLite connection.
+Terminal output redraws in place; piped output appends snapshots without terminal
+escape codes. `qqq list --watch --json` emits compact newline-delimited JSON:
+one complete task array per line. Idle databases produce no repeated snapshots.
+Changes are polled every 250 ms. Ctrl-C stops watching. Aliases such as `ls` work
+with `--watch` too.
+
 `--json` works before or after subcommands, including nested commands. It preserves
 the existing JSON shapes, including `[]` for empty lists and `null` when no task
 is ready. Existing scripts that parse command output must add `--json`.
