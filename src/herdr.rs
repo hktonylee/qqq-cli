@@ -1,7 +1,10 @@
 use crate::db::nonempty;
 use anyhow::{Context, Result, ensure};
 use serde::{Deserialize, Serialize, de::DeserializeOwned};
-use std::process::Command;
+use std::{
+    path::{Path, PathBuf},
+    process::Command,
+};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AgentSession {
@@ -14,6 +17,10 @@ pub struct Pane {
     pub pane_id: String,
     pub workspace_id: String,
     pub tab_id: String,
+    #[serde(default)]
+    pub cwd: Option<PathBuf>,
+    #[serde(default)]
+    pub foreground_cwd: Option<PathBuf>,
     #[serde(default)]
     pub agent_session: Option<AgentSession>,
 }
@@ -101,12 +108,50 @@ pub fn current() -> Result<Link> {
         pane: current.pane,
     })
 }
-pub fn owner(explicit: Option<&str>) -> Result<(String, Option<Link>)> {
+/// Prefer exact caller context; outside Herdr discover a unique agent at DB root.
+pub fn discover(project_dir: &Path) -> Result<Link> {
+    if std::env::var("HERDR_ENV").as_deref() == Ok("1") {
+        return current();
+    }
+    let project_dir = project_dir
+        .canonicalize()
+        .context("Cannot resolve database directory")?;
+    let agents: Agents = call(None, &["agent", "list"])?;
+    let mut matches = agents.agents.into_iter().filter(|pane| {
+        pane.foreground_cwd
+            .as_deref()
+            .or(pane.cwd.as_deref())
+            .filter(|cwd| cwd.is_absolute())
+            .and_then(|cwd| cwd.canonicalize().ok())
+            .is_some_and(|cwd| cwd == project_dir)
+    });
+    let pane = matches.next().with_context(|| {
+        format!(
+            "No Herdr agent matches database directory {}; use --session or QQQ_SESSION",
+            project_dir.display()
+        )
+    })?;
+    ensure!(
+        matches.next().is_none(),
+        "Multiple Herdr agents match database directory {}; use --session or run inside intended Herdr pane",
+        project_dir.display()
+    );
+    let identity = pane.agent_session.clone().context(
+        "Matching Herdr agent has no agent session identity; use --session or enable Herdr session reporting"
+    )?;
+    nonempty(&identity.value, "Herdr agent session")?;
+    Ok(Link {
+        server: None,
+        identity,
+        pane,
+    })
+}
+pub fn owner(explicit: Option<&str>, project_dir: &Path) -> Result<(String, Option<Link>)> {
     if let Some(session) = explicit {
         nonempty(session, "Session")?;
         return Ok((session.into(), None));
     }
-    let link = current()?;
+    let link = discover(project_dir)?;
     // JSON tuple encoding avoids collisions when identity strings contain delimiters.
     let owner = serde_json::to_string(&(
         &link.identity.agent,

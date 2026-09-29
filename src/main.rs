@@ -11,7 +11,7 @@ use std::path::PathBuf;
     about = "Local-first task queue for agent sessions. JSON output; project DB: qqq.sqlite."
 )]
 struct Cli {
-    /// Stable owner identity. Falls back to exact Herdr pane agent session.
+    /// Stable owner identity. Falls back to Herdr caller, then unique agent at database directory.
     #[arg(long, global = true, env = "QQQ_SESSION")]
     session: Option<String>,
     #[command(subcommand)]
@@ -59,7 +59,7 @@ enum ImageCommand {
 }
 #[derive(Subcommand)]
 enum HerdrCommand {
-    /// Link to current pane, or exact live --agent / --agent-session pair.
+    /// Link to caller, unique agent at DB directory, or explicit agent session.
     Link {
         task_id: i64,
         #[arg(long, requires = "agent_session")]
@@ -75,6 +75,9 @@ enum HerdrCommand {
 }
 fn execute(cli: Cli) -> Result<Value> {
     let (mut db, path) = db::Db::open(matches!(cli.command, Commands::Init))?;
+    let project_dir = path
+        .parent()
+        .context("Database path has no parent directory")?;
     Ok(match cli.command {
         Commands::Init => json!({"database":path}),
         Commands::Add { title, description } => json!(db.add(&title, &description)?),
@@ -82,15 +85,15 @@ fn execute(cli: Cli) -> Result<Value> {
         Commands::Show { id } => db.show(id)?,
         Commands::Describe { id, description } => json!(db.describe(id, &description)?),
         Commands::Next => {
-            let (session, link) = herdr::owner(cli.session.as_deref())?;
+            let (session, link) = herdr::owner(cli.session.as_deref(), project_dir)?;
             json!(db.next(&session, link.as_ref())?)
         }
         Commands::Complete { id } => {
-            let (session, _) = herdr::owner(cli.session.as_deref())?;
+            let (session, _) = herdr::owner(cli.session.as_deref(), project_dir)?;
             json!(db.transition(id, &session, true)?)
         }
         Commands::Release { id } => {
-            let (session, _) = herdr::owner(cli.session.as_deref())?;
+            let (session, _) = herdr::owner(cli.session.as_deref(), project_dir)?;
             json!(db.transition(id, &session, false)?)
         }
         Commands::Message { id, body } => db.message(id, &body, cli.session.as_deref())?,
@@ -108,7 +111,7 @@ fn execute(cli: Cli) -> Result<Value> {
                 db.task(task_id)?;
                 let link = match (agent, agent_session) {
                     (Some(agent), Some(session)) => herdr::explicit(agent, session, server)?,
-                    _ => herdr::current()?,
+                    _ => herdr::discover(project_dir)?,
                 };
                 db.set_link(task_id, &link)?;
                 json!(link)

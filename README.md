@@ -41,7 +41,7 @@ qqq message 1 "Implementation ready; running tests"
 qqq complete 1
 ```
 
-Or pass `--session agent-session-123` on individual commands. Precedence: `--session`, `QQQ_SESSION`, exact Herdr agent session identity.
+Or pass `--session agent-session-123` on individual commands. Precedence: `--session`, `QQQ_SESSION`, exact Herdr caller identity when `HERDR_ENV=1`, then unique Herdr agent at the database directory.
 
 - `next` returns oldest pending task, atomically marking it `in_progress`.
 - Same session calling `next` again receives its existing task.
@@ -61,10 +61,14 @@ Session IDs coordinate local agents; they are not authentication credentials. De
 
 ## Herdr
 
-Inside Herdr, `next` can derive ownership from `HERDR_ENV=1`, `HERDR_PANE_ID`, and the exact pane's reported agent session. The claim and Herdr link persist in one transaction. No focused-pane or cwd guessing. If hooks have not reported session identity, supply an explicit session and link once identity becomes available.
+Outside Herdr, plain `qqq next` queries `herdr agent list` on the currently targeted server and selects the unique agent whose cwd equals the directory containing `qqq.sqlite`. No `HERDR_ENV` needed. Running from a project subdirectory still matches the DB directory. Paths resolve symlinks; `foreground_cwd` takes precedence over `cwd` when present. Zero matches, multiple matches, or missing agent-session metadata produce an error before claiming. Use `--session` to choose ownership explicitly when discovery is ambiguous.
+
+`complete`, `release`, and `herdr link <id>` use the same discovery. Lookup requires Herdr CLI and its server to be available.
+
+Inside Herdr, `next` can derive ownership from `HERDR_ENV=1`, `HERDR_PANE_ID`, and the exact pane's reported agent session. The claim and Herdr link persist in one transaction. Caller context takes precedence over cwd discovery; caller lookup errors do not fall through to another agent. If hooks have not reported session identity, supply an explicit session and link once identity becomes available.
 
 ```sh
-# In the agent's Herdr pane, with no QQQ_SESSION override:
+# With no QQQ_SESSION override: inside Herdr, or unique agent at DB directory:
 qqq next
 qqq herdr link 1
 qqq herdr find 1
@@ -91,4 +95,4 @@ cargo fmt --check
 cargo clippy --locked --all-targets -- -D warnings
 ```
 
-Tests exercise persistence, FIFO order, wrong-owner rejection, concurrent claims, attachments, ancestor lookup, Herdr session matching and automatic ownership using a fake Herdr executable.
+Tests exercise persistence, FIFO order, wrong-owner rejection, concurrent claims, attachments, ancestor lookup, cwd discovery, Herdr session matching and automatic ownership using a fake Herdr executable.

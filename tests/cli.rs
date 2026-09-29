@@ -276,3 +276,135 @@ printf '%s\n' '{"result":{"pane":{"pane_id":"w1:p1","workspace_id":"w1","tab_id"
     assert!(!exec("w1:p1", &["next"]).status.success());
     assert_eq!(ok(p, &["show", "2"])["task"]["status"], "pending");
 }
+
+#[cfg(unix)]
+struct HerdrFixture {
+    dir: TempDir,
+}
+#[cfg(unix)]
+impl HerdrFixture {
+    fn new() -> Self {
+        use std::os::unix::fs::PermissionsExt;
+        let dir = TempDir::new().unwrap();
+        let script = dir.path().join("herdr");
+        std::fs::write(&script, "#!/bin/sh\n[ \"$1 $2\" = \"agent list\" ] || exit 1\n/bin/cat \"$QQQ_TEST_HERDR_RESPONSE\"\n").unwrap();
+        std::fs::set_permissions(script, std::fs::Permissions::from_mode(0o755)).unwrap();
+        Self { dir }
+    }
+    fn agents(&self, agents: Value) {
+        std::fs::write(
+            self.dir.path().join("response.json"),
+            serde_json::to_vec(&serde_json::json!({"result":{"agents":agents}})).unwrap(),
+        )
+        .unwrap();
+    }
+    fn run(&self, dir: &Path, args: &[&str]) -> Output {
+        command(dir)
+            .env("PATH", self.dir.path())
+            .env(
+                "QQQ_TEST_HERDR_RESPONSE",
+                self.dir.path().join("response.json"),
+            )
+            .args(args)
+            .output()
+            .unwrap()
+    }
+    fn ok(&self, dir: &Path, args: &[&str]) -> Value {
+        let out = self.run(dir, args);
+        assert!(
+            out.status.success(),
+            "{}",
+            String::from_utf8_lossy(&out.stderr)
+        );
+        serde_json::from_slice(&out.stdout).unwrap()
+    }
+}
+#[cfg(unix)]
+fn agent_at(cwd: &Path, value: &str) -> Value {
+    serde_json::json!({"pane_id":format!("w1:{value}"),"workspace_id":"w1","tab_id":"w1:t1","cwd":cwd,"agent_session":{"agent":"codex","kind":"id","value":value}})
+}
+#[cfg(unix)]
+#[test]
+fn cwd_lookup_uses_db_directory_from_nested_cwd_without_herdr_env() {
+    let d = project();
+    let p = d.path();
+    let nested = p.join("nested");
+    std::fs::create_dir(&nested).unwrap();
+    ok(p, &["add", "Cwd task"]);
+    let herdr = HerdrFixture::new();
+    herdr.agents(serde_json::json!([
+        agent_at(&nested, "wrong"),
+        agent_at(p, "correct")
+    ]));
+    let task = herdr.ok(&nested, &["next"]);
+    assert_eq!(task["owner_session"], r#"["codex","id","correct"]"#);
+    assert_eq!(
+        ok(p, &["show", "1"])["herdr"]["identity"]["value"],
+        "correct"
+    );
+    assert_eq!(herdr.ok(&nested, &["next"])["id"], 1);
+    herdr.ok(&nested, &["herdr", "link", "1"]);
+    herdr.ok(&nested, &["release", "1"]);
+    herdr.ok(&nested, &["next"]);
+    assert_eq!(herdr.ok(&nested, &["complete", "1"])["status"], "completed");
+}
+#[cfg(unix)]
+#[test]
+fn cwd_lookup_normalizes_symlinks_and_prefers_foreground_cwd() {
+    let d = project();
+    let aliases = TempDir::new().unwrap();
+    let alias = aliases.path().join("project");
+    std::os::unix::fs::symlink(d.path(), &alias).unwrap();
+    ok(d.path(), &["add", "Alias"]);
+    let herdr = HerdrFixture::new();
+    let mut moved = agent_at(d.path(), "moved-away");
+    moved["foreground_cwd"] = serde_json::json!(aliases.path());
+    let mut current = agent_at(aliases.path(), "correct");
+    current["foreground_cwd"] = serde_json::json!(alias.join("."));
+    herdr.agents(serde_json::json!([moved, current]));
+    assert_eq!(
+        herdr.ok(d.path(), &["next"])["owner_session"],
+        r#"["codex","id","correct"]"#
+    );
+}
+#[cfg(unix)]
+#[test]
+fn cwd_lookup_rejects_missing_ambiguous_or_unidentified_matches_before_claim() {
+    let d = project();
+    let p = d.path();
+    ok(p, &["add", "Pending"]);
+    let herdr = HerdrFixture::new();
+    let mut no_identity = agent_at(p, "unknown");
+    no_identity.as_object_mut().unwrap().remove("agent_session");
+    let cases = [
+        (serde_json::json!([]), "No Herdr agent matches"),
+        (
+            serde_json::json!([agent_at(p, "a"), agent_at(p, "b")]),
+            "Multiple Herdr agents match",
+        ),
+        (
+            serde_json::json!([no_identity.clone()]),
+            "no agent session identity",
+        ),
+        (
+            serde_json::json!([agent_at(p, "a"), no_identity]),
+            "Multiple Herdr agents match",
+        ),
+    ];
+    for (agents, error) in cases {
+        herdr.agents(agents);
+        let out = herdr.run(p, &["next"]);
+        assert!(!out.status.success());
+        assert!(
+            String::from_utf8_lossy(&out.stderr).contains(error),
+            "{}",
+            String::from_utf8_lossy(&out.stderr)
+        );
+        assert_eq!(ok(p, &["show", "1"])["task"]["status"], "pending");
+    }
+    // Explicit identity bypasses ambiguous Herdr discovery.
+    assert_eq!(
+        herdr.ok(p, &["next", "--session", "explicit"])["owner_session"],
+        "explicit"
+    );
+}
