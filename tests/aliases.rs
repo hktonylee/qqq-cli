@@ -206,3 +206,17 @@ fn alias_preserves_non_utf8_file_paths() {
     assert_eq!(alias.stderr, direct.stderr);
     assert_eq!(alias.stdout, direct.stdout);
 }
+
+#[test]
+fn alias_values_support_double_quotes_escapes_and_empty_arguments() {
+    let p = Project::new(
+        r#"[alias]
+quoted = 'add --description "two words"'
+escaped = 'add --description two\ words'
+empty = 'add --description ""'
+"#,
+    );
+    assert_eq!(p.ok(&["quoted", "Title"])["description"], "two words");
+    assert_eq!(p.ok(&["escaped", "Title"])["description"], "two words");
+    assert_eq!(p.ok(&["empty", "Title"])["description"], "");
+}
