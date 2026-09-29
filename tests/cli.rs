@@ -70,7 +70,7 @@ fn descriptions_messages_images_and_parent_discovery() {
     ok(p, &["message", "1", "Second note"]);
     let png = b"\x89PNG\r\n\x1a\nfixture";
     std::fs::write(p.join("image.png"), png).unwrap();
-    ok(p, &["image", "add", "1", "image.png"]);
+    ok(p, &["edit", "1", "--image", "image.png"]);
     std::fs::remove_file(p.join("image.png")).unwrap();
     std::fs::create_dir(p.join("nested")).unwrap();
     let detail = ok(&p.join("nested"), &["show", "1"]);
@@ -78,15 +78,25 @@ fn descriptions_messages_images_and_parent_discovery() {
     assert_eq!(detail["messages"][0]["body"], "First note");
     assert_eq!(detail["messages"][1]["body"], "Second note");
     assert_eq!(detail["images"][0]["media_type"], "image/png");
-    ok(p, &["image", "export", "1", "out.png"]);
+    ok(
+        p,
+        &["show", "1", "--export-image", "1", "--output", "out.png"],
+    );
     assert_eq!(std::fs::read(p.join("out.png")).unwrap(), png);
     assert!(
-        !run(p, &["image", "export", "1", "out.png"])
+        !run(
+            p,
+            &["show", "1", "--export-image", "1", "--output", "out.png"]
+        )
+        .status
+        .success()
+    );
+    std::fs::write(p.join("bad.png"), b"not image").unwrap();
+    assert!(
+        !run(p, &["edit", "1", "--image", "bad.png"])
             .status
             .success()
     );
-    std::fs::write(p.join("bad.png"), b"not image").unwrap();
-    assert!(!run(p, &["image", "add", "1", "bad.png"]).status.success());
     assert!(!run(p, &["message", "99", "missing task"]).status.success());
     assert!(!run(p, &["add", "   "]).status.success());
 }

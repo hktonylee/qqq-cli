@@ -115,12 +115,13 @@ pub fn next(db: &mut Db, caller: Option<&str>) -> Result<Option<Task>> {
     let pane = match prepared {
         Ok(pane) => pane,
         Err(error) => {
-            db.edit(task.id, None, None, Some(&name)).with_context(|| {
-                format!(
-                    "Dispatch failed ({error:#}); could not release task {} assigned to {name}",
-                    task.id
-                )
-            })?;
+            db.edit(task.id, None, None, Some(&name), &[])
+                .with_context(|| {
+                    format!(
+                        "Dispatch failed ({error:#}); could not release task {} assigned to {name}",
+                        task.id
+                    )
+                })?;
             return Err(error).with_context(|| format!("Task {} returned to new; dispatch failed at {location}. Any created tab remains for inspection", task.id));
         }
     };

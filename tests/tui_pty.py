@@ -33,6 +33,10 @@ with tempfile.TemporaryDirectory(prefix="qqq-tui-test-") as folder:
         args = ["edit", "-1"]
     image = Path(folder) / "test image.png"
     image.write_bytes(base64.b64decode("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aGD8AAAAASUVORK5CYII="))
+    if scenario in ("save", "cancel"):
+        flagged = Path(folder) / "flag image.png"
+        flagged.write_bytes(image.read_bytes())
+        args.extend(["--image", str(flagged)])
     master, slave = pty.openpty()
     fcntl.ioctl(slave, termios.TIOCSWINSZ, struct.pack("HHHH", 12, 60, 0, 0))
     before = termios.tcgetattr(slave)
@@ -110,10 +114,15 @@ with tempfile.TemporaryDirectory(prefix="qqq-tui-test-") as folder:
             if scenario == "save":
                 assert task["title"] == "Title"
                 assert task["description"] == "\u754c" * 1001 + "\n[Image: test image.png]"
-                assert cli("show", "1")["images"][0]["name"] == "test image.png"
+                attachments = cli("show", "1")["images"]
+                assert [item["name"] for item in attachments] == ["test image.png", "flag image.png"]
                 exported = Path(folder) / "export.png"
-                cli("image", "export", "1", str(exported))
+                cli("show", "1", "--export-image", "1", "--output", str(exported))
                 assert exported.read_bytes() == image.read_bytes()
+                flagged.unlink()
+                flagged_export = Path(folder) / "flag export.png"
+                cli("show", "1", "--export-image", "2", "--output", str(flagged_export))
+                assert flagged_export.read_bytes() == image.read_bytes()
             elif scenario == "blank":
                 assert task["title"] == "Recovered"
             else:

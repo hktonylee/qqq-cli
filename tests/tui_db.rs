@@ -61,7 +61,7 @@ fn failed_image_insert_rolls_back_new_and_edited_drafts() {
     });
     assert!(db.save_composition(None, None, &draft).is_err());
     assert!(db.list(None).unwrap().is_empty());
-    let existing = db.add("Original", "Original details", None).unwrap();
+    let existing = db.add("Original", "Original details", None, &[]).unwrap();
     let before = db.show(existing.id).unwrap();
     assert!(
         db.save_composition(Some(existing.id), None, &draft)
@@ -72,7 +72,7 @@ fn failed_image_insert_rolls_back_new_and_edited_drafts() {
 #[test]
 fn draft_edit_preserves_ownership_dependencies_and_existing_attachments() {
     let mut db = database();
-    let parent = db.add("Parent", "", None).unwrap();
+    let parent = db.add("Parent", "", None, &[]).unwrap();
     db.next("parent", None).unwrap();
     db.complete(parent.id, "parent").unwrap();
     let task = db

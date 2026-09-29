@@ -68,6 +68,9 @@ enum Commands {
         /// Existing task that must complete before this task can be claimed.
         #[arg(long)]
         parent: Option<i64>,
+        /// Attach image file bytes. Repeat for multiple images.
+        #[arg(long = "image", value_name = "PATH")]
+        images: Vec<PathBuf>,
     },
     /// List tasks as a dependency tree; JSON lists tasks in creation order.
     List {
@@ -82,7 +85,15 @@ enum Commands {
         all: bool,
     },
     /// Show task, messages, image metadata, ownership history and Herdr link.
-    Show { id: i64 },
+    Show {
+        id: i64,
+        /// Export an image belonging to this task; requires --output.
+        #[arg(long, requires = "output")]
+        export_image: Option<i64>,
+        /// New destination file for exported image bytes.
+        #[arg(long, requires = "export_image", value_name = "PATH")]
+        output: Option<PathBuf>,
+    },
     /// Edit title and description interactively, or update supplied fields directly.
     Edit {
         /// Task ID, or negative creation index: -1 is newest, -2 second newest.
@@ -92,12 +103,15 @@ enum Commands {
         title: Option<String>,
         #[arg(short, long)]
         description: Option<String>,
-        /// Use $EDITOR instead of the terminal editor; supplied fields prefill the draft.
+        /// Force $EDITOR with supplied fields prefilled, including attachment edits.
         #[arg(short, long, conflicts_with = "set_status")]
         edit: bool,
         /// Return claimed task to new; session ID must match recorded owner. Skips editor.
         #[arg(long, value_enum)]
         set_status: Option<EditStatus>,
+        /// Append image file bytes without opening editor. Repeat for multiple images.
+        #[arg(long = "image", value_name = "PATH")]
+        images: Vec<PathBuf>,
     },
     /// Return owned task or atomically claim oldest ready task.
     Next {
@@ -112,21 +126,11 @@ enum Commands {
     Complete { id: i64 },
     /// Append message; session, when supplied, is recorded as author.
     Message { id: i64, body: String },
-    /// Store or export image attachments.
-    Image {
-        #[command(subcommand)]
-        command: ImageCommand,
-    },
     /// Link tasks to exact Herdr agent sessions, find their live panes.
     Herdr {
         #[command(subcommand)]
         command: HerdrCommand,
     },
-}
-#[derive(Subcommand)]
-enum ImageCommand {
-    Add { task_id: i64, path: PathBuf },
-    Export { image_id: i64, path: PathBuf },
 }
 #[derive(Subcommand)]
 enum HerdrCommand {
@@ -173,38 +177,65 @@ fn execute(cli: Cli, display_limit: Option<i64>) -> Result<Value> {
             description,
             edit,
             parent,
+            images,
         } => {
             if let Some(id) = parent {
                 db.task(id)?;
             }
+            let images = images
+                .iter()
+                .map(|path| images::ImageInput::read(path))
+                .collect::<Result<Vec<_>>>()?;
             match title {
-                Some(title) if !edit => json!(db.add(&title, &description, parent)?),
+                Some(title) if !edit => json!(db.add(&title, &description, parent, &images)?),
                 title => {
-                    let draft =
+                    let mut draft =
                         editor::compose(title.as_deref().unwrap_or(""), &description, edit)?;
+                    draft.images.extend(images);
                     json!(db.save_composition(None, parent, &draft)?)
                 }
             }
         }
         Commands::List { max_completed, .. } => json!(db.list(max_completed.or(display_limit))?),
-        Commands::Show { id } => db.show(id)?,
+        Commands::Show {
+            id,
+            export_image,
+            output,
+        } => {
+            let mut detail = db.show(id)?;
+            if let (Some(image), Some(path)) = (export_image, output) {
+                detail["export"] = db.image_export(id, image, &path)?;
+            }
+            detail
+        }
         Commands::Edit {
             id,
             title,
             description,
             edit,
             set_status,
+            images,
         } => {
             let id = db.resolve_edit_id(id)?;
-            if edit || (title.is_none() && description.is_none() && set_status.is_none()) {
-                let task = db.task(id)?;
+            let task = db.task(id)?;
+            let images = images
+                .iter()
+                .map(|path| images::ImageInput::read(path))
+                .collect::<Result<Vec<_>>>()?;
+            if edit
+                || (title.is_none()
+                    && description.is_none()
+                    && set_status.is_none()
+                    && images.is_empty())
+            {
                 let title = title.as_deref().unwrap_or(&task.title);
                 let description = description.as_deref().unwrap_or(&task.description);
                 ensure!(
                     !title.contains(['\n', '\r']),
                     "Cannot edit a multiline title in EDITOR; use --title or --description"
                 );
-                let draft = editor::compose(title, description, edit)?;
+                let mut draft = editor::compose(title, description, edit)?;
+                draft.images.extend(images);
                 json!(db.save_composition(Some(id), None, &draft)?)
             } else {
                 let release_session = match set_status {
@@ -217,7 +248,8 @@ fn execute(cli: Cli, display_limit: Option<i64>) -> Result<Value> {
                     id,
                     title.as_deref(),
                     description.as_deref(),
-                    release_session.as_deref()
+                    release_session.as_deref(),
+                    &images
                 )?)
             }
         }
@@ -245,10 +277,6 @@ fn execute(cli: Cli, display_limit: Option<i64>) -> Result<Value> {
             json!(db.complete(id, &session)?)
         }
         Commands::Message { id, body } => db.message(id, &body, cli.session.as_deref())?,
-        Commands::Image { command } => match command {
-            ImageCommand::Add { task_id, path } => db.image_add(task_id, &path)?,
-            ImageCommand::Export { image_id, path } => db.image_export(image_id, &path)?,
-        },
         Commands::Herdr { command } => match command {
             HerdrCommand::Link {
                 task_id,

@@ -91,7 +91,7 @@ Run `init` in your project root. Other commands find the nearest `qqq.db` in cur
 qqq init
 qqq add "Fix login" --description "Show useful error when credentials expire"
 qqq edit 1 --description "Reproduce expiry, fix retry, add regression test"
-qqq image add 1 ./screenshot.png
+qqq edit 1 --image ./screenshot.png
 qqq message 1 "Reproduced on fresh account"
 qqq list
 qqq show 1
@@ -197,10 +197,25 @@ task. Releasing a parent keeps children blocked. Dependency chains unlock in
 order. If every new task is blocked, `next` prints `No ready tasks.`
 (`null` with `--json`).
 
-Images support PNG, JPEG, GIF and WebP signatures, up to 20 MiB each. Signature checking identifies format; it does not fully decode or validate image contents. Import copies bytes into DB, so original file can be removed. Export takes **image ID**, shown by `show`, rather than task ID; destination must not exist.
+Attach images through `add` or `edit`; repeat `--image PATH` for multiple files.
+Image-only edits skip the editor and preserve existing fields and attachments.
+During interactive add, flagged files save alongside pasted TUI images. Use
+`--edit` to combine flagged attachments with a prefilled `$EDITOR` draft.
+Images support PNG, JPEG, GIF and WebP signatures, up to 20 MiB each. Signature
+checking identifies format; it does not fully decode or validate image contents.
+Files must be regular files. Bytes are copied into DB, so source can be removed.
+Fields, status, history and all new attachments save together; any failure leaves
+task unchanged. Cancelled or failed composition saves nothing.
+
+Export through `show TASK --export-image IMAGE --output PATH`. Image ID comes
+from `show`; it must belong to selected task. Destination must not exist. Normal
+task details still print; JSON additionally includes `export` metadata (image ID,
+path, bytes). Ordinary `show` JSON stays unchanged.
 
 ```sh
-qqq image export 1 ./exported.png
+qqq add "Investigate screenshot" --image ./before.png --image ./after.jpg
+qqq edit -1 --image ./extra.png
+qqq show 1 --export-image 1 --output ./exported.png
 ```
 
 ## Config
@@ -248,7 +263,7 @@ ls = "list"
 n = "next"
 done = "complete"
 bug = "add --description 'Needs investigation'"
-img = "image add"
+img = "edit -1 --image"
 ```
 
 `qqq bug "Fix login"` expands to `qqq add --description 'Needs investigation'

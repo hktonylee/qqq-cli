@@ -77,10 +77,7 @@ fn human_show_includes_messages_images_history_and_export_result() {
     assert!(message.contains("author"));
     assert!(message.contains("Useful note"));
     std::fs::write(p.join("test.png"), b"\x89PNG\r\n\x1a\nfixture").unwrap();
-    let image = text(p, &["image", "add", "1", "test.png"]);
-    for part in ["Image #1", "test.png", "image/png", "15 bytes"] {
-        assert!(image.contains(part), "{image}");
-    }
+    text(p, &["edit", "1", "--image", "test.png"]);
     text(p, &["next", "--session", "a"]);
     text(p, &["edit", "1", "--set-status", "new", "--session", "a"]);
     let show = text(p, &["show", "1"]);
@@ -90,6 +87,9 @@ fn human_show_includes_messages_images_history_and_export_result() {
         "History:",
         "Useful note",
         "test.png",
+        "Image #1",
+        "image/png",
+        "15 bytes",
         "claim",
         "release",
         "Herdr: Not linked",
@@ -98,7 +98,10 @@ fn human_show_includes_messages_images_history_and_export_result() {
     ] {
         assert!(show.contains(part), "{part}: {show}");
     }
-    let export = text(p, &["image", "export", "1", "out.png"]);
+    let export = text(
+        p,
+        &["show", "1", "--export-image", "1", "--output", "out.png"],
+    );
     assert!(export.contains("Exported image #1 to out.png"));
 }
 

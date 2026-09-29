@@ -1,3 +1,4 @@
+use crate::images::ImageInput;
 use anyhow::{Context, Result, ensure};
 use rusqlite::{Connection, OpenFlags, OptionalExtension, TransactionBehavior, params};
 use serde::Serialize;
@@ -92,16 +93,32 @@ impl Db {
     pub fn task(&self, id: i64) -> Result<Task> {
         self.conn.query_row("SELECT id,title,description,status,assignee,created_at,updated_at,parent_id FROM tasks WHERE id=?",[id],task_row).optional()?.with_context(||format!("Task {id} not found"))
     }
-    pub fn add(&self, title: &str, description: &str, parent_id: Option<i64>) -> Result<Task> {
+    pub fn add(
+        &mut self,
+        title: &str,
+        description: &str,
+        parent_id: Option<i64>,
+        images: &[ImageInput],
+    ) -> Result<Task> {
         nonempty(title, "Title")?;
         if let Some(id) = parent_id {
             self.task(id)?;
         }
-        self.conn.execute(
+        for image in images {
+            image.media_type()?;
+        }
+        let tx = self
+            .conn
+            .transaction_with_behavior(TransactionBehavior::Immediate)?;
+        tx.execute(
             "INSERT INTO tasks(title,description,parent_id) VALUES (?,?,?)",
             params![title, description, parent_id],
         )?;
-        self.task(self.conn.last_insert_rowid())
+        let id = tx.last_insert_rowid();
+        Self::save_images(&tx, id, images)?;
+        let task = tx.query_row("SELECT id,title,description,status,assignee,created_at,updated_at,parent_id FROM tasks WHERE id=?", [id], task_row)?;
+        tx.commit()?;
+        Ok(task)
     }
     pub fn save_composition(
         &mut self,
@@ -109,48 +126,16 @@ impl Db {
         parent: Option<i64>,
         draft: &crate::tui::draft::Composition,
     ) -> Result<Task> {
-        nonempty(&draft.title, "Title")?;
-        for image in &draft.images {
-            image.media_type()?;
+        match id {
+            Some(id) => self.edit(
+                id,
+                Some(&draft.title),
+                Some(&draft.description),
+                None,
+                &draft.images,
+            ),
+            None => self.add(&draft.title, &draft.description, parent, &draft.images),
         }
-        let tx = self
-            .conn
-            .transaction_with_behavior(TransactionBehavior::Immediate)?;
-        let id = match id {
-            Some(id) => {
-                ensure!(tx.execute(
-                    "UPDATE tasks SET title=?,description=?,updated_at=strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE id=?",
-                    params![draft.title, draft.description, id]
-                )? == 1, "Task {id} not found");
-                id
-            }
-            None => {
-                if let Some(parent) = parent {
-                    ensure!(
-                        tx.query_row(
-                            "SELECT EXISTS(SELECT 1 FROM tasks WHERE id=?)",
-                            [parent],
-                            |row| row.get::<_, bool>(0)
-                        )?,
-                        "Task {parent} not found"
-                    );
-                }
-                tx.execute(
-                    "INSERT INTO tasks(title,description,parent_id) VALUES (?,?,?)",
-                    params![draft.title, draft.description, parent],
-                )?;
-                tx.last_insert_rowid()
-            }
-        };
-        for image in &draft.images {
-            tx.execute(
-                "INSERT INTO images(task_id,name,media_type,data) VALUES (?,?,?,?)",
-                params![id, image.name, image.media_type()?, image.data],
-            )?;
-        }
-        let task = tx.query_row("SELECT id,title,description,status,assignee,created_at,updated_at,parent_id FROM tasks WHERE id=?", [id], task_row)?;
-        tx.commit()?;
-        Ok(task)
     }
     pub fn list(&self, max_completed: Option<i64>) -> Result<Vec<Task>> {
         Ok(self.conn.prepare(
@@ -175,9 +160,13 @@ impl Db {
         title: Option<&str>,
         description: Option<&str>,
         release_session: Option<&str>,
+        images: &[ImageInput],
     ) -> Result<Task> {
         if let Some(title) = title {
             nonempty(title, "Title")?;
+        }
+        for image in images {
+            image.media_type()?;
         }
         let tx = self
             .conn
@@ -191,6 +180,7 @@ impl Db {
             )?;
         }
         ensure!(tx.execute("UPDATE tasks SET title=COALESCE(?,title),description=COALESCE(?,description),updated_at=strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE id=?",params![title,description,id])?==1,"Task {id} not found");
+        Self::save_images(&tx, id, images)?;
         let task = tx.query_row(
             "SELECT id,title,description,status,assignee,created_at,updated_at,parent_id FROM tasks WHERE id=?",
             [id], task_row,
@@ -351,23 +341,25 @@ impl Db {
             json!({"task":task,"messages":messages,"images":images,"events":events,"herdr":self.link(id)?}),
         )
     }
-    pub fn image_add(&self, id: i64, path: &Path) -> Result<Value> {
-        self.task(id)?;
-        let image = crate::images::ImageInput::read(path)?;
-        let media = image.media_type()?;
-        self.conn.execute(
-            "INSERT INTO images(task_id,name,media_type,data) VALUES (?,?,?,?)",
-            params![id, image.name, media, image.data],
-        )?;
-        Ok(
-            json!({"id":self.conn.last_insert_rowid(),"task_id":id,"name":image.name,"media_type":media,"bytes":image.data.len()}),
-        )
+    fn save_images(conn: &Connection, id: i64, images: &[ImageInput]) -> Result<()> {
+        for image in images {
+            conn.execute(
+                "INSERT INTO images(task_id,name,media_type,data) VALUES (?,?,?,?)",
+                params![id, image.name, image.media_type()?, image.data],
+            )?;
+        }
+        Ok(())
     }
-    pub fn image_export(&self, id: i64, path: &Path) -> Result<Value> {
+    pub fn image_export(&self, task_id: i64, id: i64, path: &Path) -> Result<Value> {
         use std::io::Write;
+        self.task(task_id)?;
         let data: Vec<u8> = self
             .conn
-            .query_row("SELECT data FROM images WHERE id=?", [id], |r| r.get(0))
+            .query_row(
+                "SELECT data FROM images WHERE id=? AND task_id=?",
+                [id, task_id],
+                |r| r.get(0),
+            )
             .optional()?
             .context("Image not found")?;
         let mut file = std::fs::OpenOptions::new()

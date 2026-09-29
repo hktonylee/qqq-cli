@@ -88,10 +88,8 @@ fn alias_chains_support_global_session_before_and_after_alias() {
 
 #[test]
 fn nested_commands_and_help_work_after_expansion() {
-    let p = Project::new("[alias]\nimg = 'image add'\na = 'add'\n");
-    p.ok(&["add", "Task"]);
-    fs::write(p.dir.path().join("image.png"), b"\x89PNG\r\n\x1a\nfixture").unwrap();
-    p.ok(&["img", "1", "image.png"]);
+    let p = Project::new("[alias]\nc = 'config --get'\na = 'add'\n");
+    assert_eq!(p.ok(&["c", "alias.a"]), "add");
     let out = p.run(&["a", "--help"]);
     assert!(out.status.success());
     assert!(String::from_utf8_lossy(&out.stdout).contains("--description"));
@@ -188,7 +186,7 @@ fn missing_home_does_not_read_relative_config() {
 #[test]
 fn alias_preserves_non_utf8_file_paths() {
     use std::{ffi::OsString, os::unix::ffi::OsStringExt};
-    let p = Project::new("[alias]\nimg = 'image add'\n");
+    let p = Project::new("[alias]\nimg = 'edit 1 --image'\n");
     p.ok(&["add", "Task"]);
     let name = OsString::from_vec(b"image\xff.png".to_vec());
     // macOS filesystems reject invalid UTF-8 filenames. Compare failure output
@@ -203,8 +201,8 @@ fn alias_preserves_non_utf8_file_paths() {
             .output()
             .unwrap()
     };
-    let direct = run(&["image", "add", "1"]);
-    let alias = run(&["img", "1"]);
+    let direct = run(&["edit", "1", "--image"]);
+    let alias = run(&["img"]);
     assert_eq!(alias.status.code(), Some(1));
     assert_eq!(alias.stderr, direct.stderr);
     assert_eq!(alias.stdout, direct.stdout);

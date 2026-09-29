@@ -1,4 +1,4 @@
-use crate::{Commands, HerdrCommand, ImageCommand};
+use crate::{Commands, HerdrCommand};
 use serde_json::Value;
 use std::collections::HashMap;
 
@@ -12,8 +12,6 @@ pub enum Format {
     Tasks,
     Detail,
     Message,
-    Image,
-    Export,
     Link,
     Pane,
 }
@@ -29,10 +27,6 @@ impl From<&Commands> for Format {
             Commands::List { .. } => Self::Tasks,
             Commands::Show { .. } => Self::Detail,
             Commands::Message { .. } => Self::Message,
-            Commands::Image { command } => match command {
-                ImageCommand::Add { .. } => Self::Image,
-                ImageCommand::Export { .. } => Self::Export,
-            },
             Commands::Herdr { command } => match command {
                 HerdrCommand::Link { .. } => Self::Link,
                 HerdrCommand::Find { .. } => Self::Pane,
@@ -290,6 +284,13 @@ pub fn render(format: Format, value: &Value, color: bool) -> String {
                 }
             }
             result.push_str(&format!("\n\n{}", link(&value["herdr"])));
+            if let Some(export) = value.get("export") {
+                result.push_str(&format!(
+                    "\n\nExported image #{} to {}",
+                    field(export, "id"),
+                    field(export, "path")
+                ));
+            }
             result
         }
         Format::Message => format!(
@@ -298,12 +299,6 @@ pub fn render(format: Format, value: &Value, color: bool) -> String {
             field(value, "task_id"),
             field(value, "session"),
             block(value, "body")
-        ),
-        Format::Image => format!("{}\nTask: #{}", image(value), field(value, "task_id")),
-        Format::Export => format!(
-            "Exported image #{} to {}",
-            field(value, "id"),
-            field(value, "path")
         ),
         Format::Link => link(value),
         Format::Pane => pane(value),
