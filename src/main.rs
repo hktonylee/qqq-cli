@@ -50,7 +50,7 @@ enum Commands {
     },
     /// List tasks as a dependency tree; JSON lists tasks in creation order.
     List {
-        /// Maximum completed tasks to show; retain most recent completions. Omit for all; 0 hides them.
+        /// Maximum completed tasks to show; overrides human display default. 0 hides completed tasks.
         #[arg(long, value_parser = clap::value_parser!(i64).range(0..))]
         max_completed: Option<i64>,
         /// Keep watching database commits and refresh the task list. Ctrl-C stops.
