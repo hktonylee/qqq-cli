@@ -78,7 +78,11 @@ fn task_responses_use_harness_and_orchestrator_fields() {
         .output()
         .unwrap();
     let text = String::from_utf8(out.stdout).unwrap();
-    assert!(text.contains("Harness session: -"));
+    assert!(
+        text.lines()
+            .filter_map(|line| line.split_once(':'))
+            .any(|(label, value)| label.trim() == "Harness session" && value.trim() == "-")
+    );
     assert!(!text.contains("Owner:"));
 }
 

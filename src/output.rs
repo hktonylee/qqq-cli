@@ -1,3 +1,5 @@
+mod detail;
+
 use crate::{Commands, HerdrCommand};
 use serde_json::Value;
 use std::collections::HashMap;
@@ -189,16 +191,6 @@ fn link(value: &Value, color: bool) -> String {
     )
 }
 
-fn image(value: &Value) -> String {
-    format!(
-        "Image #{}: {} ({}, {} bytes)",
-        field(value, "id"),
-        field(value, "name"),
-        field(value, "media_type"),
-        field(value, "bytes")
-    )
-}
-
 fn task_tree(tasks: &[Value], color: bool) -> String {
     if tasks.is_empty() {
         return "No tasks yet.".to_owned();
@@ -280,51 +272,7 @@ pub fn render(format: Format, value: &Value, color: bool) -> String {
         Format::AddedTask => task(value, false, false),
         Format::Task => task(value, false, true),
         Format::Tasks => task_tree(value.as_array().expect("task list is an array"), color),
-        Format::Detail => {
-            let mut result = task(&value["task"], color, true);
-            for (key, label) in [
-                ("messages", "Messages"),
-                ("images", "Images"),
-                ("events", "History"),
-            ] {
-                result.push_str(&format!(
-                    "\n\n{}",
-                    styled(&format!("{label}:"), color.then_some("1"))
-                ));
-                let rows = value[key].as_array().expect("detail section is an array");
-                if rows.is_empty() {
-                    result.push_str(" None");
-                }
-                for row in rows {
-                    let text = match key {
-                        "messages" => format!(
-                            "#{} · {} · {}\n{}",
-                            field(row, "id"),
-                            field(row, "session"),
-                            field(row, "created_at"),
-                            block(row, "body")
-                        ),
-                        "images" => image(row),
-                        _ => format!(
-                            "{} · {} · {}",
-                            field(row, "created_at"),
-                            field(row, "action"),
-                            field(row, "session")
-                        ),
-                    };
-                    result.push_str(&format!("\n  {text}"));
-                }
-            }
-            result.push_str(&format!("\n\n{}", link(&value["herdr"], color)));
-            if let Some(export) = value.get("export") {
-                result.push_str(&format!(
-                    "\n\nExported image #{} to {}",
-                    field(export, "id"),
-                    field(export, "path")
-                ));
-            }
-            result
-        }
+        Format::Detail => detail::render(value, color),
         Format::Message => format!(
             "Message #{}\nTask: #{}\nAuthor: {}\n{}",
             field(value, "id"),

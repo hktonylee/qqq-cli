@@ -71,14 +71,25 @@ fn human_tasks_show_descriptions_dependencies_and_ownership() {
     assert!(next.contains("Status: In progress"));
     assert!(next.contains("Harness session: a"));
     let child = text(p, &["show", "2"]);
-    assert!(child.contains("Parent: #1"));
+    assert!(
+        child
+            .lines()
+            .any(|line| line.trim_start().starts_with("Parent:") && line.ends_with("#1"))
+    );
     for label in [
         "Harness name: -",
         "Harness session: -",
         "Orchestrator name: -",
         "Orchestrator session: -",
     ] {
-        assert!(child.contains(label), "{label}: {child}");
+        let (name, value) = label.split_once(':').unwrap();
+        assert!(
+            child
+                .lines()
+                .any(|line| line.trim_start().starts_with(&format!("{name}:"))
+                    && line.trim_end().ends_with(value.trim())),
+            "{label}: {child}"
+        );
     }
     let changed = text(p, &["edit", "2", "--description", "New details"]);
     assert!(changed.contains("New details"));
