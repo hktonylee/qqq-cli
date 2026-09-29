@@ -6,10 +6,10 @@ use std::{
 
 pub fn compose(title: &str, description: &str) -> Result<(String, String)> {
     let editor = std::env::var("EDITOR")
-        .context("Set EDITOR to compose a task, or provide a title inline")?;
+        .context("Set EDITOR to compose or edit a task, or provide fields inline")?;
     ensure!(
         !editor.trim().is_empty(),
-        "Set EDITOR to compose a task, or provide a title inline"
+        "Set EDITOR to compose or edit a task, or provide fields inline"
     );
     let draft_dir = tempfile::Builder::new()
         .prefix("qqq-edit-")
@@ -33,7 +33,7 @@ pub fn compose(title: &str, description: &str) -> Result<(String, String)> {
         .context("Failed to start EDITOR")?;
     ensure!(
         status.success(),
-        "Editor exited unsuccessfully ({status}); task not created"
+        "Editor exited unsuccessfully ({status}); task not saved"
     );
     // Read the path again: editors may replace the file on save.
     let content = fs::read_to_string(&draft).context("Failed to read edited task")?;
@@ -41,7 +41,7 @@ pub fn compose(title: &str, description: &str) -> Result<(String, String)> {
     let (title, description) = content.split_once('\n').unwrap_or((&content, ""));
     ensure!(
         !title.trim().is_empty(),
-        "Task title cannot be empty; task not created"
+        "Task title cannot be empty; task not saved"
     );
     Ok((title.trim().to_owned(), description.trim().to_owned()))
 }

@@ -103,8 +103,11 @@ impl Db {
     pub fn list(&self) -> Result<Vec<Task>> {
         Ok(self.conn.prepare("SELECT id,title,description,status,owner_session,created_at,updated_at,parent_id FROM tasks ORDER BY id")?.query_map([],task_row)?.collect::<rusqlite::Result<_>>()?)
     }
-    pub fn describe(&self, id: i64, description: &str) -> Result<Task> {
-        ensure!(self.conn.execute("UPDATE tasks SET description=?,updated_at=strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE id=?",params![description,id])?==1,"Task {id} not found");
+    pub fn edit(&self, id: i64, title: Option<&str>, description: Option<&str>) -> Result<Task> {
+        if let Some(title) = title {
+            nonempty(title, "Title")?;
+        }
+        ensure!(self.conn.execute("UPDATE tasks SET title=COALESCE(?,title),description=COALESCE(?,description),updated_at=strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE id=?",params![title,description,id])?==1,"Task {id} not found");
         self.task(id)
     }
     pub fn next(

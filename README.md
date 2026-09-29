@@ -17,7 +17,7 @@ Run `init` in your project root. Other commands find the nearest `qqq.db` in cur
 ```sh
 qqq init
 qqq add "Fix login" --description "Show useful error when credentials expire"
-qqq describe 1 "Reproduce expiry, fix retry, add regression test"
+qqq edit 1 --description "Reproduce expiry, fix retry, add regression test"
 qqq image add 1 ./screenshot.png
 qqq message 1 "Reproduced on fresh account"
 qqq list
@@ -40,6 +40,23 @@ waits until editing finishes. Editor output goes to stderr; stdout stays JSON.
 An empty first line, nonzero editor exit, or unreadable draft aborts creation.
 Temporary drafts are removed on success or error. Inline `qqq add "Title"` works
 without an editor.
+
+Edit an existing task with `qqq edit <id>` (replaces `describe`). With no field
+flags, `$EDITOR` opens with the current title on the first line and description
+below. Save to update both fields. The same draft format and error handling as
+`add` apply; editor failures leave the task unchanged.
+
+```sh
+qqq edit 1
+qqq edit 1 --title "Fix expired login"
+qqq edit 1 --description "Updated details"
+qqq edit 1 --title "Fix login" -d "Updated details"
+qqq edit 1 --description ""  # clear description
+```
+
+Field flags skip the editor and preserve omitted fields. Titles cannot be blank.
+Existing multiline titles require field flags because the editor format uses one title line.
+Editing preserves task status, ownership, dependencies, messages and attachments.
 
 Add a dependency with `--parent <task-id>`:
 

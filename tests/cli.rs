@@ -59,7 +59,7 @@ fn descriptions_messages_images_and_parent_discovery() {
     let d = project();
     let p = d.path();
     ok(p, &["add", "Task"]);
-    ok(p, &["describe", "1", "Long description"]);
+    ok(p, &["edit", "1", "--description", "Long description"]);
     ok(p, &["message", "1", "First note", "--session", "a"]);
     ok(p, &["message", "1", "Second note"]);
     let png = b"\x89PNG\r\n\x1a\nfixture";

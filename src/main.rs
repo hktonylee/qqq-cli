@@ -1,7 +1,7 @@
 mod db;
 mod editor;
 mod herdr;
-use anyhow::{Context, Result};
+use anyhow::{Context, Result, ensure};
 use clap::{Parser, Subcommand};
 use serde_json::{Value, json};
 use std::path::PathBuf;
@@ -39,8 +39,14 @@ enum Commands {
     List,
     /// Show task, messages, image metadata, ownership history and Herdr link.
     Show { id: i64 },
-    /// Replace description.
-    Describe { id: i64, description: String },
+    /// Edit title and description in $EDITOR, or update supplied fields directly.
+    Edit {
+        id: i64,
+        #[arg(long)]
+        title: Option<String>,
+        #[arg(short, long)]
+        description: Option<String>,
+    },
     /// Return owned task or atomically claim oldest ready task. No ready tasks: null.
     Next,
     /// Complete task owned by this session.
@@ -105,7 +111,23 @@ fn execute(cli: Cli) -> Result<Value> {
         }
         Commands::List => json!(db.list()?),
         Commands::Show { id } => db.show(id)?,
-        Commands::Describe { id, description } => json!(db.describe(id, &description)?),
+        Commands::Edit {
+            id,
+            title,
+            description,
+        } => {
+            if title.is_none() && description.is_none() {
+                let task = db.task(id)?;
+                ensure!(
+                    !task.title.contains(['\n', '\r']),
+                    "Cannot edit a multiline title in EDITOR; use --title or --description"
+                );
+                let (title, description) = editor::compose(&task.title, &task.description)?;
+                json!(db.edit(id, Some(&title), Some(&description))?)
+            } else {
+                json!(db.edit(id, title.as_deref(), description.as_deref())?)
+            }
+        }
         Commands::Next => {
             let (session, link) = herdr::owner(cli.session.as_deref(), project_dir)?;
             json!(db.next(&session, link.as_ref())?)
