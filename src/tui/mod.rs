@@ -70,10 +70,10 @@ pub fn compose(description: &str) -> Result<Composition> {
         let size = terminal::size()?;
         let layout = render::Layout::new(&draft.fragments(), size.0 as usize);
         let footer = if confirm_discard {
-            if usize::from(size.0) < "Discard draft? y=discard; N/Enter/Esc=keep".len() {
+            if usize::from(size.0) < "Discard draft? (y/N)".len() {
                 "Discard? y/N"
             } else {
-                "Discard draft? y=discard; N/Enter/Esc=keep"
+                "Discard draft? (y/N)"
             }
         } else {
             &message

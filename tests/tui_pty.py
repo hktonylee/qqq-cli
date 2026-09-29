@@ -107,7 +107,7 @@ with tempfile.TemporaryDirectory(prefix="qqq-tui-test-") as folder:
         elif scenario in ("edit", "escape_edit"):
             if scenario == "escape_edit":
                 send(b"\x1b")
-                read_until(b"Discard draft?")
+                read_until(b"Discard draft? (y/N)")
                 assert child.poll() is None
                 assert cli("show", "1")["task"]["description"] == "Original\n\nDetails"
                 screen.clear()
@@ -134,7 +134,7 @@ with tempfile.TemporaryDirectory(prefix="qqq-tui-test-") as folder:
         cancelled = scenario in ("cancel", "escape_discard", "escape_image", "escape_whitespace", "escape_narrow", "escape_empty", "escape_deleted")
         if scenario in ("escape_discard", "escape_image", "escape_whitespace", "escape_narrow"):
             send(b"\x1b")
-            read_until(b"Discard draft?")
+            read_until(b"Discard draft? (y/N)")
             assert child.poll() is None
             assert cli("list") == []
             if scenario == "escape_narrow":
@@ -147,7 +147,7 @@ with tempfile.TemporaryDirectory(prefix="qqq-tui-test-") as folder:
             for choice in (b"n", b"\r", b"\x1b"):
                 screen.clear()
                 send(b"\x1b")
-                read_until(b"Discard draft?")
+                read_until(b"Discard draft? (y/N)")
                 assert child.poll() is None
                 assert cli("list") == []
                 paste("ignored while confirming")
