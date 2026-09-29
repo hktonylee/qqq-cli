@@ -30,3 +30,11 @@ fn tui_blank_body_remains_editable_until_valid_save() {
 fn tui_edit_pins_recent_target_and_preserves_ownership() {
     scenario("edit");
 }
+#[test]
+fn tui_no_color_keeps_plain_editor_and_terminal_restoration() {
+    scenario("no_color");
+}
+#[test]
+fn tui_dumb_terminal_keeps_plain_editor_and_terminal_restoration() {
+    scenario("dumb");
+}

@@ -17,6 +17,14 @@ from pathlib import Path
 binary, scenario = sys.argv[1:]
 with tempfile.TemporaryDirectory(prefix="qqq-tui-test-") as folder:
     env = dict(os.environ, HOME=folder, TERM="xterm-256color")
+    env.pop("NO_COLOR", None)
+    color = scenario not in ("no_color", "dumb")
+    if scenario == "no_color":
+        env["NO_COLOR"] = "1"
+        scenario = "blank"
+    elif scenario == "dumb":
+        env["TERM"] = "dumb"
+        scenario = "blank"
     for key in ("EDITOR", "QQQ_SESSION", "HERDR_ENV", "HERDR_PANE_ID"):
         env.pop(key, None)
 
@@ -38,6 +46,7 @@ with tempfile.TemporaryDirectory(prefix="qqq-tui-test-") as folder:
         flagged.write_bytes(image.read_bytes())
         args.extend(["--image", str(flagged)])
     master, slave = pty.openpty()
+    os.set_blocking(master, False)
     fcntl.ioctl(slave, termios.TIOCSWINSZ, struct.pack("HHHH", 12, 60, 0, 0))
     before = termios.tcgetattr(slave)
 
@@ -64,13 +73,32 @@ with tempfile.TemporaryDirectory(prefix="qqq-tui-test-") as folder:
                 raise AssertionError(f"Editor exited early: {screen!r}")
 
     def send(data):
-        os.write(master, data)
+        # Real terminals drain output while sending input. Keep redraw backpressure
+        # from deadlocking a large paste against the PTY's small input buffer.
+        remaining = memoryview(data)
+        deadline = time.monotonic() + 5
+        while remaining:
+            assert time.monotonic() < deadline, "Terminal input timed out"
+            readable, writable, _ = select.select([master], [master], [], 0.05)
+            if readable:
+                screen.extend(os.read(master, 65536))
+            if writable:
+                try:
+                    remaining = remaining[os.write(master, remaining):]
+                except BlockingIOError:
+                    pass
 
     def paste(text):
         send(b"\x1b[200~" + text.encode() + b"\x1b[201~")
 
     try:
         read_until(b"Ctrl-S")
+        if color:
+            assert b"\x1b[48;5;236m" in screen, "Editor grey background missing"
+            assert b"\x1b[38;5;252m" in screen, "Editor readable foreground missing"
+        else:
+            assert b"\x1b[48;" not in screen, "Plain editor set background color"
+            assert b"\x1b[38;" not in screen, "Plain editor set foreground color"
         if scenario == "blank":
             send(b"\x13")
             read_until(b"Task description cannot be empty")
@@ -104,6 +132,11 @@ with tempfile.TemporaryDirectory(prefix="qqq-tui-test-") as folder:
         after = termios.tcgetattr(slave)
         assert before[3] == after[3], "Terminal flags not restored"
         assert b"\x1b[?1049l" in screen, "Alternate screen not restored"
+        if color:
+            assert screen.rfind(b"\x1b[0m") < screen.rfind(b"\x1b[?1049l"), "Colors not reset before leaving alternate screen"
+            assert b"\x1b[0m" in screen, "Colors not reset on exit"
+        else:
+            assert b"\x1b[48;" not in screen and b"\x1b[38;" not in screen
         if scenario == "cancel":
             assert child.returncode == 1
             assert stdout == b""

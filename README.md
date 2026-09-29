@@ -114,6 +114,11 @@ Ctrl-S saves; Esc or Ctrl-C cancels. Enter inserts a newline. Arrows, Home/End
 the cursor and adapts to terminal resizing. Editor UI uses stderr; stdout contains
 only the final command result, including JSON when `--json` is supplied.
 
+Built-in add/edit editors use a dark-grey background with light text across the
+viewport, including blank and error states. Terminal colors reset on save, cancel
+or error. `NO_COLOR=1` or `TERM=dumb` keeps the editor plain. External `$EDITOR`
+commands use their own theme.
+
 Paste text normally through a terminal supporting bracketed paste, or use Ctrl-V
 to read the desktop clipboard. Pastes over 1,000 Unicode characters show a compact
 `[Pasted text #N: X chars]` placeholder. Full text expands on save; existing large

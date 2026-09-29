@@ -1,7 +1,7 @@
 use crossterm::{
     cursor::MoveTo,
     queue,
-    style::Print,
+    style::{Color, Print, SetBackgroundColor, SetForegroundColor},
     terminal::{Clear, ClearType},
 };
 use std::io::{self, Write};
@@ -9,6 +9,8 @@ use unicode_segmentation::UnicodeSegmentation;
 use unicode_width::UnicodeWidthStr;
 
 pub const KEYS: &str = "Ctrl-S save  Esc cancel  Ctrl-V paste";
+const BACKGROUND: Color = Color::AnsiValue(236);
+const FOREGROUND: Color = Color::AnsiValue(252);
 
 pub struct Layout {
     pub rows: Vec<String>,
@@ -107,9 +109,25 @@ pub fn draw(
     top: &mut usize,
     size: (u16, u16),
     message: &str,
+    color: bool,
 ) -> io::Result<()> {
     let (width, height) = size;
+    if color {
+        queue!(
+            output,
+            SetBackgroundColor(BACKGROUND),
+            SetForegroundColor(FOREGROUND)
+        )?;
+    }
     queue!(output, MoveTo(0, 0), Clear(ClearType::All))?;
+    if color {
+        // Paint unused cells too, even on terminals without background-color erase.
+        let blank = " ".repeat(width as usize);
+        for row in 0..height {
+            queue!(output, MoveTo(0, row), Print(&blank))?;
+        }
+        queue!(output, MoveTo(0, 0))?;
+    }
     if width < 12 || height < 4 {
         queue!(
             output,

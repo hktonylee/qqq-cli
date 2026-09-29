@@ -10,12 +10,15 @@ use crossterm::{
         KeyModifiers,
     },
     execute,
+    style::ResetColor,
     terminal::{self, EnterAlternateScreen, LeaveAlternateScreen},
 };
 use draft::{Composition, Draft};
 use std::io::{self, IsTerminal};
 
-struct TerminalGuard;
+struct TerminalGuard {
+    color: bool,
+}
 impl TerminalGuard {
     fn enter() -> Result<Self> {
         ensure!(
@@ -23,7 +26,9 @@ impl TerminalGuard {
             "Interactive editor requires terminal input and stderr"
         );
         terminal::enable_raw_mode()?;
-        let guard = Self;
+        let guard = Self {
+            color: crate::output::color_enabled(io::stderr().is_terminal()),
+        };
         execute!(
             io::stderr(),
             EnterAlternateScreen,
@@ -35,6 +40,9 @@ impl TerminalGuard {
 }
 impl Drop for TerminalGuard {
     fn drop(&mut self) {
+        if self.color {
+            let _ = execute!(io::stderr(), ResetColor);
+        }
         let _ = execute!(
             io::stderr(),
             DisableBracketedPaste,
@@ -53,7 +61,7 @@ fn paste(draft: &mut Draft, text: &str) -> Result<()> {
     Ok(())
 }
 pub fn compose(description: &str) -> Result<Composition> {
-    let _terminal = TerminalGuard::enter()?;
+    let terminal = TerminalGuard::enter()?;
     let mut draft = Draft::new(description);
     let mut top = 0;
     let mut message = String::new();
@@ -67,6 +75,7 @@ pub fn compose(description: &str) -> Result<Composition> {
             &mut top,
             size,
             &message,
+            terminal.color,
         )?;
         match event::read()? {
             Event::Paste(text) => {

@@ -3,6 +3,53 @@
 mod render;
 
 #[test]
+fn editor_paints_entire_viewport_before_text_in_all_states() {
+    // This synthetic colored-render case must not inherit the runner's NO_COLOR.
+    crossterm::style::force_color_output(true);
+    let layout = render::Layout::new(&["Body".into()], 40);
+    for (size, message) in [
+        ((40, 8), ""),
+        ((40, 8), "Task description cannot be empty"),
+        ((10, 2), ""),
+    ] {
+        let mut output = Vec::new();
+        render::draw(&mut output, &layout, 0, &mut 0, size, message, true).unwrap();
+        let output = String::from_utf8(output).unwrap();
+        assert!(output.starts_with("\x1b[48;5;236m\x1b[38;5;252m"));
+        let blank = " ".repeat(size.0 as usize);
+        for row in 0..size.1 {
+            assert!(output.contains(&format!("\x1b[{};1H{blank}", row + 1)));
+        }
+        let content = if size.0 < 12 {
+            "Resize ter"
+        } else {
+            "qqq task editor"
+        };
+        let last_fill = output.find(&format!("\x1b[{};1H{blank}", size.1)).unwrap();
+        assert!(last_fill < output.find(content).unwrap());
+    }
+}
+
+#[test]
+fn plain_editor_does_not_emit_color_commands() {
+    let mut output = Vec::new();
+    render::draw(
+        &mut output,
+        &render::Layout::new(&["Body".into()], 40),
+        0,
+        &mut 0,
+        (40, 8),
+        "",
+        false,
+    )
+    .unwrap();
+    let output = String::from_utf8(output).unwrap();
+    assert!(!output.contains("\x1b[48;"));
+    assert!(!output.contains("\x1b[38;"));
+    assert!(output.contains("Body"));
+}
+
+#[test]
 fn preserved_crlf_displays_as_line_break() {
     let layout = render::Layout::new(&["First".into(), "\r\n".into(), "Second".into()], 20);
     assert_eq!(layout.rows, ["First", "Second"]);
