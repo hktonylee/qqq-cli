@@ -124,6 +124,15 @@ DB includes tasks, messages, image blobs, ownership events, latest Herdr link pe
 cargo test --locked
 cargo fmt --check
 cargo clippy --locked --all-targets -- -D warnings
+cargo build --locked --release
 ```
+
+GitHub Actions runs these checks on Linux (Ubuntu 24.04) and macOS (macOS 14)
+for pushes, pull requests, and manual runs. Each job builds and smoke-tests the
+release binary, then uploads a `qqq-<OS>-<ARCH>` artifact containing a tar.gz
+archive. Download artifacts from the workflow run within 14 days; extract the
+archive to preserve the binary's executable permission. Builds use stable Rust
+and the committed lockfile. This workflow builds artifacts; it does not publish
+GitHub Releases.
 
 Tests exercise persistence, FIFO order, wrong-owner rejection, concurrent claims, attachments, ancestor lookup, cwd discovery, Herdr session matching and automatic ownership using a fake Herdr executable.
