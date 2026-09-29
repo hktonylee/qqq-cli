@@ -48,8 +48,8 @@ Files: `README.md`, this plan.
 - [x] Document precedence, variable names, exact pane lookup, public native fields, fallback/limitations and unchanged explicit override behavior.
 - [x] Run `cargo fmt --check`, `cargo test --locked`, `cargo clippy --locked --all-targets -- -D warnings`, `cargo build --locked --release`, `git diff --check`.
 - [x] Request independent review required by requesting-code-review skill; resolve findings with regressions.
-- [ ] Commit verified change; rebase onto current master, fast-forward merge, rebuild root debug CLI, smoke-test isolated native and real current Herdr caller. Mark task #24 complete; remove clean merged worktree/branch.
-- [ ] Continue `qqq next --wait`; stop after five consecutive empty waits per updated user goal.
+- [x] Commit verified change; rebase onto current master, fast-forward merge, rebuild root debug CLI, smoke-test isolated native and real current Herdr caller. Mark task #24 complete; remove clean merged worktree/branch.
+- [x] Return to `qqq next --wait` loop; task #36 claimed. Thread goal now stops after five consecutive empty waits.
 
 ## Verified before integration
 
@@ -58,3 +58,5 @@ Files: `README.md`, this plan.
 - Dispatch release race reproduced red, fixed with atomic existing-only retrieval; regression passed.
 - Independent review clear; reviewer reran four focused regressions.
 - Isolated native Codex, actual Herdr pane (without HERDR_ENV marker), and another Herdr agent kind claimed/completed successfully.
+
+Integrated on master at `41c975c`; root CLI rebuilt, 33 focused tests and native claim/completion smoke passed. Task #24 completed via original ownership key.
