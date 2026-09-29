@@ -184,7 +184,6 @@ pub fn render(format: Format, value: &Value, color: bool) -> String {
                     field(task, "title")
                 );
                 let code = match task["status"].as_str() {
-                    Some("new") => "33",
                     Some("in_progress") => "36",
                     Some("completed") => "90",
                     _ => return row,
