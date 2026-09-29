@@ -109,10 +109,10 @@ fn parent(value: &Value) -> String {
 }
 
 fn task(value: &Value, color: bool) -> String {
-    let title = format!("#{} {}", field(value, "id"), field(value, "title"));
+    let heading = format!("#{}", field(value, "id"));
     let mut result = format!(
         "{}\nStatus: {}\nParent: {}\nAssignee: {}\nCreated: {}\nUpdated: {}",
-        styled(&title, color.then_some("1")),
+        styled(&heading, color.then_some("1")),
         styled(status(value), status_color(value, color)),
         parent(value),
         field(value, "assignee"),
@@ -215,7 +215,7 @@ fn task_tree(tasks: &[Value], color: bool) -> String {
         .map(|index| (index, 0, true))
         .collect();
     let mut continuations = Vec::new();
-    let mut lines = vec![format!("{:<6} {:<12} TITLE", "ID", "STATUS")];
+    let mut lines = vec![format!("{:<6} {:<12} DESCRIPTION", "ID", "STATUS")];
     while let Some((index, depth, last)) = stack.pop() {
         continuations.truncate(depth.saturating_sub(1));
         let mut prefix: String = continuations
@@ -231,7 +231,14 @@ fn task_tree(tasks: &[Value], color: bool) -> String {
             "{:<6} {:<12} {prefix}{}",
             field(task, "id"),
             status(task),
-            field(task, "title")
+            clean(
+                task["description"]
+                    .as_str()
+                    .unwrap_or("")
+                    .lines()
+                    .next()
+                    .unwrap_or("")
+            )
         );
         lines.push(styled(&row, status_color(task, color)));
         for (position, &child) in children[index].iter().enumerate().rev() {
@@ -333,7 +340,7 @@ mod tests {
 
     #[test]
     fn error_rows_use_red_only_when_color_enabled() {
-        let tasks = json!([{"id":1,"title":"Failure","status":"error","parent_id":null}]);
+        let tasks = json!([{"id":1,"description":"Failure","status":"error","parent_id":null}]);
         let colored = render(Format::Tasks, &tasks, true);
         assert!(colored.contains("\x1b[31m1"));
         assert!(colored.contains("Error"));

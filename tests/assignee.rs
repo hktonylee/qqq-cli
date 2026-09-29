@@ -35,8 +35,8 @@ fn version_two() -> TempDir {
     conn.execute_batch(include_str!("../src/migrate_v2.sql"))
         .unwrap();
     conn.execute_batch(
-        "INSERT INTO tasks(title,status,owner_session) VALUES ('Parent','in_progress','legacy');
-        INSERT INTO tasks(title,parent_id) VALUES ('Child',1);
+        "INSERT INTO tasks(description,status,owner_session) VALUES ('Parent','in_progress','legacy');
+        INSERT INTO tasks(description,parent_id) VALUES ('Child',1);
         INSERT INTO messages(task_id,body) VALUES (1,'Note');
         INSERT INTO events(task_id,session,action) VALUES (1,'legacy','claim');
         INSERT INTO images(task_id,name,media_type,data) VALUES (1,'x.png','image/png',X'010203');
@@ -54,7 +54,10 @@ fn task_responses_use_assignee_only() {
     assignment(&ok(&d, &["next", "--session", "a"]), json!("a"));
     assignment(&ok(&d, &["list"])[0], json!("a"));
     assignment(&ok(&d, &["show", "1"])["task"], json!("a"));
-    assignment(&ok(&d, &["edit", "1", "--title", "Edited"]), json!("a"));
+    assignment(
+        &ok(&d, &["edit", "1", "--description", "Edited"]),
+        json!("a"),
+    );
     assignment(
         &ok(&d, &["edit", "1", "--set-status", "new", "--session", "a"]),
         Value::Null,
@@ -105,7 +108,7 @@ fn v2_upgrade_preserves_data_and_enforces_renamed_constraints() {
     );
     assert!(
         conn.execute(
-            "INSERT INTO tasks(title,status,assignee) VALUES ('Dup','in_progress','legacy')",
+            "INSERT INTO tasks(description,status,assignee) VALUES ('Dup','in_progress','legacy')",
             []
         )
         .is_err()

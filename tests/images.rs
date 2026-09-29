@@ -64,7 +64,12 @@ fn add_copies_repeated_images_and_show_exports_scoped_bytes() {
     let task = ok(
         p,
         &[
-            "add", "Task", "-d", "Details", "--image", "a.png", "--image", "b.jpg",
+            "add",
+            "Task\n\nDetails",
+            "--image",
+            "a.png",
+            "--image",
+            "b.jpg",
         ],
     );
     assert_eq!(task["id"], 1);
@@ -124,7 +129,12 @@ fn image_only_negative_edit_preserves_fields_owner_and_existing_images() {
     ok(
         p,
         &[
-            "add", "Child", "-d", "Original", "--parent", "1", "--image", "a.png",
+            "add",
+            "Child\n\nOriginal",
+            "--parent",
+            "1",
+            "--image",
+            "a.png",
         ],
     );
     ok(p, &["next", "--session", "owner"]);
@@ -133,7 +143,6 @@ fn image_only_negative_edit_preserves_fields_owner_and_existing_images() {
     let edited = ok(p, &["edit", "-1", "--image", "b.jpg", "--image", "a.png"]);
     for key in [
         "id",
-        "title",
         "description",
         "status",
         "assignee",
@@ -161,7 +170,7 @@ fn invalid_attachments_leave_creation_fields_status_and_events_unchanged() {
         "Unsupported image signature",
     );
     assert_eq!(ok(p, &["list"]), serde_json::json!([]));
-    ok(p, &["add", "Original", "-d", "Details", "--image", "a.png"]);
+    ok(p, &["add", "Original\n\nDetails", "--image", "a.png"]);
     ok(p, &["next", "--session", "owner"]);
     let before = ok(p, &["show", "1"]);
     error(
@@ -169,10 +178,8 @@ fn invalid_attachments_leave_creation_fields_status_and_events_unchanged() {
         &[
             "edit",
             "1",
-            "--title",
-            "Changed",
-            "-d",
-            "Changed",
+            "--description",
+            "Changed\n\nChanged",
             "--set-status",
             "new",
             "--session",
@@ -191,7 +198,7 @@ fn invalid_attachments_leave_creation_fields_status_and_events_unchanged() {
         &[
             "edit",
             "1",
-            "--title",
+            "--description",
             "Changed",
             "--set-status",
             "new",
@@ -209,7 +216,7 @@ fn invalid_attachments_leave_creation_fields_status_and_events_unchanged() {
         &[
             "edit",
             "1",
-            "--title",
+            "--description",
             "Changed",
             "--set-status",
             "new",
@@ -220,7 +227,7 @@ fn invalid_attachments_leave_creation_fields_status_and_events_unchanged() {
         ],
     );
     let after = ok(p, &["show", "1"]);
-    assert_eq!(after["task"]["title"], "Changed");
+    assert_eq!(after["task"]["description"], "Changed");
     assert_eq!(after["task"]["status"], "new");
     assert!(after["task"]["assignee"].is_null());
     assert_eq!(after["events"].as_array().unwrap().len(), 2);
@@ -253,7 +260,7 @@ fn rejected_image_insert_rolls_back_new_task_and_released_edit() {
         &[
             "edit",
             "1",
-            "--title",
+            "--description",
             "Changed",
             "--set-status",
             "new",
@@ -348,7 +355,10 @@ fn editor_composition_combines_flag_images_and_aborts_without_partial_save() {
         String::from_utf8_lossy(&out.stderr)
     );
     let detail = ok(p, &["show", "1"]);
-    assert_eq!(detail["task"]["title"], "Composed");
+    assert_eq!(
+        detail["task"]["description"],
+        "Composed\n\nEdited details\n"
+    );
     assert_eq!(detail["images"].as_array().unwrap().len(), 2);
     let out = command(p)
         .env("EDITOR", "false")
@@ -384,8 +394,7 @@ fn forced_edit_composition_appends_images_without_changing_ownership() {
         String::from_utf8_lossy(&out.stderr)
     );
     let after = ok(p, &["show", "1"]);
-    assert_eq!(after["task"]["title"], "Edited");
-    assert_eq!(after["task"]["description"], "New details");
+    assert_eq!(after["task"]["description"], "Edited\n\nNew details\n");
     assert_eq!(after["task"]["assignee"], before["task"]["assignee"]);
     assert_eq!(after["events"], before["events"]);
     assert_eq!(after["images"][0], before["images"][0]);

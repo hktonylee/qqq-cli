@@ -101,7 +101,7 @@ print(json.dumps({'result':result}))
 #[test]
 fn dispatch_claims_for_new_agent_links_before_prompt_and_can_find_session() {
     let p = Project::new();
-    p.ok(&["add", "Task", "-d", "Details"]);
+    p.ok(&["add", "Task\n\nDetails"]);
     let task = p.ok(&["next", "--session", "caller"]);
     let owner = task["assignee"].as_str().unwrap();
     assert_ne!(owner, "caller");
@@ -349,7 +349,7 @@ fn wait_dispatches_when_work_arrives_without_spawning_for_empty_queue() {
         String::from_utf8_lossy(&out.stderr)
     );
     let task: Value = serde_json::from_slice(&out.stdout).unwrap();
-    assert_eq!(task["title"], "Arrived");
+    assert_eq!(task["description"], "Arrived");
     assert!(
         task["assignee"]
             .as_str()

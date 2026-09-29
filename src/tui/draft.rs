@@ -3,7 +3,6 @@ use anyhow::{Result, ensure};
 use unicode_segmentation::UnicodeSegmentation;
 
 pub struct Composition {
-    pub title: String,
     pub description: String,
     pub images: Vec<ImageInput>,
 }
@@ -35,18 +34,14 @@ pub struct Draft {
     next_image: usize,
 }
 impl Draft {
-    pub fn new(title: &str, description: &str) -> Self {
+    pub fn new(description: &str) -> Self {
         let mut draft = Self {
             atoms: Vec::new(),
             cursor: 0,
             next_paste: 1,
             next_image: 1,
         };
-        draft.insert(&format!("{title}\n\n"));
         draft.paste(description);
-        if title.is_empty() {
-            draft.cursor = 0;
-        }
         draft
     }
     pub fn insert(&mut self, text: &str) {
@@ -68,21 +63,20 @@ impl Draft {
         }
     }
     pub fn paste(&mut self, text: &str) {
-        let text = text.replace("\r\n", "\n").replace('\r', "\n");
         let chars = text.chars().count();
         if chars > 1000 {
             self.atoms.insert(
                 self.cursor,
                 Atom::Paste {
                     id: self.next_paste,
-                    text,
+                    text: text.to_owned(),
                     chars,
                 },
             );
             self.next_paste += 1;
             self.cursor += 1;
         } else {
-            self.insert(&text);
+            self.insert(text);
         }
     }
     pub fn image(&mut self, input: ImageInput) -> Result<()> {
@@ -117,14 +111,14 @@ impl Draft {
     }
     pub fn home(&mut self) {
         while self.cursor > 0
-            && !matches!(&self.atoms[self.cursor-1], Atom::Text(text) if text == "\n")
+            && !matches!(&self.atoms[self.cursor-1], Atom::Text(text) if matches!(text.as_str(), "\n" | "\r\n"))
         {
             self.cursor -= 1;
         }
     }
     pub fn end(&mut self) {
         while self.cursor < self.atoms.len()
-            && !matches!(&self.atoms[self.cursor], Atom::Text(text) if text == "\n")
+            && !matches!(&self.atoms[self.cursor], Atom::Text(text) if matches!(text.as_str(), "\n" | "\r\n"))
         {
             self.cursor += 1;
         }
@@ -145,24 +139,18 @@ impl Draft {
             match atom {
                 Atom::Text(value) | Atom::Paste { text: value, .. } => text.push_str(value),
                 Atom::Image { input, .. } => {
-                    ensure!(
-                        text.contains('\n'),
-                        "Place images below the first title line"
-                    );
                     input.media_type()?;
                     text.push_str(&format!("[Image: {}]", input.name));
                     images.push(input.clone());
                 }
             }
         }
-        let (title, description) = text.split_once('\n').unwrap_or((&text, ""));
         ensure!(
-            !title.trim().is_empty(),
-            "Task title cannot be empty; task not saved"
+            !text.trim().is_empty(),
+            "Task description cannot be empty; task not saved"
         );
         Ok(Composition {
-            title: title.trim().to_owned(),
-            description: description.trim().to_owned(),
+            description: text,
             images,
         })
     }

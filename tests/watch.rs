@@ -98,10 +98,10 @@ fn watch_streams_initial_list_and_committed_changes_without_idle_repeats() {
     assert_eq!(watch.snapshot(), serde_json::json!([]));
     watch.idle();
     ok(p, &["add", "First"]);
-    assert_eq!(watch.snapshot()[0]["title"], "First");
-    ok(p, &["edit", "1", "--title", "Changed"]);
+    assert_eq!(watch.snapshot()[0]["description"], "First");
+    ok(p, &["edit", "1", "--description", "Changed"]);
     let changed = watch.snapshot();
-    assert_eq!(changed[0]["title"], "Changed");
+    assert_eq!(changed[0]["description"], "Changed");
     ok(p, &["message", "1", "Only message changed"]);
     assert_eq!(
         watch.snapshot(),
@@ -148,14 +148,14 @@ fn rollback_does_not_refresh_and_cancelled_watch_leaves_database_unlocked() {
     assert_eq!(watch.snapshot(), serde_json::json!([]));
     let conn = rusqlite::Connection::open(p.join("qqq.db")).unwrap();
     conn.execute_batch(
-        "BEGIN IMMEDIATE; INSERT INTO tasks(title) VALUES ('Rolled back'); ROLLBACK;",
+        "BEGIN IMMEDIATE; INSERT INTO tasks(description) VALUES ('Rolled back'); ROLLBACK;",
     )
     .unwrap();
     watch.idle();
     drop(watch);
     ok(p, &["add", "After watch"]);
     assert_eq!(
-        ok(p, &["next", "--local", "--session", "worker"])["title"],
+        ok(p, &["next", "--local", "--session", "worker"])["description"],
         "After watch"
     );
 }
@@ -187,7 +187,7 @@ fn watch_keeps_completed_limit_on_every_refresh() {
     ok(p, &["complete", "1", "--session", "worker"]);
     let remaining = watch.snapshot();
     assert_eq!(remaining.as_array().unwrap().len(), 1);
-    assert_eq!(remaining[0]["title"], "Second");
+    assert_eq!(remaining[0]["description"], "Second");
     ok(p, &["message", "2", "Note"]);
     assert_eq!(watch.snapshot(), remaining);
 }

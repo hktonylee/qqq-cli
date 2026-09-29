@@ -79,7 +79,7 @@ fn changing_parent_preserves_existing_claim_and_task_details() {
     let d = project();
     let p = d.path();
     ok(p, &["add", "First parent"]);
-    ok(p, &["add", "Child", "-d", "Details"]);
+    ok(p, &["add", "Child\n\nDetails"]);
     ok(p, &["add", "Second parent"]);
     ok(p, &["next", "--local", "--session", "parent"]);
     ok(p, &["next", "--local", "--session", "child"]);
@@ -93,8 +93,7 @@ fn changing_parent_preserves_existing_claim_and_task_details() {
         let edited = ok(p, &["edit", "2", "--set-parent", parent]);
         assert_eq!(edited["status"], "in_progress");
         assert_eq!(edited["assignee"], "child");
-        assert_eq!(edited["title"], "Child");
-        assert_eq!(edited["description"], "Details");
+        assert_eq!(edited["description"], "Child\n\nDetails");
         assert_eq!(edited["created_at"], before["task"]["created_at"]);
         let detail = ok(p, &["show", "2"]);
         for key in ["messages", "images", "events", "herdr"] {
@@ -120,10 +119,8 @@ fn missing_self_and_descendant_parents_leave_edits_unchanged() {
                 "1",
                 "--set-parent",
                 parent,
-                "--title",
-                "Changed",
-                "-d",
-                "Changed",
+                "--description",
+                "Changed\n\nChanged",
             ],
         );
         assert!(!out.status.success(), "Parent {parent}");
@@ -156,7 +153,7 @@ fn parent_content_status_and_images_share_atomic_transaction() {
                 "new",
                 "--session",
                 "wrong",
-                "--title",
+                "--description",
                 "Changed",
                 "--image",
                 "x.png"
@@ -167,7 +164,7 @@ fn parent_content_status_and_images_share_atomic_transaction() {
     );
     assert_eq!(ok(p, &["show", "2"]), before);
     assert!(
-        !run(p, &["edit", "2", "--set-parent", "1", "--title", " "])
+        !run(p, &["edit", "2", "--set-parent", "1", "--description", " "])
             .status
             .success()
     );
@@ -185,7 +182,7 @@ fn parent_content_status_and_images_share_atomic_transaction() {
         "Failure",
         "--session",
         "child",
-        "--title",
+        "--description",
         "Changed",
         "--image",
         "x.png",
@@ -196,7 +193,7 @@ fn parent_content_status_and_images_share_atomic_transaction() {
     let edited = ok(p, &args);
     assert_eq!(edited["parent_id"], 1);
     assert_eq!(edited["status"], "error");
-    assert_eq!(edited["title"], "Changed");
+    assert_eq!(edited["description"], "Changed");
     let detail = ok(p, &["show", "2"]);
     assert_eq!(detail["messages"][0]["body"], "Failure");
     assert_eq!(detail["images"].as_array().unwrap().len(), 1);
@@ -274,8 +271,7 @@ fn forced_editor_and_negative_task_reference_support_parent_changes() {
     let task: Value = serde_json::from_slice(&output.stdout).unwrap();
     assert_eq!(task["id"], 2);
     assert_eq!(task["parent_id"], 1);
-    assert_eq!(task["title"], "Edited child");
-    assert_eq!(task["description"], "New details");
+    assert_eq!(task["description"], "Edited child\n\nNew details\n");
     assert!(ok(p, &["edit", "-1", "--set-parent", "none"])["parent_id"].is_null());
 }
 

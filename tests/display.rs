@@ -77,7 +77,7 @@ fn limit_uses_completion_order_keeps_active_tasks_and_preserves_json() {
     assert_eq!(p.ids(&["list"]), vec![1, 3, 7, 4, 5, 6]);
     assert_eq!(p.tasks(), before);
     // Editing older completed task must not make it a newer completion.
-    p.ok(&["edit", "2", "--title", "Edited older completion"]);
+    p.ok(&["edit", "2", "--description", "Edited older completion"]);
     assert_eq!(p.ids(&["list"]), vec![1, 3, 7, 4, 5, 6]);
     assert_eq!(p.ids(&["list", "--all"]), vec![1, 2, 6, 3, 7, 4, 5]);
     assert!(p.ok(&["show", "2"]).contains("Edited older completion"));
@@ -148,7 +148,7 @@ fn invalid_config_fails_human_list_but_full_views_remain_usable() {
 fn legacy_completed_tasks_without_events_use_newest_id_fallback() {
     let p = Project::new();
     let conn = rusqlite::Connection::open(p.dir.path().join("qqq.db")).unwrap();
-    conn.execute_batch("INSERT INTO tasks(title,status) VALUES ('First','completed'),('Second','completed'),('Third','completed');").unwrap();
+    conn.execute_batch("INSERT INTO tasks(description,status) VALUES ('First','completed'),('Second','completed'),('Third','completed');").unwrap();
     p.config("[display]\nmax-completed = 1\n");
     assert_eq!(p.ids(&["list"]), vec![3]);
 }

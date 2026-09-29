@@ -40,7 +40,7 @@ fn set_pending_releases_claim_and_preserves_content_details_and_history() {
     let d = project();
     let p = d.path();
     ok(p, &["add", "Parent"]);
-    ok(p, &["add", "Task", "-d", "Details", "--parent", "1"]);
+    ok(p, &["add", "Task\n\nDetails", "--parent", "1"]);
     ok(p, &["next", "--local", "--session", "parent"]);
     ok(p, &["complete", "1", "--session", "parent"]);
     ok(p, &["message", "2", "Note"]);
@@ -51,7 +51,7 @@ fn set_pending_releases_claim_and_preserves_content_details_and_history() {
     let edited = ok(p, &["edit", "-1", "--set-pending", "--session", "worker"]);
     assert_eq!(edited["status"], "new");
     assert!(edited["assignee"].is_null());
-    for key in ["title", "description", "parent_id", "created_at"] {
+    for key in ["description", "parent_id", "created_at"] {
         assert_eq!(edited[key], before["task"][key]);
     }
     let detail = ok(p, &["show", "2"]);
@@ -77,8 +77,6 @@ fn set_pending_checks_owner_and_combined_edits_atomically() {
             "--set-pending",
             "--session",
             "wrong",
-            "--title",
-            "Changed",
             "-d",
             "Changed",
         ],
@@ -88,7 +86,7 @@ fn set_pending_checks_owner_and_combined_edits_atomically() {
             "--set-pending",
             "--session",
             "worker",
-            "--title",
+            "--description",
             " ",
         ],
         vec![
@@ -131,14 +129,11 @@ fn set_pending_checks_owner_and_combined_edits_atomically() {
             "--set-pending",
             "--session",
             "worker",
-            "--title",
-            "Changed",
             "-d",
             "Changed",
         ],
     );
     assert_eq!(edited["status"], "new");
-    assert_eq!(edited["title"], "Changed");
     assert_eq!(edited["description"], "Changed");
 }
 

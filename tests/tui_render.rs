@@ -3,6 +3,13 @@
 mod render;
 
 #[test]
+fn preserved_crlf_displays_as_line_break() {
+    let layout = render::Layout::new(&["First".into(), "\r\n".into(), "Second".into()], 20);
+    assert_eq!(layout.rows, ["First", "Second"]);
+    assert_eq!(layout.positions[2], (1, 0));
+}
+
+#[test]
 fn newline_after_exact_width_does_not_add_blank_visual_row() {
     let layout = render::Layout::new(&["abcd".into(), "\n".into(), "x".into()], 4);
     assert_eq!(layout.rows, vec!["abcd", "x"]);

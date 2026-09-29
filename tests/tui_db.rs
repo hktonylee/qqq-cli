@@ -30,7 +30,6 @@ fn database() -> Db {
 }
 fn composition() -> Composition {
     Composition {
-        title: "Title".into(),
         description: "Details".into(),
         images: vec![ImageInput {
             name: "ok.png".into(),
@@ -42,7 +41,7 @@ fn composition() -> Composition {
 fn composition_saves_task_and_image_bytes_together() {
     let mut db = database();
     let task = db.save_composition(None, None, &composition()).unwrap();
-    assert_eq!(task.title, "Title");
+    assert_eq!(task.description, "Details");
     assert_eq!(db.show(task.id).unwrap()["images"][0]["name"], "ok.png");
     let bytes: Vec<u8> = db
         .conn
@@ -61,7 +60,7 @@ fn failed_image_insert_rolls_back_new_and_edited_drafts() {
     });
     assert!(db.save_composition(None, None, &draft).is_err());
     assert!(db.list(None).unwrap().is_empty());
-    let existing = db.add("Original", "Original details", None, &[]).unwrap();
+    let existing = db.add("Original\n\nOriginal details", None, &[]).unwrap();
     let before = db.show(existing.id).unwrap();
     assert!(
         db.save_composition(Some(existing.id), None, &draft)
@@ -72,7 +71,7 @@ fn failed_image_insert_rolls_back_new_and_edited_drafts() {
 #[test]
 fn draft_edit_preserves_ownership_dependencies_and_existing_attachments() {
     let mut db = database();
-    let parent = db.add("Parent", "", None, &[]).unwrap();
+    let parent = db.add("Parent", None, &[]).unwrap();
     db.next("parent", None).unwrap();
     db.complete(parent.id, "parent").unwrap();
     let task = db

@@ -1,6 +1,6 @@
 CREATE TABLE tasks (
  id INTEGER PRIMARY KEY AUTOINCREMENT,
- title TEXT NOT NULL CHECK(length(trim(title))>0), description TEXT NOT NULL DEFAULT '',
+ description TEXT NOT NULL CHECK(length(trim(description))>0),
  status TEXT NOT NULL DEFAULT 'new' CHECK(status IN ('new','in_progress','completed')),
  owner_session TEXT,
  created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),

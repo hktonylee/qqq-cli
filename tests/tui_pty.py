@@ -28,7 +28,7 @@ with tempfile.TemporaryDirectory(prefix="qqq-tui-test-") as folder:
     cli("init")
     args = ["add"]
     if scenario == "edit":
-        cli("add", "Original", "-d", "Details")
+        cli("add", "Original\n\nDetails")
         cli("next", "--local", "--session", "worker")
         args = ["edit", "-1"]
     image = Path(folder) / "test image.png"
@@ -73,7 +73,7 @@ with tempfile.TemporaryDirectory(prefix="qqq-tui-test-") as folder:
         read_until(b"Ctrl-S")
         if scenario == "blank":
             send(b"\x13")
-            read_until(b"Task title cannot be empty")
+            read_until(b"Task description cannot be empty")
             send(b"Recovered")
         elif scenario == "edit":
             cli("add", "Created while editing")
@@ -112,8 +112,8 @@ with tempfile.TemporaryDirectory(prefix="qqq-tui-test-") as folder:
             assert child.returncode == 0, screen[-2000:]
             task = json.loads(stdout)
             if scenario == "save":
-                assert task["title"] == "Title"
-                assert task["description"] == "\u754c" * 1001 + "\n[Image: test image.png]"
+                assert "title" not in task
+                assert task["description"] == "Title\n\n" + "\u754c" * 1001 + "\n[Image: test image.png]"
                 attachments = cli("show", "1")["images"]
                 assert [item["name"] for item in attachments] == ["test image.png", "flag image.png"]
                 exported = Path(folder) / "export.png"
@@ -124,13 +124,13 @@ with tempfile.TemporaryDirectory(prefix="qqq-tui-test-") as folder:
                 cli("show", "1", "--export-image", "2", "--output", str(flagged_export))
                 assert flagged_export.read_bytes() == image.read_bytes()
             elif scenario == "blank":
-                assert task["title"] == "Recovered"
+                assert task["description"] == "Recovered"
             else:
                 assert task["id"] == 1
-                assert task["description"] == "Details amended"
+                assert task["description"] == "Original\n\nDetails amended"
                 assert task["assignee"] == "worker"
                 assert task["status"] == "in_progress"
-                assert cli("show", "2")["task"]["title"] == "Created while editing"
+                assert cli("show", "2")["task"]["description"] == "Created while editing"
     finally:
         if child.poll() is None:
             child.kill()

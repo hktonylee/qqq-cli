@@ -104,7 +104,7 @@ fn editor_composition_preserves_parent() {
         String::from_utf8_lossy(&out.stderr)
     );
     let task: Value = serde_json::from_slice(&out.stdout).unwrap();
-    assert_eq!(task["title"], "Edited child");
+    assert_eq!(task["description"], "Edited child\n\nDetails\n");
     assert_eq!(task["parent_id"], 1);
 }
 
@@ -152,7 +152,7 @@ fn legacy_project() -> TempDir {
     conn.execute_batch(include_str!("../src/schema.sql"))
         .unwrap();
     conn.execute_batch(
-        "INSERT INTO tasks(title,status,owner_session) VALUES ('Legacy','in_progress','owner');
+        "INSERT INTO tasks(description,status,owner_session) VALUES ('Legacy','in_progress','owner');
         INSERT INTO messages(task_id,body) VALUES (1,'Note');
         INSERT INTO images(task_id,name,media_type,data) VALUES (1,'x.png','image/png',X'010203');
         INSERT INTO events(task_id,session,action) VALUES (1,'owner','claim');",
@@ -184,7 +184,7 @@ fn version_one_migration_preserves_data_and_is_repeatable() {
         .unwrap();
     for _ in 0..2 {
         let show = ok(p, &["show", "1"]);
-        assert_eq!(show["task"]["title"], "Legacy");
+        assert_eq!(show["task"]["description"], "Legacy");
         assert_eq!(show["task"]["assignee"], "owner");
         assert_eq!(show["task"]["created_at"], before.0);
         assert_eq!(show["task"]["updated_at"], before.1);
@@ -208,7 +208,7 @@ fn version_one_migration_preserves_data_and_is_repeatable() {
     assert_eq!(ok(p, &["add", "Child", "--parent", "1"])["parent_id"], 1);
     assert!(
         conn.execute(
-            "INSERT INTO tasks(title,parent_id) VALUES ('Invalid',999)",
+            "INSERT INTO tasks(description,parent_id) VALUES ('Invalid',999)",
             []
         )
         .is_err()

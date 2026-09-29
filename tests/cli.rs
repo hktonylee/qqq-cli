@@ -37,7 +37,7 @@ fn project() -> TempDir {
 fn persistent_ownership_and_fifo() {
     let d = project();
     let p = d.path();
-    ok(p, &["add", "First", "--description", "Details"]);
+    ok(p, &["add", "First\n\nDetails"]);
     ok(p, &["add", "Second"]);
     assert_eq!(ok(p, &["next", "--session", "a"])["id"], 1);
     assert_eq!(ok(p, &["next", "--session", "a"])["id"], 1);
@@ -433,7 +433,7 @@ fn cwd_lookup_rejects_missing_ambiguous_or_unidentified_matches_before_claim() {
 fn edit_new_updates_fields_and_release_history_atomically() {
     let d = project();
     let p = d.path();
-    ok(p, &["add", "Old", "-d", "Details"]);
+    ok(p, &["add", "Old\n\nDetails"]);
     ok(p, &["next", "--session", "a"]);
     let before = ok(p, &["show", "1"]);
     for args in [
@@ -442,7 +442,7 @@ fn edit_new_updates_fields_and_release_history_atomically() {
             "1",
             "--set-status",
             "new",
-            "--title",
+            "--description",
             "Changed",
             "--session",
             "wrong",
@@ -452,7 +452,7 @@ fn edit_new_updates_fields_and_release_history_atomically() {
             "1",
             "--set-status",
             "new",
-            "--title",
+            "--description",
             " ",
             "--session",
             "a",
@@ -469,18 +469,15 @@ fn edit_new_updates_fields_and_release_history_atomically() {
             "-1",
             "--set-status",
             "new",
-            "--title",
-            "New",
-            "-d",
-            "",
+            "--description",
+            "New\n\n",
             "--session",
             "a",
         ],
     );
     assert_eq!(updated["status"], "new");
     assert!(updated["assignee"].is_null());
-    assert_eq!(updated["title"], "New");
-    assert_eq!(updated["description"], "");
+    assert_eq!(updated["description"], "New\n\n");
     let after = ok(p, &["show", "1"]);
     assert_eq!(after["events"].as_array().unwrap().len(), 2);
     assert_eq!(after["events"][1]["action"], "release");
@@ -520,7 +517,7 @@ fn edit_new_skips_editor_and_release_command_is_removed() {
     );
     let task: Value = serde_json::from_slice(&output.stdout).unwrap();
     assert_eq!(task["status"], "new");
-    assert_eq!(task["title"], "Task");
+    assert_eq!(task["description"], "Task");
     assert_eq!(
         run(p, &["release", "1", "--session", "a"]).status.code(),
         Some(2)

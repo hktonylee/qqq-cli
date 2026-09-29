@@ -157,11 +157,10 @@ fn wait_from_nested_directory_returns_task_added_later_as_single_json() {
     std::fs::create_dir(&nested).unwrap();
     let mut waiter = Waiter::spawn(&nested, "worker", true);
     waiter.assert_waiting();
-    ok(p, &["add", "Arrived later", "-d", "Details"]);
+    ok(p, &["add", "Arrived later\n\nDetails"]);
     let task = waiter.task();
     assert_eq!(task["id"], 1);
-    assert_eq!(task["title"], "Arrived later");
-    assert_eq!(task["description"], "Details");
+    assert_eq!(task["description"], "Arrived later\n\nDetails");
     assert_eq!(task["assignee"], "worker");
 }
 
@@ -178,7 +177,8 @@ fn wait_returns_released_task_in_human_output() {
         &["edit", "1", "--set-status", "new", "--session", "original"],
     );
     let output = String::from_utf8(waiter.finish().stdout).unwrap();
-    assert!(output.contains("#1 Retry"));
+    assert!(output.contains("#1"));
+    assert!(output.contains("Retry"));
     assert!(output.contains("Status: In progress"));
     assert!(output.contains("Assignee: worker"));
     assert!(!output.contains("No ready tasks."));

@@ -52,9 +52,9 @@ fn paste(draft: &mut Draft, text: &str) -> Result<()> {
     }
     Ok(())
 }
-pub fn compose(title: &str, description: &str) -> Result<Composition> {
+pub fn compose(description: &str) -> Result<Composition> {
     let _terminal = TerminalGuard::enter()?;
-    let mut draft = Draft::new(title, description);
+    let mut draft = Draft::new(description);
     let mut top = 0;
     let mut message = String::new();
     loop {

@@ -1,6 +1,6 @@
 CREATE TABLE tasks_v4 (
  id INTEGER PRIMARY KEY AUTOINCREMENT,
- title TEXT NOT NULL CHECK(length(trim(title))>0), description TEXT NOT NULL DEFAULT '',
+ description TEXT NOT NULL CHECK(length(trim(description))>0),
  status TEXT NOT NULL DEFAULT 'new' CHECK(status IN ('new','in_progress','completed','error')),
  assignee TEXT,
  created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
@@ -8,8 +8,8 @@ CREATE TABLE tasks_v4 (
  parent_id INTEGER REFERENCES tasks(id),
  CHECK ((status='in_progress' AND assignee IS NOT NULL) OR (status!='in_progress' AND assignee IS NULL))
 );
-INSERT INTO tasks_v4(id,title,description,status,assignee,created_at,updated_at,parent_id)
- SELECT id,title,description,status,assignee,created_at,updated_at,parent_id FROM tasks;
+INSERT INTO tasks_v4(id,description,status,assignee,created_at,updated_at,parent_id)
+ SELECT id,description,status,assignee,created_at,updated_at,parent_id FROM tasks;
 UPDATE sqlite_sequence SET seq=MAX(seq,COALESCE((SELECT seq FROM sqlite_sequence WHERE name='tasks'),0)) WHERE name='tasks_v4';
 DROP TABLE tasks;
 ALTER TABLE tasks_v4 RENAME TO tasks;

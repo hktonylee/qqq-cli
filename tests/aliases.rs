@@ -62,12 +62,14 @@ impl Project {
 
 #[test]
 fn aliases_expand_quotes_and_append_literal_arguments() {
-    let p = Project::new("[alias]\nnew = \"add --description 'two words'\"\ns = 'show'\n");
-    let title = "literal $(touch marker) ; $HOME";
-    let task = p.ok(&["new", title]);
-    assert_eq!(task["title"], title);
-    assert_eq!(task["description"], "two words");
-    assert_eq!(p.ok(&["s", "1"])["task"], task);
+    let p = Project::new(
+        "[alias]\nnew = \"add --description 'two words'\"\nliteral = 'add'\ns = 'show'\n",
+    );
+    assert_eq!(p.ok(&["new"])["description"], "two words");
+    let body = "literal $(touch marker) ; $HOME";
+    let task = p.ok(&["literal", body]);
+    assert_eq!(task["description"], body);
+    assert_eq!(p.ok(&["s", "2"])["task"], task);
     assert!(!p.dir.path().join("marker").exists());
 }
 
@@ -135,7 +137,7 @@ fn malformed_config_reports_path_but_builtins_remain_available() {
 #[test]
 fn builtins_win_and_command_arguments_are_not_expanded() {
     let p = Project::new("[alias]\nlist = 'next'\nhelp = 'next'\nhello = 'list'\n");
-    assert_eq!(p.ok(&["add", "hello"])["title"], "hello");
+    assert_eq!(p.ok(&["add", "hello"])["description"], "hello");
     assert_eq!(p.ok(&["list"]).as_array().unwrap().len(), 1);
     assert!(p.run(&["help"]).status.success());
 }
@@ -214,10 +216,10 @@ fn alias_values_support_double_quotes_escapes_and_empty_arguments() {
         r#"[alias]
 quoted = 'add --description "two words"'
 escaped = 'add --description two\ words'
-empty = 'add --description ""'
+empty = 'config custom.value ""'
 "#,
     );
-    assert_eq!(p.ok(&["quoted", "Title"])["description"], "two words");
-    assert_eq!(p.ok(&["escaped", "Title"])["description"], "two words");
-    assert_eq!(p.ok(&["empty", "Title"])["description"], "");
+    assert_eq!(p.ok(&["quoted"])["description"], "two words");
+    assert_eq!(p.ok(&["escaped"])["description"], "two words");
+    assert_eq!(p.ok(&["empty"])["value"], "");
 }

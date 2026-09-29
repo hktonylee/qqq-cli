@@ -5,22 +5,17 @@ use std::{
     process::{Command, Stdio},
 };
 
-pub fn compose(
-    title: &str,
-    description: &str,
-    external: bool,
-) -> Result<crate::tui::draft::Composition> {
+pub fn compose(description: &str, external: bool) -> Result<crate::tui::draft::Composition> {
     if !external && std::io::stdin().is_terminal() && std::io::stderr().is_terminal() {
-        return crate::tui::compose(title, description);
+        return crate::tui::compose(description);
     }
-    let (title, description) = compose_external(title, description)?;
+    let description = compose_external(description)?;
     Ok(crate::tui::draft::Composition {
-        title,
         description,
         images: Vec::new(),
     })
 }
-fn compose_external(title: &str, description: &str) -> Result<(String, String)> {
+fn compose_external(description: &str) -> Result<String> {
     let editor = std::env::var("EDITOR")
         .context("Set EDITOR to compose or edit a task, or provide fields inline")?;
     ensure!(
@@ -32,8 +27,7 @@ fn compose_external(title: &str, description: &str) -> Result<(String, String)> 
         .tempdir()
         .context("Failed to create task draft directory")?;
     let draft = draft_dir.path().join("task.txt");
-    fs::write(&draft, format!("{title}\n\n{description}\n"))
-        .context("Failed to write task draft")?;
+    fs::write(&draft, description).context("Failed to write task draft")?;
 
     // EDITOR is a user-configured shell command, allowing flags and quoted paths.
     // Pass the draft separately so its path is never interpreted as shell code.
@@ -53,11 +47,9 @@ fn compose_external(title: &str, description: &str) -> Result<(String, String)> 
     );
     // Read the path again: editors may replace the file on save.
     let content = fs::read_to_string(&draft).context("Failed to read edited task")?;
-    let content = content.replace("\r\n", "\n");
-    let (title, description) = content.split_once('\n').unwrap_or((&content, ""));
     ensure!(
-        !title.trim().is_empty(),
-        "Task title cannot be empty; task not saved"
+        !content.trim().is_empty(),
+        "Task description cannot be empty; task not saved"
     );
-    Ok((title.trim().to_owned(), description.trim().to_owned()))
+    Ok(content)
 }

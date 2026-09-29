@@ -4,12 +4,12 @@ Local-first Rust CLI for project tasks and coding agent sessions. Everything liv
 
 ## Output
 
-`qqq list` shows task IDs, status, and titles as a dependency tree. Children appear
+`qqq list` shows task IDs, status, and first description lines as a dependency tree. Children appear
 below their parent; roots and siblings follow creation order. Branches replace
 the parent column:
 
 ```text
-ID     STATUS       TITLE
+ID     STATUS       DESCRIPTION
 1      New          Build API
 2      New          ├── Auth
 4      New          │   └── Token tests
@@ -90,7 +90,9 @@ Run `init` in your project root. Other commands find the nearest `qqq.db` in cur
 
 ```sh
 qqq init
-qqq add "Fix login" --description "Show useful error when credentials expire"
+qqq add --description "Fix login
+
+Show useful error when credentials expire"
 qqq edit 1 --description "Reproduce expiry, fix retry, add regression test"
 qqq edit 1 --image ./screenshot.png
 qqq message 1 "Reproduced on fresh account"
@@ -98,9 +100,14 @@ qqq list
 qqq show 1
 ```
 
-Run `qqq add` without a title to compose a task in the terminal editor. First line
-becomes the title; remaining lines become the description. Surrounding whitespace
-is trimmed. `qqq edit <id>` opens the same editor with existing content.
+Run `qqq add` without text to compose a task in the terminal editor. The whole
+buffer becomes one description: no separate title, splitting or trimming.
+`qqq edit <id>` opens the same editor with the complete existing description.
+Inline `qqq add TEXT` and `qqq add --description TEXT` are equivalent; use one
+form at a time. Blank first lines are allowed; the whole body must contain text.
+Leading/trailing whitespace and final newlines are preserved. Human list/tree/
+watch output previews only the first line; `show` displays the whole body. JSON
+keeps the full `description` and has no `title` field.
 
 Ctrl-S saves; Esc or Ctrl-C cancels. Enter inserts a newline. Arrows, Home/End
 (also Ctrl-A/Ctrl-E), Backspace and Delete edit the draft. The viewport follows
@@ -112,8 +119,8 @@ to read the desktop clipboard. Pastes over 1,000 Unicode characters show a compa
 `[Pasted text #N: X chars]` placeholder. Full text expands on save; existing large
 descriptions start collapsed too. Ctrl-V prefers clipboard images, encoding them
 as PNG. Pasting a local image path (including a shell-quoted path with spaces)
-adds an image attachment and shows `[Image #N: filename]`. Place images below the
-title line. Left/Right cross placeholders as one unit; Backspace/Delete removes
+adds an image attachment and shows `[Image #N: filename]`. Images can appear
+anywhere in the buffer, including the first line. Left/Right cross placeholders as one unit; Backspace/Delete removes
 the whole placeholder and its payload. Saved descriptions use `[Image: filename]`
 markers; image bytes are stored in `qqq.db` and remain exportable.
 
@@ -124,14 +131,16 @@ clipboard errors appear in the editor and keep the draft. Terminals without
 bracketed paste can use Ctrl-V for collapsed text pastes.
 
 Use `--edit` (`-e`) on `add` or `edit` to open `$EDITOR` instead, including prefilled
-field flags:
+description flags:
 
 ```sh
 export EDITOR='vim'
 qqq add
-qqq add "Fix login" --description "Reproduce expiry" --edit
+qqq add --description "Fix login
+
+Reproduce expiry" --edit
 qqq edit 1 --edit
-qqq edit 1 --edit --title "Prefilled title"
+qqq edit 1 --edit --description "Prefilled description"
 ```
 
 Nonterminal interactive calls also use `$EDITOR`. `EDITOR` is required for this
@@ -139,23 +148,20 @@ external-editor input and runs through `sh`, supporting quoted
 executable paths and arguments such as `EDITOR='code --wait'`. Use an editor that
 waits until editing finishes. Editor output goes to stderr; stdout contains only
 the command result (JSON when `--json` is supplied).
-An empty first line, nonzero editor exit, or unreadable draft aborts creation.
-Temporary drafts are removed on success or error. Inline `qqq add "Title"` works
+A blank whole buffer, nonzero editor exit, or unreadable draft aborts creation.
+Temporary drafts are removed on success or error. Inline `qqq add "Task description"` works
 without an editor.
 
 Edit an existing task with `qqq edit <id>` (replaces `describe`). With no update
-flags, the terminal editor opens with the current title on the first line and
-description below. Save to update both fields. `--edit` forces the external editor.
+flags, the terminal editor opens with the complete description. Save to replace
+that body. `--edit` forces the external editor.
 The same draft format and error handling as `add` apply.
 
 ```sh
 qqq edit 1
-qqq edit 1 --title "Fix expired login"
 qqq edit 1 --description "Updated details"
-qqq edit 1 --title "Fix login" -d "Updated details"
-qqq edit 1 --description ""  # clear description
 qqq edit -1                  # edit newest created task
-qqq edit -2 --title "Updated" # edit second newest created task
+qqq edit -2 --description "Updated" # edit second newest created task
 ```
 
 The first argument is a positive task ID or a negative creation index (`-1`
@@ -164,11 +170,11 @@ statuses in descending ID order, not last-edited order. Zero, missing IDs, and
 out-of-range indexes fail before opening the editor. The target is resolved once
 before editing, so tasks created while the editor is open do not change it.
 
-Field flags skip the editor and preserve omitted fields. Titles cannot be blank.
-Existing multiline titles require field flags because the editor format uses one title line.
-Editing fields or attachments preserves task status and ownership unless a status
-flag is supplied. Messages and existing attachments remain; dependencies change
-only through `--set-parent`.
+Description flags skip editor, replace complete body. Omitted body stays unchanged
+during image/status/parent edits. Blank-only descriptions are rejected. Editing
+content or attachments preserves status and ownership unless a status flag is
+supplied. Messages and existing attachments remain; dependencies change only
+through `--set-parent`.
 
 Use `qqq edit <id> --set-status new` to return a claimed task to the queue
 (replaces `release`). For an active task, it must be
@@ -198,7 +204,7 @@ session. New/completed tasks reject the transition. `next` can claim returned
 work once its current dependency is satisfied. `--set-pending` conflicts with
 `--set-status` and `--edit`.
 
-`--set-status` skips the editor. Combined title, description and status updates
+`--set-status` skips the editor. Combined description and status updates
 are atomic: validation or ownership errors leave all fields and history unchanged.
 
 Mark failed work that needs manual handling with `error` and a required reason:
@@ -505,3 +511,10 @@ and the committed lockfile. This workflow builds artifacts; it does not publish
 GitHub Releases.
 
 Tests exercise persistence, FIFO order, wrong-owner rejection, concurrent claims, attachments, ancestor lookup, cwd discovery, Herdr session matching and automatic ownership using a fake Herdr executable.
+
+
+Databases containing the old `title` column require a manual SQLite update; no
+new migration was added for single-description storage. Back up first, combine
+old title and body with a blank line, then remove the old column while preserving
+task IDs, ownership, dependencies and related tables. qqq rejects the old schema
+before writing rather than silently discarding content.

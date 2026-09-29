@@ -76,7 +76,8 @@ impl Layout {
     }
 }
 fn escape(text: &str) -> String {
-    text.chars()
+    text.replace("\r\n", "\n")
+        .chars()
         .flat_map(|c| {
             if c.is_control() && c != '\n' {
                 c.escape_unicode().collect::<Vec<_>>()
@@ -129,10 +130,7 @@ pub fn draw(
         output,
         Print(clipped("qqq task editor", width as usize)),
         MoveTo(0, 1),
-        Print(clipped(
-            "First line = title; rest = description",
-            width as usize
-        ))
+        Print(clipped("Whole buffer = task description", width as usize))
     )?;
     for (index, line) in layout.rows.iter().skip(*top).take(body_height).enumerate() {
         queue!(output, MoveTo(0, index as u16 + 2), Print(line))?;

@@ -42,7 +42,6 @@ impl std::str::FromStr for ParentChange {
 #[derive(Serialize)]
 pub struct Task {
     pub id: i64,
-    pub title: String,
     pub description: String,
     pub status: String,
     pub assignee: Option<String>,
@@ -53,17 +52,27 @@ pub struct Task {
 fn task_row(r: &rusqlite::Row<'_>) -> rusqlite::Result<Task> {
     Ok(Task {
         id: r.get(0)?,
-        title: r.get(1)?,
-        description: r.get(2)?,
-        status: r.get(3)?,
-        assignee: r.get(4)?,
-        created_at: r.get(5)?,
-        updated_at: r.get(6)?,
-        parent_id: r.get(7)?,
+        description: r.get(1)?,
+        status: r.get(2)?,
+        assignee: r.get(3)?,
+        created_at: r.get(4)?,
+        updated_at: r.get(5)?,
+        parent_id: r.get(6)?,
     })
 }
 pub fn nonempty(value: &str, name: &str) -> Result<()> {
     ensure!(!value.trim().is_empty(), "{name} must not be empty");
+    Ok(())
+}
+fn ensure_description_schema(conn: &Connection) -> Result<()> {
+    ensure!(
+        !conn.query_row(
+            "SELECT EXISTS(SELECT 1 FROM pragma_table_info('tasks') WHERE name='title')",
+            [],
+            |r| r.get::<_, bool>(0)
+        )?,
+        "Database contains legacy title column; update SQLite manually before using qqq"
+    );
     Ok(())
 }
 impl Db {
@@ -91,6 +100,7 @@ impl Db {
             (1..=4).contains(&version) || (init && version == 0),
             "Unsupported database schema version {version}"
         );
+        ensure_description_schema(&conn)?;
         if version < 4 {
             // Rebuild CHECK constraints without changing references to tasks.
             // SQLite requires foreign_keys to change outside a transaction.
@@ -102,6 +112,7 @@ impl Db {
                 (1..=4).contains(&version) || (init && version == 0),
                 "Unsupported database schema version {version}"
             );
+            ensure_description_schema(&tx)?;
             if version == 0 {
                 tx.execute_batch(include_str!("schema.sql"))?;
             }
@@ -129,16 +140,15 @@ impl Db {
         Ok((Self { conn }, path))
     }
     pub fn task(&self, id: i64) -> Result<Task> {
-        self.conn.query_row("SELECT id,title,description,status,assignee,created_at,updated_at,parent_id FROM tasks WHERE id=?",[id],task_row).optional()?.with_context(||format!("Task {id} not found"))
+        self.conn.query_row("SELECT id,description,status,assignee,created_at,updated_at,parent_id FROM tasks WHERE id=?",[id],task_row).optional()?.with_context(||format!("Task {id} not found"))
     }
     pub fn add(
         &mut self,
-        title: &str,
         description: &str,
         parent_id: Option<i64>,
         images: &[ImageInput],
     ) -> Result<Task> {
-        nonempty(title, "Title")?;
+        nonempty(description, "Description")?;
         if let Some(id) = parent_id {
             self.task(id)?;
         }
@@ -149,12 +159,12 @@ impl Db {
             .conn
             .transaction_with_behavior(TransactionBehavior::Immediate)?;
         tx.execute(
-            "INSERT INTO tasks(title,description,parent_id) VALUES (?,?,?)",
-            params![title, description, parent_id],
+            "INSERT INTO tasks(description,parent_id) VALUES (?,?)",
+            params![description, parent_id],
         )?;
         let id = tx.last_insert_rowid();
         Self::save_images(&tx, id, images)?;
-        let task = tx.query_row("SELECT id,title,description,status,assignee,created_at,updated_at,parent_id FROM tasks WHERE id=?", [id], task_row)?;
+        let task = tx.query_row("SELECT id,description,status,assignee,created_at,updated_at,parent_id FROM tasks WHERE id=?", [id], task_row)?;
         tx.commit()?;
         Ok(task)
     }
@@ -165,20 +175,13 @@ impl Db {
         draft: &crate::tui::draft::Composition,
     ) -> Result<Task> {
         match id {
-            Some(id) => self.edit(
-                id,
-                Some(&draft.title),
-                Some(&draft.description),
-                None,
-                &draft.images,
-                None,
-            ),
-            None => self.add(&draft.title, &draft.description, parent, &draft.images),
+            Some(id) => self.edit(id, Some(&draft.description), None, &draft.images, None),
+            None => self.add(&draft.description, parent, &draft.images),
         }
     }
     pub fn list(&self, max_completed: Option<i64>) -> Result<Vec<Task>> {
         Ok(self.conn.prepare(
-            "SELECT id,title,description,status,assignee,created_at,updated_at,parent_id FROM tasks
+            "SELECT id,description,status,assignee,created_at,updated_at,parent_id FROM tasks
              WHERE ?1 IS NULL OR status!='completed' OR id IN (
                  SELECT id FROM tasks WHERE status='completed'
                  ORDER BY (SELECT MAX(id) FROM events WHERE task_id=tasks.id AND action='complete') DESC,
@@ -196,14 +199,13 @@ impl Db {
     pub fn edit(
         &mut self,
         id: i64,
-        title: Option<&str>,
         description: Option<&str>,
         transition: Option<EditTransition<'_>>,
         images: &[ImageInput],
         parent: Option<ParentChange>,
     ) -> Result<Task> {
-        if let Some(title) = title {
-            nonempty(title, "Title")?;
+        if let Some(description) = description {
+            nonempty(description, "Description")?;
         }
         for image in images {
             image.media_type()?;
@@ -288,10 +290,10 @@ impl Db {
             }
             None => {}
         }
-        ensure!(tx.execute("UPDATE tasks SET title=COALESCE(?,title),description=COALESCE(?,description),updated_at=strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE id=?",params![title,description,id])?==1,"Task {id} not found");
+        ensure!(tx.execute("UPDATE tasks SET description=COALESCE(?,description),updated_at=strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE id=?",params![description,id])?==1,"Task {id} not found");
         Self::save_images(&tx, id, images)?;
         let task = tx.query_row(
-            "SELECT id,title,description,status,assignee,created_at,updated_at,parent_id FROM tasks WHERE id=?",
+            "SELECT id,description,status,assignee,created_at,updated_at,parent_id FROM tasks WHERE id=?",
             [id], task_row,
         )?;
         tx.commit()?;
@@ -355,7 +357,7 @@ impl Db {
     pub fn owned(&self, session: &str) -> Result<Option<Task>> {
         nonempty(session, "Session")?;
         Ok(self.conn.query_row(
-            "SELECT id,title,description,status,assignee,created_at,updated_at,parent_id FROM tasks WHERE status='in_progress' AND assignee=?",
+            "SELECT id,description,status,assignee,created_at,updated_at,parent_id FROM tasks WHERE status='in_progress' AND assignee=?",
             [session], task_row,
         ).optional()?)
     }
@@ -409,7 +411,7 @@ impl Db {
             }
         }
         let task = id.map(|id| tx.query_row(
-            "SELECT id,title,description,status,assignee,created_at,updated_at,parent_id FROM tasks WHERE id=?",
+            "SELECT id,description,status,assignee,created_at,updated_at,parent_id FROM tasks WHERE id=?",
             [id], task_row,
         )).transpose()?;
         tx.commit()?;
@@ -426,7 +428,7 @@ impl Db {
             params![id, session],
         )?;
         let task = tx.query_row(
-            "SELECT id,title,description,status,assignee,created_at,updated_at,parent_id FROM tasks WHERE id=?",
+            "SELECT id,description,status,assignee,created_at,updated_at,parent_id FROM tasks WHERE id=?",
             [id], task_row,
         )?;
         tx.commit()?;

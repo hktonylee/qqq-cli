@@ -23,7 +23,7 @@ fn tui_cancel_leaves_database_unchanged_and_restores_terminal() {
     scenario("cancel");
 }
 #[test]
-fn tui_blank_title_remains_editable_until_valid_save() {
+fn tui_blank_body_remains_editable_until_valid_save() {
     scenario("blank");
 }
 #[test]

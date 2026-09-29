@@ -54,7 +54,7 @@ fn fail(dir: &TempDir, id: &str, session: &str) -> Value {
 #[test]
 fn failed_task_needs_explicit_manual_retry_and_retains_details() {
     let d = project();
-    ok(&d, &["add", "Task", "--description", "Original details"]);
+    ok(&d, &["add", "Task\n\nOriginal details"]);
     ok(&d, &["message", "1", "Existing note"]);
     std::fs::write(d.path().join("x.png"), b"\x89PNG\r\n\x1a\nfixture").unwrap();
     ok(&d, &["edit", "1", "--image", "x.png"]);
@@ -69,7 +69,7 @@ fn failed_task_needs_explicit_manual_retry_and_retains_details() {
     assert!(ok(&d, &["next", "--local", "--session", "worker"]).is_null());
     let detail = ok(&d, &["show", "1"]);
     assert_eq!(detail["task"]["created_at"], before["task"]["created_at"]);
-    assert_eq!(detail["task"]["description"], "Original details");
+    assert_eq!(detail["task"]["description"], "Task\n\nOriginal details");
     assert_eq!(detail["images"], before["images"]);
     assert_eq!(detail["herdr"], before["herdr"]);
     assert_eq!(detail["messages"][0], before["messages"][0]);
@@ -85,10 +85,10 @@ fn failed_task_needs_explicit_manual_retry_and_retains_details() {
 
     let retried = ok(
         &d,
-        &["edit", "1", "--set-status", "new", "--title", "Fixed"],
+        &["edit", "1", "--set-status", "new", "--description", "Fixed"],
     );
     assert_eq!(retried["status"], "new");
-    assert_eq!(retried["title"], "Fixed");
+    assert_eq!(retried["description"], "Fixed");
     let detail = ok(&d, &["show", "1"]);
     assert_eq!(detail["messages"].as_array().unwrap().len(), 2);
     assert_eq!(detail["events"][2]["action"], "release");
@@ -128,7 +128,7 @@ fn error_status_validation_and_owner_checks_are_atomic() {
             "Failure",
             "--session",
             "other",
-            "--title",
+            "--description",
             "Changed",
         ],
         vec![
@@ -140,7 +140,7 @@ fn error_status_validation_and_owner_checks_are_atomic() {
             "Failure",
             "--session",
             "owner",
-            "--title",
+            "--description",
             " ",
         ],
         vec![
@@ -153,7 +153,14 @@ fn error_status_validation_and_owner_checks_are_atomic() {
             "--session",
             "owner",
         ],
-        vec!["edit", "1", "--reason", "Failure", "--title", "Changed"],
+        vec![
+            "edit",
+            "1",
+            "--reason",
+            "Failure",
+            "--description",
+            "Changed",
+        ],
     ] {
         assert!(!run(&d, &args).status.success(), "{args:?}");
         assert_eq!(ok(&d, &["show", "1"]), before, "{args:?}");
@@ -169,19 +176,19 @@ fn error_status_validation_and_owner_checks_are_atomic() {
             "Failure",
             "--session",
             "owner",
-            "--title",
-            "Changed",
-            "-d",
-            "New details",
+            "--description",
+            "Changed\n\nNew details",
         ],
     );
-    assert_eq!(failed["title"], "Changed");
-    assert_eq!(failed["description"], "New details");
+    assert_eq!(failed["description"], "Changed\n\nNew details");
     let before = ok(&d, &["show", "1"]);
     assert!(
-        !run(&d, &["edit", "1", "--set-status", "new", "--title", " "])
-            .status
-            .success()
+        !run(
+            &d,
+            &["edit", "1", "--set-status", "new", "--description", " "]
+        )
+        .status
+        .success()
     );
     assert_eq!(ok(&d, &["show", "1"]), before);
     let retried = ok(
@@ -284,9 +291,9 @@ fn legacy_project() -> TempDir {
     conn.execute_batch(include_str!("../src/migrate_v3.sql"))
         .unwrap();
     conn.execute_batch(
-        "INSERT INTO tasks(title,status,assignee) VALUES ('Parent','in_progress','legacy');
-         INSERT INTO tasks(title,parent_id) VALUES ('Child',1);
-         INSERT INTO tasks(id,title) VALUES (99,'Deleted'); DELETE FROM tasks WHERE id=99;
+        "INSERT INTO tasks(description,status,assignee) VALUES ('Parent','in_progress','legacy');
+         INSERT INTO tasks(description,parent_id) VALUES ('Child',1);
+         INSERT INTO tasks(id,description) VALUES (99,'Deleted'); DELETE FROM tasks WHERE id=99;
          INSERT INTO messages(task_id,body) VALUES (1,'Note');
          INSERT INTO events(task_id,session,action) VALUES (1,'legacy','claim');
          INSERT INTO events(id,task_id,session,action) VALUES (77,1,'legacy','claim'); DELETE FROM events WHERE id=77;
@@ -344,7 +351,7 @@ fn v3_migration_preserves_data_sequences_constraints_and_foreign_keys() {
         "UPDATE tasks SET status='in_progress',assignee=NULL WHERE id=1",
         "UPDATE tasks SET status='unknown' WHERE id=1",
         "INSERT INTO events(task_id,session,action) VALUES (1,'a','unknown')",
-        "INSERT INTO tasks(title,parent_id) VALUES ('Bad',999)",
+        "INSERT INTO tasks(description,parent_id) VALUES ('Bad',999)",
         "INSERT INTO messages(task_id,body) VALUES (999,'Bad')",
         "DELETE FROM tasks WHERE id=1",
     ] {
@@ -359,7 +366,7 @@ fn v3_migration_preserves_data_sequences_constraints_and_foreign_keys() {
     ok(&d, &["next", "--local", "--session", "a"]);
     assert!(
         conn.execute(
-            "INSERT INTO tasks(title,status,assignee) VALUES ('Dup','in_progress','a')",
+            "INSERT INTO tasks(description,status,assignee) VALUES ('Dup','in_progress','a')",
             []
         )
         .is_err()
@@ -475,7 +482,7 @@ fn failed_image_insert_rolls_back_error_reason_history_and_content() {
         "Failure",
         "--session",
         "worker",
-        "--title",
+        "--description",
         "Changed",
         "--image",
         "x.png",

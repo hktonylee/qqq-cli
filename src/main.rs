@@ -59,11 +59,13 @@ enum Commands {
     Init,
     /// Create a new task.
     Add {
-        /// Task title. Omit to compose title and description interactively.
-        title: Option<String>,
-        #[arg(short, long, default_value = "")]
-        description: String,
-        /// Use $EDITOR with the supplied title and description prefilled.
+        /// Whole task description. Omit to compose interactively.
+        #[arg(conflicts_with = "description")]
+        text: Option<String>,
+        /// Whole task description; alternative to positional TEXT.
+        #[arg(short, long)]
+        description: Option<String>,
+        /// Use $EDITOR with supplied description prefilled.
         #[arg(short, long)]
         edit: bool,
         /// Existing task that must complete before this task can be claimed.
@@ -73,7 +75,7 @@ enum Commands {
         #[arg(long = "image", value_name = "PATH")]
         images: Vec<PathBuf>,
     },
-    /// List tasks as a dependency tree; JSON lists tasks in creation order.
+    /// List first description lines as a dependency tree; JSON preserves whole text.
     List {
         /// Maximum completed tasks to show; overrides human display default. 0 hides completed tasks.
         #[arg(long, value_parser = clap::value_parser!(i64).range(0..))]
@@ -95,13 +97,11 @@ enum Commands {
         #[arg(long, requires = "export_image", value_name = "PATH")]
         output: Option<PathBuf>,
     },
-    /// Edit title and description interactively, or update supplied fields directly.
+    /// Edit whole description interactively, or update supplied fields directly.
     Edit {
         /// Task ID, or negative creation index: -1 is newest, -2 second newest.
         #[arg(allow_negative_numbers = true)]
         id: i64,
-        #[arg(long)]
-        title: Option<String>,
         #[arg(short, long)]
         description: Option<String>,
         /// Force $EDITOR with supplied fields prefilled, including attachment edits.
@@ -183,7 +183,7 @@ fn execute(cli: Cli, display_limit: Option<i64>) -> Result<Value> {
         Commands::Config { .. } => unreachable!("config was handled before database lookup"),
         Commands::Init => json!({"database":path}),
         Commands::Add {
-            title,
+            text,
             description,
             edit,
             parent,
@@ -196,11 +196,10 @@ fn execute(cli: Cli, display_limit: Option<i64>) -> Result<Value> {
                 .iter()
                 .map(|path| images::ImageInput::read(path))
                 .collect::<Result<Vec<_>>>()?;
-            match title {
-                Some(title) if !edit => json!(db.add(&title, &description, parent, &images)?),
-                title => {
-                    let mut draft =
-                        editor::compose(title.as_deref().unwrap_or(""), &description, edit)?;
+            match text.or(description) {
+                Some(description) if !edit => json!(db.add(&description, parent, &images)?),
+                description => {
+                    let mut draft = editor::compose(description.as_deref().unwrap_or(""), edit)?;
                     draft.images.extend(images);
                     json!(db.save_composition(None, parent, &draft)?)
                 }
@@ -220,7 +219,6 @@ fn execute(cli: Cli, display_limit: Option<i64>) -> Result<Value> {
         }
         Commands::Edit {
             id,
-            title,
             description,
             edit,
             set_status,
@@ -241,23 +239,16 @@ fn execute(cli: Cli, display_limit: Option<i64>) -> Result<Value> {
                 .map(|path| images::ImageInput::read(path))
                 .collect::<Result<Vec<_>>>()?;
             if edit
-                || (title.is_none()
-                    && description.is_none()
+                || (description.is_none()
                     && set_status.is_none()
                     && set_parent.is_none()
                     && images.is_empty())
             {
-                let title = title.as_deref().unwrap_or(&task.title);
                 let description = description.as_deref().unwrap_or(&task.description);
-                ensure!(
-                    !title.contains(['\n', '\r']),
-                    "Cannot edit a multiline title in EDITOR; use --title or --description"
-                );
-                let mut draft = editor::compose(title, description, edit)?;
+                let mut draft = editor::compose(description, edit)?;
                 draft.images.extend(images);
                 json!(db.edit(
                     id,
-                    Some(&draft.title),
                     Some(&draft.description),
                     None,
                     &draft.images,
@@ -301,14 +292,7 @@ fn execute(cli: Cli, display_limit: Option<i64>) -> Result<Value> {
                     }),
                     None => None,
                 };
-                json!(db.edit(
-                    id,
-                    title.as_deref(),
-                    description.as_deref(),
-                    transition,
-                    &images,
-                    set_parent
-                )?)
+                json!(db.edit(id, description.as_deref(), transition, &images, set_parent)?)
             }
         }
         Commands::Next { local, wait } => {
