@@ -1,4 +1,5 @@
 mod db;
+mod editor;
 mod herdr;
 use anyhow::{Context, Result};
 use clap::{Parser, Subcommand};
@@ -23,9 +24,13 @@ enum Commands {
     Init,
     /// Create a pending task.
     Add {
-        title: String,
+        /// Task title. Omit to compose title and description in $EDITOR.
+        title: Option<String>,
         #[arg(short, long, default_value = "")]
         description: String,
+        /// Open $EDITOR with the supplied title and description prefilled.
+        #[arg(short, long)]
+        edit: bool,
     },
     /// List tasks in creation order.
     List,
@@ -80,7 +85,17 @@ fn execute(cli: Cli) -> Result<Value> {
         .context("Database path has no parent directory")?;
     Ok(match cli.command {
         Commands::Init => json!({"database":path}),
-        Commands::Add { title, description } => json!(db.add(&title, &description)?),
+        Commands::Add {
+            title,
+            description,
+            edit,
+        } => {
+            let (title, description) = match title {
+                Some(title) if !edit => (title, description),
+                title => editor::compose(title.as_deref().unwrap_or(""), &description)?,
+            };
+            json!(db.add(&title, &description)?)
+        }
         Commands::List => json!(db.list()?),
         Commands::Show { id } => db.show(id)?,
         Commands::Describe { id, description } => json!(db.describe(id, &description)?),

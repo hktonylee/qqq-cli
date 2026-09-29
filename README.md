@@ -24,6 +24,23 @@ qqq list
 qqq show 1
 ```
 
+Run `qqq add` without a title to compose a task in `$EDITOR`. First line becomes
+the title; remaining lines become the description. Surrounding whitespace is
+trimmed. Use `--edit` (`-e`) to edit prefilled content:
+
+```sh
+export EDITOR='vim'
+qqq add
+qqq add "Fix login" --description "Reproduce expiry" --edit
+```
+
+`EDITOR` is required for editor input and runs through `sh`, supporting quoted
+executable paths and arguments such as `EDITOR='code --wait'`. Use an editor that
+waits until editing finishes. Editor output goes to stderr; stdout stays JSON.
+An empty first line, nonzero editor exit, or unreadable draft aborts creation.
+Temporary drafts are removed on success or error. Inline `qqq add "Title"` works
+without an editor.
+
 Images support PNG, JPEG, GIF and WebP signatures, up to 20 MiB each. Signature checking identifies format; it does not fully decode or validate image contents. Import copies bytes into DB, so original file can be removed. Export takes **image ID**, shown by `show`, rather than task ID; destination must not exist.
 
 ```sh
