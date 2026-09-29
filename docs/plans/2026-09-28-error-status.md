@@ -72,4 +72,14 @@ Some("error") if color => Some("31"),
 - [x] Document failure command, required reason, owner rules, manual retry without session, queue/dependency behavior, schema version 4 preservation, and red rows.
 - [x] Run `cargo test --locked`, `cargo fmt --check`, `cargo clippy --locked --all-targets -- -D warnings`, `cargo build --locked --release`, `git diff --check`. Require exit 0.
 - [x] Review ownership/migration/queue invariants. Commit with `[Feat] Add Task Error Status And Manual Retry`.
-- [ ] Use finishing-a-development-branch: rebase onto current master, fast-forward clean base, verify integrated build/tests, rebuild CLI used by worker, record evidence and complete #25. Resume `qqq next --wait --local --json`.
+- [x] Use finishing-a-development-branch: rebase onto current master, fast-forward clean base, verify integrated build/tests, rebuild CLI used by worker, record evidence and complete #25. Resume `qqq next --wait --local --json`.
+
+## Verification
+
+Integrated code commit: `e6b8fee`. Full combined suite: **153 passed**, zero failures.
+Formatting, strict Clippy, release build, release lifecycle smoke passed. Independent
+review found concurrent session-free retry race; separate error-only retry predicate
+fixed it, regression reproduced failure before fix. Image-trigger test proves rollback
+of status, claim, reason, history, content and attachments. Final independent error
+suite: 10 passed, no remaining review findings. Live DB migrated to version 4; task
+#25 completed. Pre-upgrade backup: `/private/tmp/qqq-pre-error-v4-or_mqv75/qqq.db`.
