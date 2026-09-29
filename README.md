@@ -38,7 +38,8 @@ details. Empty lists print `No tasks yet.`; queues with no ready tasks print
 `No ready tasks.`. In a terminal, list rows use normal terminal color for new, cyan for
 in-progress, grey for completed tasks, and red for tasks in error. Aliases such as `ls = "list"` use the
 same colors. Piped output and `--json` stay plain. Set `NO_COLOR=1` or `TERM=dumb`
-to disable colors.
+to disable colors. Terminal `show` output uses the same status colors, with a
+bold task title and section headings. New status uses normal terminal color.
 
 ```sh
 qqq list

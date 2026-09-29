@@ -86,18 +86,34 @@ fn status(value: &Value) -> &str {
     }
 }
 
+fn status_color(value: &Value, color: bool) -> Option<&'static str> {
+    match value["status"].as_str() {
+        Some("in_progress") if color => Some("36"),
+        Some("completed") if color => Some("90"),
+        Some("error") if color => Some("31"),
+        _ => None,
+    }
+}
+
+fn styled(text: &str, code: Option<&str>) -> String {
+    match code {
+        Some(code) => format!("\x1b[{code}m{text}\x1b[0m"),
+        None => text.to_owned(),
+    }
+}
+
 fn parent(value: &Value) -> String {
     value["parent_id"]
         .as_i64()
         .map_or_else(|| "-".to_owned(), |id| format!("#{id}"))
 }
 
-fn task(value: &Value) -> String {
+fn task(value: &Value, color: bool) -> String {
+    let title = format!("#{} {}", field(value, "id"), field(value, "title"));
     let mut result = format!(
-        "#{} {}\nStatus: {}\nParent: {}\nAssignee: {}\nCreated: {}\nUpdated: {}",
-        field(value, "id"),
-        field(value, "title"),
-        status(value),
+        "{}\nStatus: {}\nParent: {}\nAssignee: {}\nCreated: {}\nUpdated: {}",
+        styled(&title, color.then_some("1")),
+        styled(status(value), status_color(value, color)),
         parent(value),
         field(value, "assignee"),
         field(value, "created_at"),
@@ -108,7 +124,8 @@ fn task(value: &Value) -> String {
         .is_some_and(|text| !text.is_empty())
     {
         result.push_str(&format!(
-            "\n\nDescription:\n{}",
+            "\n\n{}\n{}",
+            styled("Description:", color.then_some("1")),
             block(value, "description")
         ));
     }
@@ -145,12 +162,13 @@ fn identity(value: &Value) -> String {
     )
 }
 
-fn link(value: &Value) -> String {
+fn link(value: &Value, color: bool) -> String {
+    let heading = styled("Herdr:", color.then_some("1"));
     if value.is_null() {
-        return "Herdr: Not linked".to_owned();
+        return format!("{heading} Not linked");
     }
     format!(
-        "Herdr:\n{}\nServer: {}\n{}",
+        "{heading}\n{}\nServer: {}\n{}",
         identity(&value["identity"]),
         if value["server"].is_null() {
             "Default".to_owned()
@@ -215,16 +233,7 @@ fn task_tree(tasks: &[Value], color: bool) -> String {
             status(task),
             field(task, "title")
         );
-        let code = match task["status"].as_str() {
-            Some("in_progress") if color => Some("36"),
-            Some("completed") if color => Some("90"),
-            Some("error") if color => Some("31"),
-            _ => None,
-        };
-        lines.push(match code {
-            Some(code) => format!("\x1b[{code}m{row}\x1b[0m"),
-            None => row,
-        });
+        lines.push(styled(&row, status_color(task, color)));
         for (position, &child) in children[index].iter().enumerate().rev() {
             stack.push((child, depth + 1, position + 1 == children[index].len()));
         }
@@ -251,16 +260,19 @@ pub fn render(format: Format, value: &Value, color: bool) -> String {
         Format::ConfigUnset => format!("Unset {}.", field(value, "key")),
         Format::Database => format!("Database: {}", field(value, "database")),
         Format::Task if value.is_null() => "No ready tasks.".to_owned(),
-        Format::Task => task(value),
+        Format::Task => task(value, false),
         Format::Tasks => task_tree(value.as_array().expect("task list is an array"), color),
         Format::Detail => {
-            let mut result = task(&value["task"]);
+            let mut result = task(&value["task"], color);
             for (key, label) in [
                 ("messages", "Messages"),
                 ("images", "Images"),
                 ("events", "History"),
             ] {
-                result.push_str(&format!("\n\n{label}:"));
+                result.push_str(&format!(
+                    "\n\n{}",
+                    styled(&format!("{label}:"), color.then_some("1"))
+                ));
                 let rows = value[key].as_array().expect("detail section is an array");
                 if rows.is_empty() {
                     result.push_str(" None");
@@ -285,7 +297,7 @@ pub fn render(format: Format, value: &Value, color: bool) -> String {
                     result.push_str(&format!("\n  {text}"));
                 }
             }
-            result.push_str(&format!("\n\n{}", link(&value["herdr"])));
+            result.push_str(&format!("\n\n{}", link(&value["herdr"], color)));
             if let Some(export) = value.get("export") {
                 result.push_str(&format!(
                     "\n\nExported image #{} to {}",
@@ -302,7 +314,7 @@ pub fn render(format: Format, value: &Value, color: bool) -> String {
             field(value, "session"),
             block(value, "body")
         ),
-        Format::Link => link(value),
+        Format::Link => link(value, false),
         Format::Pane => pane(value),
     }
 }
