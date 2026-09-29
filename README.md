@@ -41,6 +41,20 @@ An empty first line, nonzero editor exit, or unreadable draft aborts creation.
 Temporary drafts are removed on success or error. Inline `qqq add "Title"` works
 without an editor.
 
+Add a dependency with `--parent <task-id>`:
+
+```sh
+qqq add "Build API"                         # returns task ID, e.g. 1
+qqq add "Build client" --parent 1
+qqq add --parent 1                          # compose dependent task in $EDITOR
+```
+
+Parent must already exist. Each task has one optional parent, fixed at creation.
+Task JSON includes `parent_id` (`null` for independent tasks). Child stays pending
+until parent completes; `next` skips blocked children and claims the oldest ready
+task. Releasing a parent keeps children blocked. Dependency chains unlock in
+order. If every pending task is blocked, `next` returns `null`.
+
 Images support PNG, JPEG, GIF and WebP signatures, up to 20 MiB each. Signature checking identifies format; it does not fully decode or validate image contents. Import copies bytes into DB, so original file can be removed. Export takes **image ID**, shown by `show`, rather than task ID; destination must not exist.
 
 ```sh
@@ -60,10 +74,10 @@ qqq complete 1
 
 Or pass `--session agent-session-123` on individual commands. Precedence: `--session`, `QQQ_SESSION`, exact Herdr caller identity when `HERDR_ENV=1`, then unique Herdr agent at the database directory.
 
-- `next` returns oldest pending task, atomically marking it `in_progress`.
+- `next` returns oldest ready pending task, atomically marking it `in_progress`.
 - Same session calling `next` again receives its existing task.
 - One active task per session; concurrent sessions cannot claim same task.
-- Empty queue returns JSON `null`, exit code 0.
+- No ready tasks returns JSON `null`, exit code 0.
 - `complete <task-id>` requires current owner, marks task `completed`.
 - `release <task-id>` requires current owner, returns task to `pending`.
 - Claims never expire. Restarting CLI preserves locks. `show` includes claim/release/completion history.
@@ -104,7 +118,7 @@ Adapter targets Herdr API protocol 20 JSON shapes: `result.agents`, `result.pane
 
 ## Data and checks
 
-DB includes tasks, messages, image blobs, ownership events, latest Herdr link per task. SQLite foreign keys, immediate write transactions, unique active-owner index and 10-second busy timeout protect concurrent claims. Schema version is checked; newer unknown versions are rejected. Keep DB out of Git. To back up while CLI processes may run, use SQLite's backup API or `sqlite3 qqq.db '.backup backup.sqlite'`; copy DB file only when all writers are stopped.
+DB includes tasks, messages, image blobs, ownership events, latest Herdr link per task. SQLite foreign keys, immediate write transactions, unique active-owner index and 10-second busy timeout protect concurrent claims. Version 1 databases automatically migrate to version 2 on open, preserving existing data and claims; old tasks have no parent. Newer unknown versions are rejected. Keep DB out of Git. To back up while CLI processes may run, use SQLite's backup API or `sqlite3 qqq.db '.backup backup.sqlite'`; copy DB file only when all writers are stopped.
 
 ```sh
 cargo test --locked

@@ -31,6 +31,9 @@ enum Commands {
         /// Open $EDITOR with the supplied title and description prefilled.
         #[arg(short, long)]
         edit: bool,
+        /// Existing task that must complete before this task can be claimed.
+        #[arg(long)]
+        parent: Option<i64>,
     },
     /// List tasks in creation order.
     List,
@@ -38,7 +41,7 @@ enum Commands {
     Show { id: i64 },
     /// Replace description.
     Describe { id: i64, description: String },
-    /// Return owned task or atomically claim oldest pending task. Empty queue: null.
+    /// Return owned task or atomically claim oldest ready task. No ready tasks: null.
     Next,
     /// Complete task owned by this session.
     Complete { id: i64 },
@@ -89,12 +92,16 @@ fn execute(cli: Cli) -> Result<Value> {
             title,
             description,
             edit,
+            parent,
         } => {
+            if let Some(id) = parent {
+                db.task(id)?;
+            }
             let (title, description) = match title {
                 Some(title) if !edit => (title, description),
                 title => editor::compose(title.as_deref().unwrap_or(""), &description)?,
             };
-            json!(db.add(&title, &description)?)
+            json!(db.add(&title, &description, parent)?)
         }
         Commands::List => json!(db.list()?),
         Commands::Show { id } => db.show(id)?,

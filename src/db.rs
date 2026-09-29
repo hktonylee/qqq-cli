@@ -20,6 +20,7 @@ pub struct Task {
     pub owner_session: Option<String>,
     pub created_at: String,
     pub updated_at: String,
+    pub parent_id: Option<i64>,
 }
 fn task_row(r: &rusqlite::Row<'_>) -> rusqlite::Result<Task> {
     Ok(Task {
@@ -30,6 +31,7 @@ fn task_row(r: &rusqlite::Row<'_>) -> rusqlite::Result<Task> {
         owner_session: r.get(4)?,
         created_at: r.get(5)?,
         updated_at: r.get(6)?,
+        parent_id: r.get(7)?,
     })
 }
 pub fn nonempty(value: &str, name: &str) -> Result<()> {
@@ -56,38 +58,50 @@ impl Db {
         let mut conn = Connection::open_with_flags(&path, flags)?;
         conn.busy_timeout(Duration::from_secs(10))?;
         conn.pragma_update(None, "foreign_keys", "ON")?;
-        if init {
+        let version: i64 = conn.pragma_query_value(None, "user_version", |r| r.get(0))?;
+        ensure!(
+            version == 2 || version == 1 || (init && version == 0),
+            "Unsupported database schema version {version}"
+        );
+        if version < 2 {
             let tx = conn.transaction_with_behavior(TransactionBehavior::Immediate)?;
+            // Another CLI may have migrated while we waited for the write lock.
             let version: i64 = tx.pragma_query_value(None, "user_version", |r| r.get(0))?;
             ensure!(
-                version <= 1,
+                version == 2 || version == 1 || (init && version == 0),
                 "Unsupported database schema version {version}"
             );
             if version == 0 {
                 tx.execute_batch(include_str!("schema.sql"))?;
             }
+            if version < 2 {
+                tx.execute_batch(include_str!("migrate_v2.sql"))?;
+            }
             tx.commit()?;
         }
         let version: i64 = conn.pragma_query_value(None, "user_version", |r| r.get(0))?;
         ensure!(
-            version == 1,
+            version == 2,
             "Unsupported database schema version {version}"
         );
         Ok((Self { conn }, path))
     }
     pub fn task(&self, id: i64) -> Result<Task> {
-        self.conn.query_row("SELECT id,title,description,status,owner_session,created_at,updated_at FROM tasks WHERE id=?",[id],task_row).optional()?.with_context(||format!("Task {id} not found"))
+        self.conn.query_row("SELECT id,title,description,status,owner_session,created_at,updated_at,parent_id FROM tasks WHERE id=?",[id],task_row).optional()?.with_context(||format!("Task {id} not found"))
     }
-    pub fn add(&self, title: &str, description: &str) -> Result<Task> {
+    pub fn add(&self, title: &str, description: &str, parent_id: Option<i64>) -> Result<Task> {
         nonempty(title, "Title")?;
+        if let Some(id) = parent_id {
+            self.task(id)?;
+        }
         self.conn.execute(
-            "INSERT INTO tasks(title,description) VALUES (?,?)",
-            params![title, description],
+            "INSERT INTO tasks(title,description,parent_id) VALUES (?,?,?)",
+            params![title, description, parent_id],
         )?;
         self.task(self.conn.last_insert_rowid())
     }
     pub fn list(&self) -> Result<Vec<Task>> {
-        Ok(self.conn.prepare("SELECT id,title,description,status,owner_session,created_at,updated_at FROM tasks ORDER BY id")?.query_map([],task_row)?.collect::<rusqlite::Result<_>>()?)
+        Ok(self.conn.prepare("SELECT id,title,description,status,owner_session,created_at,updated_at,parent_id FROM tasks ORDER BY id")?.query_map([],task_row)?.collect::<rusqlite::Result<_>>()?)
     }
     pub fn describe(&self, id: i64, description: &str) -> Result<Task> {
         ensure!(self.conn.execute("UPDATE tasks SET description=?,updated_at=strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE id=?",params![description,id])?==1,"Task {id} not found");
@@ -113,7 +127,10 @@ impl Db {
             Some(id) => Some(id),
             None => tx
                 .query_row(
-                    "SELECT id FROM tasks WHERE status='pending' ORDER BY id LIMIT 1",
+                    "SELECT id FROM tasks WHERE status='pending'
+                     AND (parent_id IS NULL OR EXISTS
+                         (SELECT 1 FROM tasks parent WHERE parent.id=tasks.parent_id AND parent.status='completed'))
+                     ORDER BY id LIMIT 1",
                     [],
                     |r| r.get(0),
                 )
@@ -133,7 +150,7 @@ impl Db {
             }
         }
         let task = id.map(|id| tx.query_row(
-            "SELECT id,title,description,status,owner_session,created_at,updated_at FROM tasks WHERE id=?",
+            "SELECT id,title,description,status,owner_session,created_at,updated_at,parent_id FROM tasks WHERE id=?",
             [id], task_row,
         )).transpose()?;
         tx.commit()?;
@@ -151,7 +168,7 @@ impl Db {
             params![id, session, if complete { "complete" } else { "release" }],
         )?;
         let task = tx.query_row(
-            "SELECT id,title,description,status,owner_session,created_at,updated_at FROM tasks WHERE id=?",
+            "SELECT id,title,description,status,owner_session,created_at,updated_at,parent_id FROM tasks WHERE id=?",
             [id], task_row,
         )?;
         tx.commit()?;
