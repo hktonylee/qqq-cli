@@ -27,6 +27,9 @@ impl UserConfig {
         c.current_dir(self.home.path())
             .env("HOME", self.home.path())
             .env_remove("QQQ_SESSION")
+            .env_remove("CODEX_THREAD_ID")
+            .env_remove("CODEX_SESSION_ID")
+            .env_remove("HERDR_PANE_ID")
             .env_remove("HERDR_ENV");
         c
     }

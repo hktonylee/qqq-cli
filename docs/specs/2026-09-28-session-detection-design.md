@@ -8,8 +8,11 @@ Task #26 is complete; use existing private claim keys and public harness metadat
 Explicit `--session` / `QQQ_SESSION` override automatic sources. Exact Herdr
 context means `HERDR_PANE_ID` is present, or `HERDR_ENV=1`; it takes priority over
 native Codex environment. Query `herdr pane current --pane <HERDR_PANE_ID>`.
-Missing, blank or invalid selected context fails before any claim; never fall
-through from an exact pane to a different client or cwd match.
+Without explicit ownership input, missing, blank or invalid selected context
+fails before any claim; never fall through from an exact pane to another client
+or cwd match. Explicit `--harness-session` retains task #26 behavior: recover
+an existing public session, otherwise attempt auto-fill with local explicit
+ownership fallback when discovery fails.
 
 Outside exact Herdr context, prefer `CODEX_THREAD_ID`, then `CODEX_SESSION_ID`.
 Both exist in current environment and installed Codex binary. Selected values
@@ -36,7 +39,9 @@ for pane/cwd discovery, links and active Herdr identity retention. Manual
 `herdr link` discovers Herdr independently of native Codex environment.
 
 Configured dispatch first returns caller's existing native claim without Herdr
-lookup or agent creation. Creating a new agent still requires valid Herdr
+lookup or agent creation. Existing-claim retrieval applies overrides atomically
+and never creates a fresh local claim if ownership disappeared while waiting
+for DB lock. Creating a new agent still requires valid Herdr
 workspace context; `--local` handles native callers outside Herdr.
 
 ## Verification

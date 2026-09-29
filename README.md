@@ -393,7 +393,25 @@ qqq message 1 "Implementation ready; running tests"
 qqq complete 1
 ```
 
-Or pass `--session agent-session-123` on individual commands. Precedence: `--session`, `QQQ_SESSION`, exact Herdr caller identity when `HERDR_ENV=1`, then unique Herdr agent at the database directory.
+Or pass `--session agent-session-123` on individual commands. Automatic ownership uses this precedence:
+
+1. Explicit `--session`, then `QQQ_SESSION`.
+2. Exact Herdr pane when `HERDR_PANE_ID` is present, or `HERDR_ENV=1`.
+3. Native Codex `CODEX_THREAD_ID`, then `CODEX_SESSION_ID` fallback.
+4. Unique Herdr agent at the database directory.
+
+Outside exact Herdr context, Codex can run `qqq next --local`, `qqq complete`,
+`qqq edit --set-pending` and `qqq edit --set-status error` without setting
+`QQQ_SESSION` or installing Herdr. Native claims expose `harness_name=codex` and
+the raw ID as `harness_session`; orchestrator fields remain null unless overridden.
+The private owner key is a JSON tuple of client, identity kind and ID. Both Codex
+variables with the same ID resolve to the same claim; when both are set, thread ID
+wins. Selected values must be UTF-8 and nonblank; invalid selected values fail
+before claiming. Higher-priority sources ignore lower-priority values.
+
+Other AI clients use Herdr's reported agent/session identity or explicit
+`--session` / `QQQ_SESSION`; qqq does not guess undocumented client env variables.
+`--harness-name` / `--harness-session` and orchestrator overrides remain available.
 
 - `next` returns oldest ready new task, atomically marking it `in_progress`.
 - `next --wait` waits until a task can be claimed, returning the task once available.
@@ -432,12 +450,14 @@ Session IDs coordinate local agents; they are not authentication credentials. De
 
 ## Herdr
 
-Outside Herdr, plain `qqq next` queries `herdr agent list` on the currently targeted server and selects the unique agent whose cwd equals the directory containing `qqq.db`. No `HERDR_ENV` needed. Running from a project subdirectory still matches the DB directory. Paths resolve symlinks; `foreground_cwd` takes precedence over `cwd` when present. Zero matches, multiple matches, or missing session and terminal identity produce an error before claiming. Use `--session` to choose ownership explicitly when discovery is ambiguous.
+When no explicit, exact-pane or native Codex identity is available, plain `qqq next` queries `herdr agent list` on the currently targeted server and selects the unique agent whose cwd equals the directory containing `qqq.db`. No `HERDR_ENV` needed. Running from a project subdirectory still matches the DB directory. Paths resolve symlinks; `foreground_cwd` takes precedence over `cwd` when present. Zero matches, multiple matches, or missing session and terminal identity produce an error before claiming. Use `--session` to choose ownership explicitly when discovery is ambiguous.
 
-`complete`, ordinary active-task `edit --set-status new`, and `herdr link <id>` use the same discovery. Lookup requires Herdr CLI and its server to be available. `edit --set-status new --force` and error retries skip discovery.
+`complete` and ordinary active-task `edit --set-status new` use the same caller resolution as `next`. Native Codex ownership works without Herdr. `herdr link <id>` always uses Herdr discovery, requiring its CLI and server. `edit --set-status new --force` and error retries skip discovery.
 
-Inside Herdr, `next` derives ownership from `HERDR_ENV=1`, `HERDR_PANE_ID`, and
-the exact pane's reported agent session. When hooks have not reported a session,
+With `HERDR_PANE_ID` present (even without `HERDR_ENV=1`), `next` queries
+`herdr pane current --pane <HERDR_PANE_ID>` and derives ownership from that
+pane's reported agent session. `HERDR_ENV=1` also selects exact Herdr context
+and requires a valid pane ID. When hooks have not reported a session,
 it uses the stable Herdr terminal ID plus agent kind instead. The same fallback
 applies to unique-cwd discovery outside Herdr. Reported session identity takes
 priority for new claims. Active auto-claims keep their saved identity until
@@ -466,9 +486,9 @@ qqq herdr link 1 --agent codex --agent-session session-123
 qqq herdr link 1 --agent codex --agent-session session-123 --server work
 ```
 
-`find` matches saved agent/session identity against `herdr agent list`, returning current `workspace_id`, `tab_id`, `pane_id`, and `agent_session`. Pane moves do not break identity matching. Missing, offline or ambiguous matches produce errors; saved link remains available in `show`. Automatic ownership uses a JSON tuple of agent, identity kind and value; keep the same identity mode through completion or returning a task to new.
+`find` matches saved agent/session identity against `herdr agent list`, returning current `workspace_id`, `tab_id`, `pane_id`, and `agent_session`. Pane moves do not break identity matching. Missing, offline or ambiguous matches produce errors; saved link remains available in `show`. Automatic Herdr ownership uses a JSON tuple of agent, identity kind and value; keep the same identity mode through completion or returning a task to new.
 
-With dispatch disabled, explicit `--session` / `QQQ_SESSION` ownership works without Herdr and does not auto-link. `herdr link` stores association separately; it does not transfer ownership. A completed task retains its latest link. A fresh claim clears the previous link, then saves the new auto-detected link when available; explicit owners should link after claiming. Auto-discovered links retain named Herdr server when available; explicit links support `--server` for a stable target.
+With dispatch disabled (or `next --local`), explicit `--session` / `QQQ_SESSION` and native Codex ownership work without Herdr and do not auto-link. Manual `herdr link` still discovers Herdr independently of native Codex env. `herdr link` stores association separately; it does not transfer ownership. A completed task retains its latest link. A fresh claim clears the previous link, then saves the new auto-detected link when available; explicit owners should link after claiming. Auto-discovered links retain named Herdr server when available; explicit links support `--server` for a stable target.
 
 ### Dispatch next task to a new agent
 
@@ -520,7 +540,7 @@ Task assignment exposes four nullable JSON fields: `harness_name`,
 `harness_session`, `orchestrator_name`, `orchestrator_session`. Human task details
 show each field. `assignee` and `owner_session` are absent. Herdr auto-fill uses
 agent kind/session (terminal ID fallback), orchestrator `herdr`, named Herdr
-server session. Optional server discovery failure leaves its session null.
+server session. Native Codex auto-fill uses `CODEX_THREAD_ID` / `CODEX_SESSION_ID` for harness fields, leaving orchestrator fields null. Optional server discovery failure leaves its session null.
 
 Override fields when claiming or linking:
 
@@ -531,7 +551,7 @@ qqq next --local --session stable-key --harness-name codex \
 ```
 
 `--session`/`QQQ_SESSION` remain stable ownership inputs and bypass automatic
-Herdr ownership discovery. Without those inputs, `--harness-session` first
+automatic ownership discovery. Without those inputs, `--harness-session` first
 recovers a matching active claim; otherwise it overrides auto-discovered session
 metadata, with local explicit ownership fallback when discovery fails. Other
 flags override auto-filled metadata. Metadata overrides do not change saved

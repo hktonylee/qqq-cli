@@ -11,6 +11,8 @@ fn command(dir: &Path) -> Command {
         .current_dir(dir)
         .env("HOME", dir)
         .env_remove("QQQ_SESSION")
+        .env_remove("CODEX_THREAD_ID")
+        .env_remove("CODEX_SESSION_ID")
         .env_remove("HERDR_ENV")
         .env_remove("HERDR_PANE_ID");
     c
@@ -259,7 +261,7 @@ fn herdr_auto_claim_records_link_and_supports_moved_pane() {
     ok(p, &["add", "Second"]);
     let bin = p.join("herdr");
     std::fs::write(&bin,r#"#!/bin/sh
-[ "$3" = "--current" ] || exit 1
+[ "$3" = "--pane" ] && [ "$4" = "$HERDR_PANE_ID" ] || exit 1
 printf '%s\n' '{"result":{"pane":{"pane_id":"w1:p1","workspace_id":"w1","tab_id":"w1:t1","agent_session":{"agent":"codex","kind":"id","value":"auto-session","source":"hook"}}}}'
 "#).unwrap();
     std::fs::set_permissions(&bin, std::fs::Permissions::from_mode(0o755)).unwrap();

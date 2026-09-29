@@ -7,6 +7,9 @@ fn command(dir: &Path) -> Command {
     c.current_dir(dir)
         .env("HOME", dir)
         .env_remove("QQQ_SESSION")
+        .env_remove("CODEX_THREAD_ID")
+        .env_remove("CODEX_SESSION_ID")
+        .env_remove("HERDR_PANE_ID")
         .env_remove("HERDR_ENV");
     c
 }

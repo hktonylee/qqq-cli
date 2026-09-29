@@ -118,15 +118,25 @@ fn retained_identity(pane: &Pane, db: &Db) -> Result<AgentSession> {
     Ok(identity)
 }
 
-pub fn dispatch_caller(db: &Db) -> Result<String> {
+pub fn has_context() -> bool {
+    std::env::var_os("HERDR_PANE_ID").is_some() || std::env::var("HERDR_ENV").as_deref() == Ok("1")
+}
+
+fn current_pane() -> Result<Pane> {
     ensure!(
-        std::env::var("HERDR_ENV").as_deref() == Ok("1"),
-        "Herdr dispatch requires HERDR_ENV=1; use next --local outside Herdr"
+        has_context(),
+        "No exact Herdr context; use --session or QQQ_SESSION"
     );
-    let pane_id = std::env::var("HERDR_PANE_ID").context("HERDR_PANE_ID missing")?;
+    let pane_id = std::env::var("HERDR_PANE_ID")
+        .context("HERDR_PANE_ID missing or not UTF-8; use --session")?;
     nonempty(&pane_id, "HERDR_PANE_ID")?;
-    let current: Current = call(None, &["pane", "current", "--current"])?;
-    let identity = retained_identity(&current.pane, db)?;
+    let current: Current = call(None, &["pane", "current", "--pane", &pane_id])?;
+    Ok(current.pane)
+}
+
+pub fn dispatch_caller(db: &Db) -> Result<String> {
+    let pane = current_pane()?;
+    let identity = retained_identity(&pane, db)?;
     Ok(serde_json::to_string(&(
         identity.agent,
         identity.kind,
@@ -183,25 +193,19 @@ pub fn server_session() -> Option<String> {
     Some(session.name)
 }
 pub fn current() -> Result<Link> {
-    ensure!(
-        std::env::var("HERDR_ENV").as_deref() == Ok("1"),
-        "No session identity; use --session or QQQ_SESSION (Herdr auto-detection requires HERDR_ENV=1)"
-    );
-    let pane_id = std::env::var("HERDR_PANE_ID").context("HERDR_PANE_ID missing; use --session")?;
-    nonempty(&pane_id, "HERDR_PANE_ID")?;
-    let current: Current = call(None, &["pane", "current", "--current"])?;
-    let identity = pane_identity(&current.pane).context(
+    let pane = current_pane()?;
+    let identity = pane_identity(&pane).context(
         "Cannot identify current Herdr agent; use --session or enable Herdr session reporting",
     )?;
     Ok(Link {
         server: server_session(),
         identity,
-        pane: current.pane,
+        pane,
     })
 }
 /// Prefer exact caller context; outside Herdr discover a unique agent at DB root.
 pub fn discover(project_dir: &Path) -> Result<Link> {
-    if std::env::var("HERDR_ENV").as_deref() == Ok("1") {
+    if has_context() {
         return current();
     }
     let project_dir = project_dir

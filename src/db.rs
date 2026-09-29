@@ -464,16 +464,38 @@ impl Db {
         session: &str,
         link: Option<&crate::herdr::Link>,
     ) -> Result<Option<Task>> {
-        self.next_with_identity(session, link, &crate::identity::Identity::default())
+        self.next_with_identity(session, link, None, &crate::identity::Identity::default())
     }
     pub fn next_with_identity(
         &mut self,
         session: &str,
         link: Option<&crate::herdr::Link>,
+        metadata: Option<&crate::identity::Identity>,
         overrides: &crate::identity::Identity,
+    ) -> Result<Option<Task>> {
+        self.claim(session, link, metadata, overrides, true)
+    }
+    /// Retrieve an existing assignment without claiming queued work if it vanished.
+    pub fn owned_with_identity(
+        &mut self,
+        session: &str,
+        overrides: &crate::identity::Identity,
+    ) -> Result<Option<Task>> {
+        self.claim(session, None, None, overrides, false)
+    }
+    fn claim(
+        &mut self,
+        session: &str,
+        link: Option<&crate::herdr::Link>,
+        metadata: Option<&crate::identity::Identity>,
+        overrides: &crate::identity::Identity,
+        allow_new: bool,
     ) -> Result<Option<Task>> {
         nonempty(session, "Session")?;
         overrides.validate()?;
+        if let Some(metadata) = metadata {
+            metadata.validate()?;
+        }
         let tx = self
             .conn
             .transaction_with_behavior(TransactionBehavior::Immediate)?;
@@ -487,7 +509,7 @@ impl Db {
             .optional()?;
         let id = match owned {
             Some(id) => Some(id),
-            None => tx
+            None if allow_new => tx
                 .query_row(
                     "SELECT id FROM tasks WHERE status='new'
                      AND (parent_id IS NULL OR EXISTS
@@ -497,6 +519,7 @@ impl Db {
                     |r| r.get(0),
                 )
                 .optional()?,
+            None => None,
         };
         if let Some(id) = id {
             if owned.is_none() {
@@ -513,7 +536,9 @@ impl Db {
             let mut identity = if owned.is_some() {
                 tx.query_row("SELECT id,description,status,claim_key,created_at,updated_at,parent_id,harness_name,harness_session,orchestrator_name,orchestrator_session FROM tasks WHERE id=?", [id], task_row)?.identity
             } else {
-                crate::identity::Identity::for_claim(&session, link)
+                metadata
+                    .cloned()
+                    .unwrap_or_else(|| crate::identity::Identity::for_claim(&session, link))
             };
             identity.overlay(overrides);
             Self::save_identity(&tx, id, &identity)?;

@@ -8,6 +8,7 @@ mod herdr;
 mod identity;
 mod images;
 mod output;
+mod session;
 mod tui;
 mod watch;
 use anyhow::{Context, Result, ensure};
@@ -24,7 +25,7 @@ struct Cli {
     /// Print JSON for scripts and agents instead of human-readable text.
     #[arg(long, global = true)]
     json: bool,
-    /// Stable owner identity. Falls back to Herdr caller, then unique agent at database directory.
+    /// Stable owner identity. Falls back to exact Herdr pane, Codex session, then unique Herdr agent at DB directory.
     #[arg(long, global = true, env = "QQQ_SESSION")]
     session: Option<String>,
     /// Override coding harness name (for example codex).
@@ -174,27 +175,23 @@ enum HerdrCommand {
     /// Find live pane by stored agent session identity.
     Find { task_id: i64 },
 }
-fn local_owner(
-    cli: &Cli,
-    project_dir: &std::path::Path,
-    db: &db::Db,
-) -> Result<(String, Option<herdr::Link>)> {
+fn local_owner(cli: &Cli, project_dir: &std::path::Path, db: &db::Db) -> Result<session::Owner> {
     if let Some(session) = cli.session.as_deref() {
-        return herdr::owner(Some(session), project_dir, db);
+        return session::owner(Some(session), project_dir, db);
     }
     if let Some(session) = cli.harness_session.as_deref() {
         if db
             .owned_with_name(session, cli.harness_name.as_deref())?
             .is_some()
         {
-            return Ok((session.to_owned(), None));
+            return session::owner(Some(session), project_dir, db);
         }
         // Override public session while retaining auto-fill; local explicit input
         // remains usable when Herdr is unavailable or ambiguous.
-        return herdr::owner(None, project_dir, db)
-            .or_else(|_| herdr::owner(Some(session), project_dir, db));
+        return session::owner(None, project_dir, db)
+            .or_else(|_| session::owner(Some(session), project_dir, db));
     }
-    herdr::owner(None, project_dir, db)
+    session::owner(None, project_dir, db)
 }
 fn execute(cli: Cli, display_limit: Option<i64>) -> Result<Value> {
     if let Commands::Config {
@@ -332,7 +329,7 @@ fn execute(cli: Cli, display_limit: Option<i64>) -> Result<Value> {
                         Some(session_input.unwrap_or("manual").to_owned())
                     }
                     Some(EditStatus::New | EditStatus::Error) => {
-                        Some(herdr::owner(session_input, project_dir, &db)?.0)
+                        Some(session::owner(session_input, project_dir, &db)?.key)
                     }
                     None => None,
                 };
@@ -360,9 +357,12 @@ fn execute(cli: Cli, display_limit: Option<i64>) -> Result<Value> {
         Commands::Next { wait, .. } => {
             loop {
                 let task = match &next_owner {
-                    Some((session, link)) => {
-                        db.next_with_identity(session, link.as_ref(), &overrides)?
-                    }
+                    Some(owner) => db.next_with_identity(
+                        &owner.key,
+                        owner.link.as_ref(),
+                        owner.metadata.as_ref(),
+                        &overrides,
+                    )?,
                     None => dispatch::next(&mut db, session_input, &overrides)?,
                 };
                 if task.is_some() || !wait {
@@ -373,8 +373,8 @@ fn execute(cli: Cli, display_limit: Option<i64>) -> Result<Value> {
             }
         }
         Commands::Complete { id } => {
-            let (session, _) = herdr::owner(session_input, project_dir, &db)?;
-            json!(db.complete(id, &session, overrides.harness_name.as_deref())?)
+            let owner = session::owner(session_input, project_dir, &db)?;
+            json!(db.complete(id, &owner.key, overrides.harness_name.as_deref())?)
         }
         Commands::Message { id, body } => db.message(id, &body, session_input)?,
         Commands::Herdr { command } => match command {

@@ -9,6 +9,8 @@ fn command(dir: &TempDir) -> Command {
         .current_dir(dir.path())
         .env("HOME", dir.path())
         .env_remove("QQQ_SESSION")
+        .env_remove("CODEX_THREAD_ID")
+        .env_remove("CODEX_SESSION_ID")
         .env_remove("HERDR_ENV")
         .env_remove("HERDR_PANE_ID")
         .env_remove("EDITOR");

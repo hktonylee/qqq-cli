@@ -12,6 +12,8 @@ fn command(dir: &Path) -> Command {
     command
         .current_dir(dir)
         .env_remove("QQQ_SESSION")
+        .env_remove("CODEX_THREAD_ID")
+        .env_remove("CODEX_SESSION_ID")
         .env_remove("HERDR_ENV")
         .env_remove("HERDR_PANE_ID");
     command
@@ -271,4 +273,27 @@ fn wait_still_fails_immediately_for_invalid_session_or_missing_database() {
     assert_eq!(output.status.code(), Some(1));
     assert!(output.stdout.is_empty());
     assert!(String::from_utf8_lossy(&output.stderr).contains("No qqq.db found"));
+}
+
+#[test]
+fn native_codex_wait_claims_incoming_task_without_herdr() {
+    let dir = project();
+    let p = dir.path();
+    let mut waiter = Waiter(Some(
+        command(p)
+            .env("HOME", p)
+            .env("PATH", p)
+            .env("CODEX_THREAD_ID", "native-wait")
+            .args(["next", "--wait", "--local", "--json"])
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .spawn()
+            .unwrap(),
+    ));
+    waiter.assert_waiting();
+    ok(p, &["add", "Arrived"]);
+    let output = waiter.finish();
+    let task: Value = serde_json::from_slice(&output.stdout).unwrap();
+    assert_eq!(task["harness_name"], "codex");
+    assert_eq!(task["harness_session"], "native-wait");
 }

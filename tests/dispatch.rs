@@ -74,6 +74,8 @@ print(json.dumps({'result':result}))
             .env("HERDR_WORKSPACE_ID", "workspace")
             .env("HERDR_PANE_ID", "caller")
             .env_remove("QQQ_SESSION")
+            .env_remove("CODEX_THREAD_ID")
+            .env_remove("CODEX_SESSION_ID")
             .env_remove("HERDR_SOCKET_PATH")
             .env_remove("FAIL_AT")
             .env_remove("NO_ID")
@@ -322,7 +324,7 @@ fn discovered_caller_existing_claim_wins_with_reported_or_terminal_identity() {
             String::from_utf8_lossy(&out.stderr)
         );
         assert_eq!(serde_json::from_slice::<Value>(&out.stdout).unwrap(), owned);
-        assert_eq!(p.calls(), vec![vec!["pane", "current", "--current"]]);
+        assert_eq!(p.calls(), vec![vec!["pane", "current", "--pane", "caller"]]);
     }
 }
 

@@ -10,6 +10,8 @@ fn command(dir: &Path) -> Command {
         .arg("--json")
         .env("HOME", dir)
         .env_remove("QQQ_SESSION")
+        .env_remove("CODEX_THREAD_ID")
+        .env_remove("CODEX_SESSION_ID")
         .env_remove("HERDR_SOCKET_PATH")
         .env_remove("HERDR_ENV")
         .env_remove("HERDR_PANE_ID");
@@ -31,7 +33,18 @@ fn project() -> TempDir {
     ok(command(dir.path()).arg("init"));
     ok(command(dir.path()).args(["add", "Auto-detect"]));
     let script = dir.path().join("herdr");
-    fs::write(&script, "#!/bin/sh\n[ \"$1\" = --session ] && shift 2\ncase \"$1 $2\" in\n'pane current'|'agent list') /bin/cat \"$QQQ_TEST_RESPONSE\";;\n*) exit 1;;\nesac\n").unwrap();
+    fs::write(
+        &script,
+        r#"#!/bin/sh
+if [ -n "$QQQ_TEST_CALLS" ]; then printf '%s\n' "$*" >> "$QQQ_TEST_CALLS"; fi
+[ "$1" = --session ] && shift 2
+case "$1 $2" in
+'pane current'|'agent list') /bin/cat "$QQQ_TEST_RESPONSE";;
+*) exit 1;;
+esac
+"#,
+    )
+    .unwrap();
     fs::set_permissions(script, fs::Permissions::from_mode(0o755)).unwrap();
     dir
 }
@@ -50,7 +63,8 @@ fn herdr(dir: &Path, response: Value, caller: bool) -> Command {
     let mut command = command(dir);
     command
         .env("PATH", dir)
-        .env("QQQ_TEST_RESPONSE", dir.join("response.json"));
+        .env("QQQ_TEST_RESPONSE", dir.join("response.json"))
+        .env("QQQ_TEST_CALLS", dir.join("calls"));
     if caller {
         command.env("HERDR_ENV", "1").env("HERDR_PANE_ID", "w1:p1");
     }
@@ -278,4 +292,313 @@ fn stored_default_server_link_ignores_callers_named_socket() {
         .env("HERDR_SOCKET_PATH", "/tmp/another-server.sock")
         .args(["herdr", "find", "1"]));
     assert_eq!(found["pane_id"], "w1:p1");
+}
+
+fn native(dir: &Path, value: &str) -> Command {
+    let mut cmd = command(dir);
+    cmd.env("PATH", dir)
+        .env("QQQ_TEST_CALLS", dir.join("native-calls"))
+        .env("CODEX_THREAD_ID", value);
+    cmd
+}
+
+#[test]
+fn native_codex_thread_claims_waits_releases_and_completes_without_herdr() {
+    let dir = project();
+    let p = dir.path();
+    let first = ok(native(p, "native-session").arg("next"));
+    assert_eq!(first["harness_name"], "codex");
+    assert_eq!(first["harness_session"], "native-session");
+    assert!(first["orchestrator_name"].is_null());
+    assert!(first["orchestrator_session"].is_null());
+    assert!(ok(command(p).args(["show", "1"]))["herdr"].is_null());
+    assert_eq!(
+        ok(native(p, "native-session").args(["next", "--wait"])),
+        first
+    );
+    let wrong = native(p, "other-session")
+        .args(["complete", "1"])
+        .output()
+        .unwrap();
+    assert_eq!(wrong.status.code(), Some(1));
+    assert_eq!(ok(command(p).args(["show", "1"]))["task"], first);
+    assert_eq!(
+        ok(native(p, "native-session").args(["edit", "1", "--set-pending"]))["status"],
+        "new"
+    );
+    let claimed = ok(native(p, "native-session").arg("next"));
+    assert_eq!(claimed["harness_name"], "codex");
+    assert_eq!(
+        ok(native(p, "native-session").args(["complete", "1"]))["status"],
+        "completed"
+    );
+    assert!(
+        !p.join("native-calls").exists(),
+        "Native resolution invoked Herdr"
+    );
+    let db = rusqlite::Connection::open(p.join("qqq.db")).unwrap();
+    let owner: String = db
+        .query_row(
+            "SELECT session FROM events WHERE action='claim' ORDER BY rowid LIMIT 1",
+            [],
+            |row| row.get(0),
+        )
+        .unwrap();
+    assert_eq!(
+        serde_json::from_str::<Value>(&owner).unwrap(),
+        json!(["codex", "id", "native-session"])
+    );
+}
+
+#[test]
+fn native_codex_prefers_thread_and_accepts_session_fallback_with_same_key() {
+    let dir = project();
+    let p = dir.path();
+    let task = ok(native(p, "preferred")
+        .env("CODEX_SESSION_ID", "legacy")
+        .arg("next"));
+    assert_eq!(task["harness_session"], "preferred");
+    assert_eq!(
+        ok(command(p)
+            .env("PATH", p)
+            .env("CODEX_SESSION_ID", "preferred")
+            .args(["next", "--wait"])),
+        task
+    );
+    ok(command(p)
+        .env("PATH", p)
+        .env("CODEX_SESSION_ID", "preferred")
+        .args(["complete", "1"]));
+    ok(command(p).args(["add", "Legacy"]));
+    let legacy = ok(command(p)
+        .env("PATH", p)
+        .env("CODEX_SESSION_ID", "legacy")
+        .arg("next"));
+    assert_eq!(legacy["harness_name"], "codex");
+    assert_eq!(legacy["harness_session"], "legacy");
+    ok(command(p)
+        .env("PATH", p)
+        .env("CODEX_SESSION_ID", "legacy")
+        .args(["edit", "2", "--set-status", "error", "--reason", "Blocked"]));
+    assert_eq!(
+        ok(command(p).args(["show", "2"]))["task"]["status"],
+        "error"
+    );
+}
+
+#[test]
+fn explicit_cli_and_qqq_environment_override_invalid_automatic_context() {
+    for cli_override in [true, false] {
+        let dir = project();
+        let p = dir.path();
+        let mut cmd = native(p, " ");
+        cmd.env("HERDR_PANE_ID", "")
+            .env("QQQ_SESSION", "env-owner")
+            .arg("next");
+        if cli_override {
+            cmd.args(["--session", "cli-owner"]);
+        }
+        let task = ok(&mut cmd);
+        assert_eq!(
+            task["harness_session"],
+            if cli_override {
+                "cli-owner"
+            } else {
+                "env-owner"
+            }
+        );
+        assert!(task["harness_name"].is_null());
+        assert!(!p.join("native-calls").exists());
+    }
+}
+
+#[test]
+fn native_claim_metadata_overrides_persist_and_raw_session_recovers_owner() {
+    let dir = project();
+    let p = dir.path();
+    let first = ok(native(p, "native").args([
+        "next",
+        "--harness-name",
+        "custom",
+        "--harness-session",
+        "display",
+        "--orchestrator-name",
+        "custom-orch",
+        "--orchestrator-session",
+        "named",
+    ]));
+    assert_eq!(first["harness_name"], "custom");
+    assert_eq!(first["harness_session"], "display");
+    assert_eq!(first["orchestrator_name"], "custom-orch");
+    assert_eq!(ok(native(p, "native").arg("next")), first);
+    ok(command(p).env("PATH", p).args([
+        "complete",
+        "1",
+        "--harness-name",
+        "custom",
+        "--harness-session",
+        "display",
+    ]));
+    ok(command(p).args(["add", "Another"]));
+    let task = ok(native(p, "native").arg("next"));
+    assert_eq!(task["harness_name"], "codex");
+    assert_eq!(task["harness_session"], "native");
+    ok(command(p)
+        .env("PATH", p)
+        .args(["complete", "2", "--harness-session", "native"]));
+}
+
+#[test]
+fn invalid_native_values_fail_before_claim_instead_of_falling_back() {
+    use std::os::unix::ffi::OsStringExt;
+    for value in [
+        std::ffi::OsString::from(""),
+        std::ffi::OsString::from(" \t"),
+        std::ffi::OsString::from_vec(vec![0xff]),
+    ] {
+        let dir = project();
+        let p = dir.path();
+        let mut cmd = native(p, "unused");
+        cmd.env("CODEX_THREAD_ID", value)
+            .env("CODEX_SESSION_ID", "valid-fallback")
+            .arg("next");
+        let output = cmd.output().unwrap();
+        assert_eq!(output.status.code(), Some(1));
+        assert!(String::from_utf8_lossy(&output.stderr).contains("CODEX_THREAD_ID"));
+        assert_eq!(ok(command(p).args(["show", "1"]))["task"]["status"], "new");
+        assert!(!p.join("native-calls").exists());
+    }
+}
+
+#[test]
+fn exact_herdr_pane_without_marker_takes_priority_over_codex_and_is_targeted() {
+    let dir = project();
+    let p = dir.path();
+    let response = json!({"result":{"pane":pane(p)}});
+    let task = ok(herdr(p, response.clone(), false)
+        .env("HERDR_PANE_ID", "w1:p1")
+        .env("CODEX_THREAD_ID", "native")
+        .arg("next"));
+    assert_eq!(task["harness_session"], "terminal-1");
+    assert_eq!(task["orchestrator_name"], "herdr");
+    let calls = fs::read_to_string(p.join("calls")).unwrap();
+    assert!(calls.contains("pane current --pane w1:p1"), "{calls}");
+    assert!(!calls.contains("--current"), "{calls}");
+    ok(herdr(p, response, false)
+        .env("HERDR_PANE_ID", "w1:p1")
+        .args(["complete", "1"]));
+}
+
+#[test]
+fn invalid_exact_herdr_context_never_falls_back_to_native_session() {
+    for blank_pane in [true, false] {
+        let dir = project();
+        let p = dir.path();
+        let mut cmd = native(p, "native");
+        if blank_pane {
+            cmd.env("HERDR_PANE_ID", " ");
+        } else {
+            cmd.env("HERDR_ENV", "1");
+        }
+        let output = cmd.arg("next").output().unwrap();
+        assert_eq!(output.status.code(), Some(1));
+        assert!(String::from_utf8_lossy(&output.stderr).contains("HERDR_PANE_ID"));
+        assert_eq!(ok(command(p).args(["show", "1"]))["task"]["status"], "new");
+        assert!(!p.join("native-calls").exists());
+    }
+}
+
+#[test]
+fn configured_dispatch_returns_existing_native_claim_without_herdr() {
+    let dir = project();
+    let p = dir.path();
+    let first = ok(native(p, "native").args(["next", "--local"]));
+    ok(command(p).args(["add", "Second"]));
+    fs::create_dir_all(p.join(".config/qqq")).unwrap();
+    fs::write(
+        p.join(".config/qqq/config.toml"),
+        "[herdr]\nnext-to-new-agent=true\n",
+    )
+    .unwrap();
+    assert_eq!(ok(native(p, "native").args(["next", "--wait"])), first);
+    assert!(!p.join("native-calls").exists());
+    let output = native(p, "different").arg("next").output().unwrap();
+    assert_eq!(output.status.code(), Some(1));
+    assert!(String::from_utf8_lossy(&output.stderr).contains("next --local"));
+    assert_eq!(ok(command(p).args(["show", "2"]))["task"]["status"], "new");
+}
+
+#[test]
+fn manual_herdr_link_discovers_herdr_even_with_native_codex_environment() {
+    let dir = project();
+    let p = dir.path();
+    ok(native(p, "native").arg("next"));
+    let link = ok(herdr(p, json!({"result":{"agents":[pane(p)]}}), false)
+        .env("CODEX_THREAD_ID", "native")
+        .args(["herdr", "link", "1"]));
+    assert_eq!(link["identity"]["value"], "terminal-1");
+    assert!(
+        fs::read_to_string(p.join("calls"))
+            .unwrap()
+            .contains("agent list")
+    );
+    ok(native(p, "native").args(["complete", "1"]));
+}
+
+#[test]
+fn dispatch_does_not_turn_released_native_claim_into_new_local_claim() {
+    use std::process::Stdio;
+    let dir = project();
+    let p = dir.path();
+    ok(native(p, "native").args(["next", "--local"]));
+    fs::create_dir_all(p.join(".config/qqq")).unwrap();
+    fs::write(
+        p.join(".config/qqq/config.toml"),
+        "[herdr]\nnext-to-new-agent=true\n",
+    )
+    .unwrap();
+    let db = rusqlite::Connection::open(p.join("qqq.db")).unwrap();
+    db.execute_batch("BEGIN IMMEDIATE").unwrap();
+    let mut child = native(p, "native")
+        .arg("next")
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .unwrap();
+    std::thread::sleep(std::time::Duration::from_millis(600));
+    assert!(child.try_wait().unwrap().is_none());
+    db.execute_batch("UPDATE tasks SET status='new',claim_key=NULL,harness_name=NULL,harness_session=NULL,orchestrator_name=NULL,orchestrator_session=NULL WHERE id=1; COMMIT").unwrap();
+    let output = child.wait_with_output().unwrap();
+    assert_eq!(
+        output.status.code(),
+        Some(1),
+        "Released task was claimed locally: {}",
+        String::from_utf8_lossy(&output.stdout)
+    );
+    assert!(String::from_utf8_lossy(&output.stderr).contains("next --local"));
+    let task = ok(command(p).args(["show", "1"]));
+    assert_eq!(task["task"]["status"], "new");
+    assert!(task["task"]["harness_session"].is_null());
+    assert!(!p.join("native-calls").exists());
+}
+
+#[test]
+fn explicit_harness_session_keeps_local_fallback_when_auto_fill_fails() {
+    let dir = project();
+    let p = dir.path();
+    let task = ok(native(p, " ").env("HERDR_PANE_ID", " ").args([
+        "next",
+        "--local",
+        "--harness-session",
+        "explicit",
+    ]));
+    assert_eq!(task["harness_session"], "explicit");
+    assert!(task["harness_name"].is_null());
+    ok(native(p, " ").env("HERDR_PANE_ID", " ").args([
+        "complete",
+        "1",
+        "--harness-session",
+        "explicit",
+    ]));
+    assert!(!p.join("native-calls").exists());
 }

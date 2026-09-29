@@ -29,13 +29,10 @@ pub fn next(
             nonempty(session, "Session")?;
             session.to_owned()
         }
-        None => herdr::dispatch_caller(db)?,
+        None => crate::session::dispatch_caller(db)?,
     };
-    if db
-        .owned_with_name(&caller, overrides.harness_name.as_deref())?
-        .is_some()
-    {
-        return db.next_with_identity(&caller, None, overrides);
+    if let Some(task) = db.owned_with_identity(&caller, overrides)? {
+        return Ok(Some(task));
     }
     if !db.has_ready()? {
         return Ok(None);

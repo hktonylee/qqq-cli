@@ -25,7 +25,7 @@ with tempfile.TemporaryDirectory(prefix="qqq-tui-test-") as folder:
     elif scenario == "dumb":
         env["TERM"] = "dumb"
         scenario = "blank"
-    for key in ("EDITOR", "QQQ_SESSION", "HERDR_ENV", "HERDR_PANE_ID"):
+    for key in ("EDITOR", "QQQ_SESSION", "HERDR_ENV", "HERDR_PANE_ID", "CODEX_THREAD_ID", "CODEX_SESSION_ID"):
         env.pop(key, None)
 
     def cli(*args):
