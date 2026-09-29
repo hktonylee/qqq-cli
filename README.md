@@ -123,8 +123,8 @@ Or pass `--session agent-session-123` on individual commands. Precedence: `--ses
 - Same session calling `next` again receives its existing task.
 - One active task per session; concurrent sessions cannot claim same task.
 - No ready tasks returns JSON `null`, exit code 0.
-- `complete <task-id>` requires current owner, marks task `completed`.
-- `release <task-id>` requires current owner, returns task to `pending`.
+- `complete <task-id>` marks task `completed` when the supplied or discovered session ID matches its recorded `owner_session`.
+- `release <task-id>` returns task to `pending` when the supplied or discovered session ID matches its recorded `owner_session`.
 - Claims never expire. Restarting CLI preserves locks. `show` includes claim/release/completion history.
 
 For an abandoned session, inspect `qqq show <id>`, then explicitly release using its recorded `owner_session`:

@@ -50,9 +50,9 @@ enum Commands {
     },
     /// Return owned task or atomically claim oldest ready task. No ready tasks: null.
     Next,
-    /// Complete task owned by this session.
+    /// Mark task completed; supplied or discovered session ID must match recorded owner.
     Complete { id: i64 },
-    /// Release owned task back to queue.
+    /// Return task to queue; supplied or discovered session ID must match recorded owner.
     Release { id: i64 },
     /// Append message; session, when supplied, is recorded as author.
     Message { id: i64, body: String },
