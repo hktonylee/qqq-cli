@@ -165,6 +165,11 @@ fn mutate(path: &Path, key: &str, keys: &[Key], value: Option<&str>) -> Result<V
     edit(document.as_item_mut(), keys, value, key)?;
     let content = document.to_string();
     toml::from_str::<config::Config>(&content).context("Invalid config value")?;
+    let display: config::DisplayConfig =
+        toml::from_str(&content).context("Invalid display config value")?;
+    if let Some(limit) = display.display.max_completed {
+        i64::try_from(limit).context("display.max-completed is too large")?;
+    }
     let result = if setting {
         lookup(&content, key, keys)?
     } else {

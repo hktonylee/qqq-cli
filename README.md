@@ -186,12 +186,14 @@ qqq config --get alias.ls
 qqq config alias.ls                  # same as --get
 qqq config alias.ls 'list --watch'    # set
 qqq config herdr.next-to-new-agent true
+qqq config display.max-completed 10
 qqq config --unset alias.ls
 ```
 
 Keys use TOML dotted-key syntax. Quote literal dots inside key segments:
 `qqq config 'alias."with.dot"' list`. Alias values always stay strings, including
 `true` or `123`; `herdr.next-to-new-agent` accepts only `true` or `false`.
+`display.max-completed` requires a non-negative integer up to `i64::MAX`.
 Other values accept TOML literals (numbers, booleans, arrays, quoted strings),
 falling back to a string when input is not a valid literal. Use `--` before
 positional arguments that start with a hyphen.

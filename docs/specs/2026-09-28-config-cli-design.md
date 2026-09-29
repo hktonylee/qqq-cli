@@ -10,7 +10,8 @@ empty and is only created by set. Reads never create files or directories.
 Keys follow TOML dotted-key syntax, including quoted segments. Alias values are
 always strings. `herdr.next-to-new-agent` accepts true/false. Other values parse
 as TOML values when possible and otherwise become strings. Candidate documents
-validate against existing typed config before persistence; invalid known types
+validate against existing typed config before persistence, including display
+settings and the SQLite integer range; invalid known types
 do not corrupt config. Unknown settings remain supported and preserved.
 
 Preserve comments, ordering, unknown values and existing permissions with

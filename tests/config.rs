@@ -245,6 +245,38 @@ fn config_human_output_escapes_controls_and_json_keeps_original() {
     assert!(!out.stdout.contains(&27));
 }
 
+#[test]
+fn config_validates_display_setting_and_applies_it_to_human_lists() {
+    let p = UserConfig::new();
+    p.ok(&["config", "display.max-completed", "0"]);
+    let before = fs::read(p.path()).unwrap();
+    for value in ["-1", "false", "1.5", "'oops'", "9223372036854775808"] {
+        let out = p.run(&["config", "display.max-completed", "--", value]);
+        assert_eq!(
+            out.status.code(),
+            Some(1),
+            "{value}: {}",
+            String::from_utf8_lossy(&out.stderr)
+        );
+        assert_eq!(fs::read(p.path()).unwrap(), before);
+    }
+    p.ok(&["init"]);
+    p.ok(&["add", "Completed task"]);
+    p.ok(&["next", "--session", "worker", "--local"]);
+    p.ok(&["complete", "1", "--session", "worker"]);
+    assert_eq!(
+        String::from_utf8(p.run(&["list"]).stdout).unwrap(),
+        "No tasks to display.\n"
+    );
+    assert_eq!(p.ok(&["list"]).as_array().unwrap().len(), 1);
+    p.ok(&["config", "--unset", "display.max-completed"]);
+    assert!(
+        String::from_utf8(p.run(&["list"]).stdout)
+            .unwrap()
+            .contains("Completed task")
+    );
+}
+
 #[cfg(unix)]
 #[test]
 fn config_updates_preserve_symlink_and_target_permissions() {
