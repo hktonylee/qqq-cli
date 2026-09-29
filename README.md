@@ -216,7 +216,7 @@ should use `assignee` in place of the former `owner_session` field. Schema versi
 claims, task data, history, attachments, and links. The `--session` flag and
 session matching rules are unchanged.
 
-DB includes tasks, messages, image blobs, ownership events, latest Herdr link per task. SQLite foreign keys, immediate write transactions, unique active-owner index and 10-second busy timeout protect concurrent claims. Version 1 databases automatically migrate to version 2 on open, preserving existing data and claims; old tasks have no parent. Newer unknown versions are rejected. Keep DB out of Git. To back up while CLI processes may run, use SQLite's backup API or `sqlite3 qqq.db '.backup backup.sqlite'`; copy DB file only when all writers are stopped.
+DB includes tasks, messages, image blobs, ownership events, latest Herdr link per task. SQLite foreign keys, immediate write transactions, unique active-owner index and 10-second busy timeout protect concurrent claims. Tasks from version 1 databases have no parent after migration. Newer unknown versions are rejected. Keep DB out of Git. To back up while CLI processes may run, use SQLite's backup API or `sqlite3 qqq.db '.backup backup.sqlite'`; copy DB file only when all writers are stopped.
 
 ```sh
 cargo test --locked
