@@ -164,7 +164,7 @@ impl Db {
     }
     pub fn has_ready(&self) -> Result<bool> {
         Ok(self.conn.query_row(
-            "SELECT EXISTS(SELECT 1 FROM tasks WHERE status='pending' AND
+            "SELECT EXISTS(SELECT 1 FROM tasks WHERE status='new' AND
                 (parent_id IS NULL OR EXISTS(SELECT 1 FROM tasks parent WHERE parent.id=tasks.parent_id AND parent.status='completed')))",
             [], |row| row.get(0),
         )?)

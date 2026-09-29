@@ -139,7 +139,7 @@ fn caller_existing_claim_wins_and_local_bypasses_dispatch() {
     let first = p.ok(&["next", "--local", "--session", "caller"]);
     assert_eq!(p.ok(&["next", "--session", "caller"]), first);
     assert!(p.calls().is_empty());
-    assert_eq!(p.ok(&["show", "2"])["task"]["status"], "pending");
+    assert_eq!(p.ok(&["show", "2"])["task"]["status"], "new");
 }
 
 #[test]
@@ -178,7 +178,7 @@ fn startup_errors_release_claim_prompt_errors_retain_claim_and_link() {
             assert!(!detail["herdr"].is_null());
             assert!(String::from_utf8_lossy(&out.stderr).contains("may have been delivered"));
         } else {
-            assert_eq!(detail["task"]["status"], "pending");
+            assert_eq!(detail["task"]["status"], "new");
             assert!(
                 !p.calls()
                     .iter()
@@ -220,7 +220,7 @@ fn terminal_fallback_links_exact_terminal_and_missing_identity_aborts() {
         .output()
         .unwrap();
     assert!(!out.status.success());
-    assert_eq!(p.ok(&["show", "1"])["task"]["status"], "pending");
+    assert_eq!(p.ok(&["show", "1"])["task"]["status"], "new");
 }
 
 #[test]
@@ -229,7 +229,7 @@ fn invalid_config_and_missing_workspace_do_not_claim_or_spawn() {
     p.ok(&["add", "Task"]);
     p.config("[herdr]\nnext-to-new-agent = 'yes'\n");
     assert!(!p.run(&["next", "--session", "caller"]).status.success());
-    assert_eq!(p.ok(&["show", "1"])["task"]["status"], "pending");
+    assert_eq!(p.ok(&["show", "1"])["task"]["status"], "new");
     p.config("[herdr]\nnext-to-new-agent = true\n");
     let out = p
         .command()
@@ -238,7 +238,7 @@ fn invalid_config_and_missing_workspace_do_not_claim_or_spawn() {
         .output()
         .unwrap();
     assert!(!out.status.success());
-    assert_eq!(p.ok(&["show", "1"])["task"]["status"], "pending");
+    assert_eq!(p.ok(&["show", "1"])["task"]["status"], "new");
     assert!(p.calls().is_empty());
 }
 

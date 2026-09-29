@@ -262,13 +262,13 @@ identity, qqq associates the exact Herdr terminal ID and agent kind instead.
 This fallback follows the terminal lifetime, not an individual resumed Codex
 conversation. Caller discovery in dispatch mode supports the same fallback.
 
-Failures before prompt submission return the task to pending. Created tabs stay
+Failures before prompt submission return the task to `new`. Created tabs stay
 open for inspection. A prompt error keeps the claim and link because delivery
 may already have happened: inspect the agent before retrying. To recover after
 confirming the agent is not working, use the recorded assignee:
 
 ```sh
-qqq edit <task-id> --set-status pending --session '<recorded-assignee>'
+qqq edit <task-id> --set-status new --session '<recorded-assignee>'
 ```
 
 Adapter targets Herdr API protocol 20 JSON shapes: `result.agents`, `result.pane`, `agent_session.{agent,kind,value}`. Agent-session metadata may be absent depending on integration hooks.

@@ -121,7 +121,7 @@ pub fn next(db: &mut Db, caller: Option<&str>) -> Result<Option<Task>> {
                     task.id
                 )
             })?;
-            return Err(error).with_context(|| format!("Task {} returned to pending; dispatch failed at {location}. Any created tab remains for inspection", task.id));
+            return Err(error).with_context(|| format!("Task {} returned to new; dispatch failed at {location}. Any created tab remains for inspection", task.id));
         }
     };
     let prompt = format!(
@@ -132,6 +132,6 @@ pub fn next(db: &mut Db, caller: Option<&str>) -> Result<Option<Task>> {
         bin = quote(executable)
     );
     let _: Value = herdr::call(None, &["agent", "prompt", &pane.pane_id, &prompt])
-        .with_context(|| format!("Prompt may have been delivered. Task {} remains assigned to {name}, linked to {location}; inspect agent before retrying. Recovery: qqq edit {} --set-status pending --session {}", task.id, task.id, quote(&name)))?;
+        .with_context(|| format!("Prompt may have been delivered. Task {} remains assigned to {name}, linked to {location}; inspect agent before retrying. Recovery: qqq edit {} --set-status new --session {}", task.id, task.id, quote(&name)))?;
     Ok(Some(task))
 }
