@@ -39,7 +39,7 @@ details. Empty lists print `No tasks yet.`; queues with no ready tasks print
 in-progress, grey for completed tasks, and red for tasks in error. Aliases such as `ls = "list"` use the
 same colors. Piped output and `--json` stay plain. Set `NO_COLOR=1` or `TERM=dumb`
 to disable colors. Terminal `show` output uses the same status colors, with a
-bold task title and section headings. New status uses normal terminal color.
+bold task ID and section headings. New status uses normal terminal color.
 
 ```sh
 qqq list
@@ -219,7 +219,7 @@ qqq edit 1 --set-status new
 Only the owner of an `in_progress` task can mark it `error`. This clears its
 assignee, saves the reason as a message, and records an `error` history event.
 Blank reasons fail; `--reason` is valid only with `--set-status error`. Optional
-title/description edits commit together with the failure. Error tasks stay
+description edits commit together with the failure. Error tasks stay
 visible in `list`, even with `--max-completed 0`; `show` includes the reason.
 `next` and `next --wait` skip them, and dependent tasks stay blocked. The worker
 can claim another ready task.
@@ -332,12 +332,12 @@ Define command shortcuts in `~/.config/qqq/config.toml`:
 ls = "list"
 n = "next"
 done = "complete"
-bug = "add --description 'Needs investigation'"
+bug = "add"
 img = "edit -1 --image"
 ```
 
-`qqq bug "Fix login"` expands to `qqq add --description 'Needs investigation'
-"Fix login"`. Extra arguments keep their original boundaries. Single/double
+`qqq bug "Fix login"` expands to `qqq add "Fix login"`. Extra arguments keep
+their original boundaries. Single/double
 quotes and backslash escaping group words in alias values. No shell runs: `$HOME`,
 wildcards, and command substitutions stay literal; Git-style `!` aliases are
 rejected. Aliases can reference other aliases; cycles, empty values, and invalid
