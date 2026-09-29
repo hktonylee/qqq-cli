@@ -1,6 +1,6 @@
 # qqq
 
-Local-first Rust CLI for project tasks and coding agent sessions. Everything lives in **`qqq.sqlite`**, including image bytes. No server required. Commands return JSON; errors go to stderr with exit code 1 (argument errors: 2).
+Local-first Rust CLI for project tasks and coding agent sessions. Everything lives in **`qqq.db`**, including image bytes. No server required. Commands return JSON; errors go to stderr with exit code 1 (argument errors: 2).
 
 ## Install
 
@@ -12,7 +12,7 @@ cargo install --path . --locked
 
 ## Tasks
 
-Run `init` in your project root. Other commands find the nearest `qqq.sqlite` in current directory or its parents. Filename is fixed.
+Run `init` in your project root. Other commands find the nearest `qqq.db` in current directory or its parents. Filename is fixed.
 
 ```sh
 qqq init
@@ -61,7 +61,7 @@ Session IDs coordinate local agents; they are not authentication credentials. De
 
 ## Herdr
 
-Outside Herdr, plain `qqq next` queries `herdr agent list` on the currently targeted server and selects the unique agent whose cwd equals the directory containing `qqq.sqlite`. No `HERDR_ENV` needed. Running from a project subdirectory still matches the DB directory. Paths resolve symlinks; `foreground_cwd` takes precedence over `cwd` when present. Zero matches, multiple matches, or missing agent-session metadata produce an error before claiming. Use `--session` to choose ownership explicitly when discovery is ambiguous.
+Outside Herdr, plain `qqq next` queries `herdr agent list` on the currently targeted server and selects the unique agent whose cwd equals the directory containing `qqq.db`. No `HERDR_ENV` needed. Running from a project subdirectory still matches the DB directory. Paths resolve symlinks; `foreground_cwd` takes precedence over `cwd` when present. Zero matches, multiple matches, or missing agent-session metadata produce an error before claiming. Use `--session` to choose ownership explicitly when discovery is ambiguous.
 
 `complete`, `release`, and `herdr link <id>` use the same discovery. Lookup requires Herdr CLI and its server to be available.
 
@@ -87,7 +87,7 @@ Adapter targets Herdr API protocol 20 JSON shapes: `result.agents`, `result.pane
 
 ## Data and checks
 
-DB includes tasks, messages, image blobs, ownership events, latest Herdr link per task. SQLite foreign keys, immediate write transactions, unique active-owner index and 10-second busy timeout protect concurrent claims. Schema version is checked; newer unknown versions are rejected. Keep DB out of Git. To back up while CLI processes may run, use SQLite's backup API or `sqlite3 qqq.sqlite '.backup backup.sqlite'`; copy DB file only when all writers are stopped.
+DB includes tasks, messages, image blobs, ownership events, latest Herdr link per task. SQLite foreign keys, immediate write transactions, unique active-owner index and 10-second busy timeout protect concurrent claims. Schema version is checked; newer unknown versions are rejected. Keep DB out of Git. To back up while CLI processes may run, use SQLite's backup API or `sqlite3 qqq.db '.backup backup.sqlite'`; copy DB file only when all writers are stopped.
 
 ```sh
 cargo test --locked

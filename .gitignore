@@ -1,4 +1,4 @@
 .worktrees/
 /target/
-qqq.sqlite
-qqq.sqlite-*
+qqq.db
+qqq.db-*

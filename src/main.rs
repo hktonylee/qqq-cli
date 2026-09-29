@@ -8,7 +8,7 @@ use std::path::PathBuf;
 #[derive(Parser)]
 #[command(
     version,
-    about = "Local-first task queue for agent sessions. JSON output; project DB: qqq.sqlite."
+    about = "Local-first task queue for agent sessions. JSON output; project DB: qqq.db."
 )]
 struct Cli {
     /// Stable owner identity. Falls back to Herdr caller, then unique agent at database directory.
@@ -19,7 +19,7 @@ struct Cli {
 }
 #[derive(Subcommand)]
 enum Commands {
-    /// Create qqq.sqlite in current directory (safe to repeat).
+    /// Create qqq.db in current directory (safe to repeat).
     Init,
     /// Create a pending task.
     Add {

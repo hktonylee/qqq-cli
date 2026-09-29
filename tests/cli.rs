@@ -117,8 +117,9 @@ fn concurrent_claims_are_unique() {
 fn init_is_explicit_and_repeatable() {
     let d = TempDir::new().unwrap();
     assert!(!run(d.path(), &["list"]).status.success());
-    assert!(!d.path().join("qqq.sqlite").exists());
+    assert!(!d.path().join("qqq.db").exists());
     ok(d.path(), &["init"]);
+    assert!(d.path().join("qqq.db").is_file());
     ok(d.path(), &["add", "Keep"]);
     ok(d.path(), &["init"]);
     assert_eq!(ok(d.path(), &["list"]).as_array().unwrap().len(), 1);

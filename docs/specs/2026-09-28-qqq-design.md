@@ -1,6 +1,6 @@
 # qqq CLI design
 
-Rust CLI for local project tasks. `qqq init` creates `qqq.sqlite` in current directory. Other commands search current directory and parents; no configurable DB filename. SQLite stores image bytes so moving project DB preserves attachments. JSON stdout supports agent consumers; errors go to stderr with nonzero exit.
+Rust CLI for local project tasks. `qqq init` creates `qqq.db` in current directory. Other commands search current directory and parents; no configurable DB filename. SQLite stores image bytes so moving project DB preserves attachments. JSON stdout supports agent consumers; errors go to stderr with nonzero exit.
 
 Tasks have integer IDs, title, description, status (pending/in_progress/completed), owner session, timestamps. FIFO `next` runs under an immediate transaction: return caller's active task or claim oldest pending task. Unique partial index allows one active task per session. Locks never expire. Only owner can complete/release. Release returns task to pending. Claim events retain history. Session comes from `--session`, `QQQ_SESSION`, exact Herdr caller identity when HERDR_ENV=1, or unique Herdr agent whose cwd matches database directory. Cwd discovery normalizes symlinks, prefers foreground_cwd over cwd and rejects zero or multiple matches before mutation. Missing identity fails before claiming.
 

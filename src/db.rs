@@ -7,7 +7,7 @@ use std::{
     time::Duration,
 };
 
-pub const DB_NAME: &str = "qqq.sqlite";
+pub const DB_NAME: &str = "qqq.db";
 pub struct Db {
     pub conn: Connection,
 }
@@ -45,7 +45,7 @@ impl Db {
             cwd.ancestors()
                 .map(|p| p.join(DB_NAME))
                 .find(|p| p.is_file())
-                .context("No qqq.sqlite found; run qqq init in project root")?
+                .context("No qqq.db found; run qqq init in project root")?
         };
         let flags = OpenFlags::SQLITE_OPEN_READ_WRITE
             | if init {
