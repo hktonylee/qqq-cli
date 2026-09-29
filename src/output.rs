@@ -3,6 +3,10 @@ use serde_json::Value;
 use std::collections::HashMap;
 
 pub enum Format {
+    ConfigList,
+    ConfigGet,
+    ConfigSet,
+    ConfigUnset,
     Database,
     Task,
     Tasks,
@@ -17,6 +21,10 @@ pub enum Format {
 impl From<&Commands> for Format {
     fn from(command: &Commands) -> Self {
         match command {
+            Commands::Config { list: true, .. } => Self::ConfigList,
+            Commands::Config { unset: Some(_), .. } => Self::ConfigUnset,
+            Commands::Config { value: Some(_), .. } => Self::ConfigSet,
+            Commands::Config { .. } => Self::ConfigGet,
             Commands::Init => Self::Database,
             Commands::List { .. } => Self::Tasks,
             Commands::Show { .. } => Self::Detail,
@@ -230,6 +238,21 @@ fn task_tree(tasks: &[Value], color: bool) -> String {
 
 pub fn render(format: Format, value: &Value, color: bool) -> String {
     match format {
+        Format::ConfigList => {
+            let values = value.as_object().expect("config list is an object");
+            if values.is_empty() {
+                "No config values set.".to_owned()
+            } else {
+                values
+                    .iter()
+                    .map(|(key, value)| format!("{}={}", clean(key), config_value(value)))
+                    .collect::<Vec<_>>()
+                    .join("\n")
+            }
+        }
+        Format::ConfigGet => config_value(value),
+        Format::ConfigSet => format!("Set {}.", field(value, "key")),
+        Format::ConfigUnset => format!("Unset {}.", field(value, "key")),
         Format::Database => format!("Database: {}", field(value, "database")),
         Format::Task if value.is_null() => "No ready tasks.".to_owned(),
         Format::Task => task(value),
@@ -284,5 +307,12 @@ pub fn render(format: Format, value: &Value, color: bool) -> String {
         ),
         Format::Link => link(value),
         Format::Pane => pane(value),
+    }
+}
+
+fn config_value(value: &Value) -> String {
+    match value {
+        Value::String(text) => clean(text),
+        other => clean(&other.to_string()),
     }
 }

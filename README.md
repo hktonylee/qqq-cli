@@ -176,6 +176,39 @@ Images support PNG, JPEG, GIF and WebP signatures, up to 20 MiB each. Signature 
 qqq image export 1 ./exported.png
 ```
 
+## Config
+
+Read or edit `~/.config/qqq/config.toml` without opening a project database:
+
+```sh
+qqq config --list
+qqq config --get alias.ls
+qqq config alias.ls                  # same as --get
+qqq config alias.ls 'list --watch'    # set
+qqq config herdr.next-to-new-agent true
+qqq config --unset alias.ls
+```
+
+Keys use TOML dotted-key syntax. Quote literal dots inside key segments:
+`qqq config 'alias."with.dot"' list`. Alias values always stay strings, including
+`true` or `123`; `herdr.next-to-new-agent` accepts only `true` or `false`.
+Other values accept TOML literals (numbers, booleans, arrays, quoted strings),
+falling back to a string when input is not a valid literal. Use `--` before
+positional arguments that start with a hyphen.
+
+`--list` shows explicitly stored values as sorted `key=value` lines. Missing
+config lists no values; reads never create files. Missing keys, invalid paths,
+unset/empty `HOME`, malformed files and invalid known setting types fail with
+exit code 1. Actions are mutually exclusive. Updates preserve comments, unknown
+settings, file permissions and existing symlinks. Concurrent qqq edits use a
+persistent sidecar lock and atomic replacement; manual editors do not share this
+lock.
+
+With `--json`, list returns a flat object of dotted keys and typed values. Get
+returns the value itself. Set returns `{"key":"alias.ls","value":"list"}`;
+unset returns `{"key":"alias.ls","value":null}`. Unsetting a setting restores
+its default behavior.
+
 ## Aliases
 
 Define command shortcuts in `~/.config/qqq/config.toml`:

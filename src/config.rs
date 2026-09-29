@@ -28,6 +28,12 @@ pub struct Display {
     pub max_completed: Option<u64>,
 }
 
+pub fn path() -> Option<PathBuf> {
+    std::env::var_os("HOME")
+        .filter(|home| !home.is_empty())
+        .map(|home| PathBuf::from(home).join(".config/qqq/config.toml"))
+}
+
 pub fn load() -> Result<Config> {
     load_section()
 }
@@ -37,10 +43,9 @@ pub fn load_display() -> Result<DisplayConfig> {
 
 // Display settings are independent of alias/Herdr settings.
 fn load_section<T: Default + DeserializeOwned>() -> Result<T> {
-    let Some(home) = std::env::var_os("HOME").filter(|home| !home.is_empty()) else {
+    let Some(path) = path() else {
         return Ok(T::default());
     };
-    let path = PathBuf::from(home).join(".config/qqq/config.toml");
     let content = match fs::read_to_string(&path) {
         Ok(content) => content,
         Err(error) if error.kind() == ErrorKind::NotFound => return Ok(T::default()),

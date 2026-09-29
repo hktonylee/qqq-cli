@@ -1,5 +1,6 @@
 mod aliases;
 mod config;
+mod config_cli;
 mod db;
 mod dispatch;
 mod editor;
@@ -7,7 +8,7 @@ mod herdr;
 mod output;
 mod watch;
 use anyhow::{Context, Result, ensure};
-use clap::{Parser, Subcommand, ValueEnum};
+use clap::{ArgGroup, Parser, Subcommand, ValueEnum};
 use serde_json::{Value, json};
 use std::{io::IsTerminal, path::PathBuf, thread, time::Duration};
 
@@ -33,6 +34,24 @@ enum EditStatus {
 
 #[derive(Subcommand)]
 enum Commands {
+    /// Read or edit ~/.config/qqq/config.toml; no project database required.
+    #[command(group(ArgGroup::new("action").required(true).args(["list", "get", "unset", "key"])))]
+    Config {
+        /// List explicitly stored values as dotted keys.
+        #[arg(long)]
+        list: bool,
+        /// Read a dotted key (also supported as a positional key).
+        #[arg(long)]
+        get: Option<String>,
+        /// Remove a dotted key.
+        #[arg(long)]
+        unset: Option<String>,
+        /// Dotted key to read, or set when VALUE is supplied.
+        key: Option<String>,
+        /// New value. Alias values are strings; other values accept TOML literals.
+        #[arg(requires = "key")]
+        value: Option<String>,
+    },
     /// Create qqq.db in current directory (safe to repeat).
     Init,
     /// Create a new task.
@@ -121,11 +140,28 @@ enum HerdrCommand {
     Find { task_id: i64 },
 }
 fn execute(cli: Cli, display_limit: Option<i64>) -> Result<Value> {
+    if let Commands::Config {
+        list,
+        get,
+        unset,
+        key,
+        value,
+    } = &cli.command
+    {
+        return config_cli::execute(
+            *list,
+            get.as_deref(),
+            unset.as_deref(),
+            key.as_deref(),
+            value.as_deref(),
+        );
+    }
     let (mut db, path) = db::Db::open(matches!(cli.command, Commands::Init))?;
     let project_dir = path
         .parent()
         .context("Database path has no parent directory")?;
     Ok(match cli.command {
+        Commands::Config { .. } => unreachable!("config was handled before database lookup"),
         Commands::Init => json!({"database":path}),
         Commands::Add {
             title,
