@@ -56,6 +56,9 @@ enum Commands {
         /// Keep watching database commits and refresh the task list. Ctrl-C stops.
         #[arg(long)]
         watch: bool,
+        /// Show all completed tasks, bypassing display.max-completed.
+        #[arg(long, conflicts_with = "max_completed")]
+        all: bool,
     },
     /// Show task, messages, image metadata, ownership history and Herdr link.
     Show { id: i64 },
@@ -117,7 +120,7 @@ enum HerdrCommand {
     /// Find live pane by stored agent session identity.
     Find { task_id: i64 },
 }
-fn execute(cli: Cli) -> Result<Value> {
+fn execute(cli: Cli, display_limit: Option<i64>) -> Result<Value> {
     let (mut db, path) = db::Db::open(matches!(cli.command, Commands::Init))?;
     let project_dir = path
         .parent()
@@ -139,7 +142,7 @@ fn execute(cli: Cli) -> Result<Value> {
             };
             json!(db.add(&title, &description, parent)?)
         }
-        Commands::List { max_completed, .. } => json!(db.list(max_completed)?),
+        Commands::List { max_completed, .. } => json!(db.list(max_completed.or(display_limit))?),
         Commands::Show { id } => db.show(id)?,
         Commands::Edit {
             id,
@@ -226,19 +229,34 @@ fn execute(cli: Cli) -> Result<Value> {
 }
 fn run() -> Result<Option<String>> {
     let cli = Cli::parse_from(aliases::expand(std::env::args_os().collect())?);
+    let display_limit = match &cli.command {
+        Commands::List {
+            all: false,
+            max_completed: None,
+            ..
+        } if !cli.json => config::load_display()?
+            .display
+            .max_completed
+            .map(|limit| i64::try_from(limit).context("display.max-completed is too large"))
+            .transpose()?,
+        _ => None,
+    };
     if let Commands::List {
         watch: true,
         max_completed,
+        ..
     } = &cli.command
     {
-        watch::run(cli.json, *max_completed)?;
+        watch::run(cli.json, max_completed.or(display_limit))?;
         return Ok(None);
     }
     let json = cli.json;
     let format = output::Format::from(&cli.command);
-    let value = execute(cli)?;
+    let value = execute(cli, display_limit)?;
     Ok(Some(if json {
         serde_json::to_string_pretty(&value).expect("JSON value is serializable")
+    } else if display_limit.is_some() && value.as_array().is_some_and(Vec::is_empty) {
+        "No tasks to display.".to_owned()
     } else {
         let color = output::color_enabled(std::io::stdout().is_terminal());
         output::render(format, &value, color)

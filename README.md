@@ -23,8 +23,8 @@ Use `qqq list --max-completed <N>` to cap completed rows while keeping every new
 and in-progress task. The most recent completions are retained; completion
 history determines recency, falling back to update time and ID when history is
 absent. Editing an older completed task does not count as another completion.
-Omit the flag to show all tasks; `0` hides completed rows. The filter applies to
-text and JSON. Children whose parents are hidden appear as roots; JSON preserves
+Omit the flag to use the human display default; `0` hides completed rows. An
+explicit flag applies to text and JSON, overriding config. Children whose parents are hidden appear as roots; JSON preserves
 the original `parent_id`. Filtering does not delete task data.
 
 ```sh
@@ -57,6 +57,22 @@ with `--watch` too.
 `--json` works before or after subcommands, including nested commands. It preserves
 the existing JSON shapes, including `[]` for empty lists and `null` when no task
 is ready. Existing scripts that parse command output must add `--json`.
+
+Limit completed tasks by default in human `list` output through
+`~/.config/qqq/config.toml`:
+
+```toml
+[display]
+max-completed = 10
+```
+
+The value must be a non-negative integer. `0` hides completed tasks; missing
+setting means unlimited. It uses the same completion ordering as the explicit
+flag. New and in-progress tasks always remain visible; children of hidden parents
+appear as roots. `qqq list --all` bypasses the default. `--json` ignores the config
+default; an explicit `--max-completed` still filters JSON. `show` opens any task.
+A configured list with no visible tasks prints `No tasks to display.`.
+
 
 ## Install
 
@@ -182,10 +198,11 @@ quoting produce errors before any task changes.
 Global `--session` works before or after an alias. Built-in commands (including
 `help`) always take precedence; only the root command is expanded. Use
 `qqq bug --help` for the expanded command's help. Unknown commands retain normal
-CLI errors. Config is read only when resolving an unknown root command, so
-built-ins other than `next`, and top-level help, remain usable with broken config.
-`next` also reads Herdr dispatch settings; `next --local` bypasses that read. Missing config
-or unset/empty `HOME` means no aliases; unreadable or malformed config reports its
+CLI errors. Alias config is read when resolving an unknown root command; human
+`list` also reads display config unless `--all` or `--max-completed` is supplied.
+Top-level help and built-ins such as `show` and `list --json` remain usable with
+broken config. `next` reads Herdr dispatch settings; `next --local` bypasses that
+read. Missing config or unset/empty `HOME` uses defaults; unreadable or malformed config reports its
 path. This fixed path uses `HOME`, not `XDG_CONFIG_HOME`.
 
 ## Agent ownership
