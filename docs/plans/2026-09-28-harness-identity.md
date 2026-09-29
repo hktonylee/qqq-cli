@@ -71,5 +71,5 @@ Files: `README.md`, existing field-related tests, spec/plan progress.
 - [x] Update README examples for JSON fields, explicit override flags and legacy ownership recovery.
 - [x] Run `cargo fmt --check`, `cargo test`, `cargo clippy --all-targets -- -D warnings`, `cargo build --release`, `git diff --check` -> all pass.
 - [x] Dispatch independent code review; fix material findings with regression tests, rerun affected checks.
-- [ ] Rebase latest master, rerun checks after relevant concurrent changes, merge fast-forward, rebuild root debug binary; smoke queue show/next with original task #26 session.
-- [ ] Record qqq progress, complete task #26 using original owner token, remove isolated branch/worktree. Continue `next --wait --local` with stable session.
+- [x] Rebase latest master, rerun checks after relevant concurrent changes, merge fast-forward, rebuild root debug binary; smoke queue show/next with original task #26 session.
+- [x] Record qqq progress, complete task #26 using original owner token, remove isolated branch/worktree. Continue `next --wait --local` with stable session.
