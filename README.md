@@ -192,6 +192,28 @@ qqq edit 1 --set-status new --session agent-session-123
 qqq edit -1 --set-status new --description "Retry with updated details" --session agent-session-123
 ```
 
+For manual recovery, inspect the task and return it without discovering or
+matching its current owner:
+
+```sh
+qqq show 1
+qqq edit 1 --set-status new --force
+qqq edit 1 --set-status new --force --session recovery-operator --description "Ready to retry"
+```
+
+`--force` skips Herdr lookup, including when neither `--session` nor
+`QQQ_SESSION` is set. A supplied session records the release author without
+enforcing ownership; otherwise history uses `manual`. `--harness-session` also
+supplies the author when no `--session`/`QQQ_SESSION` is set. It clears the claim
+and all harness/orchestrator identity fields,
+records a `release` event, and preserves omitted content, dependencies,
+messages, attachments and the saved Herdr link. Combined field, parent and
+image updates commit atomically with the release. It accepts active or error
+tasks; new/completed tasks reject the transition. The flag is valid only with
+literal `--set-status new`, not `--set-pending`, `--set-status error`, field-only
+edits or `--edit`. Without `--force`, active tasks still require their owner;
+error retries remain session-free.
+
 `--set-pending` is a shortcut for `--set-status new`, returning work to the
 execution queue using the existing `new` status:
 
@@ -378,6 +400,7 @@ Or pass `--session agent-session-123` on individual commands. Precedence: `--ses
 - Without `--wait`, no ready tasks prints `No ready tasks.` (`null` with `--json`), exit code 0.
 - `complete <task-id>` marks task `completed` when the supplied or discovered session ID matches its recorded `harness_session`.
 - `edit <task-id> --set-status new` returns a claimed task to `new` when the supplied or discovered session ID matches its recorded `harness_session`.
+- `edit <task-id> --set-status new --force` returns active/error work without owner discovery or matching, recording the supplied session or `manual` as release author.
 - `edit <task-id> --set-pending` is the same return-to-queue transition, using existing `new` status and ownership/history rules.
 - `edit <task-id> --set-status error --reason "Details"` marks owned active work as failed, clearing its claim until a user explicitly retries with `--set-status new`.
 - Claims never expire. Restarting CLI preserves locks. `show` includes claim/release/completion history.
@@ -397,10 +420,10 @@ by parent completion. Waiting prints no intermediate output; use Ctrl-C to stop.
 Identity lookup or DB errors still exit with an error. Waiting releases the DB
 write lock between checks, so other commands can add and update tasks.
 
-For an abandoned session, inspect `qqq show <id>`, then explicitly release using its recorded `harness_session`:
+For an abandoned session, inspect `qqq show <id>`, then explicitly return it to the queue:
 
 ```sh
-qqq edit 1 --set-status new --session 'recorded-owner-session'
+qqq edit 1 --set-status new --force
 ```
 
 Session IDs coordinate local agents; they are not authentication credentials. Descriptions, attachments and messages can be edited/appended by local callers regardless of claim ownership. Messages record author when `--session` or `QQQ_SESSION` is supplied.
@@ -409,7 +432,7 @@ Session IDs coordinate local agents; they are not authentication credentials. De
 
 Outside Herdr, plain `qqq next` queries `herdr agent list` on the currently targeted server and selects the unique agent whose cwd equals the directory containing `qqq.db`. No `HERDR_ENV` needed. Running from a project subdirectory still matches the DB directory. Paths resolve symlinks; `foreground_cwd` takes precedence over `cwd` when present. Zero matches, multiple matches, or missing session and terminal identity produce an error before claiming. Use `--session` to choose ownership explicitly when discovery is ambiguous.
 
-`complete`, `edit --set-status new`, and `herdr link <id>` use the same discovery. Lookup requires Herdr CLI and its server to be available.
+`complete`, ordinary active-task `edit --set-status new`, and `herdr link <id>` use the same discovery. Lookup requires Herdr CLI and its server to be available. `edit --set-status new --force` and error retries skip discovery.
 
 Inside Herdr, `next` derives ownership from `HERDR_ENV=1`, `HERDR_PANE_ID`, and
 the exact pane's reported agent session. When hooks have not reported a session,
@@ -424,7 +447,7 @@ Use `--session` when a distinct conversation identity is needed.
 
 The claim and Herdr link persist in one transaction. Caller context takes
 precedence over cwd discovery; caller lookup errors do not fall through to
-another agent. `complete` and `edit --set-status new` preserve active claim
+another agent. `complete` and ordinary `edit --set-status new` preserve active claim
 identity the same way. Default `herdr link` also preserves active auto-claim
 identity; explicit links associate the requested identity without transferring
 ownership.

@@ -4,11 +4,13 @@ Task #31 adds `qqq edit <id> --set-status new --force` for explicit manual claim
 recovery. Modifier is valid only with literal `--set-status new`, not error,
 `--set-pending`, field-only edits, or forced editor mode.
 
-Force mode skips Herdr lookup and assignee matching, including with absent or
+Force mode skips Herdr lookup and owner matching, including with absent or
 mismatched explicit/environment session. Supplied session records history author;
 otherwise use `manual`. Existing nonblank session validation stays. New typed
 `ForceNew` transition updates only in-progress/error tasks to new and clears
-assignee, recording release event in same immediate edit transaction.
+claim key and all harness/orchestrator identity fields, recording release event
+in same immediate edit transaction. Current session input precedence applies to
+release author, including --harness-session fallback, without owner lookup.
 
 Content, dependencies, messages, attachments and saved Herdr link remain intact
 unless explicitly edited. Parent/content/image edits commit with release or all

@@ -19,6 +19,7 @@ pub enum EditTransition<'a> {
         harness_name: Option<&'a str>,
     },
     NewExact(&'a str),
+    ForceNew(&'a str),
     RetryError(&'a str),
     Error {
         session: &'a str,
@@ -280,6 +281,20 @@ impl Db {
             }
             Some(EditTransition::NewExact(session)) => {
                 Self::release_claim(&tx, id, session)?;
+            }
+            Some(EditTransition::ForceNew(session)) => {
+                nonempty(session, "Session")?;
+                ensure!(
+                    tx.execute(
+                        "UPDATE tasks SET status='new',claim_key=NULL,harness_name=NULL,harness_session=NULL,orchestrator_name=NULL,orchestrator_session=NULL WHERE id=? AND status IN ('in_progress','error')",
+                        [id]
+                    )? == 1,
+                    "Task {id} is not in progress or error"
+                );
+                tx.execute(
+                    "INSERT INTO events(task_id,session,action) VALUES (?,?,'release')",
+                    params![id, session],
+                )?;
             }
             Some(EditTransition::RetryError(session)) => {
                 nonempty(session, "Session")?;

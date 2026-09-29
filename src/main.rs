@@ -126,6 +126,9 @@ enum Commands {
         /// Return owned task/error to execution queue (new); same as --set-status new.
         #[arg(long, conflicts_with = "set_status")]
         set_pending: bool,
+        /// Return active/error task to new without session discovery or owner matching.
+        #[arg(long, requires = "set_status")]
+        force: bool,
         /// Failure details, required and valid only with --set-status error.
         #[arg(long, requires = "set_status")]
         reason: Option<String>,
@@ -272,10 +275,15 @@ fn execute(cli: Cli, display_limit: Option<i64>) -> Result<Value> {
             edit,
             set_status,
             set_pending,
+            force,
             images,
             reason,
             set_parent,
         } => {
+            ensure!(
+                !force || matches!(set_status, Some(EditStatus::New)),
+                "--force is only valid with --set-status new"
+            );
             let set_status = if set_pending {
                 Some(EditStatus::New)
             } else {
@@ -317,6 +325,9 @@ fn execute(cli: Cli, display_limit: Option<i64>) -> Result<Value> {
                     )?;
                 }
                 let session = match set_status {
+                    Some(EditStatus::New) if force => {
+                        Some(session_input.unwrap_or("manual").to_owned())
+                    }
                     Some(EditStatus::New) if task.status == "error" => {
                         Some(session_input.unwrap_or("manual").to_owned())
                     }
@@ -326,6 +337,9 @@ fn execute(cli: Cli, display_limit: Option<i64>) -> Result<Value> {
                     None => None,
                 };
                 let transition = match set_status {
+                    Some(EditStatus::New) if force => {
+                        Some(db::EditTransition::ForceNew(session.as_deref().unwrap()))
+                    }
                     Some(EditStatus::New) if task.status == "error" => {
                         Some(db::EditTransition::RetryError(session.as_deref().unwrap()))
                     }
