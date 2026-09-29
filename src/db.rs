@@ -1,4 +1,4 @@
-use anyhow::{Context, Result, bail, ensure};
+use anyhow::{Context, Result, ensure};
 use rusqlite::{Connection, OpenFlags, OptionalExtension, TransactionBehavior, params};
 use serde::Serialize;
 use serde_json::{Value, json};
@@ -102,6 +102,55 @@ impl Db {
             params![title, description, parent_id],
         )?;
         self.task(self.conn.last_insert_rowid())
+    }
+    pub fn save_composition(
+        &mut self,
+        id: Option<i64>,
+        parent: Option<i64>,
+        draft: &crate::tui::draft::Composition,
+    ) -> Result<Task> {
+        nonempty(&draft.title, "Title")?;
+        for image in &draft.images {
+            image.media_type()?;
+        }
+        let tx = self
+            .conn
+            .transaction_with_behavior(TransactionBehavior::Immediate)?;
+        let id = match id {
+            Some(id) => {
+                ensure!(tx.execute(
+                    "UPDATE tasks SET title=?,description=?,updated_at=strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE id=?",
+                    params![draft.title, draft.description, id]
+                )? == 1, "Task {id} not found");
+                id
+            }
+            None => {
+                if let Some(parent) = parent {
+                    ensure!(
+                        tx.query_row(
+                            "SELECT EXISTS(SELECT 1 FROM tasks WHERE id=?)",
+                            [parent],
+                            |row| row.get::<_, bool>(0)
+                        )?,
+                        "Task {parent} not found"
+                    );
+                }
+                tx.execute(
+                    "INSERT INTO tasks(title,description,parent_id) VALUES (?,?,?)",
+                    params![draft.title, draft.description, parent],
+                )?;
+                tx.last_insert_rowid()
+            }
+        };
+        for image in &draft.images {
+            tx.execute(
+                "INSERT INTO images(task_id,name,media_type,data) VALUES (?,?,?,?)",
+                params![id, image.name, image.media_type()?, image.data],
+            )?;
+        }
+        let task = tx.query_row("SELECT id,title,description,status,assignee,created_at,updated_at,parent_id FROM tasks WHERE id=?", [id], task_row)?;
+        tx.commit()?;
+        Ok(task)
     }
     pub fn list(&self, max_completed: Option<i64>) -> Result<Vec<Task>> {
         Ok(self.conn.prepare(
@@ -303,35 +352,15 @@ impl Db {
         )
     }
     pub fn image_add(&self, id: i64, path: &Path) -> Result<Value> {
-        use std::io::Read;
         self.task(id)?;
-        let file =
-            std::fs::File::open(path).with_context(|| format!("Cannot read {}", path.display()))?;
-        ensure!(file.metadata()?.is_file(), "Image must be a regular file");
-        let mut data = Vec::new();
-        file.take(20 * 1024 * 1024 + 1).read_to_end(&mut data)?;
-        ensure!(data.len() <= 20 * 1024 * 1024, "Image exceeds 20 MiB limit");
-        let media = if data.starts_with(b"\x89PNG\r\n\x1a\n") {
-            "image/png"
-        } else if data.starts_with(b"\xff\xd8\xff") {
-            "image/jpeg"
-        } else if data.starts_with(b"GIF87a") || data.starts_with(b"GIF89a") {
-            "image/gif"
-        } else if data.starts_with(b"RIFF") && data.get(8..12) == Some(b"WEBP") {
-            "image/webp"
-        } else {
-            bail!("Unsupported image signature; expected PNG, JPEG, GIF or WebP")
-        };
-        let name = path
-            .file_name()
-            .context("Missing image filename")?
-            .to_string_lossy();
+        let image = crate::images::ImageInput::read(path)?;
+        let media = image.media_type()?;
         self.conn.execute(
             "INSERT INTO images(task_id,name,media_type,data) VALUES (?,?,?,?)",
-            params![id, name, media, data],
+            params![id, image.name, media, image.data],
         )?;
         Ok(
-            json!({"id":self.conn.last_insert_rowid(),"task_id":id,"name":name,"media_type":media,"bytes":data.len()}),
+            json!({"id":self.conn.last_insert_rowid(),"task_id":id,"name":image.name,"media_type":media,"bytes":image.data.len()}),
         )
     }
     pub fn image_export(&self, id: i64, path: &Path) -> Result<Value> {
