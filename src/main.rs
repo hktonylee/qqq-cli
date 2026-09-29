@@ -1,3 +1,4 @@
+mod aliases;
 mod db;
 mod editor;
 mod herdr;
@@ -171,7 +172,9 @@ fn execute(cli: Cli) -> Result<Value> {
     })
 }
 fn main() {
-    match execute(Cli::parse()) {
+    match aliases::expand(std::env::args_os().collect())
+        .and_then(|args| execute(Cli::parse_from(args)))
+    {
         Ok(value) => println!(
             "{}",
             serde_json::to_string_pretty(&value).expect("JSON value is serializable")

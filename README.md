@@ -78,6 +78,34 @@ Images support PNG, JPEG, GIF and WebP signatures, up to 20 MiB each. Signature 
 qqq image export 1 ./exported.png
 ```
 
+## Aliases
+
+Define command shortcuts in `~/.config/qqq/config.toml`:
+
+```toml
+[alias]
+ls = "list"
+n = "next"
+done = "complete"
+bug = "add --description 'Needs investigation'"
+img = "image add"
+```
+
+`qqq bug "Fix login"` expands to `qqq add --description 'Needs investigation'
+"Fix login"`. Extra arguments keep their original boundaries. Single/double
+quotes and backslash escaping group words in alias values. No shell runs: `$HOME`,
+wildcards, and command substitutions stay literal; Git-style `!` aliases are
+rejected. Aliases can reference other aliases; cycles, empty values, and invalid
+quoting produce errors before any task changes.
+
+Global `--session` works before or after an alias. Built-in commands (including
+`help`) always take precedence; only the root command is expanded. Use
+`qqq bug --help` for the expanded command's help. Unknown commands retain normal
+CLI errors. Config is read only when resolving an unknown root command, so
+built-ins and top-level help remain usable with broken config. Missing config
+or unset/empty `HOME` means no aliases; unreadable or malformed config reports its
+path. This fixed path uses `HOME`, not `XDG_CONFIG_HOME`.
+
 ## Agent ownership
 
 Use a stable, unique ID for each agent session:
