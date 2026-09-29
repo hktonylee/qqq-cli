@@ -17,6 +17,28 @@ pub enum EditTransition<'a> {
     RetryError(&'a str),
     Error { session: &'a str, reason: &'a str },
 }
+
+#[derive(Clone, Copy, Debug)]
+pub enum ParentChange {
+    Set(i64),
+    Clear,
+}
+
+impl std::str::FromStr for ParentChange {
+    type Err = String;
+
+    fn from_str(value: &str) -> std::result::Result<Self, Self::Err> {
+        if value == "none" {
+            return Ok(Self::Clear);
+        }
+        value
+            .parse::<i64>()
+            .ok()
+            .filter(|id| *id > 0)
+            .map(Self::Set)
+            .ok_or_else(|| "Parent must be a positive task ID or none".to_owned())
+    }
+}
 #[derive(Serialize)]
 pub struct Task {
     pub id: i64,
@@ -149,6 +171,7 @@ impl Db {
                 Some(&draft.description),
                 None,
                 &draft.images,
+                None,
             ),
             None => self.add(&draft.title, &draft.description, parent, &draft.images),
         }
@@ -177,6 +200,7 @@ impl Db {
         description: Option<&str>,
         transition: Option<EditTransition<'_>>,
         images: &[ImageInput],
+        parent: Option<ParentChange>,
     ) -> Result<Task> {
         if let Some(title) = title {
             nonempty(title, "Title")?;
@@ -187,6 +211,45 @@ impl Db {
         let tx = self
             .conn
             .transaction_with_behavior(TransactionBehavior::Immediate)?;
+        if let Some(parent) = parent {
+            let parent_id = match parent {
+                ParentChange::Clear => None,
+                ParentChange::Set(parent_id) => {
+                    ensure!(parent_id != id, "Task {id} cannot depend on itself");
+                    ensure!(
+                        tx.query_row(
+                            "SELECT EXISTS(SELECT 1 FROM tasks WHERE id=?)",
+                            [parent_id],
+                            |row| row.get::<_, bool>(0)
+                        )?,
+                        "Task {parent_id} not found"
+                    );
+                    let cycle: bool = tx.query_row(
+                        "WITH RECURSIVE ancestors(id,parent_id) AS (
+                            SELECT id,parent_id FROM tasks WHERE id=?1
+                            UNION
+                            SELECT tasks.id,tasks.parent_id FROM tasks JOIN ancestors ON tasks.id=ancestors.parent_id
+                         )
+                         SELECT EXISTS(SELECT 1 FROM ancestors WHERE id=?2)
+                            OR NOT EXISTS(SELECT 1 FROM ancestors WHERE parent_id IS NULL)",
+                        params![parent_id, id],
+                        |row| row.get(0),
+                    )?;
+                    ensure!(
+                        !cycle,
+                        "Parent {parent_id} would create a dependency cycle for task {id}"
+                    );
+                    Some(parent_id)
+                }
+            };
+            ensure!(
+                tx.execute(
+                    "UPDATE tasks SET parent_id=? WHERE id=?",
+                    params![parent_id, id]
+                )? == 1,
+                "Task {id} not found"
+            );
+        }
         match transition {
             Some(EditTransition::New(session)) => {
                 nonempty(session, "Session")?;

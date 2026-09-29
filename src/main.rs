@@ -113,6 +113,9 @@ enum Commands {
         /// Failure details, required and valid only with --set-status error.
         #[arg(long, requires = "set_status")]
         reason: Option<String>,
+        /// Change dependency to a task ID, or use none to clear it. Skips editor unless --edit.
+        #[arg(long, value_name = "ID|none")]
+        set_parent: Option<db::ParentChange>,
         /// Append image file bytes without opening editor. Repeat for multiple images.
         #[arg(long = "image", value_name = "PATH")]
         images: Vec<PathBuf>,
@@ -220,6 +223,7 @@ fn execute(cli: Cli, display_limit: Option<i64>) -> Result<Value> {
             set_status,
             images,
             reason,
+            set_parent,
         } => {
             let id = db.resolve_edit_id(id)?;
             let task = db.task(id)?;
@@ -231,6 +235,7 @@ fn execute(cli: Cli, display_limit: Option<i64>) -> Result<Value> {
                 || (title.is_none()
                     && description.is_none()
                     && set_status.is_none()
+                    && set_parent.is_none()
                     && images.is_empty())
             {
                 let title = title.as_deref().unwrap_or(&task.title);
@@ -241,7 +246,14 @@ fn execute(cli: Cli, display_limit: Option<i64>) -> Result<Value> {
                 );
                 let mut draft = editor::compose(title, description, edit)?;
                 draft.images.extend(images);
-                json!(db.save_composition(Some(id), None, &draft)?)
+                json!(db.edit(
+                    id,
+                    Some(&draft.title),
+                    Some(&draft.description),
+                    None,
+                    &draft.images,
+                    set_parent
+                )?)
             } else {
                 ensure!(
                     reason.is_none() || matches!(set_status, Some(EditStatus::Error)),
@@ -285,7 +297,8 @@ fn execute(cli: Cli, display_limit: Option<i64>) -> Result<Value> {
                     title.as_deref(),
                     description.as_deref(),
                     transition,
-                    &images
+                    &images,
+                    set_parent
                 )?)
             }
         }

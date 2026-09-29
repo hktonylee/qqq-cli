@@ -215,12 +215,32 @@ qqq add "Build client" --parent 1
 qqq add --parent 1                          # compose dependent task interactively
 ```
 
-Parent must already exist. Each task has one optional parent, fixed at creation.
+Parent must already exist. Each task has one optional parent.
 Task JSON includes `parent_id` (`null` for independent tasks). Child stays new
 until parent completes; `next` skips blocked children and claims the oldest ready
 task. Releasing a parent keeps children blocked. Dependency chains unlock in
 order. If every new task is blocked, `next` prints `No ready tasks.`
 (`null` with `--json`).
+
+Change or clear a dependency after creation:
+
+```sh
+qqq edit 2 --set-parent 1
+qqq edit 2 --set-parent none
+qqq edit -1 --set-parent 1 --description "Updated dependency details"
+qqq edit 2 --edit --set-parent 1  # compose content while changing dependency
+```
+
+`--set-parent` accepts a positive existing task ID or `none`; omitted flag keeps
+the current parent. Parent-only edits skip the editor. Self-parenting and
+dependency cycles fail without saving changes. Parent validation and updates
+share the same transaction as content, attachments and optional status updates,
+including forced editor input. Concurrent edits cannot create a cycle.
+
+Changing a parent preserves task status, assignee, messages, history, attachments
+and Herdr link. Already claimed work remains assigned. Fresh `next` claims,
+including `--wait`, use the updated dependency: incomplete parents block queued
+tasks, completed parents unblock them, and `none` makes queued tasks independent.
 
 Attach images through `add` or `edit`; repeat `--image PATH` for multiple files.
 Image-only edits skip the editor and preserve existing fields and attachments.
