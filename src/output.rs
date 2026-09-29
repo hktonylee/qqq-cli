@@ -84,12 +84,12 @@ fn parent(value: &Value) -> String {
 
 fn task(value: &Value) -> String {
     let mut result = format!(
-        "#{} {}\nStatus: {}\nParent: {}\nOwner: {}\nCreated: {}\nUpdated: {}",
+        "#{} {}\nStatus: {}\nParent: {}\nAssignee: {}\nCreated: {}\nUpdated: {}",
         field(value, "id"),
         field(value, "title"),
         status(value),
         parent(value),
-        field(value, "owner_session"),
+        field(value, "assignee"),
         field(value, "created_at"),
         field(value, "updated_at")
     );

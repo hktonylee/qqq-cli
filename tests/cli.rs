@@ -359,7 +359,7 @@ fn cwd_lookup_uses_db_directory_from_nested_cwd_without_herdr_env() {
         agent_at(p, "correct")
     ]));
     let task = herdr.ok(&nested, &["next"]);
-    assert_eq!(task["owner_session"], r#"["codex","id","correct"]"#);
+    assert_eq!(task["assignee"], r#"["codex","id","correct"]"#);
     assert_eq!(
         ok(p, &["show", "1"])["herdr"]["identity"]["value"],
         "correct"
@@ -385,7 +385,7 @@ fn cwd_lookup_normalizes_symlinks_and_prefers_foreground_cwd() {
     current["foreground_cwd"] = serde_json::json!(alias.join("."));
     herdr.agents(serde_json::json!([moved, current]));
     assert_eq!(
-        herdr.ok(d.path(), &["next"])["owner_session"],
+        herdr.ok(d.path(), &["next"])["assignee"],
         r#"["codex","id","correct"]"#
     );
 }
@@ -426,7 +426,7 @@ fn cwd_lookup_rejects_missing_ambiguous_or_unidentified_matches_before_claim() {
     }
     // Explicit identity bypasses ambiguous Herdr discovery.
     assert_eq!(
-        herdr.ok(p, &["next", "--session", "explicit"])["owner_session"],
+        herdr.ok(p, &["next", "--session", "explicit"])["assignee"],
         "explicit"
     );
 }
@@ -480,7 +480,7 @@ fn edit_pending_updates_fields_and_release_history_atomically() {
         ],
     );
     assert_eq!(updated["status"], "pending");
-    assert!(updated["owner_session"].is_null());
+    assert!(updated["assignee"].is_null());
     assert_eq!(updated["title"], "New");
     assert_eq!(updated["description"], "");
     let after = ok(p, &["show", "1"]);

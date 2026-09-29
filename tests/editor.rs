@@ -172,7 +172,7 @@ fn edit_arguments_patch_fields_and_preserve_task_metadata() {
     let changed = run_json(p, &["edit", "2", "--title", "New"]);
     assert_eq!(changed["title"], "New");
     assert_eq!(changed["description"], "");
-    for field in ["id", "parent_id", "created_at", "status", "owner_session"] {
+    for field in ["id", "parent_id", "created_at", "status", "assignee"] {
         assert_eq!(changed[field], before["task"][field]);
     }
     let changed = run_json(p, &["edit", "2", "--title", "Both", "-d", "Updated"]);

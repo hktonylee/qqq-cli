@@ -53,7 +53,7 @@ fn human_tasks_show_descriptions_dependencies_and_ownership() {
     }
     let next = text(p, &["next", "--session", "a"]);
     assert!(next.contains("Status: In progress"));
-    assert!(next.contains("Owner: a"));
+    assert!(next.contains("Assignee: a"));
     let child = text(p, &["show", "2"]);
     assert!(child.contains("Parent: #1"));
     let changed = text(p, &["edit", "2", "--description", "New details"]);

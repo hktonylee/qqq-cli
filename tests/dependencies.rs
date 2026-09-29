@@ -187,7 +187,7 @@ fn version_one_migration_preserves_data_and_is_repeatable() {
     for _ in 0..2 {
         let show = ok(p, &["show", "1"]);
         assert_eq!(show["task"]["title"], "Legacy");
-        assert_eq!(show["task"]["owner_session"], "owner");
+        assert_eq!(show["task"]["assignee"], "owner");
         assert_eq!(show["task"]["created_at"], before.0);
         assert_eq!(show["task"]["updated_at"], before.1);
         assert!(show["task"].as_object().unwrap().contains_key("parent_id"));
@@ -201,7 +201,7 @@ fn version_one_migration_preserves_data_and_is_repeatable() {
     let version: i64 = conn
         .pragma_query_value(None, "user_version", |r| r.get(0))
         .unwrap();
-    assert_eq!(version, 2);
+    assert_eq!(version, 3);
     let image: Vec<u8> = conn
         .query_row("SELECT data FROM images", [], |r| r.get(0))
         .unwrap();
@@ -246,17 +246,17 @@ fn concurrent_legacy_opens_migrate_once() {
 fn unknown_schema_is_rejected_without_modification() {
     let d = legacy_project();
     let conn = Connection::open(d.path().join("qqq.db")).unwrap();
-    conn.pragma_update(None, "user_version", 3).unwrap();
+    conn.pragma_update(None, "user_version", 4).unwrap();
     for command in ["init", "list"] {
         let out = run(d.path(), &[command]);
         assert!(!out.status.success());
         assert!(
-            String::from_utf8_lossy(&out.stderr).contains("Unsupported database schema version 3")
+            String::from_utf8_lossy(&out.stderr).contains("Unsupported database schema version 4")
         );
     }
     let version: i64 = conn
         .pragma_query_value(None, "user_version", |r| r.get(0))
         .unwrap();
-    assert_eq!(version, 3);
+    assert_eq!(version, 4);
     assert!(conn.prepare("SELECT parent_id FROM tasks").is_err());
 }

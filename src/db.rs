@@ -17,7 +17,7 @@ pub struct Task {
     pub title: String,
     pub description: String,
     pub status: String,
-    pub owner_session: Option<String>,
+    pub assignee: Option<String>,
     pub created_at: String,
     pub updated_at: String,
     pub parent_id: Option<i64>,
@@ -28,7 +28,7 @@ fn task_row(r: &rusqlite::Row<'_>) -> rusqlite::Result<Task> {
         title: r.get(1)?,
         description: r.get(2)?,
         status: r.get(3)?,
-        owner_session: r.get(4)?,
+        assignee: r.get(4)?,
         created_at: r.get(5)?,
         updated_at: r.get(6)?,
         parent_id: r.get(7)?,
@@ -60,15 +60,15 @@ impl Db {
         conn.pragma_update(None, "foreign_keys", "ON")?;
         let version: i64 = conn.pragma_query_value(None, "user_version", |r| r.get(0))?;
         ensure!(
-            version == 2 || version == 1 || (init && version == 0),
+            (1..=3).contains(&version) || (init && version == 0),
             "Unsupported database schema version {version}"
         );
-        if version < 2 {
+        if version < 3 {
             let tx = conn.transaction_with_behavior(TransactionBehavior::Immediate)?;
             // Another CLI may have migrated while we waited for the write lock.
             let version: i64 = tx.pragma_query_value(None, "user_version", |r| r.get(0))?;
             ensure!(
-                version == 2 || version == 1 || (init && version == 0),
+                (1..=3).contains(&version) || (init && version == 0),
                 "Unsupported database schema version {version}"
             );
             if version == 0 {
@@ -77,17 +77,20 @@ impl Db {
             if version < 2 {
                 tx.execute_batch(include_str!("migrate_v2.sql"))?;
             }
+            if version < 3 {
+                tx.execute_batch(include_str!("migrate_v3.sql"))?;
+            }
             tx.commit()?;
         }
         let version: i64 = conn.pragma_query_value(None, "user_version", |r| r.get(0))?;
         ensure!(
-            version == 2,
+            version == 3,
             "Unsupported database schema version {version}"
         );
         Ok((Self { conn }, path))
     }
     pub fn task(&self, id: i64) -> Result<Task> {
-        self.conn.query_row("SELECT id,title,description,status,owner_session,created_at,updated_at,parent_id FROM tasks WHERE id=?",[id],task_row).optional()?.with_context(||format!("Task {id} not found"))
+        self.conn.query_row("SELECT id,title,description,status,assignee,created_at,updated_at,parent_id FROM tasks WHERE id=?",[id],task_row).optional()?.with_context(||format!("Task {id} not found"))
     }
     pub fn add(&self, title: &str, description: &str, parent_id: Option<i64>) -> Result<Task> {
         nonempty(title, "Title")?;
@@ -101,7 +104,7 @@ impl Db {
         self.task(self.conn.last_insert_rowid())
     }
     pub fn list(&self) -> Result<Vec<Task>> {
-        Ok(self.conn.prepare("SELECT id,title,description,status,owner_session,created_at,updated_at,parent_id FROM tasks ORDER BY id")?.query_map([],task_row)?.collect::<rusqlite::Result<_>>()?)
+        Ok(self.conn.prepare("SELECT id,title,description,status,assignee,created_at,updated_at,parent_id FROM tasks ORDER BY id")?.query_map([],task_row)?.collect::<rusqlite::Result<_>>()?)
     }
     pub fn edit(
         &mut self,
@@ -118,7 +121,7 @@ impl Db {
             .transaction_with_behavior(TransactionBehavior::Immediate)?;
         if let Some(session) = release_session {
             nonempty(session, "Session")?;
-            ensure!(tx.execute("UPDATE tasks SET status='pending',owner_session=NULL WHERE id=? AND status='in_progress' AND owner_session=?",params![id,session])?==1,"Task {id} is not claimed by session {session}");
+            ensure!(tx.execute("UPDATE tasks SET status='pending',assignee=NULL WHERE id=? AND status='in_progress' AND assignee=?",params![id,session])?==1,"Task {id} is not claimed by session {session}");
             tx.execute(
                 "INSERT INTO events(task_id,session,action) VALUES (?,?,'release')",
                 params![id, session],
@@ -126,7 +129,7 @@ impl Db {
         }
         ensure!(tx.execute("UPDATE tasks SET title=COALESCE(?,title),description=COALESCE(?,description),updated_at=strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE id=?",params![title,description,id])?==1,"Task {id} not found");
         let task = tx.query_row(
-            "SELECT id,title,description,status,owner_session,created_at,updated_at,parent_id FROM tasks WHERE id=?",
+            "SELECT id,title,description,status,assignee,created_at,updated_at,parent_id FROM tasks WHERE id=?",
             [id], task_row,
         )?;
         tx.commit()?;
@@ -163,7 +166,7 @@ impl Db {
             .transaction_with_behavior(TransactionBehavior::Immediate)?;
         let owned: Option<i64> = tx
             .query_row(
-                "SELECT id FROM tasks WHERE status='in_progress' AND owner_session=?",
+                "SELECT id FROM tasks WHERE status='in_progress' AND assignee=?",
                 [session],
                 |r| r.get(0),
             )
@@ -184,7 +187,7 @@ impl Db {
         if let Some(id) = id {
             if owned.is_none() {
                 tx.execute("DELETE FROM herdr_links WHERE task_id=?", [id])?;
-                tx.execute("UPDATE tasks SET status='in_progress',owner_session=?,updated_at=strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE id=?",params![session,id])?;
+                tx.execute("UPDATE tasks SET status='in_progress',assignee=?,updated_at=strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE id=?",params![session,id])?;
                 tx.execute(
                     "INSERT INTO events(task_id,session,action) VALUES (?,?,'claim')",
                     params![id, session],
@@ -195,7 +198,7 @@ impl Db {
             }
         }
         let task = id.map(|id| tx.query_row(
-            "SELECT id,title,description,status,owner_session,created_at,updated_at,parent_id FROM tasks WHERE id=?",
+            "SELECT id,title,description,status,assignee,created_at,updated_at,parent_id FROM tasks WHERE id=?",
             [id], task_row,
         )).transpose()?;
         tx.commit()?;
@@ -206,13 +209,13 @@ impl Db {
         let tx = self
             .conn
             .transaction_with_behavior(TransactionBehavior::Immediate)?;
-        ensure!(tx.execute("UPDATE tasks SET status='completed',owner_session=NULL,updated_at=strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE id=? AND status='in_progress' AND owner_session=?",params![id,session])?==1,"Task {id} is not claimed by session {session}");
+        ensure!(tx.execute("UPDATE tasks SET status='completed',assignee=NULL,updated_at=strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE id=? AND status='in_progress' AND assignee=?",params![id,session])?==1,"Task {id} is not claimed by session {session}");
         tx.execute(
             "INSERT INTO events(task_id,session,action) VALUES (?, ?, 'complete')",
             params![id, session],
         )?;
         let task = tx.query_row(
-            "SELECT id,title,description,status,owner_session,created_at,updated_at,parent_id FROM tasks WHERE id=?",
+            "SELECT id,title,description,status,assignee,created_at,updated_at,parent_id FROM tasks WHERE id=?",
             [id], task_row,
         )?;
         tx.commit()?;

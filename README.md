@@ -92,7 +92,7 @@ attachments are preserved by all edits.
 Use `qqq edit <id> --set-status pending` to return a claimed task to the queue
 (replaces `release`). Only `pending` is accepted for now. The task must be
 `in_progress`, and the supplied or discovered session ID must match its recorded
-`owner_session`. This clears the owner and records a `release` history event.
+`assignee`. This clears the owner and records a `release` history event.
 Pending or completed tasks cannot use this transition.
 
 ```sh
@@ -169,11 +169,11 @@ Or pass `--session agent-session-123` on individual commands. Precedence: `--ses
 - Same session calling `next` again receives its existing task.
 - One active task per session; concurrent sessions cannot claim same task.
 - No ready tasks prints `No ready tasks.` (`null` with `--json`), exit code 0.
-- `complete <task-id>` marks task `completed` when the supplied or discovered session ID matches its recorded `owner_session`.
-- `edit <task-id> --set-status pending` returns a claimed task to `pending` when the supplied or discovered session ID matches its recorded `owner_session`.
+- `complete <task-id>` marks task `completed` when the supplied or discovered session ID matches its recorded `assignee`.
+- `edit <task-id> --set-status pending` returns a claimed task to `pending` when the supplied or discovered session ID matches its recorded `assignee`.
 - Claims never expire. Restarting CLI preserves locks. `show` includes claim/release/completion history.
 
-For an abandoned session, inspect `qqq show <id>`, then explicitly release using its recorded `owner_session`:
+For an abandoned session, inspect `qqq show <id>`, then explicitly release using its recorded `assignee`:
 
 ```sh
 qqq edit 1 --set-status pending --session 'recorded-owner-session'
@@ -208,6 +208,13 @@ Explicit `--session` / `QQQ_SESSION` ownership works without Herdr and does not 
 Adapter targets Herdr API protocol 20 JSON shapes: `result.agents`, `result.pane`, `agent_session.{agent,kind,value}`. Agent-session metadata may be absent depending on integration hooks.
 
 ## Data and checks
+
+Task assignment is exposed as `assignee` in JSON and `Assignee:` in human output.
+Its value is the claiming session ID, or `null` for unassigned tasks. JSON clients
+should use `assignee` in place of the former `owner_session` field. Schema version
+3 automatically migrates existing version 1/2 databases on open, preserving
+claims, task data, history, attachments, and links. The `--session` flag and
+session matching rules are unchanged.
 
 DB includes tasks, messages, image blobs, ownership events, latest Herdr link per task. SQLite foreign keys, immediate write transactions, unique active-owner index and 10-second busy timeout protect concurrent claims. Version 1 databases automatically migrate to version 2 on open, preserving existing data and claims; old tasks have no parent. Newer unknown versions are rejected. Keep DB out of Git. To back up while CLI processes may run, use SQLite's backup API or `sqlite3 qqq.db '.backup backup.sqlite'`; copy DB file only when all writers are stopped.
 
