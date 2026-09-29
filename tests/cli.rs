@@ -551,3 +551,85 @@ fn new_is_initial_status_and_pending_flag_is_rejected() {
         "new"
     );
 }
+
+#[test]
+fn show_recent_uses_creation_order_across_statuses_and_id_gaps() {
+    let d = project();
+    let p = d.path();
+    for description in ["First", "Removed", "Newest\n\nDetails"] {
+        ok(p, &["add", description]);
+    }
+    let conn = rusqlite::Connection::open(p.join("qqq.db")).unwrap();
+    conn.execute("DELETE FROM tasks WHERE id=2", []).unwrap();
+    conn.execute("UPDATE tasks SET created_at='same timestamp'", [])
+        .unwrap();
+    ok(p, &["next", "--session", "worker"]);
+    ok(p, &["complete", "1", "--session", "worker"]);
+    ok(p, &["edit", "1", "-d", "Recently edited older task"]);
+    assert_eq!(ok(p, &["show", "-1"]), ok(p, &["show", "3"]));
+    assert_eq!(ok(p, &["show", "-2"]), ok(p, &["show", "1"]));
+    assert_eq!(
+        ok(p, &["show", "-1"])["task"]["description"],
+        "Newest\n\nDetails"
+    );
+    assert_eq!(ok(p, &["show", "-2"])["task"]["status"], "completed");
+}
+
+#[test]
+fn show_recent_exports_only_selected_tasks_image() {
+    let d = project();
+    let p = d.path();
+    let png = b"\x89PNG\r\n\x1a\nfixture";
+    std::fs::write(p.join("image.png"), png).unwrap();
+    ok(p, &["add", "Older", "--image", "image.png"]);
+    ok(p, &["add", "Newest", "--image", "image.png"]);
+    let detail = ok(
+        p,
+        &["show", "-1", "--export-image", "2", "--output", "out.png"],
+    );
+    assert_eq!(detail["task"]["id"], 2);
+    assert_eq!(std::fs::read(p.join("out.png")).unwrap(), png);
+    let wrong = run(
+        p,
+        &["show", "-1", "--export-image", "1", "--output", "wrong.png"],
+    );
+    assert_eq!(wrong.status.code(), Some(1));
+    assert!(!p.join("wrong.png").exists());
+}
+
+#[test]
+fn show_recent_invalid_references_leave_export_and_database_unchanged() {
+    let d = project();
+    let p = d.path();
+    for populated in [false, true] {
+        if populated {
+            ok(p, &["add", "Unchanged"]);
+        }
+        let before = ok(p, &["list"]);
+        for reference in ["0", "-2", "-9223372036854775808", "99"] {
+            let result = run(
+                p,
+                &[
+                    "show",
+                    reference,
+                    "--export-image",
+                    "1",
+                    "--output",
+                    "out.png",
+                ],
+            );
+            assert_eq!(
+                result.status.code(),
+                Some(1),
+                "{}",
+                String::from_utf8_lossy(&result.stderr)
+            );
+            assert!(result.stdout.is_empty());
+            assert!(!p.join("out.png").exists());
+            assert_eq!(ok(p, &["list"]), before);
+        }
+        if !populated {
+            assert_eq!(run(p, &["show", "-1"]).status.code(), Some(1));
+        }
+    }
+}

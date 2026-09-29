@@ -172,8 +172,11 @@ qqq edit -1                  # edit newest created task
 qqq edit -2 --description "Updated" # edit second newest created task
 ```
 
-The first argument is a positive task ID or a negative creation index (`-1`
-means newest, `-2` second newest). Recent indexes count existing tasks across all
+`qqq show -1` also opens the newest created task; `qqq show -2` opens the second newest.
+Show supports the same indexes with image export, resolving the selected task once.
+
+The first argument to `edit` or `show` is a positive task ID or a negative creation
+index (`-1` means newest, `-2` second newest). Recent indexes count existing tasks across all
 statuses in descending ID order, not last-edited order. Zero, missing IDs, and
 out-of-range indexes fail before opening the editor. The target is resolved once
 before editing, so tasks created while the editor is open do not change it.

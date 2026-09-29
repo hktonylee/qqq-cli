@@ -103,6 +103,8 @@ enum Commands {
     },
     /// Show task, messages, image metadata, ownership history and Herdr link.
     Show {
+        /// Task ID, or negative creation index: -1 is newest, -2 second newest.
+        #[arg(allow_negative_numbers = true)]
         id: i64,
         /// Export an image belonging to this task; requires --output.
         #[arg(long, requires = "output")]
@@ -260,6 +262,7 @@ fn execute(cli: Cli, display_limit: Option<i64>) -> Result<Value> {
             export_image,
             output,
         } => {
+            let id = db.resolve_task_id(id)?;
             let mut detail = db.show(id)?;
             if let (Some(image), Some(path)) = (export_image, output) {
                 detail["export"] = db.image_export(id, image, &path)?;
@@ -286,7 +289,7 @@ fn execute(cli: Cli, display_limit: Option<i64>) -> Result<Value> {
             } else {
                 set_status
             };
-            let id = db.resolve_edit_id(id)?;
+            let id = db.resolve_task_id(id)?;
             let task = db.task(id)?;
             let images = images
                 .iter()

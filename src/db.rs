@@ -338,7 +338,7 @@ impl Db {
         tx.commit()?;
         Ok(task)
     }
-    pub fn resolve_edit_id(&self, reference: i64) -> Result<i64> {
+    pub fn resolve_task_id(&self, reference: i64) -> Result<i64> {
         ensure!(
             reference != 0,
             "Task reference must be a positive ID or negative creation index"
