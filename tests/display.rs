@@ -152,3 +152,42 @@ fn legacy_completed_tasks_without_events_use_newest_id_fallback() {
     p.config("[display]\nmax-completed = 1\n");
     assert_eq!(p.ids(&["list"]), vec![3]);
 }
+
+#[test]
+fn explicit_limit_overrides_config_in_both_output_formats() {
+    let p = Project::new();
+    p.fixture();
+    p.config("[display]\nmax-completed = 0\n");
+    assert_eq!(
+        p.ids(&["list", "--max-completed", "2"]),
+        vec![1, 3, 7, 4, 5, 6]
+    );
+    let json: Value =
+        serde_json::from_str(&p.ok(&["list", "--max-completed", "2", "--json"])).unwrap();
+    let ids: Vec<_> = json
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|task| task["id"].as_i64().unwrap())
+        .collect();
+    assert_eq!(ids, vec![1, 3, 4, 5, 6, 7]);
+    assert_eq!(
+        p.run(&["list", "--all", "--max-completed", "1"])
+            .status
+            .code(),
+        Some(2)
+    );
+    p.config("[display");
+    assert_eq!(
+        p.ids(&["list", "--max-completed", "1"]),
+        vec![1, 4, 5, 6, 7]
+    );
+}
+
+#[test]
+fn display_section_is_independent_of_alias_and_herdr_value_types() {
+    let p = Project::new();
+    p.fixture();
+    p.config("[alias]\nx = 42\n[herdr]\nnext-to-new-agent = 'bad'\n[display]\nmax-completed = 0\n");
+    assert_eq!(p.ids(&["list"]), vec![4, 5, 6, 7]);
+}
