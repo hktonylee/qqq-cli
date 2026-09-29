@@ -125,8 +125,9 @@ with tempfile.TemporaryDirectory(prefix="qqq-tui-test-") as folder:
             paste("'" + str(image) + "'")
             read_until(b"[Image #1:")
         else:
-            send(b"Title\r\r")
-            paste("\u754c" * 1001)
+            # One input burst puts keys and a multi-read paste in the same PTY
+            # readiness event; neither may need a later keypress to finish.
+            send(b"Title\r\r\x1b[200~" + ("\u754c" * 1001).encode() + b"\x1b[201~")
             read_until(b"1001 chars")
             send(b"\r")
             paste("'" + str(image) + "'")
