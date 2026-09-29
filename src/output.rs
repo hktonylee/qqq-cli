@@ -215,7 +215,7 @@ fn task_tree(tasks: &[Value], color: bool) -> String {
         .map(|index| (index, 0, true))
         .collect();
     let mut continuations = Vec::new();
-    let mut lines = vec![format!("{:<6} {:<12} DESCRIPTION", "ID", "STATUS")];
+    let mut lines = vec![format!("{:<6} {:<12} TASK", "ID", "STATUS")];
     while let Some((index, depth, last)) = stack.pop() {
         continuations.truncate(depth.saturating_sub(1));
         let mut prefix: String = continuations

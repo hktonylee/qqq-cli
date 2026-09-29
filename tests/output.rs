@@ -44,7 +44,7 @@ fn human_tasks_show_descriptions_dependencies_and_ownership() {
     for part in [
         "ID",
         "STATUS",
-        "DESCRIPTION",
+        "TASK",
         "Build API",
         "Build client",
         "New",
@@ -238,7 +238,7 @@ fn human_list_groups_nested_dependencies_with_correct_tree_branches() {
     let list = text(p, &["list"]);
     let rows: Vec<_> = list.lines().collect();
     assert_eq!(rows.len(), 10);
-    assert_eq!(rows[0], format!("{:<6} {:<12} DESCRIPTION", "ID", "STATUS"));
+    assert_eq!(rows[0], format!("{:<6} {:<12} TASK", "ID", "STATUS"));
     assert!(!list.contains("PARENT"));
     for (row, (id, title)) in rows[1..].iter().zip([
         (1, "Project A"),

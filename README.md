@@ -9,7 +9,7 @@ below their parent; roots and siblings follow creation order. Branches replace
 the parent column:
 
 ```text
-ID     STATUS       DESCRIPTION
+ID     STATUS       TASK
 1      New          Build API
 2      New          ├── Auth
 4      New          │   └── Token tests
