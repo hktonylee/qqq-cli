@@ -166,8 +166,9 @@ before editing, so tasks created while the editor is open do not change it.
 
 Field flags skip the editor and preserve omitted fields. Titles cannot be blank.
 Existing multiline titles require field flags because the editor format uses one title line.
-Field-only editing preserves task status and ownership. Dependencies, messages and
-attachments are preserved by all edits.
+Editing fields or attachments preserves task status and ownership unless a status
+flag is supplied. Messages and existing attachments remain; dependencies change
+only through `--set-parent`.
 
 Use `qqq edit <id> --set-status new` to return a claimed task to the queue
 (replaces `release`). For an active task, it must be
@@ -179,6 +180,23 @@ New or completed tasks cannot use this transition.
 qqq edit 1 --set-status new --session agent-session-123
 qqq edit -1 --set-status new --description "Retry with updated details" --session agent-session-123
 ```
+
+`--set-pending` is a shortcut for `--set-status new`, returning work to the
+execution queue using the existing `new` status:
+
+```sh
+qqq edit 1 --set-pending --session agent-session-123
+qqq edit -1 --set-pending --description "Retry with updated details" --session agent-session-123
+```
+
+It skips the editor, clears active ownership, records a `release` history event,
+and preserves omitted content, dependencies, messages and attachments. Combined
+field, parent and image updates are atomic; wrong owner or invalid input leaves
+everything unchanged. It follows the same rules as `--set-status new`: owner is
+required for active tasks; any local caller can retry an error task without a
+session. New/completed tasks reject the transition. `next` can claim returned
+work once its current dependency is satisfied. `--set-pending` conflicts with
+`--set-status` and `--edit`.
 
 `--set-status` skips the editor. Combined title, description and status updates
 are atomic: validation or ownership errors leave all fields and history unchanged.
@@ -200,7 +218,8 @@ visible in `list`, even with `--max-completed 0`; `show` includes the reason.
 `next` and `next --wait` skip them, and dependent tasks stay blocked. The worker
 can claim another ready task.
 
-Any local caller can retry an error task through `--set-status new`, without a
+Any local caller can retry an error task through `--set-status new` or
+`--set-pending`, without a
 session or Herdr connection. An explicit session records the retry author;
 otherwise history uses `manual`. Retry preserves content, dependencies,
 messages, attachments and saved Herdr link. Generic CLI errors do not mark
@@ -348,6 +367,7 @@ Or pass `--session agent-session-123` on individual commands. Precedence: `--ses
 - Without `--wait`, no ready tasks prints `No ready tasks.` (`null` with `--json`), exit code 0.
 - `complete <task-id>` marks task `completed` when the supplied or discovered session ID matches its recorded `assignee`.
 - `edit <task-id> --set-status new` returns a claimed task to `new` when the supplied or discovered session ID matches its recorded `assignee`.
+- `edit <task-id> --set-pending` is the same return-to-queue transition, using existing `new` status and ownership/history rules.
 - `edit <task-id> --set-status error --reason "Details"` marks owned active work as failed, clearing its claim until a user explicitly retries with `--set-status new`.
 - Claims never expire. Restarting CLI preserves locks. `show` includes claim/release/completion history.
 

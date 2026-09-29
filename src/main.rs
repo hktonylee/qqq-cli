@@ -105,11 +105,14 @@ enum Commands {
         #[arg(short, long)]
         description: Option<String>,
         /// Force $EDITOR with supplied fields prefilled, including attachment edits.
-        #[arg(short, long, conflicts_with = "set_status")]
+        #[arg(short, long, conflicts_with_all = ["set_status", "set_pending"])]
         edit: bool,
         /// Return owned task/error to new, or mark owned task error with --reason. Skips editor.
         #[arg(long, value_enum)]
         set_status: Option<EditStatus>,
+        /// Return owned task/error to execution queue (new); same as --set-status new.
+        #[arg(long, conflicts_with = "set_status")]
+        set_pending: bool,
         /// Failure details, required and valid only with --set-status error.
         #[arg(long, requires = "set_status")]
         reason: Option<String>,
@@ -221,10 +224,16 @@ fn execute(cli: Cli, display_limit: Option<i64>) -> Result<Value> {
             description,
             edit,
             set_status,
+            set_pending,
             images,
             reason,
             set_parent,
         } => {
+            let set_status = if set_pending {
+                Some(EditStatus::New)
+            } else {
+                set_status
+            };
             let id = db.resolve_edit_id(id)?;
             let task = db.task(id)?;
             let images = images
