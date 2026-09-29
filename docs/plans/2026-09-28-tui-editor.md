@@ -81,7 +81,9 @@ Files: `src/main.rs`, `src/editor.rs`, `tests/editor.rs`, `tests/tui.rs`, `READM
   saves, external fallback and platform/terminal constraints.
 - [x] Run `cargo fmt --check`, `cargo clippy --locked --all-targets -- -D warnings`,
   `cargo test --locked`, `cargo build --locked --release`, `git diff --check`.
-- [ ] Request code review. Fix findings, rebase current master, verify integrated
+- [x] Request code review. Fix findings, rebase current master, verify integrated
   changes, fast-forward local master, rebuild CLI, record and complete qqq #22.
 
 Validation: 133 tests passed after rebase onto f7504a6, including PTY save/cancel, image export, RGBA-to-PNG roundtrip, config CLI and owner autodetection. Formatting, clippy with warnings denied, release build and code review passed. Native desktop clipboard acquisition and Linux runtime were not exercised locally.
+
+Integrated locally through d00b584; rebuilt CLI passed PTY paste/save/export smoke. qqq task #22 completed.
