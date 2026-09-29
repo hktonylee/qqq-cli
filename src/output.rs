@@ -161,7 +161,7 @@ fn image(value: &Value) -> String {
     )
 }
 
-pub fn render(format: Format, value: &Value) -> String {
+pub fn render(format: Format, value: &Value, color: bool) -> String {
     match format {
         Format::Database => format!("Database: {}", field(value, "database")),
         Format::Task if value.is_null() => "No ready tasks.".to_owned(),
@@ -176,13 +176,24 @@ pub fn render(format: Format, value: &Value) -> String {
                 "ID", "STATUS", "PARENT"
             )];
             lines.extend(tasks.iter().map(|task| {
-                format!(
+                let row = format!(
                     "{:<6} {:<12} {:<8} {}",
                     field(task, "id"),
                     status(task),
                     parent(task),
                     field(task, "title")
-                )
+                );
+                let code = match task["status"].as_str() {
+                    Some("pending") => "33",
+                    Some("in_progress") => "36",
+                    Some("completed") => "90",
+                    _ => return row,
+                };
+                if color {
+                    format!("\x1b[{code}m{row}\x1b[0m")
+                } else {
+                    row
+                }
             }));
             lines.join("\n")
         }

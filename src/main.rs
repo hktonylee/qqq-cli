@@ -6,7 +6,7 @@ mod output;
 use anyhow::{Context, Result, ensure};
 use clap::{Parser, Subcommand, ValueEnum};
 use serde_json::{Value, json};
-use std::path::PathBuf;
+use std::{io::IsTerminal, path::PathBuf};
 
 #[derive(Parser)]
 #[command(
@@ -200,7 +200,10 @@ fn run() -> Result<String> {
     Ok(if json {
         serde_json::to_string_pretty(&value).expect("JSON value is serializable")
     } else {
-        output::render(format, &value)
+        let color = std::io::stdout().is_terminal()
+            && std::env::var_os("NO_COLOR").is_none_or(|value| value.is_empty())
+            && std::env::var_os("TERM").is_none_or(|value| value != "dumb");
+        output::render(format, &value, color)
     })
 }
 fn main() {

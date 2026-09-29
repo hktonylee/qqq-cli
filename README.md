@@ -7,7 +7,10 @@ Local-first Rust CLI for project tasks and coding agent sessions. Everything liv
 `qqq list` shows task IDs, status, parent dependencies and titles in a compact table.
 `qqq show <id>` includes description, ownership, messages, images, history and Herdr
 details. Empty lists print `No tasks yet.`; queues with no ready tasks print
-`No ready tasks.`. Text output uses no ANSI colors and stays readable when piped.
+`No ready tasks.`. In a terminal, list rows use yellow for pending, cyan for
+in-progress, and grey for completed tasks. Aliases such as `ls = "list"` use the
+same colors. Piped output and `--json` stay plain. Set `NO_COLOR=1` or `TERM=dumb`
+to disable colors.
 
 ```sh
 qqq list
