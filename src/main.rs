@@ -99,7 +99,7 @@ enum Commands {
         #[arg(long)]
         watch: bool,
         /// Show all completed tasks, bypassing display.max-completed.
-        #[arg(long, conflicts_with = "max_completed")]
+        #[arg(short = 'a', long, conflicts_with = "max_completed")]
         all: bool,
     },
     /// Show task, messages, image metadata, ownership history and Herdr link.

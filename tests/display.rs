@@ -121,6 +121,11 @@ fn aliases_share_display_setting_and_json_stays_full() {
     p.config("[alias]\nls = 'list'\nall = 'list --all'\n[display]\nmax-completed = 1\n");
     assert_eq!(p.ids(&["ls"]), vec![1, 4, 5, 6, 7]);
     assert_eq!(p.ids(&["all"]), vec![1, 2, 6, 3, 7, 4, 5]);
+    for command in ["list", "ls"] {
+        for flag in ["-a", "--all"] {
+            assert_eq!(p.ids(&[command, flag]), vec![1, 2, 6, 3, 7, 4, 5]);
+        }
+    }
     let tasks: Value = serde_json::from_str(&p.ok(&["ls", "--json"])).unwrap();
     assert_eq!(tasks.as_array().unwrap().len(), 7);
 }

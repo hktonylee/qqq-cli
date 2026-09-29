@@ -81,6 +81,11 @@ default; an explicit `--max-completed` still filters JSON. `show` opens any task
 The same config and flag rules apply to every `list --watch` snapshot. A configured
 list with no visible tasks prints `No tasks to display.`.
 
+Use `qqq list -a` or `qqq list --all` to show every task regardless of the
+configured `display.max-completed` limit. Configured aliases such as `ls = "list"`
+accept both forms: `qqq ls -a` and `qqq ls --all`. These flags also work with
+`--watch`; they conflict with an explicit `--max-completed` limit.
+
 ## Install
 
 Requires Rust 1.85+ and a C compiler for bundled SQLite.
