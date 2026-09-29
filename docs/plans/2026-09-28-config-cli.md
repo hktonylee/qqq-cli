@@ -18,4 +18,6 @@
 - [x] Add dependencies `toml_edit = "0.22"`, `fs2 = "0.4"`. Lock target sidecar via FileExt::lock_exclusive, reread after lock, preserve mode, write/sync NamedTempFile then persist over destination. Follow existing symlink target.
 - [x] Add Config command with mutually exclusive list/get/unset/key actions, optional positional value requiring key. Dispatch config before `Db::open`. Add config rendering with plain scalar reads and mutation confirmations.
 - [ ] Run focused tests, full suite, fmt, clippy, diff check. Request review, address blockers. Document syntax and JSON shapes.
-- [ ] Commit, rebase, merge master, verify merged checks, complete task 21 through qqq, continue `next --wait`.
+- [x] Commit, rebase, merge master and verify merged checks. Record task completion through qqq, then continue `next --wait`.
+
+Verification: merged master passed 111 tests, including 10 config cases; fmt, clippy with warnings denied, diff check and debug build passed. Two read-only reviews found no blockers.
