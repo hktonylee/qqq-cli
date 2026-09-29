@@ -85,14 +85,16 @@ list with no visible tasks prints `No tasks to display.`.
 
 Requires Rust 1.85+ and a C compiler for bundled SQLite.
 
-```sh
-cargo install --path . --locked
-```
-
-After the first crates.io release, install the `qqq` command with:
+Install the `qqq` command from crates.io:
 
 ```sh
 cargo install qqq-cli --locked
+```
+
+To install from a source checkout, run in the repository root:
+
+```sh
+cargo install --path . --locked
 ```
 
 ## Tasks
