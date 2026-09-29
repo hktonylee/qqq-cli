@@ -18,6 +18,7 @@ use std::{io::IsTerminal, path::PathBuf, thread, time::Duration};
 
 #[derive(Parser)]
 #[command(
+    name = "qqq",
     version,
     about = "Local-first task queue for agent sessions. Project DB: qqq.db."
 )]

@@ -36,6 +36,24 @@ fn project() -> TempDir {
     d
 }
 #[test]
+fn cli_name_stays_qqq_in_help_and_version() {
+    let dir = TempDir::new().unwrap();
+    let version = run(dir.path(), &["--version"]);
+    assert!(version.status.success());
+    assert_eq!(
+        String::from_utf8(version.stdout).unwrap(),
+        format!("qqq {}\n", env!("CARGO_PKG_VERSION"))
+    );
+
+    let help = run(dir.path(), &["--help"]);
+    assert!(help.status.success());
+    assert!(
+        String::from_utf8(help.stdout)
+            .unwrap()
+            .contains("Usage: qqq ")
+    );
+}
+#[test]
 fn persistent_ownership_and_fifo() {
     let d = project();
     let p = d.path();

@@ -1,9 +1,17 @@
 [package]
-name = "qqq"
+name = "qqq-cli"
 version = "0.1.0"
 edition = "2024"
 rust-version = "1.85"
 description = "Local-first task queue for coding agent sessions"
+license = "MIT"
+repository = "https://github.com/hktonylee/qqq"
+readme = "README.md"
+publish = ["crates-io"]
+
+[[bin]]
+name = "qqq"
+path = "src/main.rs"
 
 [dependencies]
 anyhow = "1"

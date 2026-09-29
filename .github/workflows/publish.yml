@@ -1,0 +1,81 @@
+name: Publish to crates.io
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing version tag to publish (for example, v0.1.0)
+        required: true
+        type: string
+      dry_run:
+        description: Validate package without uploading to crates.io
+        default: true
+        type: boolean
+
+permissions:
+  contents: read
+
+concurrency:
+  group: crates-io-publish
+  cancel-in-progress: false
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  publish:
+    name: Verify and publish crate
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    env:
+      RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
+    steps:
+      - name: Check out version tag
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          ref: refs/tags/${{ inputs.tag || github.ref_name }}
+          persist-credentials: false
+
+      - name: Validate release metadata
+        run: |
+          python3 - <<'PY'
+          import os
+          import tomllib
+
+          with open("Cargo.toml", "rb") as manifest:
+              package = tomllib.load(manifest)["package"]
+          expected_tag = f"v{package['version']}"
+          release_tag = os.environ["RELEASE_TAG"]
+          if release_tag != expected_tag:
+              raise SystemExit(f"Release tag {release_tag!r} must match {expected_tag!r} from Cargo.toml")
+          if not (package.get("license") or package.get("license-file")):
+              raise SystemExit("Set package.license or package.license-file in Cargo.toml before publishing")
+          PY
+
+      - name: Install Rust
+        run: rustup toolchain install stable --profile minimal --component rustfmt --component clippy
+
+      - name: Check formatting
+        run: cargo +stable fmt --check
+
+      - name: Run Clippy
+        run: cargo +stable clippy --locked --all-targets -- -D warnings
+
+      - name: Run tests
+        run: cargo +stable test --locked
+
+      - name: Verify crate package
+        run: cargo +stable publish --locked --dry-run --registry crates-io
+
+      - name: Publish to crates.io
+        if: github.event_name == 'push' || inputs.dry_run == false
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+        run: |
+          if [ -z "$CARGO_REGISTRY_TOKEN" ]; then
+            echo "::error::Set the CARGO_REGISTRY_TOKEN repository secret to a crates.io publish token"
+            exit 1
+          fi
+          cargo +stable publish --locked --registry crates-io

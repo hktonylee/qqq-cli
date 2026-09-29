@@ -89,6 +89,12 @@ Requires Rust 1.85+ and a C compiler for bundled SQLite.
 cargo install --path . --locked
 ```
 
+After the first crates.io release, install the `qqq` command with:
+
+```sh
+cargo install qqq-cli --locked
+```
+
 ## Tasks
 
 Run `init` in your project root. Other commands find the nearest `qqq.db` in current directory or its parents. Filename is fixed.
@@ -601,6 +607,38 @@ archive. Download artifacts from the workflow run within 14 days; extract the
 archive to preserve the binary's executable permission. Builds use stable Rust
 and the committed lockfile. This workflow builds artifacts; it does not publish
 GitHub Releases.
+
+### Publish to crates.io
+
+`.github/workflows/publish.yml` publishes when a `v<version>` tag is pushed.
+It checks that the tag matches `Cargo.toml`, runs formatting, Clippy and tests,
+then builds the packaged crate with `cargo publish --locked --dry-run` before
+uploading. Publishing uses the committed lockfile and targets crates.io.
+
+Before the first publish:
+
+1. Sign in to crates.io, verify your email, and create a token with permission
+   to publish `qqq-cli`, including permission to create it for the first release.
+2. Add the token as the GitHub repository Actions secret
+   `CARGO_REGISTRY_TOKEN`. The token is available only to the upload step.
+
+The package is named `qqq-cli` because `qqq` is already registered on crates.io.
+It ships the `qqq` binary under the MIT license.
+
+Commit the intended version and updated lockfile, then push the commit and
+matching tag. For the current `0.1.0` version:
+
+```sh
+git push origin master
+git tag v0.1.0
+git push origin v0.1.0
+```
+
+To validate an existing tag without uploading, run **Publish to crates.io** from
+GitHub Actions with `tag` set to that tag and leave `dry_run` enabled (the default).
+Disable `dry_run` to publish or retry an unpublished version. Each crates.io
+version can be uploaded only once; bump the version and update the lockfile
+before creating the next tag. No secret is needed for a dry run.
 
 Tests exercise persistence, FIFO order, wrong-owner rejection, concurrent claims, attachments, ancestor lookup, cwd discovery, Herdr session matching and automatic ownership using a fake Herdr executable.
 
