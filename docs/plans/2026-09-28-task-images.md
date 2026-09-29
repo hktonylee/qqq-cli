@@ -83,7 +83,7 @@ Build normal detail; when supplied, set `detail["export"] = db.image_export(id, 
 
 **Files:** Reconcile task #22 changes in `src/main.rs`, `src/db.rs`, `src/images.rs`, `tests/tui_db.rs`, `README.md`.
 
-- [ ] Rebase onto completed task #22. Keep shared ImageInput validator. Composition persistence uses:
+- [x] Rebase onto completed task #22. Keep shared ImageInput validator. Composition persistence uses:
 
 ```rust
 match id {
@@ -93,5 +93,17 @@ match id {
 ```
 
 Update direct database test calls with empty attachment slices. Extend successful add/edit composition images with flagged inputs before atomic save; cancellation returns without save.
-- [ ] Run full suite, `cargo fmt --check`, `cargo clippy --locked --all-targets -- -D warnings`, `cargo build --locked --release`, `git diff --check` in isolated target. Request read-only code review; fix verified findings.
-- [ ] Rebase latest master, verify affected combined behavior, ff merge locally, rebuild root binary, log task evidence and complete #23 with qqq CLI. Remove isolated checkout and branch. Resume next --local --wait with same session.
+- [x] Run full suite, `cargo fmt --check`, `cargo clippy --locked --all-targets -- -D warnings`, `cargo build --locked --release`, `git diff --check` in isolated target. Request read-only code review; fix verified findings.
+- [x] Rebase latest master, verify affected combined behavior, ff merge locally and rebuild root binary.
+
+After integration, log task evidence and complete #23 with qqq CLI. Remove isolated checkout and branch; resume next --local --wait with same session.
+
+
+## Verification
+
+Integrated implementation `9eede07` into local master. Fresh isolated suite: 141
+tests passed, including eight attachment regressions and real PTY pasted plus
+flagged image save/cancel. Formatting, Clippy with denied warnings, release build
+and diff checks passed. Final read-only review found no actionable issues; its
+15 focused attachment/TUI/persistence tests passed. Root debug and release CLI
+rebuilt after integration. Database schema unchanged.
