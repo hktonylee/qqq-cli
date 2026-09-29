@@ -24,6 +24,7 @@ impl Project {
     }
     fn run(&self, args: &[&str]) -> Output {
         Command::new(env!("CARGO_BIN_EXE_qqq"))
+            .arg("--json")
             .current_dir(self.dir.path())
             .env("HOME", self.dir.path())
             .env_remove("QQQ_SESSION")
@@ -174,6 +175,7 @@ fn session_values_matching_alias_names_are_not_expanded() {
 fn missing_home_does_not_read_relative_config() {
     let p = Project::new("[alias]\na = 'list'\n");
     let out = Command::new(env!("CARGO_BIN_EXE_qqq"))
+        .arg("--json")
         .current_dir(p.dir.path())
         .env_remove("HOME")
         .arg("a")
@@ -193,6 +195,7 @@ fn alias_preserves_non_utf8_file_paths() {
     // with the built-in command instead of creating such a file.
     let run = |args: &[&str]| {
         Command::new(env!("CARGO_BIN_EXE_qqq"))
+            .arg("--json")
             .current_dir(p.dir.path())
             .env("HOME", p.dir.path())
             .args(args)

@@ -22,7 +22,7 @@ fn command_index(args: &[OsString]) -> Option<usize> {
         let arg = arg.to_str()?;
         if arg == "--session" {
             index += 2;
-        } else if arg.starts_with("--session=") {
+        } else if arg.starts_with("--session=") || arg == "--json" {
             index += 1;
         } else if arg.starts_with('-') {
             return None;

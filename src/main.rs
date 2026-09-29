@@ -2,6 +2,7 @@ mod aliases;
 mod db;
 mod editor;
 mod herdr;
+mod output;
 use anyhow::{Context, Result, ensure};
 use clap::{Parser, Subcommand};
 use serde_json::{Value, json};
@@ -10,9 +11,12 @@ use std::path::PathBuf;
 #[derive(Parser)]
 #[command(
     version,
-    about = "Local-first task queue for agent sessions. JSON output; project DB: qqq.db."
+    about = "Local-first task queue for agent sessions. Project DB: qqq.db."
 )]
 struct Cli {
+    /// Print JSON for scripts and agents instead of human-readable text.
+    #[arg(long, global = true)]
+    json: bool,
     /// Stable owner identity. Falls back to Herdr caller, then unique agent at database directory.
     #[arg(long, global = true, env = "QQQ_SESSION")]
     session: Option<String>,
@@ -48,7 +52,7 @@ enum Commands {
         #[arg(short, long)]
         description: Option<String>,
     },
-    /// Return owned task or atomically claim oldest ready task. No ready tasks: null.
+    /// Return owned task or atomically claim oldest ready task.
     Next,
     /// Mark task completed; supplied or discovered session ID must match recorded owner.
     Complete { id: i64 },
@@ -171,14 +175,20 @@ fn execute(cli: Cli) -> Result<Value> {
         },
     })
 }
+fn run() -> Result<String> {
+    let cli = Cli::parse_from(aliases::expand(std::env::args_os().collect())?);
+    let json = cli.json;
+    let format = output::Format::from(&cli.command);
+    let value = execute(cli)?;
+    Ok(if json {
+        serde_json::to_string_pretty(&value).expect("JSON value is serializable")
+    } else {
+        output::render(format, &value)
+    })
+}
 fn main() {
-    match aliases::expand(std::env::args_os().collect())
-        .and_then(|args| execute(Cli::parse_from(args)))
-    {
-        Ok(value) => println!(
-            "{}",
-            serde_json::to_string_pretty(&value).expect("JSON value is serializable")
-        ),
+    match run() {
+        Ok(output) => println!("{output}"),
         Err(error) => {
             eprintln!("error: {error:#}");
             std::process::exit(1);

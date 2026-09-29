@@ -6,7 +6,7 @@ use tempfile::TempDir;
 
 fn command(dir: &Path) -> Command {
     let mut command = Command::new(env!("CARGO_BIN_EXE_qqq"));
-    command.current_dir(dir).env_remove("EDITOR");
+    command.arg("--json").current_dir(dir).env_remove("EDITOR");
     command
 }
 

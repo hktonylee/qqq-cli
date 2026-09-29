@@ -8,7 +8,8 @@ use tempfile::TempDir;
 
 fn command(dir: &Path) -> Command {
     let mut c = Command::new(env!("CARGO_BIN_EXE_qqq"));
-    c.current_dir(dir)
+    c.arg("--json")
+        .current_dir(dir)
         .env_remove("QQQ_SESSION")
         .env_remove("HERDR_ENV");
     c

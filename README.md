@@ -1,6 +1,24 @@
 # qqq
 
-Local-first Rust CLI for project tasks and coding agent sessions. Everything lives in **`qqq.db`**, including image bytes. No server required. Commands return JSON; errors go to stderr with exit code 1 (argument errors: 2).
+Local-first Rust CLI for project tasks and coding agent sessions. Everything lives in **`qqq.db`**, including image bytes. No server required. Commands print human-readable text by default; use `--json` for scripts and agents. Errors go to stderr with exit code 1 (argument errors: 2).
+
+## Output
+
+`qqq list` shows task IDs, status, parent dependencies and titles in a compact table.
+`qqq show <id>` includes description, ownership, messages, images, history and Herdr
+details. Empty lists print `No tasks yet.`; queues with no ready tasks print
+`No ready tasks.`. Text output uses no ANSI colors and stays readable when piped.
+
+```sh
+qqq list
+qqq show 1
+qqq --json list
+qqq next --json --session agent-session-123
+```
+
+`--json` works before or after subcommands, including nested commands. It preserves
+the existing JSON shapes, including `[]` for empty lists and `null` when no task
+is ready. Existing scripts that parse command output must add `--json`.
 
 ## Install
 
@@ -36,7 +54,8 @@ qqq add "Fix login" --description "Reproduce expiry" --edit
 
 `EDITOR` is required for editor input and runs through `sh`, supporting quoted
 executable paths and arguments such as `EDITOR='code --wait'`. Use an editor that
-waits until editing finishes. Editor output goes to stderr; stdout stays JSON.
+waits until editing finishes. Editor output goes to stderr; stdout contains only
+the command result (JSON when `--json` is supplied).
 An empty first line, nonzero editor exit, or unreadable draft aborts creation.
 Temporary drafts are removed on success or error. Inline `qqq add "Title"` works
 without an editor.
@@ -70,7 +89,8 @@ Parent must already exist. Each task has one optional parent, fixed at creation.
 Task JSON includes `parent_id` (`null` for independent tasks). Child stays pending
 until parent completes; `next` skips blocked children and claims the oldest ready
 task. Releasing a parent keeps children blocked. Dependency chains unlock in
-order. If every pending task is blocked, `next` returns `null`.
+order. If every pending task is blocked, `next` prints `No ready tasks.`
+(`null` with `--json`).
 
 Images support PNG, JPEG, GIF and WebP signatures, up to 20 MiB each. Signature checking identifies format; it does not fully decode or validate image contents. Import copies bytes into DB, so original file can be removed. Export takes **image ID**, shown by `show`, rather than task ID; destination must not exist.
 
@@ -122,7 +142,7 @@ Or pass `--session agent-session-123` on individual commands. Precedence: `--ses
 - `next` returns oldest ready pending task, atomically marking it `in_progress`.
 - Same session calling `next` again receives its existing task.
 - One active task per session; concurrent sessions cannot claim same task.
-- No ready tasks returns JSON `null`, exit code 0.
+- No ready tasks prints `No ready tasks.` (`null` with `--json`), exit code 0.
 - `complete <task-id>` marks task `completed` when the supplied or discovered session ID matches its recorded `owner_session`.
 - `release <task-id>` returns task to `pending` when the supplied or discovered session ID matches its recorded `owner_session`.
 - Claims never expire. Restarting CLI preserves locks. `show` includes claim/release/completion history.
