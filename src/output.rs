@@ -18,7 +18,7 @@ impl From<&Commands> for Format {
     fn from(command: &Commands) -> Self {
         match command {
             Commands::Init => Self::Database,
-            Commands::List => Self::Tasks,
+            Commands::List { .. } => Self::Tasks,
             Commands::Show { .. } => Self::Detail,
             Commands::Message { .. } => Self::Message,
             Commands::Image { command } => match command {

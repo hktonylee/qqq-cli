@@ -48,7 +48,11 @@ enum Commands {
         parent: Option<i64>,
     },
     /// List tasks as a dependency tree; JSON lists tasks in creation order.
-    List,
+    List {
+        /// Maximum completed tasks to show; retain most recent completions. Omit for all; 0 hides them.
+        #[arg(long, value_parser = clap::value_parser!(i64).range(0..))]
+        max_completed: Option<i64>,
+    },
     /// Show task, messages, image metadata, ownership history and Herdr link.
     Show { id: i64 },
     /// Edit title and description in $EDITOR, or update supplied fields directly.
@@ -131,7 +135,7 @@ fn execute(cli: Cli) -> Result<Value> {
             };
             json!(db.add(&title, &description, parent)?)
         }
-        Commands::List => json!(db.list()?),
+        Commands::List { max_completed } => json!(db.list(max_completed)?),
         Commands::Show { id } => db.show(id)?,
         Commands::Edit {
             id,

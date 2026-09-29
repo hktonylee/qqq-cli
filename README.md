@@ -18,6 +18,20 @@ ID     STATUS       TITLE
 ```
 
 `qqq list --json` keeps the flat array in creation order, including `parent_id`.
+
+Use `qqq list --max-completed <N>` to cap completed rows while keeping every new
+and in-progress task. The most recent completions are retained; completion
+history determines recency, falling back to update time and ID when history is
+absent. Editing an older completed task does not count as another completion.
+Omit the flag to show all tasks; `0` hides completed rows. The filter applies to
+text and JSON. Children whose parents are hidden appear as roots; JSON preserves
+the original `parent_id`. Filtering does not delete task data.
+
+```sh
+qqq list --max-completed 10
+qqq list --max-completed 0 --json
+```
+
 `qqq show <id>` includes description, ownership, messages, images, history and Herdr
 details. Empty lists print `No tasks yet.`; queues with no ready tasks print
 `No ready tasks.`. In a terminal, list rows use normal terminal color for new, cyan for

@@ -103,8 +103,17 @@ impl Db {
         )?;
         self.task(self.conn.last_insert_rowid())
     }
-    pub fn list(&self) -> Result<Vec<Task>> {
-        Ok(self.conn.prepare("SELECT id,title,description,status,assignee,created_at,updated_at,parent_id FROM tasks ORDER BY id")?.query_map([],task_row)?.collect::<rusqlite::Result<_>>()?)
+    pub fn list(&self, max_completed: Option<i64>) -> Result<Vec<Task>> {
+        Ok(self.conn.prepare(
+            "SELECT id,title,description,status,assignee,created_at,updated_at,parent_id FROM tasks
+             WHERE ?1 IS NULL OR status!='completed' OR id IN (
+                 SELECT id FROM tasks WHERE status='completed'
+                 ORDER BY (SELECT MAX(id) FROM events WHERE task_id=tasks.id AND action='complete') DESC,
+                          updated_at DESC, id DESC
+                 LIMIT COALESCE(?1,-1)
+             )
+             ORDER BY id"
+        )?.query_map([max_completed],task_row)?.collect::<rusqlite::Result<_>>()?)
     }
     pub fn edit(
         &mut self,
