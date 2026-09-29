@@ -46,9 +46,19 @@ fn persistent_ownership_and_fifo() {
             .status
             .success()
     );
-    assert!(!run(p, &["release", "1", "--session", "b"]).status.success());
+    assert!(
+        !run(
+            p,
+            &["edit", "1", "--set-status", "pending", "--session", "b"]
+        )
+        .status
+        .success()
+    );
     assert!(!run(p, &["next"]).status.success());
-    ok(p, &["release", "1", "--session", "a"]);
+    ok(
+        p,
+        &["edit", "1", "--set-status", "pending", "--session", "a"],
+    );
     assert_eq!(ok(p, &["next", "--session", "c"])["id"], 1);
     ok(p, &["complete", "1", "--session", "c"]);
     assert!(ok(p, &["next", "--session", "c"]).is_null());
@@ -173,7 +183,17 @@ printf '%s\n' '{"result":{"agents":[{"pane_id":"w1:p2","workspace_id":"w1","tab_
         "--agent-session",
         "session-123",
     ]);
-    ok(p, &["release", "1", "--session", "old-owner"]);
+    ok(
+        p,
+        &[
+            "edit",
+            "1",
+            "--set-status",
+            "pending",
+            "--session",
+            "old-owner",
+        ],
+    );
     ok(p, &["next", "--session", "new-owner"]);
     assert!(
         ok(p, &["show", "1"])["herdr"].is_null(),
@@ -346,7 +366,7 @@ fn cwd_lookup_uses_db_directory_from_nested_cwd_without_herdr_env() {
     );
     assert_eq!(herdr.ok(&nested, &["next"])["id"], 1);
     herdr.ok(&nested, &["herdr", "link", "1"]);
-    herdr.ok(&nested, &["release", "1"]);
+    herdr.ok(&nested, &["edit", "1", "--set-status", "pending"]);
     herdr.ok(&nested, &["next"]);
     assert_eq!(herdr.ok(&nested, &["complete", "1"])["status"], "completed");
 }
@@ -408,5 +428,109 @@ fn cwd_lookup_rejects_missing_ambiguous_or_unidentified_matches_before_claim() {
     assert_eq!(
         herdr.ok(p, &["next", "--session", "explicit"])["owner_session"],
         "explicit"
+    );
+}
+
+#[test]
+fn edit_pending_updates_fields_and_release_history_atomically() {
+    let d = project();
+    let p = d.path();
+    ok(p, &["add", "Old", "-d", "Details"]);
+    ok(p, &["next", "--session", "a"]);
+    let before = ok(p, &["show", "1"]);
+    for args in [
+        vec![
+            "edit",
+            "1",
+            "--set-status",
+            "pending",
+            "--title",
+            "Changed",
+            "--session",
+            "wrong",
+        ],
+        vec![
+            "edit",
+            "1",
+            "--set-status",
+            "pending",
+            "--title",
+            " ",
+            "--session",
+            "a",
+        ],
+        vec!["edit", "1", "--set-status", "completed", "--session", "a"],
+    ] {
+        assert!(!run(p, &args).status.success());
+        assert_eq!(ok(p, &["show", "1"]), before);
+    }
+    let updated = ok(
+        p,
+        &[
+            "edit",
+            "-1",
+            "--set-status",
+            "pending",
+            "--title",
+            "New",
+            "-d",
+            "",
+            "--session",
+            "a",
+        ],
+    );
+    assert_eq!(updated["status"], "pending");
+    assert!(updated["owner_session"].is_null());
+    assert_eq!(updated["title"], "New");
+    assert_eq!(updated["description"], "");
+    let after = ok(p, &["show", "1"]);
+    assert_eq!(after["events"].as_array().unwrap().len(), 2);
+    assert_eq!(after["events"][1]["action"], "release");
+    assert_eq!(after["events"][1]["session"], "a");
+    assert!(
+        !run(
+            p,
+            &["edit", "1", "--set-status", "pending", "--session", "a"]
+        )
+        .status
+        .success()
+    );
+    assert_eq!(ok(p, &["show", "1"]), after);
+    ok(p, &["next", "--session", "b"]);
+    ok(p, &["complete", "1", "--session", "b"]);
+    let completed = ok(p, &["show", "1"]);
+    assert!(
+        !run(
+            p,
+            &["edit", "1", "--set-status", "pending", "--session", "b"]
+        )
+        .status
+        .success()
+    );
+    assert_eq!(ok(p, &["show", "1"]), completed);
+}
+
+#[test]
+fn edit_pending_skips_editor_and_release_command_is_removed() {
+    let d = project();
+    let p = d.path();
+    ok(p, &["add", "Task"]);
+    ok(p, &["next", "--session", "a"]);
+    let output = command(p)
+        .args(["edit", "1", "--set-status", "pending", "--session", "a"])
+        .env("EDITOR", "nonexistent-qqq-editor")
+        .output()
+        .unwrap();
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let task: Value = serde_json::from_slice(&output.stdout).unwrap();
+    assert_eq!(task["status"], "pending");
+    assert_eq!(task["title"], "Task");
+    assert_eq!(
+        run(p, &["release", "1", "--session", "a"]).status.code(),
+        Some(2)
     );
 }

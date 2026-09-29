@@ -31,8 +31,7 @@ impl From<&Commands> for Format {
             Commands::Add { .. }
             | Commands::Edit { .. }
             | Commands::Next
-            | Commands::Complete { .. }
-            | Commands::Release { .. } => Self::Task,
+            | Commands::Complete { .. } => Self::Task,
         }
     }
 }

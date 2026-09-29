@@ -58,7 +58,13 @@ fn human_tasks_show_descriptions_dependencies_and_ownership() {
     assert!(child.contains("Parent: #1"));
     let changed = text(p, &["edit", "2", "--description", "New details"]);
     assert!(changed.contains("New details"));
-    assert!(text(p, &["release", "1", "--session", "a"]).contains("Status: Pending"));
+    assert!(
+        text(
+            p,
+            &["edit", "1", "--set-status", "pending", "--session", "a"]
+        )
+        .contains("Status: Pending")
+    );
     text(p, &["next", "--session", "a"]);
     assert!(text(p, &["complete", "1", "--session", "a"]).contains("Status: Completed"));
 }
@@ -79,7 +85,10 @@ fn human_show_includes_messages_images_history_and_export_result() {
         assert!(image.contains(part), "{image}");
     }
     text(p, &["next", "--session", "a"]);
-    text(p, &["release", "1", "--session", "a"]);
+    text(
+        p,
+        &["edit", "1", "--set-status", "pending", "--session", "a"],
+    );
     let show = text(p, &["show", "1"]);
     for part in [
         "Messages:",

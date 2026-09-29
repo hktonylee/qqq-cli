@@ -103,12 +103,34 @@ impl Db {
     pub fn list(&self) -> Result<Vec<Task>> {
         Ok(self.conn.prepare("SELECT id,title,description,status,owner_session,created_at,updated_at,parent_id FROM tasks ORDER BY id")?.query_map([],task_row)?.collect::<rusqlite::Result<_>>()?)
     }
-    pub fn edit(&self, id: i64, title: Option<&str>, description: Option<&str>) -> Result<Task> {
+    pub fn edit(
+        &mut self,
+        id: i64,
+        title: Option<&str>,
+        description: Option<&str>,
+        release_session: Option<&str>,
+    ) -> Result<Task> {
         if let Some(title) = title {
             nonempty(title, "Title")?;
         }
-        ensure!(self.conn.execute("UPDATE tasks SET title=COALESCE(?,title),description=COALESCE(?,description),updated_at=strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE id=?",params![title,description,id])?==1,"Task {id} not found");
-        self.task(id)
+        let tx = self
+            .conn
+            .transaction_with_behavior(TransactionBehavior::Immediate)?;
+        if let Some(session) = release_session {
+            nonempty(session, "Session")?;
+            ensure!(tx.execute("UPDATE tasks SET status='pending',owner_session=NULL WHERE id=? AND status='in_progress' AND owner_session=?",params![id,session])?==1,"Task {id} is not claimed by session {session}");
+            tx.execute(
+                "INSERT INTO events(task_id,session,action) VALUES (?,?,'release')",
+                params![id, session],
+            )?;
+        }
+        ensure!(tx.execute("UPDATE tasks SET title=COALESCE(?,title),description=COALESCE(?,description),updated_at=strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE id=?",params![title,description,id])?==1,"Task {id} not found");
+        let task = tx.query_row(
+            "SELECT id,title,description,status,owner_session,created_at,updated_at,parent_id FROM tasks WHERE id=?",
+            [id], task_row,
+        )?;
+        tx.commit()?;
+        Ok(task)
     }
     pub fn resolve_edit_id(&self, reference: i64) -> Result<i64> {
         ensure!(
@@ -179,16 +201,15 @@ impl Db {
         tx.commit()?;
         Ok(task)
     }
-    pub fn transition(&mut self, id: i64, session: &str, complete: bool) -> Result<Task> {
+    pub fn complete(&mut self, id: i64, session: &str) -> Result<Task> {
         nonempty(session, "Session")?;
         let tx = self
             .conn
             .transaction_with_behavior(TransactionBehavior::Immediate)?;
-        let status = if complete { "completed" } else { "pending" };
-        ensure!(tx.execute("UPDATE tasks SET status=?,owner_session=NULL,updated_at=strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE id=? AND status='in_progress' AND owner_session=?",params![status,id,session])?==1,"Task {id} is not claimed by session {session}");
+        ensure!(tx.execute("UPDATE tasks SET status='completed',owner_session=NULL,updated_at=strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE id=? AND status='in_progress' AND owner_session=?",params![id,session])?==1,"Task {id} is not claimed by session {session}");
         tx.execute(
-            "INSERT INTO events(task_id,session,action) VALUES (?,?,?)",
-            params![id, session, if complete { "complete" } else { "release" }],
+            "INSERT INTO events(task_id,session,action) VALUES (?, ?, 'complete')",
+            params![id, session],
         )?;
         let task = tx.query_row(
             "SELECT id,title,description,status,owner_session,created_at,updated_at,parent_id FROM tasks WHERE id=?",

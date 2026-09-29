@@ -60,7 +60,7 @@ An empty first line, nonzero editor exit, or unreadable draft aborts creation.
 Temporary drafts are removed on success or error. Inline `qqq add "Title"` works
 without an editor.
 
-Edit an existing task with `qqq edit <id>` (replaces `describe`). With no field
+Edit an existing task with `qqq edit <id>` (replaces `describe`). With no update
 flags, `$EDITOR` opens with the current title on the first line and description
 below. Save to update both fields. The same draft format and error handling as
 `add` apply; editor failures leave the task unchanged.
@@ -83,7 +83,22 @@ before editing, so tasks created while the editor is open do not change it.
 
 Field flags skip the editor and preserve omitted fields. Titles cannot be blank.
 Existing multiline titles require field flags because the editor format uses one title line.
-Editing preserves task status, ownership, dependencies, messages and attachments.
+Field-only editing preserves task status and ownership. Dependencies, messages and
+attachments are preserved by all edits.
+
+Use `qqq edit <id> --set-status pending` to return a claimed task to the queue
+(replaces `release`). Only `pending` is accepted for now. The task must be
+`in_progress`, and the supplied or discovered session ID must match its recorded
+`owner_session`. This clears the owner and records a `release` history event.
+Pending or completed tasks cannot use this transition.
+
+```sh
+qqq edit 1 --set-status pending --session agent-session-123
+qqq edit -1 --set-status pending --description "Retry with updated details" --session agent-session-123
+```
+
+`--set-status` skips the editor. Combined title, description and status updates
+are atomic: validation or ownership errors leave all fields and history unchanged.
 
 Add a dependency with `--parent <task-id>`:
 
@@ -152,13 +167,13 @@ Or pass `--session agent-session-123` on individual commands. Precedence: `--ses
 - One active task per session; concurrent sessions cannot claim same task.
 - No ready tasks prints `No ready tasks.` (`null` with `--json`), exit code 0.
 - `complete <task-id>` marks task `completed` when the supplied or discovered session ID matches its recorded `owner_session`.
-- `release <task-id>` returns task to `pending` when the supplied or discovered session ID matches its recorded `owner_session`.
+- `edit <task-id> --set-status pending` returns a claimed task to `pending` when the supplied or discovered session ID matches its recorded `owner_session`.
 - Claims never expire. Restarting CLI preserves locks. `show` includes claim/release/completion history.
 
 For an abandoned session, inspect `qqq show <id>`, then explicitly release using its recorded `owner_session`:
 
 ```sh
-qqq release 1 --session 'recorded-owner-session'
+qqq edit 1 --set-status pending --session 'recorded-owner-session'
 ```
 
 Session IDs coordinate local agents; they are not authentication credentials. Descriptions, attachments and messages can be edited/appended by local callers regardless of claim ownership. Messages record author when `--session` or `QQQ_SESSION` is supplied.
@@ -167,7 +182,7 @@ Session IDs coordinate local agents; they are not authentication credentials. De
 
 Outside Herdr, plain `qqq next` queries `herdr agent list` on the currently targeted server and selects the unique agent whose cwd equals the directory containing `qqq.db`. No `HERDR_ENV` needed. Running from a project subdirectory still matches the DB directory. Paths resolve symlinks; `foreground_cwd` takes precedence over `cwd` when present. Zero matches, multiple matches, or missing agent-session metadata produce an error before claiming. Use `--session` to choose ownership explicitly when discovery is ambiguous.
 
-`complete`, `release`, and `herdr link <id>` use the same discovery. Lookup requires Herdr CLI and its server to be available.
+`complete`, `edit --set-status pending`, and `herdr link <id>` use the same discovery. Lookup requires Herdr CLI and its server to be available.
 
 Inside Herdr, `next` can derive ownership from `HERDR_ENV=1`, `HERDR_PANE_ID`, and the exact pane's reported agent session. The claim and Herdr link persist in one transaction. Caller context takes precedence over cwd discovery; caller lookup errors do not fall through to another agent. If hooks have not reported session identity, supply an explicit session and link once identity becomes available.
 
@@ -183,7 +198,7 @@ qqq herdr link 1 --agent codex --agent-session session-123
 qqq herdr link 1 --agent codex --agent-session session-123 --server work
 ```
 
-`find` matches saved agent/session identity against `herdr agent list`, returning current `workspace_id`, `tab_id`, `pane_id`, and `agent_session`. Pane moves do not break identity matching. Missing, offline or ambiguous matches produce errors; saved link remains available in `show`. Automatic ownership uses a JSON tuple of agent, identity kind and value; keep the same identity mode through complete/release.
+`find` matches saved agent/session identity against `herdr agent list`, returning current `workspace_id`, `tab_id`, `pane_id`, and `agent_session`. Pane moves do not break identity matching. Missing, offline or ambiguous matches produce errors; saved link remains available in `show`. Automatic ownership uses a JSON tuple of agent, identity kind and value; keep the same identity mode through completion or returning a task to pending.
 
 Explicit `--session` / `QQQ_SESSION` ownership works without Herdr and does not auto-link. `herdr link` stores association separately; it does not transfer ownership. A completed task retains its latest link. A fresh claim clears the previous link, then saves the new auto-detected link when available; explicit owners should link after claiming. Default-server links query whichever Herdr server CLI currently targets; use `--server` for a stable named-server target. No automatic agent spawning or prompt submission.
 

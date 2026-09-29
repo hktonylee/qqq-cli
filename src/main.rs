@@ -4,7 +4,7 @@ mod editor;
 mod herdr;
 mod output;
 use anyhow::{Context, Result, ensure};
-use clap::{Parser, Subcommand};
+use clap::{Parser, Subcommand, ValueEnum};
 use serde_json::{Value, json};
 use std::path::PathBuf;
 
@@ -23,6 +23,11 @@ struct Cli {
     #[command(subcommand)]
     command: Commands,
 }
+#[derive(Clone, Copy, ValueEnum)]
+enum EditStatus {
+    Pending,
+}
+
 #[derive(Subcommand)]
 enum Commands {
     /// Create qqq.db in current directory (safe to repeat).
@@ -53,13 +58,14 @@ enum Commands {
         title: Option<String>,
         #[arg(short, long)]
         description: Option<String>,
+        /// Return claimed task to pending; session ID must match recorded owner. Skips editor.
+        #[arg(long, value_enum)]
+        set_status: Option<EditStatus>,
     },
     /// Return owned task or atomically claim oldest ready task.
     Next,
     /// Mark task completed; supplied or discovered session ID must match recorded owner.
     Complete { id: i64 },
-    /// Return task to queue; supplied or discovered session ID must match recorded owner.
-    Release { id: i64 },
     /// Append message; session, when supplied, is recorded as author.
     Message { id: i64, body: String },
     /// Store or export image attachments.
@@ -122,18 +128,30 @@ fn execute(cli: Cli) -> Result<Value> {
             id,
             title,
             description,
+            set_status,
         } => {
             let id = db.resolve_edit_id(id)?;
-            if title.is_none() && description.is_none() {
+            if title.is_none() && description.is_none() && set_status.is_none() {
                 let task = db.task(id)?;
                 ensure!(
                     !task.title.contains(['\n', '\r']),
                     "Cannot edit a multiline title in EDITOR; use --title or --description"
                 );
                 let (title, description) = editor::compose(&task.title, &task.description)?;
-                json!(db.edit(id, Some(&title), Some(&description))?)
+                json!(db.edit(id, Some(&title), Some(&description), None)?)
             } else {
-                json!(db.edit(id, title.as_deref(), description.as_deref())?)
+                let release_session = match set_status {
+                    Some(EditStatus::Pending) => {
+                        Some(herdr::owner(cli.session.as_deref(), project_dir)?.0)
+                    }
+                    None => None,
+                };
+                json!(db.edit(
+                    id,
+                    title.as_deref(),
+                    description.as_deref(),
+                    release_session.as_deref()
+                )?)
             }
         }
         Commands::Next => {
@@ -142,11 +160,7 @@ fn execute(cli: Cli) -> Result<Value> {
         }
         Commands::Complete { id } => {
             let (session, _) = herdr::owner(cli.session.as_deref(), project_dir)?;
-            json!(db.transition(id, &session, true)?)
-        }
-        Commands::Release { id } => {
-            let (session, _) = herdr::owner(cli.session.as_deref(), project_dir)?;
-            json!(db.transition(id, &session, false)?)
+            json!(db.complete(id, &session)?)
         }
         Commands::Message { id, body } => db.message(id, &body, cli.session.as_deref())?,
         Commands::Image { command } => match command {

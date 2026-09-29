@@ -46,7 +46,10 @@ fn parent_release_blocks_children_completion_unlocks_chain_in_fifo_order() {
     assert_eq!(ok(p, &["next", "--session", "a"])["id"], 1);
     assert_eq!(ok(p, &["next", "--session", "b"])["id"], 4);
     assert!(ok(p, &["next", "--session", "c"]).is_null());
-    ok(p, &["release", "1", "--session", "a"]);
+    ok(
+        p,
+        &["edit", "1", "--set-status", "pending", "--session", "a"],
+    );
     assert_eq!(ok(p, &["next", "--session", "c"])["id"], 1);
     assert!(ok(p, &["next", "--session", "a"]).is_null());
     ok(p, &["complete", "1", "--session", "c"]);
