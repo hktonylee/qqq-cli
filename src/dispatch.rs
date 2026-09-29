@@ -25,7 +25,7 @@ pub fn next(db: &mut Db, caller: Option<&str>) -> Result<Option<Task>> {
             nonempty(session, "Session")?;
             session.to_owned()
         }
-        None => herdr::dispatch_caller()?,
+        None => herdr::dispatch_caller(db)?,
     };
     if let Some(task) = db.owned(&caller)? {
         return Ok(Some(task));

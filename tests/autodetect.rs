@@ -140,3 +140,71 @@ fn late_session_reporting_preserves_active_terminal_claim_then_uses_reported_ses
     assert_eq!(second["id"], 2);
     assert_eq!(second["assignee"], r#"["codex","id","late-hook"]"#);
 }
+
+#[test]
+fn configured_dispatch_returns_existing_terminal_claim_after_hook_arrives() {
+    let dir = project();
+    let p = dir.path();
+    ok(command(p).args(["add", "Second"]));
+    let first = ok(herdr(p, json!({"result":{"pane":pane(p)}}), true).args(["next", "--local"]));
+    fs::create_dir_all(p.join(".config/qqq")).unwrap();
+    fs::write(
+        p.join(".config/qqq/config.toml"),
+        "[herdr]\nnext-to-new-agent = true\n",
+    )
+    .unwrap();
+    let mut reported_pane = pane(p);
+    reported_pane["agent_session"] = json!({"agent":"codex","kind":"id","value":"late-hook"});
+    let next = ok(herdr(p, json!({"result":{"pane":reported_pane}}), true).arg("next"));
+    assert_eq!(next, first);
+    assert_eq!(ok(command(p).args(["show", "2"]))["task"]["status"], "new");
+}
+
+#[test]
+fn missing_hook_metadata_preserves_active_reported_session_claim() {
+    let dir = project();
+    let p = dir.path();
+    ok(command(p).args(["add", "Second"]));
+    let mut reported_pane = pane(p);
+    reported_pane["agent_session"] = json!({"agent":"codex","kind":"id","value":"existing-hook"});
+    let first = ok(herdr(p, json!({"result":{"pane":reported_pane}}), true).arg("next"));
+    let response = json!({"result":{"pane":pane(p)}});
+    assert_eq!(ok(herdr(p, response.clone(), true).arg("next")), first);
+    assert_eq!(
+        ok(herdr(p, response, true).args(["complete", "1"]))["status"],
+        "completed"
+    );
+}
+
+#[test]
+fn explicit_claim_with_herdr_link_is_not_adopted_as_automatic_owner() {
+    let dir = project();
+    let p = dir.path();
+    ok(command(p).args(["add", "Second"]));
+    ok(command(p).args(["next", "--session", "explicit-owner"]));
+    let response = json!({"result":{"pane":pane(p)}});
+    ok(herdr(p, response.clone(), true).args(["herdr", "link", "1"]));
+    let task = ok(herdr(p, response, true).arg("next"));
+    assert_eq!(task["id"], 2);
+    assert_eq!(task["assignee"], r#"["codex","terminal","terminal-1"]"#);
+    assert_eq!(
+        ok(command(p).args(["show", "1"]))["task"]["assignee"],
+        "explicit-owner"
+    );
+}
+
+#[test]
+fn default_link_after_hook_arrives_preserves_active_claim_identity() {
+    let dir = project();
+    let p = dir.path();
+    ok(herdr(p, json!({"result":{"pane":pane(p)}}), true).arg("next"));
+    let mut reported_pane = pane(p);
+    reported_pane["agent_session"] = json!({"agent":"codex","kind":"id","value":"late-hook"});
+    let response = json!({"result":{"pane":reported_pane}});
+    let link = ok(herdr(p, response.clone(), true).args(["herdr", "link", "1"]));
+    assert_eq!(link["identity"]["kind"], "terminal");
+    assert_eq!(
+        ok(herdr(p, response, true).args(["complete", "1"]))["status"],
+        "completed"
+    );
+}

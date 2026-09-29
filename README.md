@@ -261,15 +261,19 @@ Inside Herdr, `next` derives ownership from `HERDR_ENV=1`, `HERDR_PANE_ID`, and
 the exact pane's reported agent session. When hooks have not reported a session,
 it uses the stable Herdr terminal ID plus agent kind instead. The same fallback
 applies to unique-cwd discovery outside Herdr. Reported session identity takes
-priority; an active terminal-fallback claim retains that identity until completion
-if hooks report a session later. Malformed metadata fails before claiming. Terminal identity follows
+priority for new claims. Active auto-claims keep their saved identity until
+completion when hooks appear or disappear in the same terminal, including when
+switching between local and dispatch mode. Malformed metadata fails before
+claiming. Terminal identity follows
 the terminal lifetime, so resumed conversations in that terminal share it.
 Use `--session` when a distinct conversation identity is needed.
 
 The claim and Herdr link persist in one transaction. Caller context takes
 precedence over cwd discovery; caller lookup errors do not fall through to
-another agent. `complete`, `edit --set-status new`, and `herdr link` resolve
-identity the same way.
+another agent. `complete` and `edit --set-status new` preserve active claim
+identity the same way. Default `herdr link` also preserves active auto-claim
+identity; explicit links associate the requested identity without transferring
+ownership.
 
 ```sh
 # With no QQQ_SESSION override: inside Herdr, or unique agent at DB directory:

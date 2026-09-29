@@ -169,6 +169,41 @@ impl Db {
             .optional()?
             .with_context(|| format!("No task at recent creation index {reference}"))
     }
+    pub fn active_identity_for_terminal(
+        &self,
+        agent: &str,
+        terminal: &str,
+    ) -> Result<Option<crate::herdr::AgentSession>> {
+        let mut query = self.conn.prepare(
+            "SELECT tasks.assignee,herdr_links.link_json FROM tasks
+             JOIN herdr_links ON herdr_links.task_id=tasks.id
+             WHERE tasks.status='in_progress'
+               AND json_extract(herdr_links.link_json,'$.pane.terminal_id')=?
+               AND json_extract(herdr_links.link_json,'$.identity.agent')=?",
+        )?;
+        let records = query.query_map([terminal, agent], |row| {
+            Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?))
+        })?;
+        let mut active = None;
+        for record in records {
+            let (assignee, encoded) = record?;
+            let link: crate::herdr::Link = serde_json::from_str(&encoded)?;
+            let owner = serde_json::to_string(&(
+                &link.identity.agent,
+                &link.identity.kind,
+                &link.identity.value,
+            ))?;
+            // Explicit and dispatched assignments have separate owner IDs.
+            if assignee == owner {
+                ensure!(
+                    active.is_none(),
+                    "Multiple active claims match Herdr terminal; use --session"
+                );
+                active = Some(link.identity);
+            }
+        }
+        Ok(active)
+    }
     pub fn owned(&self, session: &str) -> Result<Option<Task>> {
         nonempty(session, "Session")?;
         Ok(self.conn.query_row(

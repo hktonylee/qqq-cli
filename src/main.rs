@@ -212,7 +212,9 @@ fn execute(cli: Cli, display_limit: Option<i64>) -> Result<Value> {
                 db.task(task_id)?;
                 let link = match (agent, agent_session) {
                     (Some(agent), Some(session)) => herdr::explicit(agent, session, server)?,
-                    _ => herdr::discover(project_dir)?,
+                    _ => herdr::owner(None, project_dir, &db)?
+                        .1
+                        .context("Missing automatically discovered Herdr link")?,
                 };
                 db.set_link(task_id, &link)?;
                 json!(link)

@@ -107,7 +107,18 @@ pub fn pane_identity(pane: &Pane) -> Result<AgentSession> {
     })
 }
 
-pub fn dispatch_caller() -> Result<String> {
+fn retained_identity(pane: &Pane, db: &Db) -> Result<AgentSession> {
+    let identity = pane_identity(pane)?;
+    if let Some(terminal) = &pane.terminal_id {
+        // Keep active auto-claims reachable while session reporting changes.
+        if let Some(active) = db.active_identity_for_terminal(&identity.agent, terminal)? {
+            return Ok(active);
+        }
+    }
+    Ok(identity)
+}
+
+pub fn dispatch_caller(db: &Db) -> Result<String> {
     ensure!(
         std::env::var("HERDR_ENV").as_deref() == Ok("1"),
         "Herdr dispatch requires HERDR_ENV=1; use next --local outside Herdr"
@@ -115,7 +126,7 @@ pub fn dispatch_caller() -> Result<String> {
     let pane_id = std::env::var("HERDR_PANE_ID").context("HERDR_PANE_ID missing")?;
     nonempty(&pane_id, "HERDR_PANE_ID")?;
     let current: Current = call(None, &["pane", "current", "--current"])?;
-    let identity = pane_identity(&current.pane)?;
+    let identity = retained_identity(&current.pane, db)?;
     Ok(serde_json::to_string(&(
         identity.agent,
         identity.kind,
@@ -201,18 +212,7 @@ pub fn owner(
         return Ok((session.into(), None));
     }
     let mut link = discover(project_dir)?;
-    if let (Some(agent), Some(terminal_id)) = (&link.pane.agent, &link.pane.terminal_id) {
-        let terminal_owner = serde_json::to_string(&(agent, "terminal", terminal_id))?;
-        // Hooks may report a session after a terminal fallback already claimed work.
-        // Keep that active claim reachable until completion, then prefer hook identity.
-        if db.owned(&terminal_owner)?.is_some() {
-            link.identity = AgentSession {
-                agent: agent.clone(),
-                kind: "terminal".into(),
-                value: terminal_id.clone(),
-            };
-        }
-    }
+    link.identity = retained_identity(&link.pane, db)?;
     // JSON tuple encoding avoids collisions when identity strings contain delimiters.
     let owner = serde_json::to_string(&(
         &link.identity.agent,
