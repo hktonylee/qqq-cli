@@ -50,7 +50,7 @@ fn set_pending_releases_claim_and_preserves_content_details_and_history() {
     let before = ok(p, &["show", "2"]);
     let edited = ok(p, &["edit", "-1", "--set-pending", "--session", "worker"]);
     assert_eq!(edited["status"], "new");
-    assert!(edited["assignee"].is_null());
+    assert!(edited["harness_session"].is_null());
     for key in ["description", "parent_id", "created_at"] {
         assert_eq!(edited[key], before["task"][key]);
     }
@@ -161,7 +161,7 @@ fn set_pending_with_new_dependency_waits_for_that_parent() {
     );
     assert_eq!(edited["parent_id"], 3);
     assert_eq!(edited["status"], "new");
-    assert!(edited["assignee"].is_null());
+    assert!(edited["harness_session"].is_null());
     assert_eq!(ok(p, &["next", "--local", "--session", "parent"])["id"], 3);
     assert!(ok(p, &["next", "--local", "--session", "child"]).is_null());
     ok(p, &["complete", "3", "--session", "parent"]);

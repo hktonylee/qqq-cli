@@ -19,7 +19,11 @@ fn quote(value: &str) -> String {
     format!("'{}'", value.replace('\'', "'\\''"))
 }
 
-pub fn next(db: &mut Db, caller: Option<&str>) -> Result<Option<Task>> {
+pub fn next(
+    db: &mut Db,
+    caller: Option<&str>,
+    overrides: &crate::identity::Identity,
+) -> Result<Option<Task>> {
     let caller = match caller {
         Some(session) => {
             nonempty(session, "Session")?;
@@ -27,8 +31,11 @@ pub fn next(db: &mut Db, caller: Option<&str>) -> Result<Option<Task>> {
         }
         None => herdr::dispatch_caller(db)?,
     };
-    if let Some(task) = db.owned(&caller)? {
-        return Ok(Some(task));
+    if db
+        .owned_with_name(&caller, overrides.harness_name.as_deref())?
+        .is_some()
+    {
+        return db.next_with_identity(&caller, None, overrides);
     }
     if !db.has_ready()? {
         return Ok(None);
@@ -102,26 +109,34 @@ pub fn next(db: &mut Db, caller: Option<&str>) -> Result<Option<Task>> {
         );
         let identity = herdr::pane_identity(&current.agent)?;
         ensure!(identity.agent == "codex", "Started agent is not Codex");
-        db.set_link(
+        db.set_link_with_identity(
             task.id,
             &Link {
-                server: None,
+                server: herdr::server_session(),
                 identity,
                 pane: current.agent.clone(),
             },
+            overrides,
+            Some(&name),
         )?;
         Ok(current.agent)
     })();
     let pane = match prepared {
         Ok(pane) => pane,
         Err(error) => {
-            db.edit(task.id, None, Some(EditTransition::New(&name)), &[], None)
-                .with_context(|| {
-                    format!(
-                        "Dispatch failed ({error:#}); could not release task {} assigned to {name}",
-                        task.id
-                    )
-                })?;
+            db.edit(
+                task.id,
+                None,
+                Some(EditTransition::NewExact(&name)),
+                &[],
+                None,
+            )
+            .with_context(|| {
+                format!(
+                    "Dispatch failed ({error:#}); could not release task {} assigned to {name}",
+                    task.id
+                )
+            })?;
             return Err(error).with_context(|| format!("Task {} returned to new; dispatch failed at {location}. Any created tab remains for inspection", task.id));
         }
     };
@@ -134,5 +149,5 @@ pub fn next(db: &mut Db, caller: Option<&str>) -> Result<Option<Task>> {
     );
     let _: Value = herdr::call(None, &["agent", "prompt", &pane.pane_id, &prompt])
         .with_context(|| format!("Prompt may have been delivered. Task {} remains assigned to {name}, linked to {location}; inspect agent before retrying. Recovery: qqq edit {} --set-status new --session {}", task.id, task.id, quote(&name)))?;
-    Ok(Some(task))
+    Ok(Some(db.task(task.id)?))
 }

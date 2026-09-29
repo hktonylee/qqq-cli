@@ -181,7 +181,10 @@ fn configured_alias_works_and_unsetting_herdr_restores_default() {
     assert_eq!(p.ok(&["ls"])[0]["description"], "Task");
     p.ok(&["config", "herdr.next-to-new-agent", "true"]);
     p.ok(&["config", "--unset", "herdr.next-to-new-agent"]);
-    assert_eq!(p.ok(&["next", "--session", "worker"])["assignee"], "worker");
+    assert_eq!(
+        p.ok(&["next", "--session", "worker"])["harness_session"],
+        "worker"
+    );
 }
 
 #[test]

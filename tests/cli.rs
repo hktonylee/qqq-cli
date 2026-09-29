@@ -307,7 +307,7 @@ impl HerdrFixture {
         use std::os::unix::fs::PermissionsExt;
         let dir = TempDir::new().unwrap();
         let script = dir.path().join("herdr");
-        std::fs::write(&script, "#!/bin/sh\n[ \"$1 $2\" = \"agent list\" ] || exit 1\n/bin/cat \"$QQQ_TEST_HERDR_RESPONSE\"\n").unwrap();
+        std::fs::write(&script, "#!/bin/sh\n[ \"$1\" = --session ] && shift 2\n[ \"$1 $2\" = \"agent list\" ] || exit 1\n/bin/cat \"$QQQ_TEST_HERDR_RESPONSE\"\n").unwrap();
         std::fs::set_permissions(script, std::fs::Permissions::from_mode(0o755)).unwrap();
         Self { dir }
     }
@@ -357,7 +357,7 @@ fn cwd_lookup_uses_db_directory_from_nested_cwd_without_herdr_env() {
         agent_at(p, "correct")
     ]));
     let task = herdr.ok(&nested, &["next"]);
-    assert_eq!(task["assignee"], r#"["codex","id","correct"]"#);
+    assert_eq!(task["harness_session"], "correct");
     assert_eq!(
         ok(p, &["show", "1"])["herdr"]["identity"]["value"],
         "correct"
@@ -382,10 +382,7 @@ fn cwd_lookup_normalizes_symlinks_and_prefers_foreground_cwd() {
     let mut current = agent_at(aliases.path(), "correct");
     current["foreground_cwd"] = serde_json::json!(alias.join("."));
     herdr.agents(serde_json::json!([moved, current]));
-    assert_eq!(
-        herdr.ok(d.path(), &["next"])["assignee"],
-        r#"["codex","id","correct"]"#
-    );
+    assert_eq!(herdr.ok(d.path(), &["next"])["harness_session"], "correct");
 }
 #[cfg(unix)]
 #[test]
@@ -424,7 +421,7 @@ fn cwd_lookup_rejects_missing_ambiguous_or_unidentified_matches_before_claim() {
     }
     // Explicit identity bypasses ambiguous Herdr discovery.
     assert_eq!(
-        herdr.ok(p, &["next", "--session", "explicit"])["assignee"],
+        herdr.ok(p, &["next", "--session", "explicit"])["harness_session"],
         "explicit"
     );
 }
@@ -476,7 +473,7 @@ fn edit_new_updates_fields_and_release_history_atomically() {
         ],
     );
     assert_eq!(updated["status"], "new");
-    assert!(updated["assignee"].is_null());
+    assert!(updated["harness_session"].is_null());
     assert_eq!(updated["description"], "New\n\n");
     let after = ok(p, &["show", "1"]);
     assert_eq!(after["events"].as_array().unwrap().len(), 2);

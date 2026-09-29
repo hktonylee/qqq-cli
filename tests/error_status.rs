@@ -65,7 +65,7 @@ fn failed_task_needs_explicit_manual_retry_and_retains_details() {
     let before = ok(&d, &["show", "1"]);
     let failed = fail(&d, "1", "worker");
     assert_eq!(failed["status"], "error");
-    assert!(failed["assignee"].is_null());
+    assert!(failed["harness_session"].is_null());
     assert!(ok(&d, &["next", "--local", "--session", "worker"]).is_null());
     let detail = ok(&d, &["show", "1"]);
     assert_eq!(detail["task"]["created_at"], before["task"]["created_at"]);
@@ -317,7 +317,7 @@ fn v3_migration_preserves_data_sequences_constraints_and_foreign_keys() {
         .unwrap();
     for _ in 0..2 {
         let detail = ok(&d, &["show", "1"]);
-        assert_eq!(detail["task"]["assignee"], "legacy");
+        assert_eq!(detail["task"]["harness_session"], "legacy-session");
         assert_eq!(detail["task"]["created_at"], before.0);
         assert_eq!(detail["task"]["updated_at"], before.1);
         assert_eq!(detail["messages"][0]["body"], "Note");
@@ -329,7 +329,7 @@ fn v3_migration_preserves_data_sequences_constraints_and_foreign_keys() {
     assert_eq!(
         conn.pragma_query_value(None, "user_version", |r| r.get::<_, i64>(0))
             .unwrap(),
-        4
+        5
     );
     assert_eq!(ok(&d, &["add", "After deleted ID"])["id"], 100);
     fail(&d, "1", "legacy");
@@ -347,8 +347,8 @@ fn v3_migration_preserves_data_sequences_constraints_and_foreign_keys() {
             .unwrap()
     );
     for sql in [
-        "UPDATE tasks SET assignee='bad' WHERE id=1",
-        "UPDATE tasks SET status='in_progress',assignee=NULL WHERE id=1",
+        "UPDATE tasks SET claim_key='bad' WHERE id=1",
+        "UPDATE tasks SET status='in_progress',claim_key=NULL WHERE id=1",
         "UPDATE tasks SET status='unknown' WHERE id=1",
         "INSERT INTO events(task_id,session,action) VALUES (1,'a','unknown')",
         "INSERT INTO tasks(description,parent_id) VALUES ('Bad',999)",
@@ -366,7 +366,7 @@ fn v3_migration_preserves_data_sequences_constraints_and_foreign_keys() {
     ok(&d, &["next", "--local", "--session", "a"]);
     assert!(
         conn.execute(
-            "INSERT INTO tasks(description,status,assignee) VALUES ('Dup','in_progress','a')",
+            "INSERT INTO tasks(description,status,claim_key) VALUES ('Dup','in_progress','a')",
             []
         )
         .is_err()
@@ -394,7 +394,7 @@ fn concurrent_v3_opens_upgrade_once() {
             String::from_utf8_lossy(&output.stderr)
         );
         let tasks: Value = serde_json::from_slice(&output.stdout).unwrap();
-        assert_eq!(tasks[0]["assignee"], "legacy");
+        assert_eq!(tasks[0]["harness_session"], "legacy-session");
     }
     fail(&d, "1", "legacy");
 }
@@ -450,7 +450,7 @@ fn session_free_retry_cannot_release_claim_created_while_it_waits() {
     std::thread::sleep(std::time::Duration::from_millis(600));
     assert!(child.try_wait().unwrap().is_none());
     conn.execute_batch(
-        "UPDATE tasks SET status='in_progress',assignee='manual' WHERE id=1; COMMIT",
+        "UPDATE tasks SET status='in_progress',claim_key='manual',harness_session='manual' WHERE id=1; COMMIT",
     )
     .unwrap();
     let output = child.wait_with_output().unwrap();
@@ -460,7 +460,7 @@ fn session_free_retry_cannot_release_claim_created_while_it_waits() {
     );
     let detail = ok(&d, &["show", "1"]);
     assert_eq!(detail["task"]["status"], "in_progress");
-    assert_eq!(detail["task"]["assignee"], "manual");
+    assert_eq!(detail["task"]["harness_session"], "manual");
     assert_eq!(detail["events"].as_array().unwrap().len(), 2);
 }
 

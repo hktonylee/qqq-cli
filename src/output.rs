@@ -111,11 +111,14 @@ fn parent(value: &Value) -> String {
 fn task(value: &Value, color: bool) -> String {
     let heading = format!("#{}", field(value, "id"));
     let mut result = format!(
-        "{}\nStatus: {}\nParent: {}\nAssignee: {}\nCreated: {}\nUpdated: {}",
+        "{}\nStatus: {}\nParent: {}\nHarness name: {}\nHarness session: {}\nOrchestrator name: {}\nOrchestrator session: {}\nCreated: {}\nUpdated: {}",
         styled(&heading, color.then_some("1")),
         styled(status(value), status_color(value, color)),
         parent(value),
-        field(value, "assignee"),
+        field(value, "harness_name"),
+        field(value, "harness_session"),
+        field(value, "orchestrator_name"),
+        field(value, "orchestrator_session"),
         field(value, "created_at"),
         field(value, "updated_at")
     );

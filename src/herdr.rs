@@ -142,11 +142,45 @@ pub fn explicit(agent: String, value: String, server: Option<String>) -> Result<
         value,
     };
     let pane = find(&identity, server.as_deref())?;
+    let server = server.or_else(server_session);
     Ok(Link {
         server,
         identity,
         pane,
     })
+}
+/// Discover named server without failing claims when optional metadata is unavailable.
+pub fn server_session() -> Option<String> {
+    let Some(socket) = std::env::var_os("HERDR_SOCKET_PATH") else {
+        return Some("default".into());
+    };
+    #[derive(Deserialize)]
+    struct Sessions {
+        sessions: Vec<ServerSession>,
+    }
+    #[derive(Deserialize)]
+    struct ServerSession {
+        name: String,
+        socket_path: PathBuf,
+    }
+    let out = Command::new("herdr")
+        .args(["session", "list", "--json"])
+        .output()
+        .ok()?;
+    if !out.status.success() {
+        return None;
+    }
+    let sessions: Sessions = serde_json::from_slice(&out.stdout).ok()?;
+    let socket = PathBuf::from(socket);
+    let mut matches = sessions
+        .sessions
+        .into_iter()
+        .filter(|s| s.socket_path == socket);
+    let session = matches.next()?;
+    if matches.next().is_some() || session.name.trim().is_empty() {
+        return None;
+    }
+    Some(session.name)
 }
 pub fn current() -> Result<Link> {
     ensure!(
@@ -160,7 +194,7 @@ pub fn current() -> Result<Link> {
         "Cannot identify current Herdr agent; use --session or enable Herdr session reporting",
     )?;
     Ok(Link {
-        server: None,
+        server: server_session(),
         identity,
         pane: current.pane,
     })
@@ -197,7 +231,7 @@ pub fn discover(project_dir: &Path) -> Result<Link> {
         "Cannot identify matching Herdr agent; use --session or enable Herdr session reporting",
     )?;
     Ok(Link {
-        server: None,
+        server: server_session(),
         identity,
         pane,
     })

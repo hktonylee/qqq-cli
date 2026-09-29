@@ -5,6 +5,7 @@ mod db;
 mod dispatch;
 mod editor;
 mod herdr;
+mod identity;
 mod images;
 mod output;
 mod tui;
@@ -26,6 +27,18 @@ struct Cli {
     /// Stable owner identity. Falls back to Herdr caller, then unique agent at database directory.
     #[arg(long, global = true, env = "QQQ_SESSION")]
     session: Option<String>,
+    /// Override coding harness name (for example codex).
+    #[arg(long, global = true)]
+    harness_name: Option<String>,
+    /// Override displayed harness session; also supplies ownership input without --session.
+    #[arg(long, global = true)]
+    harness_session: Option<String>,
+    /// Override orchestrator name (for example herdr).
+    #[arg(long, global = true)]
+    orchestrator_name: Option<String>,
+    /// Override orchestrator server session.
+    #[arg(long, global = true)]
+    orchestrator_session: Option<String>,
     #[command(subcommand)]
     command: Commands,
 }
@@ -158,6 +171,28 @@ enum HerdrCommand {
     /// Find live pane by stored agent session identity.
     Find { task_id: i64 },
 }
+fn local_owner(
+    cli: &Cli,
+    project_dir: &std::path::Path,
+    db: &db::Db,
+) -> Result<(String, Option<herdr::Link>)> {
+    if let Some(session) = cli.session.as_deref() {
+        return herdr::owner(Some(session), project_dir, db);
+    }
+    if let Some(session) = cli.harness_session.as_deref() {
+        if db
+            .owned_with_name(session, cli.harness_name.as_deref())?
+            .is_some()
+        {
+            return Ok((session.to_owned(), None));
+        }
+        // Override public session while retaining auto-fill; local explicit input
+        // remains usable when Herdr is unavailable or ambiguous.
+        return herdr::owner(None, project_dir, db)
+            .or_else(|_| herdr::owner(Some(session), project_dir, db));
+    }
+    herdr::owner(None, project_dir, db)
+}
 fn execute(cli: Cli, display_limit: Option<i64>) -> Result<Value> {
     if let Commands::Config {
         list,
@@ -175,10 +210,24 @@ fn execute(cli: Cli, display_limit: Option<i64>) -> Result<Value> {
             value.as_deref(),
         );
     }
+    let overrides = identity::Identity {
+        harness_name: cli.harness_name.clone(),
+        harness_session: cli.harness_session.clone(),
+        orchestrator_name: cli.orchestrator_name.clone(),
+        orchestrator_session: cli.orchestrator_session.clone(),
+    };
+    overrides.validate()?;
+    let session_input = cli.session.as_deref().or(cli.harness_session.as_deref());
     let (mut db, path) = db::Db::open(matches!(cli.command, Commands::Init))?;
     let project_dir = path
         .parent()
         .context("Database path has no parent directory")?;
+    let next_owner = match &cli.command {
+        Commands::Next { local, .. } if *local || !config::load()?.herdr.next_to_new_agent => {
+            Some(local_owner(&cli, project_dir, &db)?)
+        }
+        _ => None,
+    };
     Ok(match cli.command {
         Commands::Config { .. } => unreachable!("config was handled before database lookup"),
         Commands::Init => json!({"database":path}),
@@ -269,13 +318,10 @@ fn execute(cli: Cli, display_limit: Option<i64>) -> Result<Value> {
                 }
                 let session = match set_status {
                     Some(EditStatus::New) if task.status == "error" => {
-                        Some(cli.session.clone().unwrap_or_else(|| "manual".to_owned()))
+                        Some(session_input.unwrap_or("manual").to_owned())
                     }
-                    Some(EditStatus::New) => {
-                        Some(herdr::owner(cli.session.as_deref(), project_dir, &db)?.0)
-                    }
-                    Some(EditStatus::Error) => {
-                        Some(herdr::owner(cli.session.as_deref(), project_dir, &db)?.0)
+                    Some(EditStatus::New | EditStatus::Error) => {
+                        Some(herdr::owner(session_input, project_dir, &db)?.0)
                     }
                     None => None,
                 };
@@ -283,29 +329,27 @@ fn execute(cli: Cli, display_limit: Option<i64>) -> Result<Value> {
                     Some(EditStatus::New) if task.status == "error" => {
                         Some(db::EditTransition::RetryError(session.as_deref().unwrap()))
                     }
-                    Some(EditStatus::New) => {
-                        Some(db::EditTransition::New(session.as_deref().unwrap()))
-                    }
+                    Some(EditStatus::New) => Some(db::EditTransition::New {
+                        session: session.as_deref().unwrap(),
+                        harness_name: overrides.harness_name.as_deref(),
+                    }),
                     Some(EditStatus::Error) => Some(db::EditTransition::Error {
                         session: session.as_deref().unwrap(),
                         reason: reason.as_deref().unwrap(),
+                        harness_name: overrides.harness_name.as_deref(),
                     }),
                     None => None,
                 };
                 json!(db.edit(id, description.as_deref(), transition, &images, set_parent)?)
             }
         }
-        Commands::Next { local, wait } => {
-            let dispatch = !local && config::load()?.herdr.next_to_new_agent;
-            let local_owner = if dispatch {
-                None
-            } else {
-                Some(herdr::owner(cli.session.as_deref(), project_dir, &db)?)
-            };
+        Commands::Next { wait, .. } => {
             loop {
-                let task = match &local_owner {
-                    Some((session, link)) => db.next(session, link.as_ref())?,
-                    None => dispatch::next(&mut db, cli.session.as_deref())?,
+                let task = match &next_owner {
+                    Some((session, link)) => {
+                        db.next_with_identity(session, link.as_ref(), &overrides)?
+                    }
+                    None => dispatch::next(&mut db, session_input, &overrides)?,
                 };
                 if task.is_some() || !wait {
                     break json!(task);
@@ -315,10 +359,10 @@ fn execute(cli: Cli, display_limit: Option<i64>) -> Result<Value> {
             }
         }
         Commands::Complete { id } => {
-            let (session, _) = herdr::owner(cli.session.as_deref(), project_dir, &db)?;
-            json!(db.complete(id, &session)?)
+            let (session, _) = herdr::owner(session_input, project_dir, &db)?;
+            json!(db.complete(id, &session, overrides.harness_name.as_deref())?)
         }
-        Commands::Message { id, body } => db.message(id, &body, cli.session.as_deref())?,
+        Commands::Message { id, body } => db.message(id, &body, session_input)?,
         Commands::Herdr { command } => match command {
             HerdrCommand::Link {
                 task_id,
@@ -333,7 +377,7 @@ fn execute(cli: Cli, display_limit: Option<i64>) -> Result<Value> {
                         .1
                         .context("Missing automatically discovered Herdr link")?,
                 };
-                db.set_link(task_id, &link)?;
+                db.set_link_with_identity(task_id, &link, &overrides, None)?;
                 json!(link)
             }
             HerdrCommand::Find { task_id } => {

@@ -7,9 +7,20 @@ fn command_index(args: &[OsString]) -> Option<usize> {
     let mut index = 1;
     while let Some(arg) = args.get(index) {
         let arg = arg.to_str()?;
-        if arg == "--session" {
+        let takes_value = [
+            "--session",
+            "--harness-name",
+            "--harness-session",
+            "--orchestrator-name",
+            "--orchestrator-session",
+        ];
+        if takes_value.contains(&arg) {
             index += 2;
-        } else if arg.starts_with("--session=") || arg == "--json" {
+        } else if takes_value.iter().any(|flag| {
+            arg.strip_prefix(flag)
+                .is_some_and(|rest| rest.starts_with('='))
+        }) || arg == "--json"
+        {
             index += 1;
         } else if arg.starts_with('-') {
             return None;

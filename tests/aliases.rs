@@ -79,13 +79,16 @@ fn alias_chains_support_global_session_before_and_after_alias() {
         "[alias]\nn = 'claim'\nclaim = 'next'\ndone = 'complete'\nowned = '--session fixed next'\n",
     );
     p.ok(&["add", "First"]);
-    assert_eq!(p.ok(&["--session", "agent", "n"])["assignee"], "agent");
+    assert_eq!(
+        p.ok(&["--session", "agent", "n"])["harness_session"],
+        "agent"
+    );
     assert_eq!(
         p.ok(&["done", "1", "--session=agent"])["status"],
         "completed"
     );
     p.ok(&["add", "Second"]);
-    assert_eq!(p.ok(&["owned"])["assignee"], "fixed");
+    assert_eq!(p.ok(&["owned"])["harness_session"], "fixed");
 }
 
 #[test]
@@ -166,7 +169,7 @@ fn unreadable_config_reports_path() {
 fn session_values_matching_alias_names_are_not_expanded() {
     let p = Project::new("[alias]\na = 'next'\n");
     p.ok(&["add", "Task"]);
-    assert_eq!(p.ok(&["--session=a", "a"])["assignee"], "a");
+    assert_eq!(p.ok(&["--session=a", "a"])["harness_session"], "a");
     assert!(p.run(&["--version"]).status.success());
     p.error(&["--unknown", "a"], "unexpected argument", 2);
 }
@@ -222,4 +225,24 @@ empty = 'config custom.value ""'
     assert_eq!(p.ok(&["quoted"])["description"], "two words");
     assert_eq!(p.ok(&["escaped"])["description"], "two words");
     assert_eq!(p.ok(&["empty"])["value"], "");
+}
+
+#[test]
+fn identity_flags_before_alias_are_consumed_as_global_options() {
+    let p = Project::new("[alias]\nn = 'next --local'\n");
+    p.ok(&["add", "Task"]);
+    let task = p.ok(&[
+        "--session",
+        "key",
+        "--harness-name=codex",
+        "--harness-session",
+        "visible",
+        "--orchestrator-name",
+        "herdr",
+        "--orchestrator-session=named",
+        "n",
+    ]);
+    assert_eq!(task["harness_name"], "codex");
+    assert_eq!(task["harness_session"], "visible");
+    assert_eq!(task["orchestrator_session"], "named");
 }

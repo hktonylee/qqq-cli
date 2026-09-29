@@ -12,10 +12,19 @@ pub const DB_NAME: &str = "qqq.db";
 pub struct Db {
     pub conn: Connection,
 }
+#[derive(Clone, Copy)]
 pub enum EditTransition<'a> {
-    New(&'a str),
+    New {
+        session: &'a str,
+        harness_name: Option<&'a str>,
+    },
+    NewExact(&'a str),
     RetryError(&'a str),
-    Error { session: &'a str, reason: &'a str },
+    Error {
+        session: &'a str,
+        reason: &'a str,
+        harness_name: Option<&'a str>,
+    },
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -44,7 +53,8 @@ pub struct Task {
     pub id: i64,
     pub description: String,
     pub status: String,
-    pub assignee: Option<String>,
+    #[serde(flatten)]
+    pub identity: crate::identity::Identity,
     pub created_at: String,
     pub updated_at: String,
     pub parent_id: Option<i64>,
@@ -54,10 +64,15 @@ fn task_row(r: &rusqlite::Row<'_>) -> rusqlite::Result<Task> {
         id: r.get(0)?,
         description: r.get(1)?,
         status: r.get(2)?,
-        assignee: r.get(3)?,
         created_at: r.get(4)?,
         updated_at: r.get(5)?,
         parent_id: r.get(6)?,
+        identity: crate::identity::Identity {
+            harness_name: r.get(7)?,
+            harness_session: r.get(8)?,
+            orchestrator_name: r.get(9)?,
+            orchestrator_session: r.get(10)?,
+        },
     })
 }
 pub fn nonempty(value: &str, name: &str) -> Result<()> {
@@ -97,11 +112,11 @@ impl Db {
         conn.pragma_update(None, "foreign_keys", "ON")?;
         let version: i64 = conn.pragma_query_value(None, "user_version", |r| r.get(0))?;
         ensure!(
-            (1..=4).contains(&version) || (init && version == 0),
+            (1..=5).contains(&version) || (init && version == 0),
             "Unsupported database schema version {version}"
         );
         ensure_description_schema(&conn)?;
-        if version < 4 {
+        if version < 5 {
             // Rebuild CHECK constraints without changing references to tasks.
             // SQLite requires foreign_keys to change outside a transaction.
             conn.pragma_update(None, "foreign_keys", "OFF")?;
@@ -109,7 +124,7 @@ impl Db {
             // Another CLI may have migrated while we waited for the write lock.
             let version: i64 = tx.pragma_query_value(None, "user_version", |r| r.get(0))?;
             ensure!(
-                (1..=4).contains(&version) || (init && version == 0),
+                (1..=5).contains(&version) || (init && version == 0),
                 "Unsupported database schema version {version}"
             );
             ensure_description_schema(&tx)?;
@@ -129,18 +144,21 @@ impl Db {
                     "Database migration found invalid foreign key references"
                 );
             }
+            if version < 5 {
+                tx.execute_batch(include_str!("migrate_v5.sql"))?;
+            }
             tx.commit()?;
             conn.pragma_update(None, "foreign_keys", "ON")?;
         }
         let version: i64 = conn.pragma_query_value(None, "user_version", |r| r.get(0))?;
         ensure!(
-            version == 4,
+            version == 5,
             "Unsupported database schema version {version}"
         );
         Ok((Self { conn }, path))
     }
     pub fn task(&self, id: i64) -> Result<Task> {
-        self.conn.query_row("SELECT id,description,status,assignee,created_at,updated_at,parent_id FROM tasks WHERE id=?",[id],task_row).optional()?.with_context(||format!("Task {id} not found"))
+        self.conn.query_row("SELECT id,description,status,claim_key,created_at,updated_at,parent_id,harness_name,harness_session,orchestrator_name,orchestrator_session FROM tasks WHERE id=?",[id],task_row).optional()?.with_context(||format!("Task {id} not found"))
     }
     pub fn add(
         &mut self,
@@ -164,7 +182,7 @@ impl Db {
         )?;
         let id = tx.last_insert_rowid();
         Self::save_images(&tx, id, images)?;
-        let task = tx.query_row("SELECT id,description,status,assignee,created_at,updated_at,parent_id FROM tasks WHERE id=?", [id], task_row)?;
+        let task = tx.query_row("SELECT id,description,status,claim_key,created_at,updated_at,parent_id,harness_name,harness_session,orchestrator_name,orchestrator_session FROM tasks WHERE id=?", [id], task_row)?;
         tx.commit()?;
         Ok(task)
     }
@@ -181,7 +199,7 @@ impl Db {
     }
     pub fn list(&self, max_completed: Option<i64>) -> Result<Vec<Task>> {
         Ok(self.conn.prepare(
-            "SELECT id,description,status,assignee,created_at,updated_at,parent_id FROM tasks
+            "SELECT id,description,status,claim_key,created_at,updated_at,parent_id,harness_name,harness_session,orchestrator_name,orchestrator_session FROM tasks
              WHERE ?1 IS NULL OR status!='completed' OR id IN (
                  SELECT id FROM tasks WHERE status='completed'
                  ORDER BY (SELECT MAX(id) FROM events WHERE task_id=tasks.id AND action='complete') DESC,
@@ -253,19 +271,21 @@ impl Db {
             );
         }
         match transition {
-            Some(EditTransition::New(session)) => {
-                nonempty(session, "Session")?;
-                ensure!(tx.execute("UPDATE tasks SET status='new',assignee=NULL WHERE id=? AND status='in_progress' AND assignee=?",params![id,session])?==1,"Task {id} is not claimed by session {session}");
-                tx.execute(
-                    "INSERT INTO events(task_id,session,action) VALUES (?,?,'release')",
-                    params![id, session],
-                )?;
+            Some(EditTransition::New {
+                session,
+                harness_name,
+            }) => {
+                let session = Self::owner_key(&tx, session, harness_name)?;
+                Self::release_claim(&tx, id, &session)?;
+            }
+            Some(EditTransition::NewExact(session)) => {
+                Self::release_claim(&tx, id, session)?;
             }
             Some(EditTransition::RetryError(session)) => {
                 nonempty(session, "Session")?;
                 ensure!(
                     tx.execute(
-                        "UPDATE tasks SET status='new',assignee=NULL WHERE id=? AND status='error'",
+                        "UPDATE tasks SET status='new',claim_key=NULL,harness_name=NULL,harness_session=NULL,orchestrator_name=NULL,orchestrator_session=NULL WHERE id=? AND status='error'",
                         [id]
                     )? == 1,
                     "Task {id} is no longer in error; inspect its current status before retrying"
@@ -275,10 +295,14 @@ impl Db {
                     params![id, session],
                 )?;
             }
-            Some(EditTransition::Error { session, reason }) => {
-                nonempty(session, "Session")?;
+            Some(EditTransition::Error {
+                session,
+                reason,
+                harness_name,
+            }) => {
+                let session = Self::owner_key(&tx, session, harness_name)?;
                 nonempty(reason, "Error reason")?;
-                ensure!(tx.execute("UPDATE tasks SET status='error',assignee=NULL WHERE id=? AND status='in_progress' AND assignee=?",params![id,session])?==1,"Task {id} is not claimed by session {session}");
+                ensure!(tx.execute("UPDATE tasks SET status='error',claim_key=NULL,harness_name=NULL,harness_session=NULL,orchestrator_name=NULL,orchestrator_session=NULL WHERE id=? AND status='in_progress' AND claim_key=?",params![id,session])?==1,"Task {id} is not claimed by session {session}");
                 tx.execute(
                     "INSERT INTO events(task_id,session,action) VALUES (?,?,'error')",
                     params![id, session],
@@ -293,7 +317,7 @@ impl Db {
         ensure!(tx.execute("UPDATE tasks SET description=COALESCE(?,description),updated_at=strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE id=?",params![description,id])?==1,"Task {id} not found");
         Self::save_images(&tx, id, images)?;
         let task = tx.query_row(
-            "SELECT id,description,status,assignee,created_at,updated_at,parent_id FROM tasks WHERE id=?",
+            "SELECT id,description,status,claim_key,created_at,updated_at,parent_id,harness_name,harness_session,orchestrator_name,orchestrator_session FROM tasks WHERE id=?",
             [id], task_row,
         )?;
         tx.commit()?;
@@ -325,7 +349,7 @@ impl Db {
         terminal: &str,
     ) -> Result<Option<crate::herdr::AgentSession>> {
         let mut query = self.conn.prepare(
-            "SELECT tasks.assignee,herdr_links.link_json FROM tasks
+            "SELECT tasks.claim_key,herdr_links.link_json FROM tasks
              JOIN herdr_links ON herdr_links.task_id=tasks.id
              WHERE tasks.status='in_progress'
                AND json_extract(herdr_links.link_json,'$.pane.terminal_id')=?
@@ -336,7 +360,7 @@ impl Db {
         })?;
         let mut active = None;
         for record in records {
-            let (assignee, encoded) = record?;
+            let (claim_key, encoded) = record?;
             let link: crate::herdr::Link = serde_json::from_str(&encoded)?;
             let owner = serde_json::to_string(&(
                 &link.identity.agent,
@@ -344,7 +368,7 @@ impl Db {
                 &link.identity.value,
             ))?;
             // Explicit and dispatched assignments have separate owner IDs.
-            if assignee == owner {
+            if claim_key == owner {
                 ensure!(
                     active.is_none(),
                     "Multiple active claims match Herdr terminal; use --session"
@@ -354,10 +378,62 @@ impl Db {
         }
         Ok(active)
     }
-    pub fn owned(&self, session: &str) -> Result<Option<Task>> {
+    fn release_claim(conn: &Connection, id: i64, session: &str) -> Result<()> {
         nonempty(session, "Session")?;
+        ensure!(conn.execute("UPDATE tasks SET status='new',claim_key=NULL,harness_name=NULL,harness_session=NULL,orchestrator_name=NULL,orchestrator_session=NULL WHERE id=? AND status='in_progress' AND claim_key=?",params![id,session])?==1,"Task {id} is not claimed by session {session}");
+        conn.execute(
+            "INSERT INTO events(task_id,session,action) VALUES (?,?,'release')",
+            params![id, session],
+        )?;
+        Ok(())
+    }
+    fn owner_key(conn: &Connection, session: &str, harness_name: Option<&str>) -> Result<String> {
+        nonempty(session, "Session")?;
+        let exact: bool = conn.query_row(
+            "SELECT EXISTS(SELECT 1 FROM tasks WHERE status='in_progress' AND claim_key=?)",
+            [session],
+            |row| row.get(0),
+        )?;
+        if exact {
+            return Ok(session.into());
+        }
+        let keys = conn
+            .prepare(
+                "SELECT claim_key FROM tasks WHERE status='in_progress' AND harness_session=?1
+             AND (?2 IS NULL OR harness_name=?2) LIMIT 2",
+            )?
+            .query_map(params![session, harness_name], |row| {
+                row.get::<_, String>(0)
+            })?
+            .collect::<rusqlite::Result<Vec<_>>>()?;
+        ensure!(
+            keys.len() <= 1,
+            "Multiple active claims match harness session {session}; use --harness-name or original --session token"
+        );
+        Ok(keys.into_iter().next().unwrap_or_else(|| session.into()))
+    }
+    pub fn resolve_owner(&self, session: &str, harness_name: Option<&str>) -> Result<String> {
+        Self::owner_key(&self.conn, session, harness_name)
+    }
+    fn save_identity(
+        conn: &Connection,
+        id: i64,
+        identity: &crate::identity::Identity,
+    ) -> Result<()> {
+        conn.execute(
+            "UPDATE tasks SET harness_name=?,harness_session=?,orchestrator_name=?,orchestrator_session=? WHERE id=? AND status='in_progress'",
+            params![identity.harness_name, identity.harness_session, identity.orchestrator_name, identity.orchestrator_session, id],
+        )?;
+        Ok(())
+    }
+    pub fn owned_with_name(
+        &self,
+        session: &str,
+        harness_name: Option<&str>,
+    ) -> Result<Option<Task>> {
+        let session = self.resolve_owner(session, harness_name)?;
         Ok(self.conn.query_row(
-            "SELECT id,description,status,assignee,created_at,updated_at,parent_id FROM tasks WHERE status='in_progress' AND assignee=?",
+            "SELECT id,description,status,claim_key,created_at,updated_at,parent_id,harness_name,harness_session,orchestrator_name,orchestrator_session FROM tasks WHERE status='in_progress' AND claim_key=?",
             [session], task_row,
         ).optional()?)
     }
@@ -373,14 +449,24 @@ impl Db {
         session: &str,
         link: Option<&crate::herdr::Link>,
     ) -> Result<Option<Task>> {
+        self.next_with_identity(session, link, &crate::identity::Identity::default())
+    }
+    pub fn next_with_identity(
+        &mut self,
+        session: &str,
+        link: Option<&crate::herdr::Link>,
+        overrides: &crate::identity::Identity,
+    ) -> Result<Option<Task>> {
         nonempty(session, "Session")?;
+        overrides.validate()?;
         let tx = self
             .conn
             .transaction_with_behavior(TransactionBehavior::Immediate)?;
+        let session = Self::owner_key(&tx, session, overrides.harness_name.as_deref())?;
         let owned: Option<i64> = tx
             .query_row(
-                "SELECT id FROM tasks WHERE status='in_progress' AND assignee=?",
-                [session],
+                "SELECT id FROM tasks WHERE status='in_progress' AND claim_key=?",
+                [&session],
                 |r| r.get(0),
             )
             .optional()?;
@@ -400,7 +486,7 @@ impl Db {
         if let Some(id) = id {
             if owned.is_none() {
                 tx.execute("DELETE FROM herdr_links WHERE task_id=?", [id])?;
-                tx.execute("UPDATE tasks SET status='in_progress',assignee=?,updated_at=strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE id=?",params![session,id])?;
+                tx.execute("UPDATE tasks SET status='in_progress',claim_key=?,updated_at=strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE id=?",params![session,id])?;
                 tx.execute(
                     "INSERT INTO events(task_id,session,action) VALUES (?,?,'claim')",
                     params![id, session],
@@ -409,26 +495,34 @@ impl Db {
             if let Some(link) = link {
                 Self::save_link(&tx, id, link)?;
             }
+            let mut identity = if owned.is_some() {
+                tx.query_row("SELECT id,description,status,claim_key,created_at,updated_at,parent_id,harness_name,harness_session,orchestrator_name,orchestrator_session FROM tasks WHERE id=?", [id], task_row)?.identity
+            } else {
+                crate::identity::Identity::for_claim(&session, link)
+            };
+            identity.overlay(overrides);
+            Self::save_identity(&tx, id, &identity)?;
         }
         let task = id.map(|id| tx.query_row(
-            "SELECT id,description,status,assignee,created_at,updated_at,parent_id FROM tasks WHERE id=?",
+            "SELECT id,description,status,claim_key,created_at,updated_at,parent_id,harness_name,harness_session,orchestrator_name,orchestrator_session FROM tasks WHERE id=?",
             [id], task_row,
         )).transpose()?;
         tx.commit()?;
         Ok(task)
     }
-    pub fn complete(&mut self, id: i64, session: &str) -> Result<Task> {
+    pub fn complete(&mut self, id: i64, session: &str, harness_name: Option<&str>) -> Result<Task> {
         nonempty(session, "Session")?;
         let tx = self
             .conn
             .transaction_with_behavior(TransactionBehavior::Immediate)?;
-        ensure!(tx.execute("UPDATE tasks SET status='completed',assignee=NULL,updated_at=strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE id=? AND status='in_progress' AND assignee=?",params![id,session])?==1,"Task {id} is not claimed by session {session}");
+        let session = Self::owner_key(&tx, session, harness_name)?;
+        ensure!(tx.execute("UPDATE tasks SET status='completed',claim_key=NULL,harness_name=NULL,harness_session=NULL,orchestrator_name=NULL,orchestrator_session=NULL,updated_at=strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE id=? AND status='in_progress' AND claim_key=?",params![id,session])?==1,"Task {id} is not claimed by session {session}");
         tx.execute(
             "INSERT INTO events(task_id,session,action) VALUES (?, ?, 'complete')",
             params![id, session],
         )?;
         let task = tx.query_row(
-            "SELECT id,description,status,assignee,created_at,updated_at,parent_id FROM tasks WHERE id=?",
+            "SELECT id,description,status,claim_key,created_at,updated_at,parent_id,harness_name,harness_session,orchestrator_name,orchestrator_session FROM tasks WHERE id=?",
             [id], task_row,
         )?;
         tx.commit()?;
@@ -490,9 +584,37 @@ impl Db {
         conn.execute("INSERT INTO herdr_links(task_id,link_json) VALUES (?,?) ON CONFLICT(task_id) DO UPDATE SET link_json=excluded.link_json",params![id,serde_json::to_string(link)?])?;
         Ok(())
     }
-    pub fn set_link(&self, id: i64, link: &crate::herdr::Link) -> Result<()> {
-        self.task(id)?;
-        Self::save_link(&self.conn, id, link)
+    pub fn set_link_with_identity(
+        &mut self,
+        id: i64,
+        link: &crate::herdr::Link,
+        overrides: &crate::identity::Identity,
+        expected_claim: Option<&str>,
+    ) -> Result<()> {
+        overrides.validate()?;
+        let tx = self
+            .conn
+            .transaction_with_behavior(TransactionBehavior::Immediate)?;
+        let key: Option<String> = tx
+            .query_row("SELECT claim_key FROM tasks WHERE id=?", [id], |row| {
+                row.get(0)
+            })
+            .optional()?
+            .with_context(|| format!("Task {id} not found"))?;
+        if let Some(expected) = expected_claim {
+            ensure!(
+                key.as_deref() == Some(expected),
+                "Task {id} is no longer claimed by dispatch session {expected}"
+            );
+        }
+        Self::save_link(&tx, id, link)?;
+        if let Some(key) = key {
+            let mut identity = crate::identity::Identity::for_claim(&key, Some(link));
+            identity.overlay(overrides);
+            Self::save_identity(&tx, id, &identity)?;
+        }
+        tx.commit()?;
+        Ok(())
     }
     pub fn link(&self, id: i64) -> Result<Option<crate::herdr::Link>> {
         let text: Option<String> = self

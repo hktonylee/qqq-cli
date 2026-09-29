@@ -128,7 +128,7 @@ with tempfile.TemporaryDirectory(prefix="qqq-tui-test-") as folder:
             else:
                 assert task["id"] == 1
                 assert task["description"] == "Original\n\nDetails amended"
-                assert task["assignee"] == "worker"
+                assert task["harness_session"] == "worker"
                 assert task["status"] == "in_progress"
                 assert cli("show", "2")["task"]["description"] == "Created while editing"
     finally:

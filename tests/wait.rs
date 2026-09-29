@@ -143,7 +143,7 @@ fn wait_returns_ready_or_already_owned_task_immediately() {
     ok(p, &["add", "First"]);
     let task = Waiter::spawn(p, "worker", true).task();
     assert_eq!(task["id"], 1);
-    assert_eq!(task["assignee"], "worker");
+    assert_eq!(task["harness_session"], "worker");
     assert_eq!(task["status"], "in_progress");
     assert_eq!(Waiter::spawn(p, "worker", true).task(), task);
     assert_eq!(ok(p, &["show", "1"])["events"].as_array().unwrap().len(), 1);
@@ -161,7 +161,7 @@ fn wait_from_nested_directory_returns_task_added_later_as_single_json() {
     let task = waiter.task();
     assert_eq!(task["id"], 1);
     assert_eq!(task["description"], "Arrived later\n\nDetails");
-    assert_eq!(task["assignee"], "worker");
+    assert_eq!(task["harness_session"], "worker");
 }
 
 #[test]
@@ -180,9 +180,9 @@ fn wait_returns_released_task_in_human_output() {
     assert!(output.contains("#1"));
     assert!(output.contains("Retry"));
     assert!(output.contains("Status: In progress"));
-    assert!(output.contains("Assignee: worker"));
+    assert!(output.contains("Harness session: worker"));
     assert!(!output.contains("No ready tasks."));
-    assert_eq!(ok(p, &["show", "1"])["task"]["assignee"], "worker");
+    assert_eq!(ok(p, &["show", "1"])["task"]["harness_session"], "worker");
 }
 
 #[test]
@@ -227,7 +227,7 @@ fn concurrent_waiters_claim_each_arrival_once_while_others_keep_waiting() {
         };
         let task = waiters[winner].1.take().unwrap().task();
         assert_eq!(task["id"], id);
-        assert_eq!(task["assignee"], waiters[winner].0);
+        assert_eq!(task["harness_session"], waiters[winner].0);
         let history = ok(p, &["show", &id.to_string()]);
         assert_eq!(history["events"].as_array().unwrap().len(), 1);
         assert_eq!(history["events"][0]["action"], "claim");

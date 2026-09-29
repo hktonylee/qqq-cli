@@ -8,6 +8,9 @@ pub mod draft;
 #[path = "../src/herdr.rs"]
 mod herdr;
 #[allow(dead_code)]
+#[path = "../src/identity.rs"]
+mod identity;
+#[allow(dead_code)]
 #[path = "../src/images.rs"]
 mod images;
 mod tui {
@@ -25,6 +28,10 @@ fn database() -> Db {
     conn.execute_batch(include_str!("../src/migrate_v2.sql"))
         .unwrap();
     conn.execute_batch(include_str!("../src/migrate_v3.sql"))
+        .unwrap();
+    conn.execute_batch(include_str!("../src/migrate_v4.sql"))
+        .unwrap();
+    conn.execute_batch(include_str!("../src/migrate_v5.sql"))
         .unwrap();
     Db { conn }
 }
@@ -73,7 +80,7 @@ fn draft_edit_preserves_ownership_dependencies_and_existing_attachments() {
     let mut db = database();
     let parent = db.add("Parent", None, &[]).unwrap();
     db.next("parent", None).unwrap();
-    db.complete(parent.id, "parent").unwrap();
+    db.complete(parent.id, "parent", None).unwrap();
     let task = db
         .save_composition(None, Some(parent.id), &composition())
         .unwrap();
@@ -83,7 +90,7 @@ fn draft_edit_preserves_ownership_dependencies_and_existing_attachments() {
         .save_composition(Some(task.id), None, &composition())
         .unwrap();
     assert_eq!(updated.status, "in_progress");
-    assert_eq!(updated.assignee.as_deref(), Some("worker"));
+    assert_eq!(updated.identity.harness_session.as_deref(), Some("worker"));
     assert_eq!(updated.parent_id, Some(parent.id));
     let shown = db.show(task.id).unwrap();
     assert_eq!(shown["images"].as_array().unwrap().len(), 2);

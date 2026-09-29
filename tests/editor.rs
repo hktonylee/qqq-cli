@@ -175,7 +175,16 @@ fn edit_arguments_replace_body_and_preserve_task_metadata() {
     let before = run_json(p, &["show", "2"]);
     let changed = run_json(p, &["edit", "2", "--description", "New"]);
     assert_eq!(changed["description"], "New");
-    for field in ["id", "parent_id", "created_at", "status", "assignee"] {
+    for field in [
+        "id",
+        "parent_id",
+        "created_at",
+        "status",
+        "harness_name",
+        "harness_session",
+        "orchestrator_name",
+        "orchestrator_session",
+    ] {
         assert_eq!(changed[field], before["task"][field]);
     }
     let changed = run_json(p, &["edit", "2", "--description", "Both\n\nUpdated"]);

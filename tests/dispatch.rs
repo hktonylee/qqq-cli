@@ -23,6 +23,7 @@ import sys,os,json,sqlite3
 from pathlib import Path
 a=sys.argv[1:]
 with open('calls','a') as f: f.write(json.dumps(a)+'\n')
+if a[:1]==['--session']: a=a[2:]
 step=a[1] if a[0]=='agent' else a[0]
 if os.environ.get('FAIL_AT')==step:
     print('fake failure',file=sys.stderr);sys.exit(1)
@@ -36,14 +37,23 @@ if a[:2]==['tab','create']:
     Path(name).write_text(json.dumps(pane(name)))
     result={'root_pane':pane(name),'tab':{'tab_id':'tab-'+name}}
 elif a[:2]==['agent','start']: result={}
-elif a[:2]==['agent','get']: result={'agent':pane(a[2])}
+elif a[:2]==['agent','get']:
+    if os.environ.get('RECLAIM_ON_GET'):
+        db=sqlite3.connect('qqq.db')
+        visible = a[2] if os.environ.get('RECLAIM_ALIAS') else 'replacement'
+        db.execute("UPDATE tasks SET claim_key='replacement',harness_name='other',harness_session=? WHERE claim_key=?", (visible,a[2]))
+        db.commit()
+    result={'agent':pane(a[2])}
 elif a[:2]==['pane','current']: result={'pane':pane('caller')}
 elif a[:2]==['agent','list']:
     result={'agents':[json.loads(p.read_text()) for p in Path('.').glob('qqq-dispatch-*')]}
 elif a[:2]==['agent','prompt']:
     db=sqlite3.connect('qqq.db')
-    row=db.execute('SELECT t.assignee,h.link_json FROM tasks t JOIN herdr_links h ON h.task_id=t.id WHERE t.assignee=?',(a[2],)).fetchone()
+    row=db.execute('SELECT t.claim_key,h.link_json,t.harness_name,t.harness_session,t.orchestrator_name,t.orchestrator_session FROM tasks t JOIN herdr_links h ON h.task_id=t.id WHERE t.claim_key=?',(a[2],)).fetchone()
     assert row is not None,'link missing before prompt'
+    expected_session=('terminal-' if os.environ.get('NO_ID') else 'session-')+a[2]
+    expected=tuple(os.environ.get('EXPECT_'+key, value) for key,value in zip(['HARNESS_NAME','HARNESS_SESSION','ORCHESTRATOR_NAME','ORCHESTRATOR_SESSION'], ['codex',expected_session,'herdr','default']))
+    assert row[2:] == expected, 'identity missing before prompt'
     result={}
 else: raise Exception(a)
 print(json.dumps({'result':result}))
@@ -64,6 +74,7 @@ print(json.dumps({'result':result}))
             .env("HERDR_WORKSPACE_ID", "workspace")
             .env("HERDR_PANE_ID", "caller")
             .env_remove("QQQ_SESSION")
+            .env_remove("HERDR_SOCKET_PATH")
             .env_remove("FAIL_AT")
             .env_remove("NO_ID")
             .env_remove("NO_TERMINAL")
@@ -103,7 +114,12 @@ fn dispatch_claims_for_new_agent_links_before_prompt_and_can_find_session() {
     let p = Project::new();
     p.ok(&["add", "Task\n\nDetails"]);
     let task = p.ok(&["next", "--session", "caller"]);
-    let owner = task["assignee"].as_str().unwrap();
+    let detail = p.ok(&["show", "1"]);
+    let owner = detail["herdr"]["pane"]["pane_id"].as_str().unwrap();
+    assert_eq!(task["harness_name"], "codex");
+    assert_eq!(task["harness_session"], format!("session-{owner}"));
+    assert_eq!(task["orchestrator_name"], "herdr");
+    assert_eq!(task["orchestrator_session"], "default");
     assert_ne!(owner, "caller");
     assert!(owner.starts_with("qqq-dispatch-"));
     let detail = p.ok(&["show", "1"]);
@@ -148,7 +164,10 @@ fn disabled_missing_and_empty_queue_do_not_spawn() {
         let p = Project::new();
         p.config(config);
         p.ok(&["add", "Task"]);
-        assert_eq!(p.ok(&["next", "--session", "caller"])["assignee"], "caller");
+        assert_eq!(
+            p.ok(&["next", "--session", "caller"])["harness_session"],
+            "caller"
+        );
         assert!(p.calls().is_empty());
     }
     let p = Project::new();
@@ -205,7 +224,7 @@ fn terminal_fallback_links_exact_terminal_and_missing_identity_aborts() {
     );
     let detail = p.ok(&["show", "1"]);
     assert_eq!(detail["herdr"]["identity"]["kind"], "terminal");
-    let owner = detail["task"]["assignee"].as_str().unwrap();
+    let owner = detail["herdr"]["pane"]["pane_id"].as_str().unwrap();
     assert_eq!(
         p.ok(&["herdr", "find", "1"])["terminal_id"],
         format!("terminal-{owner}")
@@ -313,7 +332,7 @@ fn local_mode_bypasses_invalid_dispatch_config() {
     p.ok(&["add", "Task"]);
     p.config("[herdr]\nnext-to-new-agent = 'wrong'\n");
     assert_eq!(
-        p.ok(&["next", "--local", "--session", "local"])["assignee"],
+        p.ok(&["next", "--local", "--session", "local"])["harness_session"],
         "local"
     );
     assert!(p.calls().is_empty());
@@ -351,10 +370,10 @@ fn wait_dispatches_when_work_arrives_without_spawning_for_empty_queue() {
     let task: Value = serde_json::from_slice(&out.stdout).unwrap();
     assert_eq!(task["description"], "Arrived");
     assert!(
-        task["assignee"]
+        task["harness_session"]
             .as_str()
             .unwrap()
-            .starts_with("qqq-dispatch-")
+            .starts_with("session-qqq-dispatch-")
     );
     assert_eq!(
         p.calls()
@@ -362,5 +381,89 @@ fn wait_dispatches_when_work_arrives_without_spawning_for_empty_queue() {
             .filter(|c| c.get(1).map(String::as_str) == Some("prompt"))
             .count(),
         1
+    );
+}
+
+#[test]
+fn dispatch_overrides_keep_generated_token_and_real_child_link() {
+    let p = Project::new();
+    p.ok(&["add", "Task"]);
+    let out = p
+        .command()
+        .env("EXPECT_HARNESS_NAME", "custom")
+        .env("EXPECT_HARNESS_SESSION", "visible")
+        .env("EXPECT_ORCHESTRATOR_NAME", "custom-orch")
+        .env("EXPECT_ORCHESTRATOR_SESSION", "named")
+        .args([
+            "next",
+            "--session",
+            "caller",
+            "--harness-name",
+            "custom",
+            "--harness-session",
+            "visible",
+            "--orchestrator-name",
+            "custom-orch",
+            "--orchestrator-session",
+            "named",
+        ])
+        .output()
+        .unwrap();
+    assert!(
+        out.status.success(),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let task: Value = serde_json::from_slice(&out.stdout).unwrap();
+    assert_eq!(task["harness_session"], "visible");
+    let detail = p.ok(&["show", "1"]);
+    assert_eq!(detail["herdr"]["identity"]["agent"], "codex");
+    assert_eq!(detail["herdr"]["server"], "default");
+    p.ok(&["complete", "1", "--harness-session", "visible"]);
+}
+
+#[test]
+fn dispatch_does_not_overwrite_replacement_claim_after_slow_agent_start() {
+    let p = Project::new();
+    p.ok(&["add", "Task"]);
+    let out = p
+        .command()
+        .env("RECLAIM_ON_GET", "1")
+        .args(["next", "--session", "caller"])
+        .output()
+        .unwrap();
+    assert!(!out.status.success());
+    let detail = p.ok(&["show", "1"]);
+    assert_eq!(detail["task"]["status"], "in_progress");
+    assert_eq!(detail["task"]["harness_name"], "other");
+    assert_eq!(detail["task"]["harness_session"], "replacement");
+    assert!(detail["herdr"].is_null());
+    assert!(
+        !p.calls()
+            .iter()
+            .any(|call| call.get(1).map(String::as_str) == Some("prompt"))
+    );
+}
+
+#[test]
+fn dispatch_cleanup_never_releases_alias_of_vanished_generated_token() {
+    let p = Project::new();
+    p.ok(&["add", "Task"]);
+    let out = p
+        .command()
+        .env("RECLAIM_ON_GET", "1")
+        .env("RECLAIM_ALIAS", "1")
+        .args(["next", "--session", "caller"])
+        .output()
+        .unwrap();
+    assert!(!out.status.success());
+    let detail = p.ok(&["show", "1"]);
+    assert_eq!(detail["task"]["status"], "in_progress");
+    assert_eq!(detail["task"]["harness_name"], "other");
+    assert!(detail["herdr"].is_null());
+    assert!(
+        !p.calls()
+            .iter()
+            .any(|call| call.get(1).map(String::as_str) == Some("prompt"))
     );
 }

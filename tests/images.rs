@@ -145,7 +145,7 @@ fn image_only_negative_edit_preserves_fields_owner_and_existing_images() {
         "id",
         "description",
         "status",
-        "assignee",
+        "harness_session",
         "parent_id",
         "created_at",
     ] {
@@ -229,7 +229,7 @@ fn invalid_attachments_leave_creation_fields_status_and_events_unchanged() {
     let after = ok(p, &["show", "1"]);
     assert_eq!(after["task"]["description"], "Changed");
     assert_eq!(after["task"]["status"], "new");
-    assert!(after["task"]["assignee"].is_null());
+    assert!(after["task"]["harness_session"].is_null());
     assert_eq!(after["events"].as_array().unwrap().len(), 2);
     assert_eq!(after["images"].as_array().unwrap().len(), 2);
 }
@@ -395,7 +395,10 @@ fn forced_edit_composition_appends_images_without_changing_ownership() {
     );
     let after = ok(p, &["show", "1"]);
     assert_eq!(after["task"]["description"], "Edited\n\nNew details\n");
-    assert_eq!(after["task"]["assignee"], before["task"]["assignee"]);
+    assert_eq!(
+        after["task"]["harness_session"],
+        before["task"]["harness_session"]
+    );
     assert_eq!(after["events"], before["events"]);
     assert_eq!(after["images"][0], before["images"][0]);
     assert_eq!(after["images"].as_array().unwrap().len(), 2);

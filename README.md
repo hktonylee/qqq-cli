@@ -179,7 +179,7 @@ through `--set-parent`.
 Use `qqq edit <id> --set-status new` to return a claimed task to the queue
 (replaces `release`). For an active task, it must be
 `in_progress`, and the supplied or discovered session ID must match its recorded
-`assignee`. This clears the owner and records a `release` history event.
+`harness_session`. This clears the owner and records a `release` history event.
 New or completed tasks cannot use this transition.
 
 ```sh
@@ -217,7 +217,7 @@ qqq edit 1 --set-status new
 ```
 
 Only the owner of an `in_progress` task can mark it `error`. This clears its
-assignee, saves the reason as a message, and records an `error` history event.
+assignment, saves the reason as a message, and records an `error` history event.
 Blank reasons fail; `--reason` is valid only with `--set-status error`. Optional
 description edits commit together with the failure. Error tasks stay
 visible in `list`, even with `--max-completed 0`; `show` includes the reason.
@@ -262,7 +262,7 @@ dependency cycles fail without saving changes. Parent validation and updates
 share the same transaction as content, attachments and optional status updates,
 including forced editor input. Concurrent edits cannot create a cycle.
 
-Changing a parent preserves task status, assignee, messages, history, attachments
+Changing a parent preserves task status, assignment metadata, messages, history, attachments
 and Herdr link. Already claimed work remains assigned. Fresh `next` claims,
 including `--wait`, use the updated dependency: incomplete parents block queued
 tasks, completed parents unblock them, and `none` makes queued tasks independent.
@@ -371,8 +371,8 @@ Or pass `--session agent-session-123` on individual commands. Precedence: `--ses
 - Same session calling `next` (with or without `--wait`) again receives its existing task.
 - One active task per session; concurrent sessions cannot claim same task.
 - Without `--wait`, no ready tasks prints `No ready tasks.` (`null` with `--json`), exit code 0.
-- `complete <task-id>` marks task `completed` when the supplied or discovered session ID matches its recorded `assignee`.
-- `edit <task-id> --set-status new` returns a claimed task to `new` when the supplied or discovered session ID matches its recorded `assignee`.
+- `complete <task-id>` marks task `completed` when the supplied or discovered session ID matches its recorded `harness_session`.
+- `edit <task-id> --set-status new` returns a claimed task to `new` when the supplied or discovered session ID matches its recorded `harness_session`.
 - `edit <task-id> --set-pending` is the same return-to-queue transition, using existing `new` status and ownership/history rules.
 - `edit <task-id> --set-status error --reason "Details"` marks owned active work as failed, clearing its claim until a user explicitly retries with `--set-status new`.
 - Claims never expire. Restarting CLI preserves locks. `show` includes claim/release/completion history.
@@ -392,7 +392,7 @@ by parent completion. Waiting prints no intermediate output; use Ctrl-C to stop.
 Identity lookup or DB errors still exit with an error. Waiting releases the DB
 write lock between checks, so other commands can add and update tasks.
 
-For an abandoned session, inspect `qqq show <id>`, then explicitly release using its recorded `assignee`:
+For an abandoned session, inspect `qqq show <id>`, then explicitly release using its recorded `harness_session`:
 
 ```sh
 qqq edit 1 --set-status new --session 'recorded-owner-session'
@@ -438,7 +438,7 @@ qqq herdr link 1 --agent codex --agent-session session-123 --server work
 
 `find` matches saved agent/session identity against `herdr agent list`, returning current `workspace_id`, `tab_id`, `pane_id`, and `agent_session`. Pane moves do not break identity matching. Missing, offline or ambiguous matches produce errors; saved link remains available in `show`. Automatic ownership uses a JSON tuple of agent, identity kind and value; keep the same identity mode through completion or returning a task to new.
 
-With dispatch disabled, explicit `--session` / `QQQ_SESSION` ownership works without Herdr and does not auto-link. `herdr link` stores association separately; it does not transfer ownership. A completed task retains its latest link. A fresh claim clears the previous link, then saves the new auto-detected link when available; explicit owners should link after claiming. Default-server links query whichever Herdr server CLI currently targets; use `--server` for a stable named-server target.
+With dispatch disabled, explicit `--session` / `QQQ_SESSION` ownership works without Herdr and does not auto-link. `herdr link` stores association separately; it does not transfer ownership. A completed task retains its latest link. A fresh claim clears the previous link, then saves the new auto-detected link when available; explicit owners should link after claiming. Auto-discovered links retain named Herdr server when available; explicit links support `--server` for a stable target.
 
 ### Dispatch next task to a new agent
 
@@ -454,9 +454,10 @@ the oldest ready task for a new Codex agent, creates an unfocused tab in the
 calling Herdr workspace with the same working directory, starts the agent, saves
 its Herdr association, and submits a prompt to handle that specific task.
 Empty or dependency-blocked queues create no tabs; `next --wait` waits for ready
-work before creating an agent. The returned task's `assignee`
-is the new agent's unique session; that value is passed as `QQQ_SESSION` and
-included explicitly in its completion instructions.
+work before creating an agent. The returned task's `harness_name` and `harness_session` identify the new Codex
+agent. A separate generated claim token is passed as `QQQ_SESSION` and included
+in completion instructions. Both that token and the displayed harness session
+can recover the claim.
 
 New-agent creation requires `HERDR_ENV=1` and `HERDR_WORKSPACE_ID`.
 `qqq next --local` bypasses dispatch, even when enabled, and keeps the normal
@@ -471,10 +472,10 @@ conversation. Caller discovery in dispatch mode supports the same fallback.
 Failures before prompt submission return the task to `new`. Created tabs stay
 open for inspection. A prompt error keeps the claim and link because delivery
 may already have happened: inspect the agent before retrying. To recover after
-confirming the agent is not working, use the recorded assignee:
+confirming the agent is not working, use the recorded harness session:
 
 ```sh
-qqq edit <task-id> --set-status new --session '<recorded-assignee>'
+qqq edit <task-id> --set-status new --session '<recorded-harness-session>'
 ```
 
 Adapter targets Herdr API protocol 20 JSON shapes: `result.agents`, `result.pane`, `agent_session.{agent,kind,value}`. Agent-session metadata may be absent depending on integration hooks.
@@ -485,13 +486,44 @@ Initial status is `new` (displayed as `New`); use `--set-status new` to return a
 claimed task to the queue. Existing databases using `pending` require a manual
 schema/data update; this rename adds no automatic migration or schema version bump.
 
-Task assignment is exposed as `assignee` in JSON and `Assignee:` in human output.
-Its value is the claiming session ID, or `null` for unassigned tasks. JSON clients
-should use `assignee` in place of the former `owner_session` field. Schema version
-4 automatically migrates existing version 1/2/3 databases on open, preserving
-claims, task data, dependencies, history, attachments, links and deleted-ID
-high-water marks. The `--session` flag and
-session matching rules are unchanged.
+Task assignment exposes four nullable JSON fields: `harness_name`,
+`harness_session`, `orchestrator_name`, `orchestrator_session`. Human task details
+show each field. `assignee` and `owner_session` are absent. Herdr auto-fill uses
+agent kind/session (terminal ID fallback), orchestrator `herdr`, named Herdr
+server session. Optional server discovery failure leaves its session null.
+
+Override fields when claiming or linking:
+
+```sh
+qqq next --local --session stable-key --harness-name codex \
+  --harness-session agent-session --orchestrator-name herdr \
+  --orchestrator-session default
+```
+
+`--session`/`QQQ_SESSION` remain stable ownership inputs and bypass automatic
+Herdr ownership discovery. Without those inputs, `--harness-session` first
+recovers a matching active claim; otherwise it overrides auto-discovered session
+metadata, with local explicit ownership fallback when discovery fails. Other
+flags override auto-filled metadata. Metadata overrides do not change saved
+Herdr lookup identity. Repeated `next` applies explicit overrides to existing
+claim. Content/attachment edits preserve metadata; completion/release/error clear
+current assignment fields and retain history/link.
+
+Ownership commands accept original token or displayed harness session. Exact
+legacy token takes priority; ambiguous public sessions require `--harness-name`
+or original token. For example:
+
+```sh
+qqq complete 1 --harness-session agent-session --harness-name codex
+```
+
+Schema version 5 automatically migrates compatible single-description version
+1/2/3/4 databases, preserving
+claims, error tasks, dependencies, timestamps, history, images, links and
+sequence high-water marks. Internal `claim_key` retains existing ownership;
+linked active claims populate public fields from saved agent identity/server.
+Unknown legacy names/server sessions remain null. Legacy title schemas still require manual text/schema conversion before opening.
+JSON clients should replace `assignee` with harness fields.
 
 DB includes tasks, messages, image blobs, ownership events, latest Herdr link per task. SQLite foreign keys, immediate write transactions, unique active-owner index and 10-second busy timeout protect concurrent claims. Tasks from version 1 databases have no parent after migration. Newer unknown versions are rejected. Keep DB out of Git. To back up while CLI processes may run, use SQLite's backup API or `sqlite3 qqq.db '.backup backup.sqlite'`; copy DB file only when all writers are stopped.
 

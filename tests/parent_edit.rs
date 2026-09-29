@@ -92,7 +92,15 @@ fn changing_parent_preserves_existing_claim_and_task_details() {
     for parent in ["1", "3", "none"] {
         let edited = ok(p, &["edit", "2", "--set-parent", parent]);
         assert_eq!(edited["status"], "in_progress");
-        assert_eq!(edited["assignee"], "child");
+        assert_eq!(edited["harness_session"], "child");
+        for field in [
+            "harness_name",
+            "harness_session",
+            "orchestrator_name",
+            "orchestrator_session",
+        ] {
+            assert_eq!(edited[field], before["task"][field]);
+        }
         assert_eq!(edited["description"], "Child\n\nDetails");
         assert_eq!(edited["created_at"], before["task"]["created_at"]);
         let detail = ok(p, &["show", "2"]);
