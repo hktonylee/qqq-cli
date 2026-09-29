@@ -30,7 +30,7 @@ impl From<&Commands> for Format {
             },
             Commands::Add { .. }
             | Commands::Edit { .. }
-            | Commands::Next
+            | Commands::Next { .. }
             | Commands::Complete { .. } => Self::Task,
         }
     }

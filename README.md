@@ -166,12 +166,28 @@ qqq complete 1
 Or pass `--session agent-session-123` on individual commands. Precedence: `--session`, `QQQ_SESSION`, exact Herdr caller identity when `HERDR_ENV=1`, then unique Herdr agent at the database directory.
 
 - `next` returns oldest ready new task, atomically marking it `in_progress`.
-- Same session calling `next` again receives its existing task.
+- `next --wait` waits until a task can be claimed, returning the task once available.
+- Same session calling `next` (with or without `--wait`) again receives its existing task.
 - One active task per session; concurrent sessions cannot claim same task.
-- No ready tasks prints `No ready tasks.` (`null` with `--json`), exit code 0.
+- Without `--wait`, no ready tasks prints `No ready tasks.` (`null` with `--json`), exit code 0.
 - `complete <task-id>` marks task `completed` when the supplied or discovered session ID matches its recorded `assignee`.
 - `edit <task-id> --set-status new` returns a claimed task to `new` when the supplied or discovered session ID matches its recorded `assignee`.
 - Claims never expire. Restarting CLI preserves locks. `show` includes claim/release/completion history.
+
+Use `--wait` for workers that should stay ready when the queue is empty:
+
+```sh
+qqq next --wait --session worker-1
+qqq next --wait --json --session worker-2
+```
+
+Waiters check every 250 ms. Each check uses the same atomic claim transaction;
+only one worker session receives each task, while other waiters keep waiting.
+Use a unique session ID for each worker. Existing claims return immediately for
+that session. A task becomes ready when added, returned to `new`, or unblocked
+by parent completion. Waiting prints no intermediate output; use Ctrl-C to stop.
+Identity lookup or DB errors still exit with an error. Waiting releases the DB
+write lock between checks, so other commands can add and update tasks.
 
 For an abandoned session, inspect `qqq show <id>`, then explicitly release using its recorded `assignee`:
 

@@ -6,7 +6,7 @@ mod output;
 use anyhow::{Context, Result, ensure};
 use clap::{Parser, Subcommand, ValueEnum};
 use serde_json::{Value, json};
-use std::{io::IsTerminal, path::PathBuf};
+use std::{io::IsTerminal, path::PathBuf, thread, time::Duration};
 
 #[derive(Parser)]
 #[command(
@@ -63,7 +63,11 @@ enum Commands {
         set_status: Option<EditStatus>,
     },
     /// Return owned task or atomically claim oldest ready task.
-    Next,
+    Next {
+        /// Wait until a task is available; concurrent sessions claim each task once.
+        #[arg(long)]
+        wait: bool,
+    },
     /// Mark task completed; supplied or discovered session ID must match recorded owner.
     Complete { id: i64 },
     /// Append message; session, when supplied, is recorded as author.
@@ -154,9 +158,16 @@ fn execute(cli: Cli) -> Result<Value> {
                 )?)
             }
         }
-        Commands::Next => {
+        Commands::Next { wait } => {
             let (session, link) = herdr::owner(cli.session.as_deref(), project_dir)?;
-            json!(db.next(&session, link.as_ref())?)
+            loop {
+                let task = db.next(&session, link.as_ref())?;
+                if task.is_some() || !wait {
+                    break json!(task);
+                }
+                // next() commits before returning, so waiting holds no write lock.
+                thread::sleep(Duration::from_millis(250));
+            }
         }
         Commands::Complete { id } => {
             let (session, _) = herdr::owner(cli.session.as_deref(), project_dir)?;
