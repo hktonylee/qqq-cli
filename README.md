@@ -248,7 +248,8 @@ next-to-new-agent = true
 the oldest ready task for a new Codex agent, creates an unfocused tab in the
 calling Herdr workspace with the same working directory, starts the agent, saves
 its Herdr association, and submits a prompt to handle that specific task.
-Empty or dependency-blocked queues create no tabs. The returned task's `assignee`
+Empty or dependency-blocked queues create no tabs; `next --wait` waits for ready
+work before creating an agent. The returned task's `assignee`
 is the new agent's unique session; that value is passed as `QQQ_SESSION` and
 included explicitly in its completion instructions.
 

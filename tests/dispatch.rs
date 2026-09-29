@@ -318,3 +318,49 @@ fn local_mode_bypasses_invalid_dispatch_config() {
     );
     assert!(p.calls().is_empty());
 }
+
+#[test]
+fn wait_dispatches_when_work_arrives_without_spawning_for_empty_queue() {
+    let p = Project::new();
+    let mut child = p
+        .command()
+        .args(["next", "--wait", "--session", "caller"])
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .unwrap();
+    std::thread::sleep(std::time::Duration::from_millis(100));
+    assert!(child.try_wait().unwrap().is_none());
+    assert!(p.calls().is_empty());
+    p.ok(&["add", "Arrived"]);
+    let start = std::time::Instant::now();
+    while child.try_wait().unwrap().is_none() {
+        if start.elapsed() > std::time::Duration::from_secs(10) {
+            child.kill().unwrap();
+            child.wait().unwrap();
+            panic!("waiting dispatch did not finish");
+        }
+        std::thread::sleep(std::time::Duration::from_millis(25));
+    }
+    let out = child.wait_with_output().unwrap();
+    assert!(
+        out.status.success(),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let task: Value = serde_json::from_slice(&out.stdout).unwrap();
+    assert_eq!(task["title"], "Arrived");
+    assert!(
+        task["assignee"]
+            .as_str()
+            .unwrap()
+            .starts_with("qqq-dispatch-")
+    );
+    assert_eq!(
+        p.calls()
+            .iter()
+            .filter(|c| c.get(1).map(String::as_str) == Some("prompt"))
+            .count(),
+        1
+    );
+}
