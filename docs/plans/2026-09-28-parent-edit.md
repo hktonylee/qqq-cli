@@ -54,4 +54,11 @@ Reject true result. Set/clear with `UPDATE tasks SET parent_id=? WHERE id=?`; va
 
 - [x] Document `qqq edit 2 --set-parent 1`, `qqq edit 2 --set-parent none`, cycle/parent validation, atomic combinations, ownership preservation and existing claim behavior.
 - [x] Run full `cargo test --locked`, `cargo fmt --check`, strict Clippy, release build, diff check; require exit 0.
-- [ ] Review, commit `[Feat] Allow Editing Task Dependencies`, rebase current master, fast-forward merge, rebuild CLI, record checks and complete #29. Clean worktree; resume `next --wait --local --json`.
+- [x] Review, commit `[Feat] Allow Editing Task Dependencies`, rebase current master, fast-forward merge, rebuild CLI, record checks and complete #29. Clean worktree; resume `next --wait --local --json`.
+
+## Verification
+
+Code integrated as `c1b0a29`; full integrated suite **161 passed**, zero failures.
+Formatting, strict Clippy, release build and release dependency smoke passed.
+Independent parent-edit/wait checks: **16 passed**, no review findings. Task #29
+completed; CLI rebuilt. No schema migration needed.
