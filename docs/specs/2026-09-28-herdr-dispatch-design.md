@@ -1,8 +1,8 @@
 # Herdr Task Dispatch
 
 Config `~/.config/qqq/config.toml` supports `[herdr] next-to-new-agent = true`.
-Default false preserves existing next behavior. Enabled `next` reserves oldest
-ready task under a unique generated owner, even if caller owns another task.
+Default false preserves existing next behavior. Enabled `next` first returns caller's existing task. Only when caller has no active task does it reserve oldest
+ready task under a unique generated owner.
 `next --local` bypasses dispatch and returns/claims work for caller as before.
 Empty/blocked queues create no Herdr resources. JSON remains Task or null.
 

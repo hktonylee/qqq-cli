@@ -9,6 +9,7 @@ fn command(dir: &Path) -> Command {
     let mut c = Command::new(env!("CARGO_BIN_EXE_qqq"));
     c.arg("--json")
         .current_dir(dir)
+        .env("HOME", dir)
         .env_remove("QQQ_SESSION")
         .env_remove("HERDR_ENV")
         .env_remove("HERDR_PANE_ID");

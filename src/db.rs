@@ -155,6 +155,20 @@ impl Db {
             .optional()?
             .with_context(|| format!("No task at recent creation index {reference}"))
     }
+    pub fn owned(&self, session: &str) -> Result<Option<Task>> {
+        nonempty(session, "Session")?;
+        Ok(self.conn.query_row(
+            "SELECT id,title,description,status,assignee,created_at,updated_at,parent_id FROM tasks WHERE status='in_progress' AND assignee=?",
+            [session], task_row,
+        ).optional()?)
+    }
+    pub fn has_ready(&self) -> Result<bool> {
+        Ok(self.conn.query_row(
+            "SELECT EXISTS(SELECT 1 FROM tasks WHERE status='pending' AND
+                (parent_id IS NULL OR EXISTS(SELECT 1 FROM tasks parent WHERE parent.id=tasks.parent_id AND parent.status='completed')))",
+            [], |row| row.get(0),
+        )?)
+    }
     pub fn next(
         &mut self,
         session: &str,

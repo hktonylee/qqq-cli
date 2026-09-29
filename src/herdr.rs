@@ -23,6 +23,10 @@ pub struct Pane {
     pub foreground_cwd: Option<PathBuf>,
     #[serde(default)]
     pub agent_session: Option<AgentSession>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub terminal_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub agent: Option<String>,
 }
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Link {
@@ -42,7 +46,7 @@ struct Agents {
 struct Current {
     pane: Pane,
 }
-fn call<T: DeserializeOwned>(server: Option<&str>, args: &[&str]) -> Result<T> {
+pub(crate) fn call<T: DeserializeOwned>(server: Option<&str>, args: &[&str]) -> Result<T> {
     let mut cmd = Command::new("herdr");
     if let Some(server) = server {
         nonempty(server, "Herdr server")?;
@@ -64,6 +68,10 @@ fn call<T: DeserializeOwned>(server: Option<&str>, args: &[&str]) -> Result<T> {
 pub fn find(identity: &AgentSession, server: Option<&str>) -> Result<Pane> {
     let agents: Agents = call(server, &["agent", "list"])?;
     let mut matches = agents.agents.into_iter().filter(|pane| {
+        if identity.kind == "terminal" {
+            return pane.terminal_id.as_deref() == Some(&identity.value)
+                && pane.agent.as_deref() == Some(&identity.agent);
+        }
         pane.agent_session.as_ref().is_some_and(|s| {
             s.agent == identity.agent && s.kind == identity.kind && s.value == identity.value
         })
@@ -76,6 +84,43 @@ pub fn find(identity: &AgentSession, server: Option<&str>) -> Result<Pane> {
         "Multiple Herdr panes match agent session; resolve duplicate session reports"
     );
     Ok(pane)
+}
+
+pub fn dispatch_identity(pane: &Pane) -> Result<AgentSession> {
+    if let Some(identity) = &pane.agent_session {
+        nonempty(&identity.agent, "Herdr agent kind")?;
+        nonempty(&identity.kind, "Herdr identity kind")?;
+        nonempty(&identity.value, "Herdr agent session")?;
+        return Ok(identity.clone());
+    }
+    let value = pane
+        .terminal_id
+        .as_deref()
+        .context("Herdr agent has no session or terminal identity")?;
+    let agent = pane.agent.as_deref().context("Herdr agent kind missing")?;
+    nonempty(value, "Herdr terminal identity")?;
+    nonempty(agent, "Herdr agent kind")?;
+    Ok(AgentSession {
+        agent: agent.into(),
+        kind: "terminal".into(),
+        value: value.into(),
+    })
+}
+
+pub fn dispatch_caller() -> Result<String> {
+    ensure!(
+        std::env::var("HERDR_ENV").as_deref() == Ok("1"),
+        "Herdr dispatch requires HERDR_ENV=1; use next --local outside Herdr"
+    );
+    let pane_id = std::env::var("HERDR_PANE_ID").context("HERDR_PANE_ID missing")?;
+    nonempty(&pane_id, "HERDR_PANE_ID")?;
+    let current: Current = call(None, &["pane", "current", "--current"])?;
+    let identity = dispatch_identity(&current.pane)?;
+    Ok(serde_json::to_string(&(
+        identity.agent,
+        identity.kind,
+        identity.value,
+    ))?)
 }
 pub fn explicit(agent: String, value: String, server: Option<String>) -> Result<Link> {
     nonempty(&agent, "Agent")?;

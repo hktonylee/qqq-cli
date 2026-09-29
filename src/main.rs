@@ -1,5 +1,7 @@
 mod aliases;
+mod config;
 mod db;
+mod dispatch;
 mod editor;
 mod herdr;
 mod output;
@@ -67,6 +69,9 @@ enum Commands {
         /// Wait until a task is available; concurrent sessions claim each task once.
         #[arg(long)]
         wait: bool,
+        /// Claim locally even when Herdr new-agent dispatch is configured.
+        #[arg(long)]
+        local: bool,
     },
     /// Mark task completed; supplied or discovered session ID must match recorded owner.
     Complete { id: i64 },
@@ -158,14 +163,22 @@ fn execute(cli: Cli) -> Result<Value> {
                 )?)
             }
         }
-        Commands::Next { wait } => {
-            let (session, link) = herdr::owner(cli.session.as_deref(), project_dir)?;
+        Commands::Next { local, wait } => {
+            let dispatch = !local && config::load()?.herdr.next_to_new_agent;
+            let local_owner = if dispatch {
+                None
+            } else {
+                Some(herdr::owner(cli.session.as_deref(), project_dir)?)
+            };
             loop {
-                let task = db.next(&session, link.as_ref())?;
+                let task = match &local_owner {
+                    Some((session, link)) => db.next(session, link.as_ref())?,
+                    None => dispatch::next(&mut db, cli.session.as_deref())?,
+                };
                 if task.is_some() || !wait {
                     break json!(task);
                 }
-                // next() commits before returning, so waiting holds no write lock.
+                // Claims commit before waiting; no write lock spans the sleep.
                 thread::sleep(Duration::from_millis(250));
             }
         }

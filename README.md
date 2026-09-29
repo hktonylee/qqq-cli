@@ -161,7 +161,8 @@ Global `--session` works before or after an alias. Built-in commands (including
 `help`) always take precedence; only the root command is expanded. Use
 `qqq bug --help` for the expanded command's help. Unknown commands retain normal
 CLI errors. Config is read only when resolving an unknown root command, so
-built-ins and top-level help remain usable with broken config. Missing config
+built-ins other than `next`, and top-level help, remain usable with broken config.
+`next` also reads Herdr dispatch settings; `next --local` bypasses that read. Missing config
 or unset/empty `HOME` means no aliases; unreadable or malformed config reports its
 path. This fixed path uses `HOME`, not `XDG_CONFIG_HOME`.
 
@@ -232,7 +233,43 @@ qqq herdr link 1 --agent codex --agent-session session-123 --server work
 
 `find` matches saved agent/session identity against `herdr agent list`, returning current `workspace_id`, `tab_id`, `pane_id`, and `agent_session`. Pane moves do not break identity matching. Missing, offline or ambiguous matches produce errors; saved link remains available in `show`. Automatic ownership uses a JSON tuple of agent, identity kind and value; keep the same identity mode through completion or returning a task to new.
 
-Explicit `--session` / `QQQ_SESSION` ownership works without Herdr and does not auto-link. `herdr link` stores association separately; it does not transfer ownership. A completed task retains its latest link. A fresh claim clears the previous link, then saves the new auto-detected link when available; explicit owners should link after claiming. Default-server links query whichever Herdr server CLI currently targets; use `--server` for a stable named-server target. No automatic agent spawning or prompt submission.
+With dispatch disabled, explicit `--session` / `QQQ_SESSION` ownership works without Herdr and does not auto-link. `herdr link` stores association separately; it does not transfer ownership. A completed task retains its latest link. A fresh claim clears the previous link, then saves the new auto-detected link when available; explicit owners should link after claiming. Default-server links query whichever Herdr server CLI currently targets; use `--server` for a stable named-server target.
+
+### Dispatch next task to a new agent
+
+Opt in through `~/.config/qqq/config.toml`:
+
+```toml
+[herdr]
+next-to-new-agent = true
+```
+
+`qqq next` first returns the caller's existing active task. Otherwise it reserves
+the oldest ready task for a new Codex agent, creates an unfocused tab in the
+calling Herdr workspace with the same working directory, starts the agent, saves
+its Herdr association, and submits a prompt to handle that specific task.
+Empty or dependency-blocked queues create no tabs. The returned task's `assignee`
+is the new agent's unique session; that value is passed as `QQQ_SESSION` and
+included explicitly in its completion instructions.
+
+New-agent creation requires `HERDR_ENV=1` and `HERDR_WORKSPACE_ID`.
+`qqq next --local` bypasses dispatch, even when enabled, and keeps the normal
+caller claim behavior. The setting defaults to false. JSON remains a task or
+`null`; inspect `qqq show <id>` / `qqq herdr find <id>` for the saved/live link.
+
+When Herdr reports an agent-session identity, qqq saves it. When hooks omit that
+identity, qqq associates the exact Herdr terminal ID and agent kind instead.
+This fallback follows the terminal lifetime, not an individual resumed Codex
+conversation. Caller discovery in dispatch mode supports the same fallback.
+
+Failures before prompt submission return the task to pending. Created tabs stay
+open for inspection. A prompt error keeps the claim and link because delivery
+may already have happened: inspect the agent before retrying. To recover after
+confirming the agent is not working, use the recorded assignee:
+
+```sh
+qqq edit <task-id> --set-status pending --session '<recorded-assignee>'
+```
 
 Adapter targets Herdr API protocol 20 JSON shapes: `result.agents`, `result.pane`, `agent_session.{agent,kind,value}`. Agent-session metadata may be absent depending on integration hooks.
 
