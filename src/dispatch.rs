@@ -100,7 +100,7 @@ pub fn next(db: &mut Db, caller: Option<&str>) -> Result<Option<Task>> {
             current.agent.pane_id == pane.pane_id,
             "Herdr returned a different agent pane"
         );
-        let identity = herdr::dispatch_identity(&current.agent)?;
+        let identity = herdr::pane_identity(&current.agent)?;
         ensure!(identity.agent == "codex", "Started agent is not Codex");
         db.set_link(
             task.id,

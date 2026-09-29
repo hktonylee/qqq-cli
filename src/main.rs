@@ -162,7 +162,7 @@ fn execute(cli: Cli, display_limit: Option<i64>) -> Result<Value> {
             } else {
                 let release_session = match set_status {
                     Some(EditStatus::New) => {
-                        Some(herdr::owner(cli.session.as_deref(), project_dir)?.0)
+                        Some(herdr::owner(cli.session.as_deref(), project_dir, &db)?.0)
                     }
                     None => None,
                 };
@@ -179,7 +179,7 @@ fn execute(cli: Cli, display_limit: Option<i64>) -> Result<Value> {
             let local_owner = if dispatch {
                 None
             } else {
-                Some(herdr::owner(cli.session.as_deref(), project_dir)?)
+                Some(herdr::owner(cli.session.as_deref(), project_dir, &db)?)
             };
             loop {
                 let task = match &local_owner {
@@ -194,7 +194,7 @@ fn execute(cli: Cli, display_limit: Option<i64>) -> Result<Value> {
             }
         }
         Commands::Complete { id } => {
-            let (session, _) = herdr::owner(cli.session.as_deref(), project_dir)?;
+            let (session, _) = herdr::owner(cli.session.as_deref(), project_dir, &db)?;
             json!(db.complete(id, &session)?)
         }
         Commands::Message { id, body } => db.message(id, &body, cli.session.as_deref())?,

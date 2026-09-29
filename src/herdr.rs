@@ -1,4 +1,4 @@
-use crate::db::nonempty;
+use crate::db::{Db, nonempty};
 use anyhow::{Context, Result, ensure};
 use serde::{Deserialize, Serialize, de::DeserializeOwned};
 use std::{
@@ -86,7 +86,7 @@ pub fn find(identity: &AgentSession, server: Option<&str>) -> Result<Pane> {
     Ok(pane)
 }
 
-pub fn dispatch_identity(pane: &Pane) -> Result<AgentSession> {
+pub fn pane_identity(pane: &Pane) -> Result<AgentSession> {
     if let Some(identity) = &pane.agent_session {
         nonempty(&identity.agent, "Herdr agent kind")?;
         nonempty(&identity.kind, "Herdr identity kind")?;
@@ -115,7 +115,7 @@ pub fn dispatch_caller() -> Result<String> {
     let pane_id = std::env::var("HERDR_PANE_ID").context("HERDR_PANE_ID missing")?;
     nonempty(&pane_id, "HERDR_PANE_ID")?;
     let current: Current = call(None, &["pane", "current", "--current"])?;
-    let identity = dispatch_identity(&current.pane)?;
+    let identity = pane_identity(&current.pane)?;
     Ok(serde_json::to_string(&(
         identity.agent,
         identity.kind,
@@ -145,8 +145,9 @@ pub fn current() -> Result<Link> {
     let pane_id = std::env::var("HERDR_PANE_ID").context("HERDR_PANE_ID missing; use --session")?;
     nonempty(&pane_id, "HERDR_PANE_ID")?;
     let current: Current = call(None, &["pane", "current", "--current"])?;
-    let identity=current.pane.agent_session.clone().context("Herdr pane has no agent session identity; use --session, then qqq herdr link when available")?;
-    nonempty(&identity.value, "Herdr agent session")?;
+    let identity = pane_identity(&current.pane).context(
+        "Cannot identify current Herdr agent; use --session or enable Herdr session reporting",
+    )?;
     Ok(Link {
         server: None,
         identity,
@@ -181,22 +182,37 @@ pub fn discover(project_dir: &Path) -> Result<Link> {
         "Multiple Herdr agents match database directory {}; use --session or run inside intended Herdr pane",
         project_dir.display()
     );
-    let identity = pane.agent_session.clone().context(
-        "Matching Herdr agent has no agent session identity; use --session or enable Herdr session reporting"
+    let identity = pane_identity(&pane).context(
+        "Cannot identify matching Herdr agent; use --session or enable Herdr session reporting",
     )?;
-    nonempty(&identity.value, "Herdr agent session")?;
     Ok(Link {
         server: None,
         identity,
         pane,
     })
 }
-pub fn owner(explicit: Option<&str>, project_dir: &Path) -> Result<(String, Option<Link>)> {
+pub fn owner(
+    explicit: Option<&str>,
+    project_dir: &Path,
+    db: &Db,
+) -> Result<(String, Option<Link>)> {
     if let Some(session) = explicit {
         nonempty(session, "Session")?;
         return Ok((session.into(), None));
     }
-    let link = discover(project_dir)?;
+    let mut link = discover(project_dir)?;
+    if let (Some(agent), Some(terminal_id)) = (&link.pane.agent, &link.pane.terminal_id) {
+        let terminal_owner = serde_json::to_string(&(agent, "terminal", terminal_id))?;
+        // Hooks may report a session after a terminal fallback already claimed work.
+        // Keep that active claim reachable until completion, then prefer hook identity.
+        if db.owned(&terminal_owner)?.is_some() {
+            link.identity = AgentSession {
+                agent: agent.clone(),
+                kind: "terminal".into(),
+                value: terminal_id.clone(),
+            };
+        }
+    }
     // JSON tuple encoding avoids collisions when identity strings contain delimiters.
     let owner = serde_json::to_string(&(
         &link.identity.agent,

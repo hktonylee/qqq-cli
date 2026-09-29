@@ -275,7 +275,7 @@ printf '%s\n' '{"result":{"pane":{"pane_id":"w1:p1","workspace_id":"w1","tab_id"
     let complete = exec("old:p1", &["complete", "1"]);
     assert!(complete.status.success());
     assert_eq!(ok(p, &["show", "1"])["task"]["status"], "completed");
-    // Missing hook identity fails rather than treating a pane ID as an agent session.
+    // Missing session and terminal identity fails rather than using a pane ID.
     std::fs::write(
         &bin,
         r#"#!/bin/sh
@@ -394,7 +394,7 @@ fn cwd_lookup_rejects_missing_ambiguous_or_unidentified_matches_before_claim() {
         ),
         (
             serde_json::json!([no_identity.clone()]),
-            "no agent session identity",
+            "no session or terminal identity",
         ),
         (
             serde_json::json!([agent_at(p, "a"), no_identity]),
