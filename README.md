@@ -542,7 +542,8 @@ schema/data update; this rename adds no automatic migration or schema version bu
 
 Task assignment exposes four nullable JSON fields: `harness_name`,
 `harness_session`, `orchestrator_name`, `orchestrator_session`. Human task details
-show each field. `assignee` and `owner_session` are absent. Herdr auto-fill uses
+show each field; human `add` output omits these empty assignment fields. JSON
+always includes all four fields. `assignee` and `owner_session` are absent. Herdr auto-fill uses
 agent kind/session (terminal ID fallback), orchestrator `herdr`, named Herdr
 server session. Native Codex auto-fill uses `CODEX_THREAD_ID` / `CODEX_SESSION_ID` for harness fields, leaving orchestrator fields null. Optional server discovery failure leaves its session null.
 

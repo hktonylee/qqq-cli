@@ -42,6 +42,17 @@ fn human_tasks_show_descriptions_dependencies_and_ownership() {
     assert!(added.contains("Build API"), "{added}");
     assert!(added.contains("Status: New"));
     assert!(added.contains("First line\n  Second line"));
+    for label in [
+        "Harness name:",
+        "Harness session:",
+        "Orchestrator name:",
+        "Orchestrator session:",
+    ] {
+        assert!(!added.contains(label), "{label}: {added}");
+    }
+    for label in ["Parent:", "Created:", "Updated:"] {
+        assert!(added.contains(label), "{label}: {added}");
+    }
     text(p, &["add", "Build client", "--parent", "1"]);
     let list = text(p, &["list"]);
     for part in [
@@ -61,6 +72,14 @@ fn human_tasks_show_descriptions_dependencies_and_ownership() {
     assert!(next.contains("Harness session: a"));
     let child = text(p, &["show", "2"]);
     assert!(child.contains("Parent: #1"));
+    for label in [
+        "Harness name: -",
+        "Harness session: -",
+        "Orchestrator name: -",
+        "Orchestrator session: -",
+    ] {
+        assert!(child.contains(label), "{label}: {child}");
+    }
     let changed = text(p, &["edit", "2", "--description", "New details"]);
     assert!(changed.contains("New details"));
     assert!(
@@ -115,6 +134,14 @@ fn global_json_flag_preserves_machine_output_and_errors() {
     let p = d.path();
     let task: Value = serde_json::from_str(&text(p, &["--json", "add", "Task"])).unwrap();
     assert_eq!(task["id"], 1);
+    for key in [
+        "harness_name",
+        "harness_session",
+        "orchestrator_name",
+        "orchestrator_session",
+    ] {
+        assert_eq!(task.get(key), Some(&Value::Null), "{key}: {task}");
+    }
     let list: Value = serde_json::from_str(&text(p, &["list", "--json"])).unwrap();
     assert_eq!(list[0], task);
     text(p, &["next", "--session", "a"]);

@@ -8,6 +8,7 @@ pub enum Format {
     ConfigSet,
     ConfigUnset,
     Database,
+    AddedTask,
     Task,
     Tasks,
     Detail,
@@ -31,10 +32,8 @@ impl From<&Commands> for Format {
                 HerdrCommand::Link { .. } => Self::Link,
                 HerdrCommand::Find { .. } => Self::Pane,
             },
-            Commands::Add { .. }
-            | Commands::Edit { .. }
-            | Commands::Next { .. }
-            | Commands::Complete { .. } => Self::Task,
+            Commands::Add { .. } => Self::AddedTask,
+            Commands::Edit { .. } | Commands::Next { .. } | Commands::Complete { .. } => Self::Task,
         }
     }
 }
@@ -108,20 +107,28 @@ fn parent(value: &Value) -> String {
         .map_or_else(|| "-".to_owned(), |id| format!("#{id}"))
 }
 
-fn task(value: &Value, color: bool) -> String {
+fn task(value: &Value, color: bool, assignment: bool) -> String {
     let heading = format!("#{}", field(value, "id"));
     let mut result = format!(
-        "{}\nStatus: {}\nParent: {}\nHarness name: {}\nHarness session: {}\nOrchestrator name: {}\nOrchestrator session: {}\nCreated: {}\nUpdated: {}",
+        "{}\nStatus: {}\nParent: {}",
         styled(&heading, color.then_some("1")),
         styled(status(value), status_color(value, color)),
-        parent(value),
-        field(value, "harness_name"),
-        field(value, "harness_session"),
-        field(value, "orchestrator_name"),
-        field(value, "orchestrator_session"),
+        parent(value)
+    );
+    if assignment {
+        result.push_str(&format!(
+            "\nHarness name: {}\nHarness session: {}\nOrchestrator name: {}\nOrchestrator session: {}",
+            field(value, "harness_name"),
+            field(value, "harness_session"),
+            field(value, "orchestrator_name"),
+            field(value, "orchestrator_session")
+        ));
+    }
+    result.push_str(&format!(
+        "\nCreated: {}\nUpdated: {}",
         field(value, "created_at"),
         field(value, "updated_at")
-    );
+    ));
     if value["description"]
         .as_str()
         .is_some_and(|text| !text.is_empty())
@@ -270,10 +277,11 @@ pub fn render(format: Format, value: &Value, color: bool) -> String {
         Format::ConfigUnset => format!("Unset {}.", field(value, "key")),
         Format::Database => format!("Database: {}", field(value, "database")),
         Format::Task if value.is_null() => "No ready tasks.".to_owned(),
-        Format::Task => task(value, false),
+        Format::AddedTask => task(value, false, false),
+        Format::Task => task(value, false, true),
         Format::Tasks => task_tree(value.as_array().expect("task list is an array"), color),
         Format::Detail => {
-            let mut result = task(&value["task"], color);
+            let mut result = task(&value["task"], color, true);
             for (key, label) in [
                 ("messages", "Messages"),
                 ("images", "Images"),
