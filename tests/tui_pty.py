@@ -93,6 +93,7 @@ with tempfile.TemporaryDirectory(prefix="qqq-tui-test-") as folder:
 
     try:
         read_until(b"Ctrl-S")
+        assert b"Whole buffer =" not in screen, "Removed editor hint reappeared"
         if color:
             assert b"\x1b[48;5;236m" in screen, "Editor grey background missing"
             assert b"\x1b[38;5;252m" in screen, "Editor readable foreground missing"

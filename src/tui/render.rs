@@ -136,7 +136,7 @@ pub fn draw(
         )?;
         return output.flush();
     }
-    let body_height = height as usize - 3;
+    let body_height = height as usize - 2;
     let (row, column) = layout.positions[cursor];
     if row < *top {
         *top = row;
@@ -144,21 +144,16 @@ pub fn draw(
     if row >= *top + body_height {
         *top = row + 1 - body_height;
     }
-    queue!(
-        output,
-        Print(clipped("qqq task editor", width as usize)),
-        MoveTo(0, 1),
-        Print(clipped("Whole buffer = task description", width as usize))
-    )?;
+    queue!(output, Print(clipped("qqq task editor", width as usize)))?;
     for (index, line) in layout.rows.iter().skip(*top).take(body_height).enumerate() {
-        queue!(output, MoveTo(0, index as u16 + 2), Print(line))?;
+        queue!(output, MoveTo(0, index as u16 + 1), Print(line))?;
     }
     let footer = if message.is_empty() { KEYS } else { message };
     queue!(
         output,
         MoveTo(0, height - 1),
         Print(clipped(footer, width as usize)),
-        MoveTo(column as u16, (row - *top) as u16 + 2)
+        MoveTo(column as u16, (row - *top) as u16 + 1)
     )?;
     output.flush()
 }

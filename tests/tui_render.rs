@@ -16,6 +16,7 @@ fn editor_paints_entire_viewport_before_text_in_all_states() {
         render::draw(&mut output, &layout, 0, &mut 0, size, message, true).unwrap();
         let output = String::from_utf8(output).unwrap();
         assert!(output.starts_with("\x1b[48;5;236m\x1b[38;5;252m"));
+        assert!(!output.contains("Whole buffer ="));
         let blank = " ".repeat(size.0 as usize);
         for row in 0..size.1 {
             assert!(output.contains(&format!("\x1b[{};1H{blank}", row + 1)));
@@ -47,6 +48,24 @@ fn plain_editor_does_not_emit_color_commands() {
     assert!(!output.contains("\x1b[48;"));
     assert!(!output.contains("\x1b[38;"));
     assert!(output.contains("Body"));
+}
+
+#[test]
+fn editor_reclaims_hint_row_for_body_and_keeps_cursor_above_footer() {
+    let layout = render::Layout::new(&["A\nB\nC\nD\nE".into()], 40);
+    let mut output = Vec::new();
+    let mut top = 0;
+    render::draw(&mut output, &layout, 1, &mut top, (40, 5), "", false).unwrap();
+    let output = String::from_utf8(output).unwrap();
+    assert_eq!(top, 2);
+    for (row, text) in [(2, "C"), (3, "D"), (4, "E")] {
+        assert!(
+            output.contains(&format!("\x1b[{row};1H{text}")),
+            "{output:?}"
+        );
+    }
+    assert!(output.contains("\x1b[5;1HCtrl-S"));
+    assert!(output.ends_with("\x1b[4;2H"));
 }
 
 #[test]
