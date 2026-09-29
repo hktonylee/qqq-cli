@@ -1,7 +1,7 @@
 use crossterm::{
     cursor::MoveTo,
     queue,
-    style::{Color, Print, SetBackgroundColor, SetForegroundColor},
+    style::{Color, Print, ResetColor, SetBackgroundColor, SetForegroundColor},
     terminal::{Clear, ClearType},
 };
 use std::io::{self, Write};
@@ -113,21 +113,9 @@ pub fn draw(
 ) -> io::Result<()> {
     let (width, height) = size;
     if color {
-        queue!(
-            output,
-            SetBackgroundColor(BACKGROUND),
-            SetForegroundColor(FOREGROUND)
-        )?;
+        queue!(output, ResetColor)?;
     }
     queue!(output, MoveTo(0, 0), Clear(ClearType::All))?;
-    if color {
-        // Paint unused cells too, even on terminals without background-color erase.
-        let blank = " ".repeat(width as usize);
-        for row in 0..height {
-            queue!(output, MoveTo(0, row), Print(&blank))?;
-        }
-        queue!(output, MoveTo(0, 0))?;
-    }
     if width < 12 || height < 4 {
         queue!(
             output,
@@ -145,8 +133,23 @@ pub fn draw(
         *top = row + 1 - body_height;
     }
     queue!(output, Print(clipped("qqq task editor", width as usize)))?;
+    if color {
+        queue!(
+            output,
+            SetBackgroundColor(BACKGROUND),
+            SetForegroundColor(FOREGROUND)
+        )?;
+        // Paint every editor cell, including blank rows; keep terminal chrome default.
+        let blank = " ".repeat(width as usize);
+        for row in 1..height - 1 {
+            queue!(output, MoveTo(0, row), Print(&blank))?;
+        }
+    }
     for (index, line) in layout.rows.iter().skip(*top).take(body_height).enumerate() {
         queue!(output, MoveTo(0, index as u16 + 1), Print(line))?;
+    }
+    if color {
+        queue!(output, ResetColor)?;
     }
     let footer = if message.is_empty() { KEYS } else { message };
     queue!(

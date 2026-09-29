@@ -3,32 +3,59 @@
 mod render;
 
 #[test]
-fn editor_paints_entire_viewport_before_text_in_all_states() {
-    // This synthetic colored-render case must not inherit the runner's NO_COLOR.
+fn editor_paints_only_body_rows_and_resets_colors_for_header_and_footer() {
     crossterm::style::force_color_output(true);
     let layout = render::Layout::new(&["Body".into()], 40);
-    for (size, message) in [
-        ((40, 8), ""),
-        ((40, 8), "Task description cannot be empty"),
-        ((10, 2), ""),
+    for message in [
+        "",
+        "Task description cannot be empty",
+        "Discard draft? (y/N)",
     ] {
         let mut output = Vec::new();
-        render::draw(&mut output, &layout, 0, &mut 0, size, message, true).unwrap();
+        render::draw(&mut output, &layout, 0, &mut 0, (40, 8), message, true).unwrap();
         let output = String::from_utf8(output).unwrap();
-        assert!(output.starts_with("\x1b[48;5;236m\x1b[38;5;252m"));
-        assert!(!output.contains("Whole buffer ="));
-        let blank = " ".repeat(size.0 as usize);
-        for row in 0..size.1 {
-            assert!(output.contains(&format!("\x1b[{};1H{blank}", row + 1)));
+        assert!(output.starts_with("\x1b[0m"), "{output:?}");
+        let background = output.find("\x1b[48;5;236m").unwrap();
+        assert!(output.find("qqq task editor").unwrap() < background);
+        assert!(output.contains("\x1b[38;5;252m"));
+        let blank = " ".repeat(40);
+        for row in 2..8 {
+            assert!(output.contains(&format!("\x1b[{row};1H{blank}")));
         }
-        let content = if size.0 < 12 {
-            "Resize ter"
+        for row in [1, 8] {
+            assert!(!output.contains(&format!("\x1b[{row};1H{blank}")));
+        }
+        let reset = output.rfind("\x1b[0m").unwrap();
+        assert!(output.find("Body").unwrap() < reset);
+        let footer = if message.is_empty() {
+            render::KEYS
         } else {
-            "qqq task editor"
+            message
         };
-        let last_fill = output.find(&format!("\x1b[{};1H{blank}", size.1)).unwrap();
-        assert!(last_fill < output.find(content).unwrap());
+        assert!(reset < output.find(footer).unwrap());
+        assert!(!output.contains("Whole buffer ="));
     }
+}
+
+#[test]
+fn resize_hint_uses_default_colors_without_editor_body() {
+    crossterm::style::force_color_output(true);
+    let mut output = Vec::new();
+    render::draw(
+        &mut output,
+        &render::Layout::new(&["Body".into()], 10),
+        0,
+        &mut 0,
+        (10, 2),
+        "",
+        true,
+    )
+    .unwrap();
+    let output = String::from_utf8(output).unwrap();
+    assert!(output.starts_with("\x1b[0m"));
+    assert!(output.contains("Resize ter"));
+    assert!(!output.contains("\x1b[48;"));
+    assert!(!output.contains("\x1b[38;"));
 }
 
 #[test]
