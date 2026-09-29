@@ -123,6 +123,9 @@ impl Draft {
             self.cursor += 1;
         }
     }
+    pub fn is_empty(&self) -> bool {
+        self.atoms.is_empty()
+    }
     pub fn cursor(&self) -> usize {
         self.cursor
     }

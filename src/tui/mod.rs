@@ -65,26 +65,55 @@ pub fn compose(description: &str) -> Result<Composition> {
     let mut draft = Draft::new(description);
     let mut top = 0;
     let mut message = String::new();
+    let mut confirm_discard = false;
     loop {
         let size = terminal::size()?;
         let layout = render::Layout::new(&draft.fragments(), size.0 as usize);
+        let footer = if confirm_discard {
+            if usize::from(size.0) < "Discard draft? y=discard; N/Enter/Esc=keep".len() {
+                "Discard? y/N"
+            } else {
+                "Discard draft? y=discard; N/Enter/Esc=keep"
+            }
+        } else {
+            &message
+        };
         render::draw(
             &mut io::stderr(),
             &layout,
             draft.cursor(),
             &mut top,
             size,
-            &message,
+            footer,
             terminal.color,
         )?;
         match event::read()? {
-            Event::Paste(text) => {
+            Event::Paste(text) if !confirm_discard => {
                 message = paste(&mut draft, &text)
                     .err()
                     .map_or_else(String::new, |error| format!("{error:#}"));
             }
             Event::Key(key) if key.kind != KeyEventKind::Release => {
                 let control = key.modifiers.contains(KeyModifiers::CONTROL);
+                if confirm_discard {
+                    if control && key.code == KeyCode::Char('c') {
+                        bail!("Editor cancelled; task not saved");
+                    }
+                    if !key
+                        .modifiers
+                        .intersects(KeyModifiers::CONTROL | KeyModifiers::ALT | KeyModifiers::SUPER)
+                    {
+                        match key.code {
+                            KeyCode::Char('y' | 'Y') => bail!("Editor cancelled; task not saved"),
+                            KeyCode::Char('n' | 'N') | KeyCode::Enter | KeyCode::Esc => {
+                                confirm_discard = false;
+                                message.clear();
+                            }
+                            _ => (),
+                        }
+                    }
+                    continue;
+                }
                 if control {
                     match key.code {
                         KeyCode::Char('s') => match draft.finish() {
@@ -109,7 +138,8 @@ pub fn compose(description: &str) -> Result<Composition> {
                 }
                 message.clear();
                 match key.code {
-                    KeyCode::Esc => bail!("Editor cancelled; task not saved"),
+                    KeyCode::Esc if draft.is_empty() => bail!("Editor cancelled; task not saved"),
+                    KeyCode::Esc => confirm_discard = true,
                     KeyCode::Char(character)
                         if !key
                             .modifiers

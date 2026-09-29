@@ -109,7 +109,9 @@ Leading/trailing whitespace and final newlines are preserved. Human list/tree/
 watch output previews only the first line; `show` displays the whole body. JSON
 keeps the full `description` and has no `title` field.
 
-Ctrl-S saves; Esc or Ctrl-C cancels. Enter inserts a newline. Arrows, Home/End
+Ctrl-S saves. Esc asks to discard when buffer contains text or images: Y confirms;
+N, Enter or Esc keeps editing. Empty-buffer Esc exits directly. Ctrl-C cancels
+immediately. Enter inserts a newline. Arrows, Home/End
 (also Ctrl-A/Ctrl-E), Backspace and Delete edit the draft. The viewport follows
 the cursor and adapts to terminal resizing. Editor UI uses stderr; stdout contains
 only the final command result, including JSON when `--json` is supplied.

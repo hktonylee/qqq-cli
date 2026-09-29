@@ -38,3 +38,29 @@ fn tui_no_color_keeps_plain_editor_and_terminal_restoration() {
 fn tui_dumb_terminal_keeps_plain_editor_and_terminal_restoration() {
     scenario("dumb");
 }
+
+#[test]
+fn tui_escape_requires_explicit_discard_for_text_images_and_whitespace() {
+    for name in [
+        "escape_discard",
+        "escape_image",
+        "escape_whitespace",
+        "escape_narrow",
+    ] {
+        scenario(name);
+    }
+}
+#[test]
+fn tui_escape_empty_or_deleted_buffer_exits_without_prompt() {
+    for name in ["escape_empty", "escape_deleted"] {
+        scenario(name);
+    }
+}
+#[test]
+fn tui_escape_keep_choices_preserve_pastes_images_and_ignore_modal_input() {
+    scenario("escape_keep");
+}
+#[test]
+fn tui_escape_confirms_unchanged_existing_content_then_resumes_editing() {
+    scenario("escape_edit");
+}

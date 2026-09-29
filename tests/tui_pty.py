@@ -35,13 +35,13 @@ with tempfile.TemporaryDirectory(prefix="qqq-tui-test-") as folder:
 
     cli("init")
     args = ["add"]
-    if scenario == "edit":
+    if scenario in ("edit", "escape_edit"):
         cli("add", "Original\n\nDetails")
         cli("next", "--local", "--session", "worker")
         args = ["edit", "-1"]
     image = Path(folder) / "test image.png"
     image.write_bytes(base64.b64decode("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aGD8AAAAASUVORK5CYII="))
-    if scenario in ("save", "cancel"):
+    if scenario in ("save", "cancel", "escape_discard", "escape_keep"):
         flagged = Path(folder) / "flag image.png"
         flagged.write_bytes(image.read_bytes())
         args.extend(["--image", str(flagged)])
@@ -104,9 +104,26 @@ with tempfile.TemporaryDirectory(prefix="qqq-tui-test-") as folder:
             send(b"\x13")
             read_until(b"Task description cannot be empty")
             send(b"Recovered")
-        elif scenario == "edit":
+        elif scenario in ("edit", "escape_edit"):
+            if scenario == "escape_edit":
+                send(b"\x1b")
+                read_until(b"Discard draft?")
+                assert child.poll() is None
+                assert cli("show", "1")["task"]["description"] == "Original\n\nDetails"
+                screen.clear()
+                send(b"\x1b")
+                read_until(b"Ctrl-S")
             cli("add", "Created while editing")
             paste(" amended")
+        elif scenario == "escape_empty":
+            pass
+        elif scenario == "escape_deleted":
+            send(b"Draft" + b"\x7f" * 5)
+        elif scenario == "escape_whitespace":
+            send(b" \r")
+        elif scenario in ("escape_image", "escape_narrow"):
+            paste("'" + str(image) + "'")
+            read_until(b"[Image #1:")
         else:
             send(b"Title\r\r")
             paste("\u754c" * 1001)
@@ -114,7 +131,35 @@ with tempfile.TemporaryDirectory(prefix="qqq-tui-test-") as folder:
             send(b"\r")
             paste("'" + str(image) + "'")
             read_until(b"[Image #1:")
-        send(b"\x03" if scenario == "cancel" else b"\x13")
+        cancelled = scenario in ("cancel", "escape_discard", "escape_image", "escape_whitespace", "escape_narrow", "escape_empty", "escape_deleted")
+        if scenario in ("escape_discard", "escape_image", "escape_whitespace", "escape_narrow"):
+            send(b"\x1b")
+            read_until(b"Discard draft?")
+            assert child.poll() is None
+            assert cli("list") == []
+            if scenario == "escape_narrow":
+                screen.clear()
+                fcntl.ioctl(slave, termios.TIOCSWINSZ, struct.pack("HHHH", 4, 12, 0, 0))
+                child.send_signal(signal.SIGWINCH)
+                read_until(b"Discard? y/N")
+            send(b"Y" if scenario == "escape_discard" else b"y")
+        elif scenario == "escape_keep":
+            for choice in (b"n", b"\r", b"\x1b"):
+                screen.clear()
+                send(b"\x1b")
+                read_until(b"Discard draft?")
+                assert child.poll() is None
+                assert cli("list") == []
+                paste("ignored while confirming")
+                send(b"z\x13")
+                screen.clear()
+                send(choice)
+                read_until(b"Ctrl-S")
+            send(b"\x13")
+        elif scenario in ("escape_empty", "escape_deleted"):
+            send(b"\x1b")
+        else:
+            send(b"\x03" if scenario == "cancel" else b"\x13")
         # Keep draining terminal redraws while process exits; a PTY has a small
         # output buffer and can block editor writes before save reaches stdout.
         deadline = time.monotonic() + 5
@@ -138,14 +183,16 @@ with tempfile.TemporaryDirectory(prefix="qqq-tui-test-") as folder:
             assert b"\x1b[0m" in screen, "Colors not reset on exit"
         else:
             assert b"\x1b[48;" not in screen and b"\x1b[38;" not in screen
-        if scenario == "cancel":
+        if cancelled:
             assert child.returncode == 1
             assert stdout == b""
             assert cli("list") == []
+            if scenario in ("escape_empty", "escape_deleted"):
+                assert b"Discard" not in screen
         else:
             assert child.returncode == 0, screen[-2000:]
             task = json.loads(stdout)
-            if scenario == "save":
+            if scenario in ("save", "escape_keep"):
                 assert "title" not in task
                 assert task["description"] == "Title\n\n" + "\u754c" * 1001 + "\n[Image: test image.png]"
                 attachments = cli("show", "1")["images"]
