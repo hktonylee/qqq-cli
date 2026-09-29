@@ -88,6 +88,31 @@ impl Waiter {
     }
 }
 
+#[test]
+fn wait_skips_error_until_user_retries() {
+    let dir = project();
+    let path = dir.path();
+    ok(path, &["add", "Task"]);
+    ok(path, &["next", "--local", "--session", "worker"]);
+    ok(
+        path,
+        &[
+            "edit",
+            "1",
+            "--set-status",
+            "error",
+            "--reason",
+            "Needs input",
+            "--session",
+            "worker",
+        ],
+    );
+    let mut waiter = Waiter::spawn(path, "worker", true);
+    waiter.assert_waiting();
+    ok(path, &["edit", "1", "--set-status", "new"]);
+    assert_eq!(waiter.task()["id"], 1);
+}
+
 impl Drop for Waiter {
     fn drop(&mut self) {
         if let Some(mut child) = self.0.take() {

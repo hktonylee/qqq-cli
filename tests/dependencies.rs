@@ -199,7 +199,7 @@ fn version_one_migration_preserves_data_and_is_repeatable() {
     let version: i64 = conn
         .pragma_query_value(None, "user_version", |r| r.get(0))
         .unwrap();
-    assert_eq!(version, 3);
+    assert_eq!(version, 4);
     let image: Vec<u8> = conn
         .query_row("SELECT data FROM images", [], |r| r.get(0))
         .unwrap();
@@ -244,17 +244,17 @@ fn concurrent_legacy_opens_migrate_once() {
 fn unknown_schema_is_rejected_without_modification() {
     let d = legacy_project();
     let conn = Connection::open(d.path().join("qqq.db")).unwrap();
-    conn.pragma_update(None, "user_version", 4).unwrap();
+    conn.pragma_update(None, "user_version", 5).unwrap();
     for command in ["init", "list"] {
         let out = run(d.path(), &[command]);
         assert!(!out.status.success());
         assert!(
-            String::from_utf8_lossy(&out.stderr).contains("Unsupported database schema version 4")
+            String::from_utf8_lossy(&out.stderr).contains("Unsupported database schema version 5")
         );
     }
     let version: i64 = conn
         .pragma_query_value(None, "user_version", |r| r.get(0))
         .unwrap();
-    assert_eq!(version, 4);
+    assert_eq!(version, 5);
     assert!(conn.prepare("SELECT parent_id FROM tasks").is_err());
 }

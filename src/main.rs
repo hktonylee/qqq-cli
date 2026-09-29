@@ -32,6 +32,7 @@ struct Cli {
 #[derive(Clone, Copy, ValueEnum)]
 enum EditStatus {
     New,
+    Error,
 }
 
 #[derive(Subcommand)]
@@ -106,9 +107,12 @@ enum Commands {
         /// Force $EDITOR with supplied fields prefilled, including attachment edits.
         #[arg(short, long, conflicts_with = "set_status")]
         edit: bool,
-        /// Return claimed task to new; session ID must match recorded owner. Skips editor.
+        /// Return owned task/error to new, or mark owned task error with --reason. Skips editor.
         #[arg(long, value_enum)]
         set_status: Option<EditStatus>,
+        /// Failure details, required and valid only with --set-status error.
+        #[arg(long, requires = "set_status")]
+        reason: Option<String>,
         /// Append image file bytes without opening editor. Repeat for multiple images.
         #[arg(long = "image", value_name = "PATH")]
         images: Vec<PathBuf>,
@@ -215,6 +219,7 @@ fn execute(cli: Cli, display_limit: Option<i64>) -> Result<Value> {
             edit,
             set_status,
             images,
+            reason,
         } => {
             let id = db.resolve_edit_id(id)?;
             let task = db.task(id)?;
@@ -238,17 +243,45 @@ fn execute(cli: Cli, display_limit: Option<i64>) -> Result<Value> {
                 draft.images.extend(images);
                 json!(db.save_composition(Some(id), None, &draft)?)
             } else {
-                let release_session = match set_status {
+                ensure!(
+                    reason.is_none() || matches!(set_status, Some(EditStatus::Error)),
+                    "--reason is only valid with --set-status error"
+                );
+                if matches!(set_status, Some(EditStatus::Error)) {
+                    db::nonempty(
+                        reason
+                            .as_deref()
+                            .context("--set-status error requires --reason")?,
+                        "Error reason",
+                    )?;
+                }
+                let session = match set_status {
+                    Some(EditStatus::New) if db.task(id)?.status == "error" => {
+                        Some(cli.session.clone().unwrap_or_else(|| "manual".to_owned()))
+                    }
                     Some(EditStatus::New) => {
                         Some(herdr::owner(cli.session.as_deref(), project_dir, &db)?.0)
                     }
+                    Some(EditStatus::Error) => {
+                        Some(herdr::owner(cli.session.as_deref(), project_dir, &db)?.0)
+                    }
+                    None => None,
+                };
+                let transition = match set_status {
+                    Some(EditStatus::New) => {
+                        Some(db::EditTransition::New(session.as_deref().unwrap()))
+                    }
+                    Some(EditStatus::Error) => Some(db::EditTransition::Error {
+                        session: session.as_deref().unwrap(),
+                        reason: reason.as_deref().unwrap(),
+                    }),
                     None => None,
                 };
                 json!(db.edit(
                     id,
                     title.as_deref(),
                     description.as_deref(),
-                    release_session.as_deref(),
+                    transition,
                     &images
                 )?)
             }

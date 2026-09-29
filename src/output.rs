@@ -81,6 +81,7 @@ fn status(value: &Value) -> &str {
         Some("new") => "New",
         Some("in_progress") => "In progress",
         Some("completed") => "Completed",
+        Some("error") => "Error",
         _ => "Unknown",
     }
 }
@@ -217,6 +218,7 @@ fn task_tree(tasks: &[Value], color: bool) -> String {
         let code = match task["status"].as_str() {
             Some("in_progress") if color => Some("36"),
             Some("completed") if color => Some("90"),
+            Some("error") if color => Some("31"),
             _ => None,
         };
         lines.push(match code {
@@ -309,5 +311,22 @@ fn config_value(value: &Value) -> String {
     match value {
         Value::String(text) => clean(text),
         other => clean(&other.to_string()),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{Format, render};
+    use serde_json::json;
+
+    #[test]
+    fn error_rows_use_red_only_when_color_enabled() {
+        let tasks = json!([{"id":1,"title":"Failure","status":"error","parent_id":null}]);
+        let colored = render(Format::Tasks, &tasks, true);
+        assert!(colored.contains("\x1b[31m1"));
+        assert!(colored.contains("Error"));
+        let plain = render(Format::Tasks, &tasks, false);
+        assert!(plain.contains("Error"));
+        assert!(!plain.contains('\x1b'));
     }
 }

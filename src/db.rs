@@ -12,6 +12,10 @@ pub const DB_NAME: &str = "qqq.db";
 pub struct Db {
     pub conn: Connection,
 }
+pub enum EditTransition<'a> {
+    New(&'a str),
+    Error { session: &'a str, reason: &'a str },
+}
 #[derive(Serialize)]
 pub struct Task {
     pub id: i64,
@@ -61,15 +65,18 @@ impl Db {
         conn.pragma_update(None, "foreign_keys", "ON")?;
         let version: i64 = conn.pragma_query_value(None, "user_version", |r| r.get(0))?;
         ensure!(
-            (1..=3).contains(&version) || (init && version == 0),
+            (1..=4).contains(&version) || (init && version == 0),
             "Unsupported database schema version {version}"
         );
-        if version < 3 {
+        if version < 4 {
+            // Rebuild CHECK constraints without changing references to tasks.
+            // SQLite requires foreign_keys to change outside a transaction.
+            conn.pragma_update(None, "foreign_keys", "OFF")?;
             let tx = conn.transaction_with_behavior(TransactionBehavior::Immediate)?;
             // Another CLI may have migrated while we waited for the write lock.
             let version: i64 = tx.pragma_query_value(None, "user_version", |r| r.get(0))?;
             ensure!(
-                (1..=3).contains(&version) || (init && version == 0),
+                (1..=4).contains(&version) || (init && version == 0),
                 "Unsupported database schema version {version}"
             );
             if version == 0 {
@@ -81,11 +88,19 @@ impl Db {
             if version < 3 {
                 tx.execute_batch(include_str!("migrate_v3.sql"))?;
             }
+            if version < 4 {
+                tx.execute_batch(include_str!("migrate_v4.sql"))?;
+                ensure!(
+                    !tx.prepare("PRAGMA foreign_key_check")?.exists([])?,
+                    "Database migration found invalid foreign key references"
+                );
+            }
             tx.commit()?;
+            conn.pragma_update(None, "foreign_keys", "ON")?;
         }
         let version: i64 = conn.pragma_query_value(None, "user_version", |r| r.get(0))?;
         ensure!(
-            version == 3,
+            version == 4,
             "Unsupported database schema version {version}"
         );
         Ok((Self { conn }, path))
@@ -159,7 +174,7 @@ impl Db {
         id: i64,
         title: Option<&str>,
         description: Option<&str>,
-        release_session: Option<&str>,
+        transition: Option<EditTransition<'_>>,
         images: &[ImageInput],
     ) -> Result<Task> {
         if let Some(title) = title {
@@ -171,13 +186,29 @@ impl Db {
         let tx = self
             .conn
             .transaction_with_behavior(TransactionBehavior::Immediate)?;
-        if let Some(session) = release_session {
-            nonempty(session, "Session")?;
-            ensure!(tx.execute("UPDATE tasks SET status='new',assignee=NULL WHERE id=? AND status='in_progress' AND assignee=?",params![id,session])?==1,"Task {id} is not claimed by session {session}");
-            tx.execute(
-                "INSERT INTO events(task_id,session,action) VALUES (?,?,'release')",
-                params![id, session],
-            )?;
+        match transition {
+            Some(EditTransition::New(session)) => {
+                nonempty(session, "Session")?;
+                ensure!(tx.execute("UPDATE tasks SET status='new',assignee=NULL WHERE id=? AND ((status='in_progress' AND assignee=?) OR status='error')",params![id,session])?==1,"Task {id} is not in error or claimed by session {session}");
+                tx.execute(
+                    "INSERT INTO events(task_id,session,action) VALUES (?,?,'release')",
+                    params![id, session],
+                )?;
+            }
+            Some(EditTransition::Error { session, reason }) => {
+                nonempty(session, "Session")?;
+                nonempty(reason, "Error reason")?;
+                ensure!(tx.execute("UPDATE tasks SET status='error',assignee=NULL WHERE id=? AND status='in_progress' AND assignee=?",params![id,session])?==1,"Task {id} is not claimed by session {session}");
+                tx.execute(
+                    "INSERT INTO events(task_id,session,action) VALUES (?,?,'error')",
+                    params![id, session],
+                )?;
+                tx.execute(
+                    "INSERT INTO messages(task_id,body,session) VALUES (?,?,?)",
+                    params![id, reason, session],
+                )?;
+            }
+            None => {}
         }
         ensure!(tx.execute("UPDATE tasks SET title=COALESCE(?,title),description=COALESCE(?,description),updated_at=strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE id=?",params![title,description,id])?==1,"Task {id} not found");
         Self::save_images(&tx, id, images)?;

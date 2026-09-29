@@ -36,7 +36,7 @@ qqq list --max-completed 0 --json
 `qqq show <id>` includes description, ownership, messages, images, history and Herdr
 details. Empty lists print `No tasks yet.`; queues with no ready tasks print
 `No ready tasks.`. In a terminal, list rows use normal terminal color for new, cyan for
-in-progress, and grey for completed tasks. Aliases such as `ls = "list"` use the
+in-progress, grey for completed tasks, and red for tasks in error. Aliases such as `ls = "list"` use the
 same colors. Piped output and `--json` stay plain. Set `NO_COLOR=1` or `TERM=dumb`
 to disable colors.
 
@@ -169,7 +169,7 @@ Field-only editing preserves task status and ownership. Dependencies, messages a
 attachments are preserved by all edits.
 
 Use `qqq edit <id> --set-status new` to return a claimed task to the queue
-(replaces `release`). Only `new` is accepted for now. The task must be
+(replaces `release`). For an active task, it must be
 `in_progress`, and the supplied or discovered session ID must match its recorded
 `assignee`. This clears the owner and records a `release` history event.
 New or completed tasks cannot use this transition.
@@ -181,6 +181,30 @@ qqq edit -1 --set-status new --description "Retry with updated details" --sessio
 
 `--set-status` skips the editor. Combined title, description and status updates
 are atomic: validation or ownership errors leave all fields and history unchanged.
+
+Mark failed work that needs manual handling with `error` and a required reason:
+
+```sh
+qqq edit 1 --set-status error --reason "Missing API credentials" --session agent-session-123
+qqq show 1
+# After handling failure, explicitly return it to the queue:
+qqq edit 1 --set-status new
+```
+
+Only the owner of an `in_progress` task can mark it `error`. This clears its
+assignee, saves the reason as a message, and records an `error` history event.
+Blank reasons fail; `--reason` is valid only with `--set-status error`. Optional
+title/description edits commit together with the failure. Error tasks stay
+visible in `list`, even with `--max-completed 0`; `show` includes the reason.
+`next` and `next --wait` skip them, and dependent tasks stay blocked. The worker
+can claim another ready task.
+
+Any local caller can retry an error task through `--set-status new`, without a
+session or Herdr connection. An explicit session records the retry author;
+otherwise history uses `manual`. Retry preserves content, dependencies,
+messages, attachments and saved Herdr link. Generic CLI errors do not mark
+tasks error automatically. Dispatch startup failures still return tasks to new;
+ambiguous prompt-delivery failures retain their active claim for inspection.
 
 Add a dependency with `--parent <task-id>`:
 
@@ -303,6 +327,7 @@ Or pass `--session agent-session-123` on individual commands. Precedence: `--ses
 - Without `--wait`, no ready tasks prints `No ready tasks.` (`null` with `--json`), exit code 0.
 - `complete <task-id>` marks task `completed` when the supplied or discovered session ID matches its recorded `assignee`.
 - `edit <task-id> --set-status new` returns a claimed task to `new` when the supplied or discovered session ID matches its recorded `assignee`.
+- `edit <task-id> --set-status error --reason "Details"` marks owned active work as failed, clearing its claim until a user explicitly retries with `--set-status new`.
 - Claims never expire. Restarting CLI preserves locks. `show` includes claim/release/completion history.
 
 Use `--wait` for workers that should stay ready when the queue is empty:
@@ -416,8 +441,9 @@ schema/data update; this rename adds no automatic migration or schema version bu
 Task assignment is exposed as `assignee` in JSON and `Assignee:` in human output.
 Its value is the claiming session ID, or `null` for unassigned tasks. JSON clients
 should use `assignee` in place of the former `owner_session` field. Schema version
-3 automatically migrates existing version 1/2 databases on open, preserving
-claims, task data, history, attachments, and links. The `--session` flag and
+4 automatically migrates existing version 1/2/3 databases on open, preserving
+claims, task data, dependencies, history, attachments, links and deleted-ID
+high-water marks. The `--session` flag and
 session matching rules are unchanged.
 
 DB includes tasks, messages, image blobs, ownership events, latest Herdr link per task. SQLite foreign keys, immediate write transactions, unique active-owner index and 10-second busy timeout protect concurrent claims. Tasks from version 1 databases have no parent after migration. Newer unknown versions are rejected. Keep DB out of Git. To back up while CLI processes may run, use SQLite's backup API or `sqlite3 qqq.db '.backup backup.sqlite'`; copy DB file only when all writers are stopped.

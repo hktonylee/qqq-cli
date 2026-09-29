@@ -1,5 +1,5 @@
 use crate::{
-    db::{Db, Task, nonempty},
+    db::{Db, EditTransition, Task, nonempty},
     herdr::{self, Link, Pane},
 };
 use anyhow::{Context, Result, ensure};
@@ -115,7 +115,7 @@ pub fn next(db: &mut Db, caller: Option<&str>) -> Result<Option<Task>> {
     let pane = match prepared {
         Ok(pane) => pane,
         Err(error) => {
-            db.edit(task.id, None, None, Some(&name), &[])
+            db.edit(task.id, None, None, Some(EditTransition::New(&name)), &[])
                 .with_context(|| {
                     format!(
                         "Dispatch failed ({error:#}); could not release task {} assigned to {name}",
@@ -126,7 +126,7 @@ pub fn next(db: &mut Db, caller: Option<&str>) -> Result<Option<Task>> {
         }
     };
     let prompt = format!(
-        "Work on qqq task #{id} in {cwd}. Task is already assigned to session {session}. Do not call qqq next or dispatch another agent. Run {bin} show {id} --json to read task, messages and attachments. Complete requested work, verify changes, record progress using {bin} message {id} '<progress>' --session {session}, then run {bin} complete {id} --session {session} only when finished. If blocked, leave task claimed and record blocker. Use next --local only if you need to retrieve this existing claim.",
+        "Work on qqq task #{id} in {cwd}. Task is already assigned to session {session}. Do not call qqq next or dispatch another agent. Run {bin} show {id} --json to read task, messages and attachments. Complete requested work, verify changes, record progress using {bin} message {id} '<progress>' --session {session}, then run {bin} complete {id} --session {session} only when finished. If work fails and needs manual handling, run {bin} edit {id} --set-status error --reason '<failure details>' --session {session}; task stays out of queue until user explicitly retries. Use next --local only if you need to retrieve this existing claim.",
         id = task.id,
         cwd = quote(cwd),
         session = quote(&name),
