@@ -5,7 +5,7 @@ edition = "2024"
 rust-version = "1.85"
 description = "Local-first task queue for coding agent sessions"
 license = "MIT"
-repository = "https://github.com/hktonylee/qqq"
+repository = "https://github.com/hktonylee/qqq-cli"
 readme = "README.md"
 publish = ["crates-io"]
 
