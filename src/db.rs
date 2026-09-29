@@ -14,6 +14,7 @@ pub struct Db {
 }
 pub enum EditTransition<'a> {
     New(&'a str),
+    RetryError(&'a str),
     Error { session: &'a str, reason: &'a str },
 }
 #[derive(Serialize)]
@@ -189,7 +190,21 @@ impl Db {
         match transition {
             Some(EditTransition::New(session)) => {
                 nonempty(session, "Session")?;
-                ensure!(tx.execute("UPDATE tasks SET status='new',assignee=NULL WHERE id=? AND ((status='in_progress' AND assignee=?) OR status='error')",params![id,session])?==1,"Task {id} is not in error or claimed by session {session}");
+                ensure!(tx.execute("UPDATE tasks SET status='new',assignee=NULL WHERE id=? AND status='in_progress' AND assignee=?",params![id,session])?==1,"Task {id} is not claimed by session {session}");
+                tx.execute(
+                    "INSERT INTO events(task_id,session,action) VALUES (?,?,'release')",
+                    params![id, session],
+                )?;
+            }
+            Some(EditTransition::RetryError(session)) => {
+                nonempty(session, "Session")?;
+                ensure!(
+                    tx.execute(
+                        "UPDATE tasks SET status='new',assignee=NULL WHERE id=? AND status='error'",
+                        [id]
+                    )? == 1,
+                    "Task {id} is no longer in error; inspect its current status before retrying"
+                );
                 tx.execute(
                     "INSERT INTO events(task_id,session,action) VALUES (?,?,'release')",
                     params![id, session],

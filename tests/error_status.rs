@@ -424,3 +424,70 @@ fn invalid_legacy_foreign_key_aborts_migration_atomically() {
         99
     );
 }
+
+#[test]
+fn session_free_retry_cannot_release_claim_created_while_it_waits() {
+    let d = project();
+    ok(&d, &["add", "Task"]);
+    ok(&d, &["next", "--local", "--session", "worker"]);
+    fail(&d, "1", "worker");
+    let conn = Connection::open(d.path().join("qqq.db")).unwrap();
+    conn.execute_batch("BEGIN IMMEDIATE").unwrap();
+    let mut child = command(&d)
+        .args(["edit", "1", "--set-status", "new", "--json"])
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .unwrap();
+    // Retry reads the committed error snapshot, then waits for this write lock.
+    std::thread::sleep(std::time::Duration::from_millis(600));
+    assert!(child.try_wait().unwrap().is_none());
+    conn.execute_batch(
+        "UPDATE tasks SET status='in_progress',assignee='manual' WHERE id=1; COMMIT",
+    )
+    .unwrap();
+    let output = child.wait_with_output().unwrap();
+    assert!(
+        !output.status.success(),
+        "Stale retry released a fresh claim"
+    );
+    let detail = ok(&d, &["show", "1"]);
+    assert_eq!(detail["task"]["status"], "in_progress");
+    assert_eq!(detail["task"]["assignee"], "manual");
+    assert_eq!(detail["events"].as_array().unwrap().len(), 2);
+}
+
+#[test]
+fn failed_image_insert_rolls_back_error_reason_history_and_content() {
+    let d = project();
+    ok(&d, &["add", "Task"]);
+    ok(&d, &["next", "--local", "--session", "worker"]);
+    std::fs::write(d.path().join("x.png"), b"\x89PNG\r\n\x1a\nfixture").unwrap();
+    let conn = Connection::open(d.path().join("qqq.db")).unwrap();
+    conn.execute_batch("CREATE TRIGGER reject_image BEFORE INSERT ON images BEGIN SELECT RAISE(ABORT,'image insertion blocked'); END").unwrap();
+    let before = ok(&d, &["show", "1"]);
+    let args = [
+        "edit",
+        "1",
+        "--set-status",
+        "error",
+        "--reason",
+        "Failure",
+        "--session",
+        "worker",
+        "--title",
+        "Changed",
+        "--image",
+        "x.png",
+    ];
+    let output = run(&d, &args);
+    assert!(!output.status.success());
+    assert!(String::from_utf8_lossy(&output.stderr).contains("image insertion blocked"));
+    assert_eq!(ok(&d, &["show", "1"]), before);
+    conn.execute_batch("DROP TRIGGER reject_image").unwrap();
+    assert_eq!(ok(&d, &args)["status"], "error");
+    let detail = ok(&d, &["show", "1"]);
+    assert_eq!(detail["images"].as_array().unwrap().len(), 1);
+    assert_eq!(detail["messages"][0]["body"], "Failure");
+    assert_eq!(detail["events"][1]["action"], "error");
+}

@@ -256,7 +256,7 @@ fn execute(cli: Cli, display_limit: Option<i64>) -> Result<Value> {
                     )?;
                 }
                 let session = match set_status {
-                    Some(EditStatus::New) if db.task(id)?.status == "error" => {
+                    Some(EditStatus::New) if task.status == "error" => {
                         Some(cli.session.clone().unwrap_or_else(|| "manual".to_owned()))
                     }
                     Some(EditStatus::New) => {
@@ -268,6 +268,9 @@ fn execute(cli: Cli, display_limit: Option<i64>) -> Result<Value> {
                     None => None,
                 };
                 let transition = match set_status {
+                    Some(EditStatus::New) if task.status == "error" => {
+                        Some(db::EditTransition::RetryError(session.as_deref().unwrap()))
+                    }
                     Some(EditStatus::New) => {
                         Some(db::EditTransition::New(session.as_deref().unwrap()))
                     }
