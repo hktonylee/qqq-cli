@@ -1,5 +1,6 @@
 use crate::{Commands, HerdrCommand, ImageCommand};
 use serde_json::Value;
+use std::collections::HashMap;
 
 pub enum Format {
     Database,
@@ -161,41 +162,72 @@ fn image(value: &Value) -> String {
     )
 }
 
+fn task_tree(tasks: &[Value], color: bool) -> String {
+    if tasks.is_empty() {
+        return "No tasks yet.".to_owned();
+    }
+    let positions: HashMap<_, _> = tasks
+        .iter()
+        .enumerate()
+        .map(|(index, task)| (task["id"].as_i64().expect("task ID is an integer"), index))
+        .collect();
+    let mut children = vec![Vec::new(); tasks.len()];
+    let mut roots = Vec::new();
+    for (index, task) in tasks.iter().enumerate() {
+        match task["parent_id"].as_i64().and_then(|id| positions.get(&id)) {
+            Some(&parent) => children[parent].push(index),
+            None => roots.push(index),
+        }
+    }
+
+    // DB list order is creation order, so adjacency lists preserve root/sibling order.
+    // Explicit stack avoids recursive calls for long dependency chains.
+    let mut stack: Vec<(usize, usize, bool)> = roots
+        .into_iter()
+        .rev()
+        .map(|index| (index, 0, true))
+        .collect();
+    let mut continuations = Vec::new();
+    let mut lines = vec![format!("{:<6} {:<12} TITLE", "ID", "STATUS")];
+    while let Some((index, depth, last)) = stack.pop() {
+        continuations.truncate(depth.saturating_sub(1));
+        let mut prefix: String = continuations
+            .iter()
+            .map(|&continues| if continues { "│   " } else { "    " })
+            .collect();
+        if depth > 0 {
+            prefix.push_str(if last { "└── " } else { "├── " });
+            continuations.push(!last);
+        }
+        let task = &tasks[index];
+        let row = format!(
+            "{:<6} {:<12} {prefix}{}",
+            field(task, "id"),
+            status(task),
+            field(task, "title")
+        );
+        let code = match task["status"].as_str() {
+            Some("in_progress") if color => Some("36"),
+            Some("completed") if color => Some("90"),
+            _ => None,
+        };
+        lines.push(match code {
+            Some(code) => format!("\x1b[{code}m{row}\x1b[0m"),
+            None => row,
+        });
+        for (position, &child) in children[index].iter().enumerate().rev() {
+            stack.push((child, depth + 1, position + 1 == children[index].len()));
+        }
+    }
+    lines.join("\n")
+}
+
 pub fn render(format: Format, value: &Value, color: bool) -> String {
     match format {
         Format::Database => format!("Database: {}", field(value, "database")),
         Format::Task if value.is_null() => "No ready tasks.".to_owned(),
         Format::Task => task(value),
-        Format::Tasks => {
-            let tasks = value.as_array().expect("task list is an array");
-            if tasks.is_empty() {
-                return "No tasks yet.".to_owned();
-            }
-            let mut lines = vec![format!(
-                "{:<6} {:<12} {:<8} TITLE",
-                "ID", "STATUS", "PARENT"
-            )];
-            lines.extend(tasks.iter().map(|task| {
-                let row = format!(
-                    "{:<6} {:<12} {:<8} {}",
-                    field(task, "id"),
-                    status(task),
-                    parent(task),
-                    field(task, "title")
-                );
-                let code = match task["status"].as_str() {
-                    Some("in_progress") => "36",
-                    Some("completed") => "90",
-                    _ => return row,
-                };
-                if color {
-                    format!("\x1b[{code}m{row}\x1b[0m")
-                } else {
-                    row
-                }
-            }));
-            lines.join("\n")
-        }
+        Format::Tasks => task_tree(value.as_array().expect("task list is an array"), color),
         Format::Detail => {
             let mut result = task(&value["task"]);
             for (key, label) in [

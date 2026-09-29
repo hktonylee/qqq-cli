@@ -42,15 +42,15 @@ fn human_tasks_show_descriptions_dependencies_and_ownership() {
     for part in [
         "ID",
         "STATUS",
-        "PARENT",
         "TITLE",
         "Build API",
         "Build client",
         "New",
-        "#1",
+        "└── Build client",
     ] {
         assert!(list.contains(part), "{part}: {list}");
     }
+    assert!(!list.contains("PARENT"));
     let next = text(p, &["next", "--session", "a"]);
     assert!(next.contains("Status: In progress"));
     assert!(next.contains("Assignee: a"));
@@ -208,4 +208,91 @@ fn aliases_support_human_default_and_json_in_all_positions() {
             assert_eq!(tasks[0]["title"], "Alias task");
         }
     }
+}
+
+#[test]
+fn human_list_groups_nested_dependencies_with_correct_tree_branches() {
+    let d = project();
+    let p = d.path();
+    for args in [
+        vec!["add", "Project A"],
+        vec!["add", "Project B"],
+        vec!["add", "API", "--parent", "1"],
+        vec!["add", "UI", "--parent", "1"],
+        vec!["add", "Auth", "--parent", "3"],
+        vec!["add", "Storage", "--parent", "3"],
+        vec!["add", "App", "--parent", "2"],
+        vec!["add", "Cleanup"],
+        vec!["add", "Views", "--parent", "4"],
+    ] {
+        text(p, &args);
+    }
+    text(p, &["next", "--session", "tree"]);
+    text(p, &["complete", "1", "--session", "tree"]);
+    text(p, &["next", "--session", "tree"]);
+    let list = text(p, &["list"]);
+    let rows: Vec<_> = list.lines().collect();
+    assert_eq!(rows.len(), 10);
+    assert_eq!(rows[0], format!("{:<6} {:<12} TITLE", "ID", "STATUS"));
+    assert!(!list.contains("PARENT"));
+    for (row, (id, title)) in rows[1..].iter().zip([
+        (1, "Project A"),
+        (3, "├── API"),
+        (5, "│   ├── Auth"),
+        (6, "│   └── Storage"),
+        (4, "└── UI"),
+        (9, "    └── Views"),
+        (2, "Project B"),
+        (7, "└── App"),
+        (8, "Cleanup"),
+    ]) {
+        assert_eq!(row.split_whitespace().next().unwrap(), id.to_string());
+        assert_eq!(&row[20..], title, "{list}");
+    }
+    assert!(rows[1].contains("Completed"));
+    assert!(rows[7].contains("In progress"));
+    let json: Value = serde_json::from_str(&text(p, &["--json", "list"])).unwrap();
+    let ids: Vec<_> = json
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|task| task["id"].as_i64().unwrap())
+        .collect();
+    assert_eq!(ids, (1..=9).collect::<Vec<_>>());
+    assert_eq!(json[4]["parent_id"], 3);
+    assert!(!list.contains('\u{1b}'));
+}
+
+#[test]
+fn nested_titles_escape_terminal_controls_and_json_keeps_original_text() {
+    let d = project();
+    let p = d.path();
+    text(p, &["add", "Root"]);
+    let title = "Child\nline\t\u{1b}[31m";
+    text(p, &["add", title, "--parent", "1"]);
+    let list = text(p, &["list"]);
+    assert_eq!(list.lines().count(), 3);
+    assert!(list.contains("└── Child\\nline\\t\\u{1b}[31m"), "{list}");
+    assert!(!list.contains('\u{1b}'));
+    let json: Value = serde_json::from_str(&text(p, &["list", "--json"])).unwrap();
+    assert_eq!(json[1]["title"], title);
+}
+
+#[test]
+fn human_list_renders_long_dependency_chains() {
+    let d = project();
+    let p = d.path();
+    let conn = rusqlite::Connection::open(p.join("qqq.db")).unwrap();
+    conn.execute_batch(
+        "WITH RECURSIVE ids(id) AS (SELECT 1 UNION ALL SELECT id+1 FROM ids WHERE id<512)
+        INSERT INTO tasks(id,title,parent_id) SELECT id,'Task '||id,NULLIF(id-1,0) FROM ids;",
+    )
+    .unwrap();
+    let list = text(p, &["list"]);
+    let rows: Vec<_> = list.lines().collect();
+    assert_eq!(rows.len(), 513);
+    assert_eq!(
+        &rows[512][20..],
+        format!("{}└── Task 512", "    ".repeat(510))
+    );
 }

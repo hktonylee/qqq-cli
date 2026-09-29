@@ -4,7 +4,20 @@ Local-first Rust CLI for project tasks and coding agent sessions. Everything liv
 
 ## Output
 
-`qqq list` shows task IDs, status, parent dependencies and titles in a compact table.
+`qqq list` shows task IDs, status, and titles as a dependency tree. Children appear
+below their parent; roots and siblings follow creation order. Branches replace
+the parent column:
+
+```text
+ID     STATUS       TITLE
+1      New          Build API
+2      New          ├── Auth
+4      New          │   └── Token tests
+3      New          └── Client
+5      New          Docs
+```
+
+`qqq list --json` keeps the flat array in creation order, including `parent_id`.
 `qqq show <id>` includes description, ownership, messages, images, history and Herdr
 details. Empty lists print `No tasks yet.`; queues with no ready tasks print
 `No ready tasks.`. In a terminal, list rows use normal terminal color for new, cyan for

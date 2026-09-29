@@ -45,7 +45,7 @@ enum Commands {
         #[arg(long)]
         parent: Option<i64>,
     },
-    /// List tasks in creation order.
+    /// List tasks as a dependency tree; JSON lists tasks in creation order.
     List,
     /// Show task, messages, image metadata, ownership history and Herdr link.
     Show { id: i64 },
