@@ -10,7 +10,7 @@ use std::{
     time::Duration,
 };
 
-pub fn run(json_output: bool, max_completed: Option<i64>) -> Result<()> {
+pub fn run(json_output: bool, max_completed: Option<i64>, display_limited: bool) -> Result<()> {
     let (db, _) = Db::open(false)?;
     let stdout = io::stdout();
     let terminal =
@@ -23,6 +23,8 @@ pub fn run(json_output: bool, max_completed: Option<i64>) -> Result<()> {
         let tasks = json!(db.list(max_completed)?);
         let snapshot = if json_output {
             serde_json::to_string(&tasks)?
+        } else if display_limited && tasks.as_array().is_some_and(Vec::is_empty) {
+            "No tasks to display.".to_owned()
         } else {
             output::render(Format::Tasks, &tasks, color)
         };

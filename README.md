@@ -24,8 +24,9 @@ and in-progress task. The most recent completions are retained; completion
 history determines recency, falling back to update time and ID when history is
 absent. Editing an older completed task does not count as another completion.
 Omit the flag to use the human display default; `0` hides completed rows. An
-explicit flag applies to text and JSON, overriding config. Children whose parents are hidden appear as roots; JSON preserves
-the original `parent_id`. Filtering does not delete task data.
+explicit flag applies to text and JSON, overriding config. Children whose parents
+are hidden appear as roots; JSON preserves the original `parent_id`. Filtering
+does not delete task data.
 
 ```sh
 qqq list --max-completed 10
@@ -71,8 +72,8 @@ setting means unlimited. It uses the same completion ordering as the explicit
 flag. New and in-progress tasks always remain visible; children of hidden parents
 appear as roots. `qqq list --all` bypasses the default. `--json` ignores the config
 default; an explicit `--max-completed` still filters JSON. `show` opens any task.
-A configured list with no visible tasks prints `No tasks to display.`.
-
+The same config and flag rules apply to every `list --watch` snapshot. A configured
+list with no visible tasks prints `No tasks to display.`.
 
 ## Install
 

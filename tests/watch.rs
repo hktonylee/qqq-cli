@@ -191,3 +191,44 @@ fn watch_keeps_completed_limit_on_every_refresh() {
     ok(p, &["message", "2", "Note"]);
     assert_eq!(watch.snapshot(), remaining);
 }
+
+#[test]
+fn watch_uses_human_display_default_and_honors_overrides() {
+    let dir = project();
+    let p = dir.path();
+    ok(p, &["add", "First"]);
+    ok(p, &["next", "--local", "--session", "worker"]);
+    ok(p, &["complete", "1", "--session", "worker"]);
+    ok(p, &["add", "Second"]);
+    std::fs::create_dir_all(p.join(".config/qqq")).unwrap();
+    std::fs::write(
+        p.join(".config/qqq/config.toml"),
+        "[display]\nmax-completed = 0\n",
+    )
+    .unwrap();
+
+    {
+        let json = Watcher::start(p, &["list", "--watch", "--json"]);
+        assert_eq!(json.snapshot().as_array().unwrap().len(), 2);
+    }
+    for args in [
+        vec!["list", "--watch", "--all"],
+        vec!["list", "--watch", "--max-completed", "1"],
+    ] {
+        let watch = Watcher::start(p, &args);
+        assert!(watch.line().starts_with("ID"));
+        assert!(watch.line().contains("First"));
+        assert!(watch.line().contains("Second"));
+    }
+
+    let mut watch = Watcher::start(p, &["list", "--watch"]);
+    assert!(watch.line().starts_with("ID"));
+    assert!(watch.line().contains("Second"));
+    watch.idle();
+    ok(p, &["next", "--local", "--session", "worker"]);
+    assert!(watch.line().starts_with("ID"));
+    assert!(watch.line().contains("In progress"));
+    ok(p, &["complete", "2", "--session", "worker"]);
+    assert_eq!(watch.line(), "No tasks to display.");
+    watch.idle();
+}

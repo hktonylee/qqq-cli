@@ -247,7 +247,11 @@ fn run() -> Result<Option<String>> {
         ..
     } = &cli.command
     {
-        watch::run(cli.json, max_completed.or(display_limit))?;
+        watch::run(
+            cli.json,
+            max_completed.or(display_limit),
+            display_limit.is_some(),
+        )?;
         return Ok(None);
     }
     let json = cli.json;
