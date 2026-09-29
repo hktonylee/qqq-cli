@@ -110,6 +110,26 @@ impl Db {
         ensure!(self.conn.execute("UPDATE tasks SET title=COALESCE(?,title),description=COALESCE(?,description),updated_at=strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE id=?",params![title,description,id])?==1,"Task {id} not found");
         self.task(id)
     }
+    pub fn resolve_edit_id(&self, reference: i64) -> Result<i64> {
+        ensure!(
+            reference != 0,
+            "Task reference must be a positive ID or negative creation index"
+        );
+        if reference > 0 {
+            return Ok(reference);
+        }
+        // AUTOINCREMENT IDs preserve insertion order even when timestamps tie.
+        // Add before negating so i64::MIN maps safely to i64::MAX.
+        let offset = -(reference + 1);
+        self.conn
+            .query_row(
+                "SELECT id FROM tasks ORDER BY id DESC LIMIT 1 OFFSET ?",
+                [offset],
+                |row| row.get(0),
+            )
+            .optional()?
+            .with_context(|| format!("No task at recent creation index {reference}"))
+    }
     pub fn next(
         &mut self,
         session: &str,

@@ -71,7 +71,15 @@ qqq edit 1 --title "Fix expired login"
 qqq edit 1 --description "Updated details"
 qqq edit 1 --title "Fix login" -d "Updated details"
 qqq edit 1 --description ""  # clear description
+qqq edit -1                  # edit newest created task
+qqq edit -2 --title "Updated" # edit second newest created task
 ```
+
+The first argument is a positive task ID or a negative creation index (`-1`
+means newest, `-2` second newest). Recent indexes count existing tasks across all
+statuses in descending ID order, not last-edited order. Zero, missing IDs, and
+out-of-range indexes fail before opening the editor. The target is resolved once
+before editing, so tasks created while the editor is open do not change it.
 
 Field flags skip the editor and preserve omitted fields. Titles cannot be blank.
 Existing multiline titles require field flags because the editor format uses one title line.

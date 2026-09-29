@@ -46,6 +46,8 @@ enum Commands {
     Show { id: i64 },
     /// Edit title and description in $EDITOR, or update supplied fields directly.
     Edit {
+        /// Task ID, or negative creation index: -1 is newest, -2 second newest.
+        #[arg(allow_negative_numbers = true)]
         id: i64,
         #[arg(long)]
         title: Option<String>,
@@ -121,6 +123,7 @@ fn execute(cli: Cli) -> Result<Value> {
             title,
             description,
         } => {
+            let id = db.resolve_edit_id(id)?;
             if title.is_none() && description.is_none() {
                 let task = db.task(id)?;
                 ensure!(
