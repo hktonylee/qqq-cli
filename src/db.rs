@@ -121,7 +121,7 @@ impl Db {
             .transaction_with_behavior(TransactionBehavior::Immediate)?;
         if let Some(session) = release_session {
             nonempty(session, "Session")?;
-            ensure!(tx.execute("UPDATE tasks SET status='pending',assignee=NULL WHERE id=? AND status='in_progress' AND assignee=?",params![id,session])?==1,"Task {id} is not claimed by session {session}");
+            ensure!(tx.execute("UPDATE tasks SET status='new',assignee=NULL WHERE id=? AND status='in_progress' AND assignee=?",params![id,session])?==1,"Task {id} is not claimed by session {session}");
             tx.execute(
                 "INSERT INTO events(task_id,session,action) VALUES (?,?,'release')",
                 params![id, session],
@@ -175,7 +175,7 @@ impl Db {
             Some(id) => Some(id),
             None => tx
                 .query_row(
-                    "SELECT id FROM tasks WHERE status='pending'
+                    "SELECT id FROM tasks WHERE status='new'
                      AND (parent_id IS NULL OR EXISTS
                          (SELECT 1 FROM tasks parent WHERE parent.id=tasks.parent_id AND parent.status='completed'))
                      ORDER BY id LIMIT 1",

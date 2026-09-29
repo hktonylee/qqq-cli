@@ -14,5 +14,5 @@ writes. Migration never changes task timestamps, IDs, links, attachments, or his
 
 Tests cover renamed output in all task responses; version 1 and 2 upgrades;
 repeat and concurrent opens; retained claims and related data; index and CHECK
-constraint enforcement; pending/completed null assignment; wrong-session denial.
+constraint enforcement; new/completed null assignment; wrong-session denial.
 Run full tests, fmt, Clippy, release build, and diff checks before integration.

@@ -47,18 +47,12 @@ fn persistent_ownership_and_fifo() {
             .success()
     );
     assert!(
-        !run(
-            p,
-            &["edit", "1", "--set-status", "pending", "--session", "b"]
-        )
-        .status
-        .success()
+        !run(p, &["edit", "1", "--set-status", "new", "--session", "b"])
+            .status
+            .success()
     );
     assert!(!run(p, &["next"]).status.success());
-    ok(
-        p,
-        &["edit", "1", "--set-status", "pending", "--session", "a"],
-    );
+    ok(p, &["edit", "1", "--set-status", "new", "--session", "a"]);
     assert_eq!(ok(p, &["next", "--session", "c"])["id"], 1);
     ok(p, &["complete", "1", "--session", "c"]);
     assert!(ok(p, &["next", "--session", "c"]).is_null());
@@ -185,14 +179,7 @@ printf '%s\n' '{"result":{"agents":[{"pane_id":"w1:p2","workspace_id":"w1","tab_
     ]);
     ok(
         p,
-        &[
-            "edit",
-            "1",
-            "--set-status",
-            "pending",
-            "--session",
-            "old-owner",
-        ],
+        &["edit", "1", "--set-status", "new", "--session", "old-owner"],
     );
     ok(p, &["next", "--session", "new-owner"]);
     assert!(
@@ -279,7 +266,7 @@ printf '%s\n' '{"result":{"pane":{"pane_id":"w1:p1","workspace_id":"w1","tab_id"
     };
     let bad = exec("", &["next"]);
     assert!(!bad.status.success());
-    assert_eq!(ok(p, &["show", "1"])["task"]["status"], "pending");
+    assert_eq!(ok(p, &["show", "1"])["task"]["status"], "new");
     let good = exec("old:p1", &["next"]);
     assert!(good.status.success());
     let detail = ok(p, &["show", "1"]);
@@ -296,7 +283,7 @@ printf '%s\n' '{"result":{"pane":{"pane_id":"w1:p1","workspace_id":"w1","tab_id"
     )
     .unwrap();
     assert!(!exec("w1:p1", &["next"]).status.success());
-    assert_eq!(ok(p, &["show", "2"])["task"]["status"], "pending");
+    assert_eq!(ok(p, &["show", "2"])["task"]["status"], "new");
 }
 
 #[cfg(unix)]
@@ -366,7 +353,7 @@ fn cwd_lookup_uses_db_directory_from_nested_cwd_without_herdr_env() {
     );
     assert_eq!(herdr.ok(&nested, &["next"])["id"], 1);
     herdr.ok(&nested, &["herdr", "link", "1"]);
-    herdr.ok(&nested, &["edit", "1", "--set-status", "pending"]);
+    herdr.ok(&nested, &["edit", "1", "--set-status", "new"]);
     herdr.ok(&nested, &["next"]);
     assert_eq!(herdr.ok(&nested, &["complete", "1"])["status"], "completed");
 }
@@ -394,7 +381,7 @@ fn cwd_lookup_normalizes_symlinks_and_prefers_foreground_cwd() {
 fn cwd_lookup_rejects_missing_ambiguous_or_unidentified_matches_before_claim() {
     let d = project();
     let p = d.path();
-    ok(p, &["add", "Pending"]);
+    ok(p, &["add", "New"]);
     let herdr = HerdrFixture::new();
     let mut no_identity = agent_at(p, "unknown");
     no_identity.as_object_mut().unwrap().remove("agent_session");
@@ -422,7 +409,7 @@ fn cwd_lookup_rejects_missing_ambiguous_or_unidentified_matches_before_claim() {
             "{}",
             String::from_utf8_lossy(&out.stderr)
         );
-        assert_eq!(ok(p, &["show", "1"])["task"]["status"], "pending");
+        assert_eq!(ok(p, &["show", "1"])["task"]["status"], "new");
     }
     // Explicit identity bypasses ambiguous Herdr discovery.
     assert_eq!(
@@ -432,7 +419,7 @@ fn cwd_lookup_rejects_missing_ambiguous_or_unidentified_matches_before_claim() {
 }
 
 #[test]
-fn edit_pending_updates_fields_and_release_history_atomically() {
+fn edit_new_updates_fields_and_release_history_atomically() {
     let d = project();
     let p = d.path();
     ok(p, &["add", "Old", "-d", "Details"]);
@@ -443,7 +430,7 @@ fn edit_pending_updates_fields_and_release_history_atomically() {
             "edit",
             "1",
             "--set-status",
-            "pending",
+            "new",
             "--title",
             "Changed",
             "--session",
@@ -453,7 +440,7 @@ fn edit_pending_updates_fields_and_release_history_atomically() {
             "edit",
             "1",
             "--set-status",
-            "pending",
+            "new",
             "--title",
             " ",
             "--session",
@@ -470,7 +457,7 @@ fn edit_pending_updates_fields_and_release_history_atomically() {
             "edit",
             "-1",
             "--set-status",
-            "pending",
+            "new",
             "--title",
             "New",
             "-d",
@@ -479,7 +466,7 @@ fn edit_pending_updates_fields_and_release_history_atomically() {
             "a",
         ],
     );
-    assert_eq!(updated["status"], "pending");
+    assert_eq!(updated["status"], "new");
     assert!(updated["assignee"].is_null());
     assert_eq!(updated["title"], "New");
     assert_eq!(updated["description"], "");
@@ -488,36 +475,30 @@ fn edit_pending_updates_fields_and_release_history_atomically() {
     assert_eq!(after["events"][1]["action"], "release");
     assert_eq!(after["events"][1]["session"], "a");
     assert!(
-        !run(
-            p,
-            &["edit", "1", "--set-status", "pending", "--session", "a"]
-        )
-        .status
-        .success()
+        !run(p, &["edit", "1", "--set-status", "new", "--session", "a"])
+            .status
+            .success()
     );
     assert_eq!(ok(p, &["show", "1"]), after);
     ok(p, &["next", "--session", "b"]);
     ok(p, &["complete", "1", "--session", "b"]);
     let completed = ok(p, &["show", "1"]);
     assert!(
-        !run(
-            p,
-            &["edit", "1", "--set-status", "pending", "--session", "b"]
-        )
-        .status
-        .success()
+        !run(p, &["edit", "1", "--set-status", "new", "--session", "b"])
+            .status
+            .success()
     );
     assert_eq!(ok(p, &["show", "1"]), completed);
 }
 
 #[test]
-fn edit_pending_skips_editor_and_release_command_is_removed() {
+fn edit_new_skips_editor_and_release_command_is_removed() {
     let d = project();
     let p = d.path();
     ok(p, &["add", "Task"]);
     ok(p, &["next", "--session", "a"]);
     let output = command(p)
-        .args(["edit", "1", "--set-status", "pending", "--session", "a"])
+        .args(["edit", "1", "--set-status", "new", "--session", "a"])
         .env("EDITOR", "nonexistent-qqq-editor")
         .output()
         .unwrap();
@@ -527,10 +508,39 @@ fn edit_pending_skips_editor_and_release_command_is_removed() {
         String::from_utf8_lossy(&output.stderr)
     );
     let task: Value = serde_json::from_slice(&output.stdout).unwrap();
-    assert_eq!(task["status"], "pending");
+    assert_eq!(task["status"], "new");
     assert_eq!(task["title"], "Task");
     assert_eq!(
         run(p, &["release", "1", "--session", "a"]).status.code(),
         Some(2)
+    );
+}
+
+#[test]
+fn new_is_initial_status_and_pending_flag_is_rejected() {
+    let d = project();
+    let p = d.path();
+    let task = ok(p, &["add", "Fresh"]);
+    assert_eq!(task["status"], "new");
+    let conn = rusqlite::Connection::open(p.join("qqq.db")).unwrap();
+    assert!(
+        conn.execute("UPDATE tasks SET status='pending' WHERE id=1", [])
+            .is_err()
+    );
+    ok(p, &["next", "--session", "a"]);
+    let before = ok(p, &["show", "1"]);
+    assert_eq!(
+        run(
+            p,
+            &["edit", "1", "--set-status", "pending", "--session", "a"]
+        )
+        .status
+        .code(),
+        Some(2)
+    );
+    assert_eq!(ok(p, &["show", "1"]), before);
+    assert_eq!(
+        ok(p, &["edit", "1", "--set-status", "new", "--session", "a"])["status"],
+        "new"
     );
 }

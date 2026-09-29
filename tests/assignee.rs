@@ -56,10 +56,7 @@ fn task_responses_use_assignee_only() {
     assignment(&ok(&d, &["show", "1"])["task"], json!("a"));
     assignment(&ok(&d, &["edit", "1", "--title", "Edited"]), json!("a"));
     assignment(
-        &ok(
-            &d,
-            &["edit", "1", "--set-status", "pending", "--session", "a"],
-        ),
+        &ok(&d, &["edit", "1", "--set-status", "new", "--session", "a"]),
         Value::Null,
     );
     assignment(&ok(&d, &["next", "--session", "b"]), json!("b"));

@@ -35,7 +35,7 @@ fn human_tasks_show_descriptions_dependencies_and_ownership() {
     assert_eq!(text(p, &["next", "--session", "a"]), "No ready tasks.\n");
     let added = text(p, &["add", "Build API", "-d", "First line\nSecond line"]);
     assert!(added.contains("#1 Build API"), "{added}");
-    assert!(added.contains("Status: Pending"));
+    assert!(added.contains("Status: New"));
     assert!(added.contains("First line\n  Second line"));
     text(p, &["add", "Build client", "--parent", "1"]);
     let list = text(p, &["list"]);
@@ -46,7 +46,7 @@ fn human_tasks_show_descriptions_dependencies_and_ownership() {
         "TITLE",
         "Build API",
         "Build client",
-        "Pending",
+        "New",
         "#1",
     ] {
         assert!(list.contains(part), "{part}: {list}");
@@ -59,11 +59,7 @@ fn human_tasks_show_descriptions_dependencies_and_ownership() {
     let changed = text(p, &["edit", "2", "--description", "New details"]);
     assert!(changed.contains("New details"));
     assert!(
-        text(
-            p,
-            &["edit", "1", "--set-status", "pending", "--session", "a"]
-        )
-        .contains("Status: Pending")
+        text(p, &["edit", "1", "--set-status", "new", "--session", "a"]).contains("Status: New")
     );
     text(p, &["next", "--session", "a"]);
     assert!(text(p, &["complete", "1", "--session", "a"]).contains("Status: Completed"));
@@ -85,10 +81,7 @@ fn human_show_includes_messages_images_history_and_export_result() {
         assert!(image.contains(part), "{image}");
     }
     text(p, &["next", "--session", "a"]);
-    text(
-        p,
-        &["edit", "1", "--set-status", "pending", "--session", "a"],
-    );
+    text(p, &["edit", "1", "--set-status", "new", "--session", "a"]);
     let show = text(p, &["show", "1"]);
     for part in [
         "Messages:",

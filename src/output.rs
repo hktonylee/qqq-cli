@@ -69,7 +69,7 @@ fn block(value: &Value, key: &str) -> String {
 
 fn status(value: &Value) -> &str {
     match value["status"].as_str() {
-        Some("pending") => "Pending",
+        Some("new") => "New",
         Some("in_progress") => "In progress",
         Some("completed") => "Completed",
         _ => "Unknown",
@@ -184,7 +184,7 @@ pub fn render(format: Format, value: &Value, color: bool) -> String {
                     field(task, "title")
                 );
                 let code = match task["status"].as_str() {
-                    Some("pending") => "33",
+                    Some("new") => "33",
                     Some("in_progress") => "36",
                     Some("completed") => "90",
                     _ => return row,

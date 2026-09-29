@@ -6,8 +6,8 @@ links are immutable, parents must already exist, so CLI cannot create cycles.
 Reject missing parents before launching an editor or inserting a task.
 
 Task JSON includes nullable `parent_id` in every response. `next` returns the
-session's existing claim first, otherwise claims the oldest pending task whose
-parent is absent or completed. Blocked tasks stay pending. No ready tasks means
+session's existing claim first, otherwise claims the oldest new task whose
+parent is absent or completed. Blocked tasks stay new. No ready tasks means
 JSON null, including queues containing only blocked tasks. Parent release keeps
 children blocked. Completion unlocks direct children; chains unlock in order.
 

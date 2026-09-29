@@ -25,14 +25,14 @@ struct Cli {
 }
 #[derive(Clone, Copy, ValueEnum)]
 enum EditStatus {
-    Pending,
+    New,
 }
 
 #[derive(Subcommand)]
 enum Commands {
     /// Create qqq.db in current directory (safe to repeat).
     Init,
-    /// Create a pending task.
+    /// Create a new task.
     Add {
         /// Task title. Omit to compose title and description in $EDITOR.
         title: Option<String>,
@@ -58,7 +58,7 @@ enum Commands {
         title: Option<String>,
         #[arg(short, long)]
         description: Option<String>,
-        /// Return claimed task to pending; session ID must match recorded owner. Skips editor.
+        /// Return claimed task to new; session ID must match recorded owner. Skips editor.
         #[arg(long, value_enum)]
         set_status: Option<EditStatus>,
     },
@@ -141,7 +141,7 @@ fn execute(cli: Cli) -> Result<Value> {
                 json!(db.edit(id, Some(&title), Some(&description), None)?)
             } else {
                 let release_session = match set_status {
-                    Some(EditStatus::Pending) => {
+                    Some(EditStatus::New) => {
                         Some(herdr::owner(cli.session.as_deref(), project_dir)?.0)
                     }
                     None => None,

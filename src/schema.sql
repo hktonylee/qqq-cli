@@ -1,14 +1,14 @@
 CREATE TABLE tasks (
  id INTEGER PRIMARY KEY AUTOINCREMENT,
  title TEXT NOT NULL CHECK(length(trim(title))>0), description TEXT NOT NULL DEFAULT '',
- status TEXT NOT NULL DEFAULT 'pending' CHECK(status IN ('pending','in_progress','completed')),
+ status TEXT NOT NULL DEFAULT 'new' CHECK(status IN ('new','in_progress','completed')),
  owner_session TEXT,
  created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
  updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
  CHECK ((status='in_progress' AND owner_session IS NOT NULL) OR (status!='in_progress' AND owner_session IS NULL))
 );
 CREATE UNIQUE INDEX active_session ON tasks(owner_session) WHERE status='in_progress';
-CREATE INDEX pending_queue ON tasks(id) WHERE status='pending';
+CREATE INDEX new_queue ON tasks(id) WHERE status='new';
 CREATE TABLE messages (
  id INTEGER PRIMARY KEY AUTOINCREMENT, task_id INTEGER NOT NULL REFERENCES tasks(id), body TEXT NOT NULL, session TEXT,
  created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))

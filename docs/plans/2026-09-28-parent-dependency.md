@@ -23,7 +23,7 @@
 - [x] Extend `Db::add` with `parent_id: Option<i64>`, validate using `self.task(id)?`, insert with `INSERT INTO tasks(title,description,parent_id) VALUES (?,?,?)`.
 - [x] Use ready query inside existing next transaction:
   ```sql
-  SELECT id FROM tasks WHERE status='pending'
+  SELECT id FROM tasks WHERE status='new'
   AND (parent_id IS NULL OR EXISTS
     (SELECT 1 FROM tasks parent WHERE parent.id=tasks.parent_id AND parent.status='completed'))
   ORDER BY id LIMIT 1
@@ -33,7 +33,7 @@
 
 ## Task 3: Verify And Ship
 
-- [x] Document `--parent`, nullable JSON field, blocked pending tasks and automatic migration in README.md.
+- [x] Document `--parent`, nullable JSON field, blocked new tasks and automatic migration in README.md.
 - [x] Run `cargo test --locked`, `cargo fmt --check`, `cargo clippy --locked --all-targets -- -D warnings`, `git diff --check`. Request code review, fix blockers.
 - [x] Prepare verified implementation for commit `[Feat] Add Parent Task Dependencies`. Full suite: 21 passed; fmt, clippy, diff checks passed; review found no blockers.
 
