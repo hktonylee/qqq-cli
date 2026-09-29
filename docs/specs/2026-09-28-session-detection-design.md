@@ -1,25 +1,50 @@
 # Automatic Session Detection
 
-Task 24: infer caller identity from environment without requiring qqq-specific
-session configuration. Existing explicit `--session` and `QQQ_SESSION` override
-automatic sources. Exact Herdr context (`HERDR_PANE_ID`, or `HERDR_ENV=1`) comes
-next, then Codex `CODEX_THREAD_ID`, legacy `CODEX_SESSION_ID`, and existing unique
-Herdr agent discovery by database cwd. Use namespaced JSON tuples for automatic
-Codex identity: `["codex","id","<value>"]`.
+Task #24: infer caller identity without qqq-specific session configuration.
+Task #26 is complete; use existing private claim keys and public harness metadata.
 
-Herdr lookup uses explicit `--pane HERDR_PANE_ID`, even without HERDR_ENV. Keep
-reported session/terminal identities and active-claim retention. Invalid exact
-context must fail before claim, without falling through to another client.
-Native Codex ownership requires no Herdr installation/link and uses same
-resolution for next, wait, complete, and release. Invalid selected env values
-fail; higher-priority sources ignore lower-priority values. Aliases stay valid.
+## Resolution
 
-Configured dispatch must return caller's existing native Codex claim before
-checking Herdr availability or spawning. Manual `herdr link` still discovers
-Herdr context independently of native Codex env. Other clients supported through
-Herdr's reported agent identity or explicit QQQ_SESSION; no guessed env names.
+Explicit `--session` / `QQQ_SESSION` override automatic sources. Exact Herdr
+context means `HERDR_PANE_ID` is present, or `HERDR_ENV=1`; it takes priority over
+native Codex environment. Query `herdr pane current --pane <HERDR_PANE_ID>`.
+Missing, blank or invalid selected context fails before any claim; never fall
+through from an exact pane to a different client or cwd match.
 
-Local inspection confirmed both Codex variable names in installed binary and
-current subprocess environment. CODEX_THREAD_ID matches current thread identity;
-prefer it, retain CODEX_SESSION_ID compatibility. Test fixtures clear inherited
-caller env so test outcomes do not depend on developer's hosting client.
+Outside exact Herdr context, prefer `CODEX_THREAD_ID`, then `CODEX_SESSION_ID`.
+Both exist in current environment and installed Codex binary. Selected values
+must be UTF-8 and nonblank; preserve exact nonblank values. Automatic ownership
+uses collision-safe JSON tuple `["codex","id","<value>"]`. Native claims need
+no Herdr installation, invocation or link. Public `harness_name=codex` and
+`harness_session=<raw value>`; orchestrator fields remain null unless overridden.
+No guessed environment names for other clients: use Herdr agent reports or
+explicit ownership inputs.
+
+When no native or exact source exists, retain unique Herdr agent discovery by
+canonical database directory. Retain existing active-claim identity across
+changes in Herdr session reporting. `next`, `next --wait`, `complete`, returning
+tasks to new and setting error use same caller resolution. Explicit harness
+metadata overrides retain current semantics; existing claims keep prior metadata
+unless new overrides are supplied. Derive native metadata only for fresh claims,
+inside DB write transaction. No schema migration.
+
+## Boundaries
+
+Add `src/session.rs`: typed owner key, optional Herdr link, optional native
+metadata; resolution and dispatch caller helper. Herdr adapter stays responsible
+for pane/cwd discovery, links and active Herdr identity retention. Manual
+`herdr link` discovers Herdr independently of native Codex environment.
+
+Configured dispatch first returns caller's existing native claim without Herdr
+lookup or agent creation. Creating a new agent still requires valid Herdr
+workspace context; `--local` handles native callers outside Herdr.
+
+## Verification
+
+Real CLI tests cover native thread/fallback identity and metadata, overrides,
+wrong-owner rejection, lifecycle, incoming wait, invalid environment, exact pane
+without HERDR_ENV, Herdr precedence, dispatch existing claim, manual linking and
+metadata preservation. Clear inherited caller environment in all test fixtures.
+Run full suite, formatting, clippy with warnings denied, release build and
+independent review. Rebase, integrate locally, rebuild CLI and smoke-test isolated
+native and real Herdr caller contexts. Complete task only after verification.

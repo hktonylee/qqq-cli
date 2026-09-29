@@ -1,15 +1,51 @@
-# Session Detection Plan
+# Native Session Detection Implementation Plan
 
-Use superpowers:executing-plans inline. Rust CLI; existing Herdr identity adapter.
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task inline. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-- [ ] Add real-binary tests for Codex thread/session fallback, overrides,
-  wrong owner, wait/release/complete, no Herdr invocation, exact pane without
-  HERDR_ENV, invalid context, dispatch's existing native claim, manual link.
-- [ ] Clear inherited Codex/Herdr context in existing fixtures; observe new
-  feature tests fail before implementing.
-- [ ] Add native Codex env helper; use it in local owner and dispatch caller.
-  Detect exact Herdr context from pane env; pass pane explicitly to Herdr.
-  Extract automatic Herdr link lookup so native identity does not block linking.
-- [ ] Document precedence and limitations. Run full suite, fmt, clippy, review.
-- [ ] Commit, rebase, ff merge, verify merged checkout, mark task complete,
-  continue next --wait.
+**Goal:** Auto-detect exact Herdr pane or native Codex session consistently across ownership commands.
+
+**Architecture:** Typed caller resolver separates private key, native metadata and optional Herdr link. DB derives native metadata inside claim transaction only for fresh claims. Exact pane resolution stays in Herdr adapter; no schema changes.
+
+**Tech Stack:** Rust, clap, rusqlite, serde, real CLI integration tests, fake Herdr executable.
+
+## 1. Tests before implementation
+
+Files: `tests/autodetect.rs`, `tests/wait.rs`, existing CLI command fixtures.
+
+- [ ] Clear inherited `CODEX_THREAD_ID`, `CODEX_SESSION_ID`, `HERDR_PANE_ID` in fixture commands (preserve deliberate Herdr test env).
+- [ ] Add native claim regression using existing `command`, `project`, `ok` helpers:
+
+```rust
+let dir = project();
+let p = dir.path();
+let task = ok(command(p).env("PATH", p).env("CODEX_THREAD_ID", "native").arg("next"));
+assert_eq!(task["harness_name"], "codex");
+assert_eq!(task["harness_session"], "native");
+assert!(task["orchestrator_name"].is_null());
+assert!(ok(command(p).args(["show", "1"]))["herdr"].is_null());
+```
+
+- [ ] Cover thread-over-session precedence, session fallback, lifecycle (wait/release/error/complete), wrong thread, explicit CLI/env overrides, harness overrides, blank/non-UTF-8 selected values, native metadata retention, exact pane without HERDR_ENV, invalid exact context, manual link, configured dispatch existing claim and new-task refusal outside Herdr. Fake Herdr logs arguments; exact lookup must contain `--pane`.
+- [ ] Add incoming-task wait test with bounded child-process polling, isolated HOME/DB and no Herdr binary.
+- [ ] Run `cargo test --locked --test autodetect --test wait`; confirm native and pane-specific regressions fail for missing behavior.
+
+## 2. Typed caller resolution
+
+Files: create `src/session.rs`; modify `src/main.rs`, `src/herdr.rs`, `src/dispatch.rs`, `src/db.rs`.
+
+- [ ] Define `Owner { key: String, link: Option<Link>, metadata: Option<Identity> }`. Native helper returns `Result<Option<Owner>>`; selected `std::env::var` value rejects non-Unicode/blank. Skip native resolution when exact Herdr context exists. Encode private key with `serde_json::to_string(&("codex", "id", &value))`; native metadata fills only harness name/session.
+- [ ] `session::owner(explicit, project_dir, db)` validates explicit input first, then native helper (which defers exact Herdr context), then existing `herdr::owner` adapter. `session::dispatch_caller(db)` returns native key when selected, otherwise existing exact Herdr caller key.
+- [ ] Add `herdr::has_context()` checking pane env presence or HERDR_ENV=1. Share current-pane lookup used by `current` and `dispatch_caller`; validate pane then call `pane current --pane <id>`. `discover` uses `has_context`.
+- [ ] Route `local_owner`, `complete` and ownership-sensitive edit transitions through typed resolver. Keep manual `herdr link` using Herdr-only resolution. Apply explicit harness overrides after native metadata.
+- [ ] Extend DB claim API with optional derived metadata; choose it only for new claims inside transaction. Keep current identity for existing owned tasks; apply user overrides separately. Update main/dispatch callsites with native metadata or None.
+- [ ] Run focused suites; fix implementation until all pass.
+
+## 3. Docs and final verification
+
+Files: `README.md`, this plan.
+
+- [ ] Document precedence, variable names, exact pane lookup, public native fields, fallback/limitations and unchanged explicit override behavior.
+- [ ] Run `cargo fmt --check`, `cargo test --locked`, `cargo clippy --locked --all-targets -- -D warnings`, `cargo build --locked --release`, `git diff --check`.
+- [ ] Request independent review required by requesting-code-review skill; resolve findings with regressions.
+- [ ] Commit verified change; rebase onto current master, fast-forward merge, rebuild root debug CLI, smoke-test isolated native and real current Herdr caller. Mark task #24 complete; remove clean merged worktree/branch.
+- [ ] Continue `qqq next --wait`; stop after five consecutive empty waits per updated user goal.
