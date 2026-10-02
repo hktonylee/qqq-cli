@@ -208,7 +208,12 @@ attachments.
 qqq tui
 ```
 
-Upper panel lists unarchived tasks by default; lower panel edits current task.
+Top third lists unarchived tasks by default. New drafts use remaining two thirds
+for editor. Selecting task splits screen into three equal parts: list, task
+details/messages, editor. Small terminals retain usable list and editor rows.
+Details show status, priority, parent, timestamps, archive state and ownership;
+latest messages appear first with author and timestamp. Empty message history
+shows `No messages yet.`.
 Each task preview shows at most three wrapped lines; clipped previews end with
 `...`. Editor loads full description, including hidden lines.
 Selection underlines task text; plain mode uses `>` marker.
@@ -230,13 +235,15 @@ normal Enter inserts newline. Navigating away clears draft's parent context.
 Shift+Enter requires terminal to report modified Enter; TUI requests enhanced
 keyboard reporting on Unix, restores previous mode on exit.
 
-Task list refreshes after external DB commits without keyboard input. Refresh
+Task list and details refresh after external DB commits without keyboard input. Refresh
 keeps current editor draft, filter query, and manual scroll positions. Selected
 task status updates in editor title; task text stays in editor until reloaded
 or saved.
 
-Mouse wheel scrolls task list or editor under pointer. Both panes keep separate
-scroll positions; scrolling editor never edits or saves text. Shift-Up/Down
+Mouse wheel scrolls list, details or editor under pointer. Panes keep separate
+scroll positions; scrolling never edits or saves text. PgUp/PgDn scroll selected
+task details while editor has focus. Selection changes reset details scroll.
+Details clicks leave editor caret and draft unchanged. Shift-Up/Down
 returns list to selected task. Editor keys reveal caret after manual scroll.
 Left-click task row to load it in editor, including indented or wrapped rows.
 Left-click editor text to place caret; dirty drafts ask before switching tasks.

@@ -487,6 +487,8 @@ fn compose_inner(
     let mut draft_parent_id = None;
     let mut top = 0;
     let mut list_top = 0;
+    let mut details_top = 0;
+    let mut details_id = None;
     let mut list_follow_selected = true;
     let mut editor_follow_cursor = true;
     let mut filter_query = String::new();
@@ -498,6 +500,10 @@ fn compose_inner(
     let mut saved_any = false;
     loop {
         let size = terminal::size()?;
+        if details_id != target_id {
+            details_top = 0;
+            details_id = target_id;
+        }
         let fragments = draft.fragments();
         let image_mask = draft.image_mask();
         let paste_mask = draft.paste_mask();
@@ -506,7 +512,7 @@ fn compose_inner(
         } else {
             render::Layout::new(&fragments, &image_mask, size.0 as usize)
         };
-        let (dashboard_tasks, list_version) = if dashboard {
+        let (dashboard_tasks, list_version, details_rows) = if dashboard {
             let db = mode.db().expect("dashboard has database");
             // Capture before listing so commits during rendering trigger another refresh.
             let version = db.data_version()?;
@@ -518,12 +524,19 @@ fn compose_inner(
             if let Some(task) = tasks.iter().find(|task| Some(task.id) == target_id) {
                 target_status = Some(task.status.clone());
             }
+            let details_rows = match target_id {
+                Some(id) => match tasks.iter().find(|task| task.id == id) {
+                    Some(task) => details::rows(task, &db.task_messages(id)?, usize::from(size.0)),
+                    None => vec![format!("Task #{id} unavailable.")],
+                },
+                None => Vec::new(),
+            };
             if !include_archived {
                 tasks.retain(|task| !task.archived);
             }
-            (Some(tasks), Some(version))
+            (Some(tasks), Some(version), details_rows)
         } else {
-            (None, None)
+            (None, None, Vec::new())
         };
         let footer = match &confirmation {
             Some(Confirmation::Exit) if usize::from(size.0) < "Discard draft? (y/N)".len() => {
@@ -637,12 +650,16 @@ fn compose_inner(
                         &rows,
                         &statuses,
                         target_id,
-                        dashboard::ListView {
+                        dashboard::View {
                             query: &filter_query,
                             focused: filter_focused,
                             top: &mut list_top,
                             follow_selected: list_follow_selected,
                             modal_lines: modal_lines.as_deref(),
+                            details: target_id.map(|_| dashboard::DetailsView {
+                                rows: &details_rows,
+                                top: &mut details_top,
+                            }),
                         },
                         render::DashboardEditor {
                             layout: &layout,
@@ -760,7 +777,10 @@ fn compose_inner(
                         editor_follow_cursor = false;
                         top = panel::wheel_top(top, layout.rows.len(), height, down);
                     }
-                    Some(dashboard::WheelArea::Details(_)) => (),
+                    Some(dashboard::WheelArea::Details(height)) => {
+                        details_top =
+                            panel::wheel_top(details_top, details_rows.len(), height, down);
+                    }
                     None => (),
                 }
             }
@@ -1250,6 +1270,25 @@ fn compose_inner(
                             _ => (),
                         }
                     }
+                    continue;
+                }
+                if dashboard
+                    && target_id.is_some()
+                    && key.modifiers.is_empty()
+                    && matches!(key.code, KeyCode::PageUp | KeyCode::PageDown)
+                {
+                    let area =
+                        dashboard::panes(ratatui::layout::Rect::new(0, 0, size.0, size.1), true)
+                            .details
+                            .expect("selected task has details pane");
+                    let page = dashboard::details_height(area).max(1);
+                    details_top = if key.code == KeyCode::PageDown {
+                        details_top
+                            .saturating_add(page)
+                            .min(details_rows.len().saturating_sub(page))
+                    } else {
+                        details_top.saturating_sub(page)
+                    };
                     continue;
                 }
                 if control {

@@ -1,4 +1,4 @@
-"""Exercise two-panel qqq tui through a real terminal."""
+"""Exercise task-list, selected-details and editor panes through a real terminal."""
 
 import base64
 import codecs
@@ -89,7 +89,7 @@ SHIFT_ENTER = b"\x1b[13;2u"
 with tempfile.TemporaryDirectory(prefix="qqq-dashboard-test-") as folder:
     env = dict(os.environ, HOME=folder, TERM="xterm-256color")
     env.pop("NO_COLOR", None)
-    if scenario in ("no_color", "pasteboard_no_color", "filter_no_color"):
+    if scenario in ("no_color", "pasteboard_no_color", "filter_no_color", "details_no_color"):
         env["NO_COLOR"] = "1"
     elif scenario == "dumb":
         env["TERM"] = "dumb"
@@ -177,10 +177,16 @@ with tempfile.TemporaryDirectory(prefix="qqq-dashboard-test-") as folder:
             cli("add", description)
     if scenario == "click_editor_scroll":
         cli("add", "\n".join(f"Line{index:02}" for index in range(1, 13)))
+    if scenario.startswith("details") and scenario != "details_deleted":
+        if scenario == "details_scroll":
+            cli("message", "2", "\n".join(f"Message line {index:02}" for index in range(1, 31)), "--session", "reviewer")
+        else:
+            cli("message", "2", "Earlier message", "--session", "worker")
+            cli("message", "2", "Latest message\nMessage continuation", "--session", "reviewer")
 
     master, slave = pty.openpty()
     os.set_blocking(master, False)
-    fcntl.ioctl(slave, termios.TIOCSWINSZ, struct.pack("HHHH", 16, 72, 0, 0))
+    fcntl.ioctl(slave, termios.TIOCSWINSZ, struct.pack("HHHH", 24, 72, 0, 0))
     before = termios.tcgetattr(slave)
     os.setsid()
     fcntl.ioctl(slave, termios.TIOCSCTTY, 0)
@@ -193,7 +199,7 @@ with tempfile.TemporaryDirectory(prefix="qqq-dashboard-test-") as folder:
     child = subprocess.Popen(args, cwd=folder, env=env, stdin=slave,
                              stderr=slave, stdout=subprocess.PIPE)
     screen = bytearray()
-    visible = TerminalScreen(72, 16)
+    visible = TerminalScreen(72, 24)
     visible_at_clear = [visible.text()]
 
     def clear_capture():
@@ -245,8 +251,41 @@ with tempfile.TemporaryDirectory(prefix="qqq-dashboard-test-") as folder:
     def click(column, row):
         send(f"\x1b[<0;{column};{row}M\x1b[<0;{column};{row}m".encode())
 
+    def list_bottom():
+        return next((index for index, row in enumerate(visible.text().splitlines())
+                     if row and set(row) == {"-"}), 0)
+
+    def editor_row():
+        return next((index for index, row in enumerate(visible.text().splitlines())
+                     if row.startswith("qqq task editor"[:visible.width])), None)
+
+    def editor_title():
+        row = editor_row()
+        return visible.text().splitlines()[row] if row is not None else ""
+
+    def editor_line(offset=0):
+        row = editor_row()
+        lines = visible.text().splitlines()
+        index = row + 1 + offset if row is not None else len(lines)
+        return lines[index] if index < len(lines) - 1 else ""
+
+    def details_text():
+        row = editor_row()
+        return "\n".join(visible.text().splitlines()[list_bottom() + 1:row]) if row is not None else ""
+
+    def click_editor(column, offset=0):
+        row = editor_row()
+        assert row is not None, visible.text()
+        click(column, row + 2 + offset)
+
+    def wheel_editor(down, count=1):
+        row = editor_row()
+        assert row is not None, visible.text()
+        code = 65 if down else 64
+        send(f"\x1b[<{code};6;{row + 2}M".encode() * count)
+
     def task_row(label):
-        for row, content in enumerate(visible.text().splitlines()[2:7], 3):
+        for row, content in enumerate(visible.text().splitlines()[2:list_bottom()], 3):
             if label in content:
                 return row
         raise AssertionError(f"Task row {label!r} not visible:\n{visible.text()}")
@@ -257,7 +296,7 @@ with tempfile.TemporaryDirectory(prefix="qqq-dashboard-test-") as folder:
             capture(os.read(master, 65536))
 
     try:
-        read_until(b"qqq task editor - new task")
+        wait_visible(lambda: 'qqq task editor - new task' in editor_title())
         assert "qqq tasks" in visible.text(), visible.text()
         read_until(b"\x1b[?1000h")
         read_until(b"\x1b[?1006h")
@@ -276,7 +315,106 @@ with tempfile.TemporaryDirectory(prefix="qqq-dashboard-test-") as folder:
             read_until(b"Second")
             assert "First" in visible.text() and "Second" in visible.text(), visible.text()
         assert not select.select([child.stdout], [], [], 0)[0], "TUI wrote stdout while open"
-        if scenario in ("archive_hidden", "archive_included"):
+        if scenario in ("details", "details_no_color"):
+            assert editor_row() == 8, visible.text()
+            assert not details_text(), visible.text()
+            send(b"\x1b[1;2A")
+            wait_visible(lambda: "task #2 (New)" in editor_title()
+                         and "Message continuation" in details_text()
+                         and editor_line().startswith("Second"))
+            assert editor_row() == 16, visible.text()
+            assert "Task #2 | New | Priority 0" in details_text(), visible.text()
+            assert "reviewer" in details_text(), visible.text()
+            assert "Message continuation" in details_text(), visible.text()
+            assert editor_line().startswith("Second"), visible.text()
+            clear_capture()
+            send(b"\x1b")
+            wait_visible(lambda: "new task" in editor_title() and editor_row() == 8
+                         and "Latest message" not in visible.text()
+                         and visible.text().count("qqq task editor") == 1)
+            assert not details_text() and "Latest message" not in visible.text(), visible.text()
+            send(b"Fresh\x13")
+            wait_visible(lambda: "task #3 (New)" in editor_title()
+                         and "No messages yet." in details_text()
+                         and "Latest message" not in details_text()
+                         and editor_line().startswith("Fresh"))
+            assert "Latest message" not in details_text(), visible.text()
+            assert cli("show", "3")["task"]["description"] == "Fresh"
+            if scenario == "details_no_color":
+                assert b"\x1b[38;" not in screen and b"\x1b[48;" not in screen, screen[-2000:]
+        elif scenario == "layout_new":
+            payload = "\n".join(f"Draft line {index:02}" for index in range(1, 13))
+            send(b"\x1b[200~" + payload.encode() + b"\x1b[201~")
+            wait_visible(lambda: editor_line().startswith("Draft line 01") and editor_line(11).startswith("Draft line 12"))
+            assert editor_row() == 8 and not details_text(), visible.text()
+            assert len(cli("list")) == 2
+            send(b"\x13")
+            wait_visible(lambda: "task #3" in editor_title() and editor_row() == 16)
+            assert cli("show", "3")["task"]["description"] == payload
+        elif scenario == "details_scroll":
+            send(b"\x1b[1;2A")
+            wait_visible(lambda: "Message line 01" in details_text()
+                         and "task #2 (New)" in editor_title()
+                         and editor_line().startswith("Second"))
+            initial_tasks = cli("list")
+            initial_list = visible.text().splitlines()[:list_bottom() + 1]
+            send(b"\x1b[6~")
+            wait_visible(lambda: details_text().splitlines()[0].startswith("Message line 05"))
+            assert editor_line().startswith("Second"), visible.text()
+            assert visible.text().splitlines()[:list_bottom() + 1] == initial_list
+            send(f"\x1b[<65;6;{list_bottom() + 2}M".encode())
+            wait_visible(lambda: details_text().splitlines()[0].startswith("Message line 08"))
+            settle()
+            clear_capture()
+            click(5, list_bottom() + 2)
+            settle()
+            assert not screen, f"Read-only details click redrew screen: {screen[-500:]!r}"
+            send(b"\x1b[5~" * 3)
+            wait_visible(lambda: details_text().startswith("Task #2"))
+            assert cli("list") == initial_tasks
+            send(b"\x1b[6~" * 6)
+            wait_visible(lambda: "Orchestrator:" in details_text())
+            send(b"\x1b[1;2A")
+            wait_visible(lambda: "task #1 (New)" in editor_title()
+                         and details_text().startswith("Task #1")
+                         and "No messages yet." in details_text())
+            assert "No messages yet." in details_text(), visible.text()
+            send(b"\x1b[1;2B")
+            wait_visible(lambda: "task #2" in editor_title() and "Message line 01" in details_text())
+            assert cli("list") == initial_tasks
+        elif scenario == "details_refresh":
+            send(b"\x1b[1;2A")
+            wait_visible(lambda: "Latest message" in details_text())
+            send(b"Unsaved ")
+            wait_visible(lambda: editor_line().startswith("Unsaved Second"))
+            cli("message", "2", "External message", "--session", "reviewer")
+            wait_visible(lambda: "External message" in details_text())
+            assert editor_line().startswith("Unsaved Second"), visible.text()
+            cli("edit", "2", "--priority", "7")
+            cli("next", "--local", "--session", "worker")
+            cli("edit", "2", "--set-status", "error", "--reason", "Live failure", "--session", "worker")
+            wait_visible(lambda: "Task #2 | Error | Priority 7" in details_text() and "Live failure" in details_text())
+            assert editor_line().startswith("Unsaved Second"), visible.text()
+            assert cli("show", "2")["task"]["description"] == "Second"
+        elif scenario == "details_deleted":
+            send(b"\x1b[1;2A")
+            wait_visible(lambda: "No messages yet." in details_text())
+            send(b"Unsaved ")
+            wait_visible(lambda: editor_line().startswith("Unsaved Second"))
+            with sqlite3.connect(os.path.join(folder, ".qqq", "qqq.db")) as db:
+                db.execute("DELETE FROM tasks WHERE id=2")
+            wait_visible(lambda: "Task #2 unavailable." in details_text()
+                         and "No messages yet." not in details_text())
+            assert editor_line().startswith("Unsaved Second"), visible.text()
+            assert "No messages yet." not in details_text(), visible.text()
+            send(b"\x1b")
+            wait_visible(lambda: "Discard changes and switch?" in visible.text().splitlines()[-1])
+            send(b"y")
+            wait_visible(lambda: "new task" in editor_title() and editor_row() == 8
+                         and "Task #2 unavailable." not in visible.text()
+                         and visible.text().count("qqq task editor") == 1)
+            assert not details_text(), visible.text()
+        elif scenario in ("archive_hidden", "archive_included"):
             wait_visible(lambda: "Visible" in visible.text())
             settle()
             if scenario == "archive_hidden":
@@ -312,23 +450,23 @@ with tempfile.TemporaryDirectory(prefix="qqq-dashboard-test-") as folder:
             if scenario in ("ctrl_c_new_keep", "ctrl_c_new_filter"):
                 send(b"n")
                 wait_visible(lambda: visible.text().splitlines()[-1].startswith("Ctrl-S save")
-                             and visible.text().splitlines()[9].startswith("Unsaved draft"))
+                             and editor_line().startswith("Unsaved draft"))
                 send(b"\x13")
-                wait_visible(lambda: "task #3 (" in visible.text().splitlines()[8])
+                wait_visible(lambda: "task #3 (" in editor_title())
                 assert cli("show", "3")["task"]["description"] == "Unsaved draft"
         elif scenario in ("live_title", "live_title_filtered"):
             cli("edit", "2", "--priority", "8")
             send(b"\x1b[1;2A")
-            wait_visible(lambda: "task #2 (New)" in visible.text().splitlines()[8])
+            wait_visible(lambda: "task #2 (New)" in editor_title())
             send(b"Draft ")
-            wait_visible(lambda: visible.text().splitlines()[9].startswith("Draft Second"))
+            wait_visible(lambda: editor_line().startswith("Draft Second"))
             if scenario == "live_title_filtered":
                 send(CTRL_SLASH + b"first")
                 wait_visible(lambda: visible.text().splitlines()[1].strip() == "Filter: first"
                              and "Second" not in "\n".join(visible.text().splitlines()[2:7]))
             def title_status(status):
-                wait_visible(lambda: f"task #2 ({status})" in visible.text().splitlines()[8])
-                assert visible.text().splitlines()[9].startswith("Draft Second")
+                wait_visible(lambda: f"task #2 ({status})" in editor_title())
+                assert editor_line().startswith("Draft Second")
             assert cli("next", "--local", "--session", "worker")["id"] == 2
             title_status("In progress")
             cli("complete", "2", "--session", "worker")
@@ -356,7 +494,7 @@ with tempfile.TemporaryDirectory(prefix="qqq-dashboard-test-") as folder:
             clear_capture()
             cli("add", "External task")
             wait_visible(lambda: "External task" in visible.text())
-            assert "new task" in visible.text().splitlines()[8]
+            assert "new task" in editor_title()
             cli("edit", "2", "--description", "Changed externally")
             wait_visible(lambda: "Changed externally" in visible.text())
             cli("next", "--local", "--session", "worker")
@@ -381,9 +519,9 @@ with tempfile.TemporaryDirectory(prefix="qqq-dashboard-test-") as folder:
             assert not screen, f"Unchanged DB redrew TUI: {screen[-500:]!r}"
         elif scenario == "live_refresh_filter":
             send(b"\x1b[1;2A")
-            wait_visible(lambda: "task #2 (" in visible.text().splitlines()[8])
+            wait_visible(lambda: "task #2 (" in editor_title())
             send(b"Unsaved " + CTRL_SLASH + b"second")
-            wait_visible(lambda: visible.text().splitlines()[9].startswith("Unsaved Second")
+            wait_visible(lambda: editor_line().startswith("Unsaved Second")
                          and visible.text().splitlines()[1].strip() == "Filter: second"
                          and (visible.x, visible.y) == (len("Filter: second"), 1))
             cursor_before = (visible.x, visible.y)
@@ -393,8 +531,8 @@ with tempfile.TemporaryDirectory(prefix="qqq-dashboard-test-") as folder:
             wait_visible(lambda: "Second external task" in visible.text()
                          and (visible.x, visible.y) == cursor_before)
             assert "First" not in visible.text()
-            assert visible.text().splitlines()[9].startswith("Unsaved Second")
-            assert "task #2 (" in visible.text().splitlines()[8]
+            assert editor_line().startswith("Unsaved Second")
+            assert "task #2 (" in editor_title()
             assert visible.text().splitlines()[1].strip() == "Filter: second"
             assert (visible.x, visible.y) == cursor_before
             assert cli("show", "2")["task"]["description"] == "Updated second externally"
@@ -415,109 +553,109 @@ with tempfile.TemporaryDirectory(prefix="qqq-dashboard-test-") as folder:
                 motion.join(timeout=1)
         elif scenario == "live_refresh_scroll":
             send(b"\x1b[1;2A")
-            wait_visible(lambda: "task #20 (" in visible.text().splitlines()[8])
+            wait_visible(lambda: "task #20 (" in editor_title())
             send(b"\x1b[<64;6;4M")
             wait_visible(lambda: "Task 13" in visible.text().splitlines()[2])
             cli("edit", "13", "--description", "Refreshed row")
             wait_visible(lambda: "Refreshed row" in visible.text().splitlines()[2])
-            assert "task #20 (" in visible.text().splitlines()[8]
-            assert visible.text().splitlines()[9].startswith("Task 20")
+            assert "task #20 (" in editor_title()
+            assert editor_line().startswith("Task 20")
         elif scenario == "tree_navigation":
             expected = (2, 3, 1)
             for task_id in expected:
                 clear_capture()
                 send(b"\x1b[1;2A")
-                wait_visible(lambda: f"task #{task_id} (" in visible.text().splitlines()[8])
+                wait_visible(lambda: f"task #{task_id} (" in editor_title())
             clear_capture()
             send(b"\x1b[1;2B")
-            wait_visible(lambda: "task #3 (" in visible.text().splitlines()[8])
+            wait_visible(lambda: "task #3 (" in editor_title())
             send(b"\x1b[1;2B")
-            wait_visible(lambda: "task #2 (" in visible.text().splitlines()[8])
+            wait_visible(lambda: "task #2 (" in editor_title())
             send(b"\x1b[1;2B")
-            wait_visible(lambda: "new task" in visible.text().splitlines()[8])
+            wait_visible(lambda: "new task" in editor_title())
         elif scenario in ("escape_selected", "ctrl_c_selected", "escape_dirty_selected", "ctrl_c_dirty_selected"):
             initial_tasks = cli("list")
             send(b"\x1b[1;2A")
-            wait_visible(lambda: "task #2 (" in visible.text().splitlines()[8])
+            wait_visible(lambda: "task #2 (" in editor_title())
             if scenario in ("escape_dirty_selected", "ctrl_c_dirty_selected"):
                 send(b"Changed ")
-                wait_visible(lambda: visible.text().splitlines()[9].startswith("Changed Second"))
+                wait_visible(lambda: editor_line().startswith("Changed Second"))
             key = b"\x03" if scenario.startswith("ctrl_c") else b"\x1b"
             clear_capture()
             send(key)
             if scenario == "escape_dirty_selected":
                 read_until(b"Discard changes and switch? (y/N)")
                 send(b"n")
-                wait_visible(lambda: visible.text().splitlines()[9].startswith("Changed Second")
+                wait_visible(lambda: editor_line().startswith("Changed Second")
                              and visible.text().splitlines()[-1].startswith("Ctrl-S save"))
                 clear_capture()
                 send(b"\x1b")
                 read_until(b"Discard changes and switch? (y/N)")
                 send(b"y")
-            wait_visible(lambda: "new task" in visible.text().splitlines()[8]
-                         and visible.text().splitlines()[9].strip() == "")
+            wait_visible(lambda: "new task" in editor_title()
+                         and editor_line().strip() == "")
             assert cli("list") == initial_tasks
             assert child.poll() is None
         elif scenario in ("save_selected", "after_save_open_saved", "after_save_default_restored"):
             send(b"Created\x13")
-            wait_visible(lambda: "task #3 (New)" in visible.text().splitlines()[8]
-                         and visible.text().splitlines()[9].startswith("Created"))
+            wait_visible(lambda: "task #3 (New)" in editor_title()
+                         and editor_line().startswith("Created"))
             assert cli("show", "3")["task"]["description"] == "Created"
             send(b"\x05 updated\x13")
-            wait_visible(lambda: visible.text().splitlines()[9].startswith("Created updated")
+            wait_visible(lambda: editor_line().startswith("Created updated")
                          and visible.text().splitlines()[-1].startswith("Saved #3")
-                         and (visible.x, visible.y) == (0, 9))
+                         and (visible.x, visible.y) == (0, editor_row() + 1))
             assert len(cli("list")) == 3
             assert cli("show", "3")["task"]["description"] == "Created updated"
             send(b"\x1b[1;2B")
-            wait_visible(lambda: "new task" in visible.text().splitlines()[8])
+            wait_visible(lambda: "new task" in editor_title())
         elif scenario.startswith("child"):
             if scenario == "child_no_selection":
                 send(SHIFT_ENTER)
                 wait_visible(lambda: "Select parent task" in visible.text().splitlines()[-1])
                 assert len(cli("list")) == 2
-                assert visible.text().splitlines()[9].strip() == ""
+                assert editor_line().strip() == ""
             send(b"\x1b[1;2A")
-            wait_visible(lambda: "task #2 (New)" in visible.text().splitlines()[8])
+            wait_visible(lambda: "task #2 (New)" in editor_title())
             if scenario == "child_dirty":
                 send(b"Draft ")
-                wait_visible(lambda: visible.text().splitlines()[9].startswith("Draft Second"))
+                wait_visible(lambda: editor_line().startswith("Draft Second"))
                 send(SHIFT_ENTER)
                 wait_visible(lambda: "Discard changes and switch?" in visible.text().splitlines()[-1])
                 send(b"n")
-                wait_visible(lambda: visible.text().splitlines()[9].startswith("Draft Second")
+                wait_visible(lambda: editor_line().startswith("Draft Second")
                              and visible.text().splitlines()[-1].startswith("Ctrl-S save"))
                 assert cli("show", "2")["task"]["description"] == "Second"
                 send(SHIFT_ENTER + b"y")
             else:
                 send(SHIFT_ENTER)
-            wait_visible(lambda: "new task (parent #2)" in visible.text().splitlines()[8]
-                         and visible.text().splitlines()[9].strip() == ""
-                         and (visible.x, visible.y) == (0, 9))
+            wait_visible(lambda: "new task (parent #2)" in editor_title()
+                         and editor_line().strip() == ""
+                         and (visible.x, visible.y) == (0, editor_row() + 1))
             assert len(cli("list")) == 2
             if scenario == "child_no_selection":
                 send(b"\x1b[1;2A")
-                wait_visible(lambda: "task #2 (New)" in visible.text().splitlines()[8])
+                wait_visible(lambda: "task #2 (New)" in editor_title())
                 send(b"\x1b[1;2B")
-                wait_visible(lambda: "new task" in visible.text().splitlines()[8]
-                             and "parent" not in visible.text().splitlines()[8])
+                wait_visible(lambda: "new task" in editor_title()
+                             and "parent" not in editor_title())
             if scenario == "child_error":
                 cli("archive", "2")
             send(b"Child\x13")
             if scenario == "child_error":
                 wait_visible(lambda: "archived unfinished parent" in visible.text().splitlines()[-1])
-                assert visible.text().splitlines()[9].startswith("Child")
-                assert "parent #2" in visible.text().splitlines()[8]
+                assert editor_line().startswith("Child")
+                assert "parent #2" in editor_title()
                 assert len(cli("list", "--include-archived")) == 2
                 cli("unarchive", "2")
                 send(b"\x13")
             if scenario == "child_open_new":
-                wait_visible(lambda: "new task" in visible.text().splitlines()[8]
-                             and "parent" not in visible.text().splitlines()[8]
-                             and visible.text().splitlines()[9].strip() == ""
+                wait_visible(lambda: "new task" in editor_title()
+                             and "parent" not in editor_title()
+                             and editor_line().strip() == ""
                              and visible.text().splitlines()[-1].startswith("Saved #3. New task"))
             else:
-                wait_visible(lambda: "task #3 (New)" in visible.text().splitlines()[8]
+                wait_visible(lambda: "task #3 (New)" in editor_title()
                              and visible.text().splitlines()[-1].startswith("Saved #3"))
             task = cli("show", "3")["task"]
             assert task["description"] == "Child"
@@ -525,7 +663,7 @@ with tempfile.TemporaryDirectory(prefix="qqq-dashboard-test-") as folder:
             assert cli("show", "2")["task"]["description"] == "Second"
             if scenario != "child_open_new":
                 send(b"\x1b[1;2B")
-                wait_visible(lambda: "new task" in visible.text().splitlines()[8])
+                wait_visible(lambda: "new task" in editor_title())
             send(b"Root\x13")
             wait_visible(lambda: visible.text().splitlines()[-1].startswith("Saved #4"))
             assert cli("show", "4")["task"]["parent_id"] is None
@@ -536,28 +674,28 @@ with tempfile.TemporaryDirectory(prefix="qqq-dashboard-test-") as folder:
             send(b"Created\x13")
             if scenario == "after_save_open_new_error":
                 wait_visible(lambda: "New task rejected" in visible.text().splitlines()[-1]
-                             and visible.text().splitlines()[9].startswith("Created"))
+                             and editor_line().startswith("Created"))
                 assert len(cli("list")) == 2
                 with sqlite3.connect(os.path.join(folder, ".qqq", "qqq.db")) as db:
                     db.execute("DROP TRIGGER reject_new")
                 send(b"\x13")
-            wait_visible(lambda: "new task" in visible.text().splitlines()[8]
-                         and visible.text().splitlines()[9].strip() == ""
+            wait_visible(lambda: "new task" in editor_title()
+                         and editor_line().strip() == ""
                          and visible.text().splitlines()[-1].startswith("Saved #3. New task")
-                         and (visible.x, visible.y) == (0, 9))
+                         and (visible.x, visible.y) == (0, editor_row() + 1))
             assert cli("show", "3")["task"]["description"] == "Created"
             send(b"Next\x13")
-            wait_visible(lambda: "new task" in visible.text().splitlines()[8]
-                         and visible.text().splitlines()[9].strip() == ""
+            wait_visible(lambda: "new task" in editor_title()
+                         and editor_line().strip() == ""
                          and visible.text().splitlines()[-1].startswith("Saved #4. New task"))
             assert cli("show", "4")["task"]["description"] == "Next"
             send(b"\x1b[1;2A")
-            wait_visible(lambda: "task #4 (New)" in visible.text().splitlines()[8])
+            wait_visible(lambda: "task #4 (New)" in editor_title())
             send(b"\x05 updated\x13")
-            wait_visible(lambda: "task #4 (New)" in visible.text().splitlines()[8]
-                         and visible.text().splitlines()[9].startswith("Next updated")
+            wait_visible(lambda: "task #4 (New)" in editor_title()
+                         and editor_line().startswith("Next updated")
                          and visible.text().splitlines()[-1].startswith("Saved #4")
-                         and (visible.x, visible.y) == (0, 9))
+                         and (visible.x, visible.y) == (0, editor_row() + 1))
             assert len(cli("list")) == 4
             assert cli("show", "4")["task"]["description"] == "Next updated"
         elif scenario == "workflow":
@@ -571,12 +709,12 @@ with tempfile.TemporaryDirectory(prefix="qqq-dashboard-test-") as folder:
             settle()
             clear_capture()
             click(6, task_row("Target 14"))
-            read_until(b"task #14")
-            wait_visible(lambda: visible.text().splitlines()[9].startswith("Target 14"))
+            wait_visible(lambda: 'task #14' in editor_title())
+            wait_visible(lambda: editor_line().startswith("Target 14"))
             clear_capture()
-            click(10, 10)
+            click_editor(10)
             send(b" updated")
-            wait_visible(lambda: visible.text().splitlines()[9].startswith("Target 14 updated"))
+            wait_visible(lambda: editor_line().startswith("Target 14 updated"))
             assert cli("list") == initial_tasks
             clear_capture()
             send(b"\x13")
@@ -585,15 +723,15 @@ with tempfile.TemporaryDirectory(prefix="qqq-dashboard-test-") as folder:
             assert child.poll() is None
             assert not select.select([child.stdout], [], [], 0)[0], "TUI wrote stdout after update"
             send(b"\x1b[1;2B" * 7)
-            wait_visible(lambda: "new task" in visible.text().splitlines()[8]
-                         and visible.text().splitlines()[9].strip() == "")
+            wait_visible(lambda: "new task" in editor_title()
+                         and editor_line().strip() == "")
             clear_capture()
             send(b"\x13")
             read_until(b"Task description cannot be empty")
             clear_capture()
             send(b"New target ")
             send(b"\x1b[200~details\x1b[201~")
-            wait_visible(lambda: visible.text().splitlines()[9].startswith("New target details"))
+            wait_visible(lambda: editor_line().startswith("New target details"))
             clear_capture()
             send(b"\x1b[200~" + str(image_path).encode() + b"\x1b[201~")
             read_until(b"[Image #1: workflow.png]")
@@ -611,7 +749,7 @@ with tempfile.TemporaryDirectory(prefix="qqq-dashboard-test-") as folder:
         elif scenario == "workflow_empty":
             wait_visible(lambda: "No tasks yet." in visible.text().splitlines()[2])
             assert cli("list") == []
-            assert visible.text().splitlines()[8].startswith("qqq task editor - new task")
+            assert editor_title().startswith("qqq task editor - new task")
         elif scenario == "workflow_status":
             wait_visible(lambda: "Completed" in visible.text()
                          and "Error" in visible.text()
@@ -619,16 +757,16 @@ with tempfile.TemporaryDirectory(prefix="qqq-dashboard-test-") as folder:
             assert "New          Fresh item" in visible.text(), visible.text()
             clear_capture()
             send(b"\x1b[1;2A" * 2)
-            wait_visible(lambda: "task #2 (Error)" in visible.text().splitlines()[8])
+            wait_visible(lambda: "task #2 (Error)" in editor_title())
             clear_capture()
             send(b"\x1b[1;2A")
-            wait_visible(lambda: "task #1 (Completed)" in visible.text().splitlines()[8])
+            wait_visible(lambda: "task #1 (Completed)" in editor_title())
         elif scenario == "actions_basic":
             wait_visible(lambda: "Owned item" in visible.text() and "Hidden item" in visible.text())
             def select_action_task(label, task_id):
                 clear_capture()
                 click(5, task_row(label))
-                wait_visible(lambda: f"task #{task_id}" in visible.text().splitlines()[8])
+                wait_visible(lambda: f"task #{task_id}" in editor_title())
 
             def action(letter, prompt):
                 clear_capture()
@@ -639,7 +777,7 @@ with tempfile.TemporaryDirectory(prefix="qqq-dashboard-test-") as folder:
                 read_until(prompt.encode())
 
             click(5, task_row("Owned item"))
-            read_until(b"task #1 (In progress)")
+            wait_visible(lambda: 'task #1 (In progress)' in editor_title())
             action("c", "Complete task #1?")
             clear_capture()
             send(b"y")
@@ -677,7 +815,7 @@ with tempfile.TemporaryDirectory(prefix="qqq-dashboard-test-") as folder:
                          "Task 4 is not claimed by session worker" in visible.text().splitlines()[-1])
             assert cli("show", "4")["task"]["status"] == "new"
             send(b"\x7f")
-            wait_visible(lambda: visible.text().splitlines()[9].startswith("Fresh item"))
+            wait_visible(lambda: editor_line().startswith("Fresh item"))
 
             action("p", "Priority task #4")
             send(b"7\r")
@@ -693,7 +831,7 @@ with tempfile.TemporaryDirectory(prefix="qqq-dashboard-test-") as folder:
             read_until(b"Priority #4: -5")
             assert cli("show", "4")["task"]["priority"] == -5
             assert cli("show", "4")["task"]["description"] == "Fresh item"
-            wait_visible(lambda: visible.text().splitlines()[9].startswith("Fresh item"))
+            wait_visible(lambda: editor_line().startswith("Fresh item"))
             action("d", "Parent task #4")
             send(b"3\r")
             read_until(b"Parent #4: #3")
@@ -718,7 +856,7 @@ with tempfile.TemporaryDirectory(prefix="qqq-dashboard-test-") as folder:
             def rejected_action(label, task_id, letter, prompt, error):
                 clear_capture()
                 click(5, task_row(label))
-                wait_visible(lambda: f"task #{task_id}" in visible.text().splitlines()[8])
+                wait_visible(lambda: f"task #{task_id}" in editor_title())
                 clear_capture()
                 send(b"\x07")
                 wait_visible(lambda: "c Complete" in visible.text())
@@ -728,8 +866,8 @@ with tempfile.TemporaryDirectory(prefix="qqq-dashboard-test-") as folder:
                 send(b"y")
                 read_until(error.encode())
                 send(b"\x1b")
-                wait_visible(lambda: f"task #{task_id}" in visible.text().splitlines()[8])
-                assert f"task #{task_id}" in visible.text().splitlines()[8]
+                wait_visible(lambda: f"task #{task_id}" in editor_title())
+                assert f"task #{task_id}" in editor_title()
 
             wait_visible(lambda: "Owned item" in visible.text() and "Hidden item" in visible.text())
             rejected_action("Owned item", 1, "a", "Archive task #1?",
@@ -743,12 +881,12 @@ with tempfile.TemporaryDirectory(prefix="qqq-dashboard-test-") as folder:
 
             clear_capture()
             click(5, task_row("Fresh item"))
-            read_until(b"task #4")
+            wait_visible(lambda: 'task #4' in editor_title())
             send(b"\x07p101\r")
             wait_visible(lambda: "Priority must be -100..100" in visible.text())
             assert "101" in visible.text(), visible.text()
             send(b"\x1b")
-            wait_visible(lambda: "task #4" in visible.text().splitlines()[8])
+            wait_visible(lambda: "task #4" in editor_title())
             send(b"\x07d4\r")
             read_until(b"Task 4 cannot depend on itself")
             send(b"\x1b")
@@ -761,24 +899,24 @@ with tempfile.TemporaryDirectory(prefix="qqq-dashboard-test-") as folder:
             wait_visible(lambda: "Filter: Filtered" in visible.text() and
                          "Filtered item" in visible.text() and "Visible" not in visible.text())
             send(b"\x1b[1;2A")
-            wait_visible(lambda: "task #2" in visible.text().splitlines()[8])
+            wait_visible(lambda: "task #2" in editor_title())
             send(b"\x07a")
             read_until(b"Archive task #2?")
             send(b"y")
             wait_visible(lambda: "No matching tasks." in visible.text() and
-                         "new task" in visible.text().splitlines()[8] and
+                         "new task" in editor_title() and
                          "Filter: Filtered" in visible.text())
             assert cli("show", "2")["task"]["archived"] is True
             assert not select.select([child.stdout], [], [], 0)[0], "TUI wrote stdout"
         elif scenario == "actions_narrow":
             click(5, task_row("First"))
-            read_until(b"task #1")
+            wait_visible(lambda: 'task #1' in editor_title())
             fcntl.ioctl(slave, termios.TIOCSWINSZ, struct.pack("HHHH", 8, 12, 0, 0))
             visible.resize(12, 8)
             clear_capture()
             os.kill(child.pid, signal.SIGWINCH)
             read_until(b"qqq tasks")
-            read_until(b"\x1b[?25h\x1b[6;1H")
+            wait_visible(lambda: editor_row() is not None and (visible.x, visible.y) == (0, editor_row() + 1))
             send(b"\x07")
             wait_visible(lambda: "c Complete" in visible.text() and
                          "d Parent" in visible.text() and "Esc cancel" in visible.text())
@@ -809,11 +947,11 @@ with tempfile.TemporaryDirectory(prefix="qqq-dashboard-test-") as folder:
             wait_visible(lambda: "Task 1 is in progress and cannot be archived" in
                          " ".join(row.strip() for row in visible.text().splitlines()[1:7]))
             send(b"\x1b")
-            fcntl.ioctl(slave, termios.TIOCSWINSZ, struct.pack("HHHH", 16, 72, 0, 0))
-            visible.resize(72, 16)
+            fcntl.ioctl(slave, termios.TIOCSWINSZ, struct.pack("HHHH", 24, 72, 0, 0))
+            visible.resize(72, 24)
             clear_capture()
             os.kill(child.pid, signal.SIGWINCH)
-            read_until(b"qqq task editor - task #1")
+            wait_visible(lambda: 'qqq task editor - task #1' in editor_title())
             wait_visible(lambda: "Task 1 is in progress and cannot be archived" in visible.text())
             settle()
         elif scenario == "click":
@@ -834,20 +972,20 @@ with tempfile.TemporaryDirectory(prefix="qqq-dashboard-test-") as folder:
 
             clear_capture()
             click(5, task_row("Parent detail"))
-            read_until(b"task #1")
-            wait_visible(lambda: visible.text().splitlines()[9].startswith("Parent"))
+            wait_visible(lambda: 'task #1' in editor_title())
+            wait_visible(lambda: editor_line().startswith("Parent"))
             clear_capture()
             send(b"\x1b[<65;6;4M")
             wait_visible(lambda: "word" in visible.text().splitlines()[6]
                          and "Child detail" not in visible.text().splitlines()[6])
             clear_capture()
             click(5, 7)
-            read_until(b"task #2")
-            wait_visible(lambda: visible.text().splitlines()[9].startswith("Child start"))
+            wait_visible(lambda: 'task #2' in editor_title())
+            wait_visible(lambda: editor_line().startswith("Child start"))
             clear_capture()
-            click(7, 10)
+            click_editor(7)
             send(b"X")
-            wait_visible(lambda: visible.text().splitlines()[9].startswith("Child Xstart"))
+            wait_visible(lambda: editor_line().startswith("Child Xstart"))
             assert cli("list") == initial_tasks
             clear_capture()
             send(b"\x13")
@@ -870,7 +1008,7 @@ with tempfile.TemporaryDirectory(prefix="qqq-dashboard-test-") as folder:
             wait_visible(lambda: "Needle 13" in visible.text().splitlines()[2])
             settle()
             clear_capture()
-            click(3, 10)
+            click_editor(3)
             wait_visible(lambda: visible.text().splitlines()[-1].startswith("Ctrl-S save"))
             clear_capture()
             send(CTRL_SLASH)
@@ -880,20 +1018,20 @@ with tempfile.TemporaryDirectory(prefix="qqq-dashboard-test-") as folder:
             read_until(b"Discard changes and switch? (y/N)")
             clear_capture()
             send(b"n")
-            wait_visible(lambda: "new task" in visible.text().splitlines()[8]
-                         and "Unsaved" in visible.text().splitlines()[9]
+            wait_visible(lambda: "new task" in editor_title()
+                         and "Unsaved" in editor_line()
                          and visible.text().splitlines()[-1].startswith("Type to filter"))
             assert cli("list") == initial_tasks
             clear_capture()
             click(6, task_row("Needle 14"))
             read_until(b"Discard changes and switch? (y/N)")
             send(b"y")
-            read_until(b"task #14")
-            wait_visible(lambda: visible.text().splitlines()[9].startswith("Needle 14"))
+            wait_visible(lambda: 'task #14' in editor_title())
+            wait_visible(lambda: editor_line().startswith("Needle 14"))
             assert cli("list") == initial_tasks
             clear_capture()
             send(b"!")
-            wait_visible(lambda: visible.text().splitlines()[9].startswith("!Needle 14"))
+            wait_visible(lambda: editor_line().startswith("!Needle 14"))
             clear_capture()
             click(6, task_row("Needle 14"))
             settle()
@@ -907,15 +1045,15 @@ with tempfile.TemporaryDirectory(prefix="qqq-dashboard-test-") as folder:
         elif scenario == "click_editor_scroll":
             clear_capture()
             click(5, task_row("Line01"))
-            read_until(b"task #3")
-            wait_visible(lambda: visible.text().splitlines()[9].startswith("Line01"))
+            wait_visible(lambda: 'task #3' in editor_title())
+            wait_visible(lambda: editor_line().startswith("Line01"))
             clear_capture()
-            send(b"\x1b[<65;6;11M")
-            wait_visible(lambda: visible.text().splitlines()[9].startswith("Line04"))
+            wheel_editor(True, 1)
+            wait_visible(lambda: editor_line().startswith("Line04"))
             clear_capture()
-            click(5, 10)
+            click_editor(5)
             send(b"X")
-            wait_visible(lambda: visible.text().splitlines()[9].startswith("LineX04"))
+            wait_visible(lambda: editor_line().startswith("LineX04"))
             clear_capture()
             send(b"\x13")
             read_until(b"Saved #3")
@@ -929,14 +1067,14 @@ with tempfile.TemporaryDirectory(prefix="qqq-dashboard-test-") as folder:
             settle()
             assert not screen, f"Blank list click redrew TUI: {screen[-500:]!r}"
             send(b"Unsaved")
-            wait_visible(lambda: visible.text().splitlines()[9].startswith("Unsaved"))
+            wait_visible(lambda: editor_line().startswith("Unsaved"))
             with sqlite3.connect(os.path.join(folder, ".qqq", "qqq.db")) as db:
                 db.execute("DELETE FROM tasks WHERE id=2")
             clear_capture()
             click(5, 5)
             read_until(b"Task 2 not found")
-            assert "new task" in visible.text().splitlines()[8]
-            assert visible.text().splitlines()[9].startswith("Unsaved")
+            assert "new task" in editor_title()
+            assert editor_line().startswith("Unsaved")
             assert cli("list")[0]["id"] == 1
         elif scenario == "wheel_error":
             with sqlite3.connect(os.path.join(folder, ".qqq", "qqq.db")) as db:
@@ -969,68 +1107,68 @@ with tempfile.TemporaryDirectory(prefix="qqq-dashboard-test-") as folder:
             assert not screen, f"Mouse movement redrew TUI: {screen[-500:]!r}"
             clear_capture()
             send(b"\x1b[1;2A")
-            read_until(b"task #20")
-            wait_visible(lambda: visible.text().splitlines()[9].startswith("Line01"))
+            wait_visible(lambda: 'task #20' in editor_title())
+            wait_visible(lambda: editor_line().startswith("Line01"))
 
             clear_capture()
             send(b"\x1b[<64;6;4M")
             wait_visible(lambda: "Task 13" in visible.text().splitlines()[2])
-            assert visible.text().splitlines()[9].startswith("Line01"), visible.text()
+            assert editor_line().startswith("Line01"), visible.text()
             clear_capture()
-            send(b"\x1b[<65;6;11M")
-            wait_visible(lambda: visible.text().splitlines()[9].startswith("Line04"))
+            wheel_editor(True, 1)
+            wait_visible(lambda: editor_line().startswith("Line04"))
             assert "Task 13" in visible.text().splitlines()[2], visible.text()
             clear_capture()
             send(b"\x11")
             time.sleep(0.1)
             while select.select([master], [], [], 0)[0]:
                 capture(os.read(master, 65536))
-            assert visible.text().splitlines()[9].startswith("Line04"), visible.text()
+            assert editor_line().startswith("Line04"), visible.text()
 
             clear_capture()
             send(b"\x1b[<65;6;8M\x1b[<65;6;16M")
             time.sleep(0.1)
             assert "Task 13" in visible.text().splitlines()[2], visible.text()
-            assert visible.text().splitlines()[9].startswith("Line04"), visible.text()
+            assert editor_line().startswith("Line04"), visible.text()
             clear_capture()
-            send(b"\x1b[<64;6;11M" * 10)
-            wait_visible(lambda: visible.text().splitlines()[9].startswith("Line01"))
+            wheel_editor(False, 10)
+            wait_visible(lambda: editor_line().startswith("Line01"))
             clear_capture()
-            send(b"\x1b[<65;6;11M" * 10)
-            wait_visible(lambda: visible.text().splitlines()[9].startswith("Line10"))
+            wheel_editor(True, 10)
+            wait_visible(lambda: editor_line().startswith("Line10"))
             assert "Task 13" in visible.text().splitlines()[2], visible.text()
             clear_capture()
             send(b"\x1b[<64;6;4M" * 10)
             wait_visible(lambda: "ID" in visible.text().splitlines()[2])
-            assert visible.text().splitlines()[9].startswith("Line10"), visible.text()
+            assert editor_line().startswith("Line10"), visible.text()
             clear_capture()
             send(b"\x1b[<65;6;4M" * 10)
             wait_visible(lambda: "Task 18" in visible.text().splitlines()[2]
                          and "Line03..." in visible.text().splitlines()[6])
 
-            fcntl.ioctl(slave, termios.TIOCSWINSZ, struct.pack("HHHH", 24, 72, 0, 0))
-            visible.resize(72, 24)
+            fcntl.ioctl(slave, termios.TIOCSWINSZ, struct.pack("HHHH", 36, 72, 0, 0))
+            visible.resize(72, 36)
             clear_capture()
             os.kill(child.pid, signal.SIGWINCH)
             wait_visible(lambda: "Task 14" in visible.text().splitlines()[2]
-                         and visible.text().splitlines()[13].startswith("Line06"))
+                         and editor_line().startswith("Line06"))
             time.sleep(0.1)
             clear_capture()
             send(b"!")
-            wait_visible(lambda: visible.text().splitlines()[13].startswith("!Line01"))
+            wait_visible(lambda: editor_line().startswith("!Line01"))
             assert cli("list") == initial_tasks
             clear_capture()
             send(b"\x1b[1;2A")
             read_until(b"Discard changes and switch? (y/N)")
             clear_capture()
             send(b"y")
-            read_until(b"task #19")
+            wait_visible(lambda: 'task #19' in editor_title())
             wait_visible(lambda: "Task 14" in visible.text().splitlines()[2]
-                         and visible.text().splitlines()[13].startswith("Task 19"))
+                         and editor_line().startswith("Task 19"))
             assert cli("list") == initial_tasks
             clear_capture()
             send(b"\x1b[1;2A" * 18)
-            wait_visible(lambda: "task #1 (" in visible.text().splitlines()[12])
+            wait_visible(lambda: "task #1 (" in editor_title())
             clear_capture()
             send(b"\x1b[<65;6;4M" * 10)
             wait_visible(lambda: "Task 14" in visible.text().splitlines()[2])
@@ -1041,7 +1179,7 @@ with tempfile.TemporaryDirectory(prefix="qqq-dashboard-test-") as folder:
         elif scenario == "filter_shortcuts":
             initial_tasks = cli("list")
             send(b"Draft/path")
-            wait_visible(lambda: visible.text().splitlines()[9].startswith("Draft/path"))
+            wait_visible(lambda: editor_line().startswith("Draft/path"))
             for shortcut in (
                 CTRL_SLASH,
                 b"\x1b[47;5u",       # CSI-u Ctrl+/.
@@ -1052,7 +1190,7 @@ with tempfile.TemporaryDirectory(prefix="qqq-dashboard-test-") as folder:
                 wait_visible(lambda: visible.text().splitlines()[1].strip() == "Filter: First"
                              and visible.text().splitlines()[-1].startswith("Type to filter"))
                 assert "Second" not in visible.text(), visible.text()
-                assert visible.text().splitlines()[9].startswith("Draft/path"), visible.text()
+                assert editor_line().startswith("Draft/path"), visible.text()
                 send(shortcut + b"/")
                 wait_visible(lambda: visible.text().splitlines()[1].strip() == "Filter: First/")
                 assert cli("list") == initial_tasks
@@ -1066,10 +1204,10 @@ with tempfile.TemporaryDirectory(prefix="qqq-dashboard-test-") as folder:
             assert cli("show", "3")["task"]["description"] == "Draft/path"
         elif scenario == "slash_edit":
             send(b"/")
-            wait_visible(lambda: visible.text().splitlines()[9].startswith("/")
+            wait_visible(lambda: editor_line().startswith("/")
                          and visible.text().splitlines()[-1].startswith("Ctrl-S save"))
             send(b"\x1b/")
-            wait_visible(lambda: visible.text().splitlines()[9].startswith("//"))
+            wait_visible(lambda: editor_line().startswith("//"))
             send(b"path\x13")
             read_until(b"Saved #3")
             assert cli("show", "3")["task"]["description"] == "//path"
@@ -1124,13 +1262,13 @@ with tempfile.TemporaryDirectory(prefix="qqq-dashboard-test-") as folder:
             assert cli("show", "4")["task"]["description"] == "Unsaved!"
             clear_capture()
             send(b"\x1b[1;2A")
-            read_until(b"task #2")
+            wait_visible(lambda: 'task #2' in editor_title())
             clear_capture()
             send(b"\x1b[1;2A")
-            read_until(b"task #1")
+            wait_visible(lambda: 'task #1' in editor_title())
             clear_capture()
             send(b"\x1b[1;2B")
-            read_until(b"task #2")
+            wait_visible(lambda: 'task #2' in editor_title())
             clear_capture()
             send(b"\x1b[1;2B")
             read_until(b"new task")
@@ -1144,8 +1282,8 @@ with tempfile.TemporaryDirectory(prefix="qqq-dashboard-test-") as folder:
             clear_capture()
             os.kill(child.pid, signal.SIGWINCH)
             read_until(b"Resize ter")
-            fcntl.ioctl(slave, termios.TIOCSWINSZ, struct.pack("HHHH", 16, 72, 0, 0))
-            visible.resize(72, 16)
+            fcntl.ioctl(slave, termios.TIOCSWINSZ, struct.pack("HHHH", 24, 72, 0, 0))
+            visible.resize(72, 24)
             clear_capture()
             os.kill(child.pid, signal.SIGWINCH)
             read_until(b"Filter: needle")
@@ -1153,20 +1291,20 @@ with tempfile.TemporaryDirectory(prefix="qqq-dashboard-test-") as folder:
             time.sleep(0.1)
             clear_capture()
             send(b"\rx")
-            wait_visible(lambda: visible.text().splitlines()[9].startswith("x"))
+            wait_visible(lambda: editor_line().startswith("x"))
             send(b"\x7f")
-            wait_visible(lambda: visible.text().splitlines()[9].strip() == "")
+            wait_visible(lambda: editor_line().strip() == "")
         elif scenario in ("save", "save_json"):
             clear_capture()
             send(b"\x1b[1;2A")
-            read_until(b"task #2")
+            wait_visible(lambda: 'task #2' in editor_title())
             assert "> 2" in visible.text(), visible.text()
             clear_capture()
             send(b"\x05 edited\x13")
             read_until(b"Saved #2")
             assert cli("show", "2")["task"]["description"] == "Second edited"
             send(b"\x1b[1;2B")
-            wait_visible(lambda: "new task" in visible.text().splitlines()[8])
+            wait_visible(lambda: "new task" in editor_title())
             clear_capture()
             send(b"Third\x13")
             read_until(b"Saved #3")
@@ -1181,7 +1319,7 @@ with tempfile.TemporaryDirectory(prefix="qqq-dashboard-test-") as folder:
             assert "> 1" in visible.text() and "First" in visible.text(), visible.text()
             clear_capture()
             send(b"\x1b[1;2B")
-            read_until(b"qqq task editor - task #2")
+            wait_visible(lambda: 'qqq task editor - task #2' in editor_title())
             assert "> 2" in visible.text(), visible.text()
         elif scenario in ("pasteboard", "pasteboard_no_color"):
             payload = "x" * 1001
@@ -1200,11 +1338,11 @@ with tempfile.TemporaryDirectory(prefix="qqq-dashboard-test-") as folder:
             )
             clear_capture()
             send(b"\x1b[1;2B")
-            wait_visible(lambda: "new task" in visible.text().splitlines()[8])
+            wait_visible(lambda: "new task" in editor_title())
             clear_capture()
             send(b"\x1b[1;2A")
-            read_until(b"task #3")
-            wait_visible(lambda: "task #3" in visible.text().splitlines()[8] and
+            wait_visible(lambda: 'task #3' in editor_title())
+            wait_visible(lambda: "task #3" in editor_title() and
                          "[Pasted Content 1001 chars]" in visible.text() and
                          visible.text().splitlines()[-1].startswith("Ctrl-S save"))
             if scenario == "pasteboard":
@@ -1233,7 +1371,7 @@ with tempfile.TemporaryDirectory(prefix="qqq-dashboard-test-") as folder:
         elif scenario == "save_error":
             clear_capture()
             send(b"\x1b[1;2A")
-            read_until(b"qqq task editor - task #2")
+            wait_visible(lambda: 'qqq task editor - task #2' in editor_title())
             with sqlite3.connect(os.path.join(folder, ".qqq", "qqq.db")) as db:
                 db.execute("DELETE FROM tasks WHERE id=2")
             clear_capture()
@@ -1256,11 +1394,11 @@ with tempfile.TemporaryDirectory(prefix="qqq-dashboard-test-") as folder:
             os.kill(child.pid, signal.SIGWINCH)
             read_until(b"Resize ter")
             clear_capture()
-            fcntl.ioctl(slave, termios.TIOCSWINSZ, struct.pack("HHHH", 16, 72, 0, 0))
-            visible.resize(72, 16)
+            fcntl.ioctl(slave, termios.TIOCSWINSZ, struct.pack("HHHH", 24, 72, 0, 0))
+            visible.resize(72, 24)
             clear_capture()
             os.kill(child.pid, signal.SIGWINCH)
-            read_until(b"qqq task editor - new task")
+            wait_visible(lambda: 'qqq task editor - new task' in editor_title())
             read_until(b"Draft")
             read_until(b"\x1b[10;6H")
             clear_capture()

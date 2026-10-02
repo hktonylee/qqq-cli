@@ -52,6 +52,24 @@ fn dashboard_scenario(name: &str) {
 }
 
 #[test]
+fn tui_dashboard_selected_details_and_expanded_new_editor() {
+    dashboard_scenario("details");
+    dashboard_scenario("details_no_color");
+    dashboard_scenario("layout_new");
+}
+
+#[test]
+fn tui_dashboard_details_scroll_independently() {
+    dashboard_scenario("details_scroll");
+}
+
+#[test]
+fn tui_dashboard_details_refresh_without_replacing_dirty_draft() {
+    dashboard_scenario("details_refresh");
+    dashboard_scenario("details_deleted");
+}
+
+#[test]
 fn tui_dashboard_edits_and_adds_without_leaving_screen() {
     dashboard_scenario("save");
     dashboard_scenario("save_json");

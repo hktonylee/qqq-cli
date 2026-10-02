@@ -14,12 +14,18 @@ const ACCENT: Color = Color::Indexed(81);
 const BODY_FG: Color = Color::Indexed(252);
 const BODY_BG: Color = Color::Indexed(236);
 
-pub struct ListView<'a> {
+pub struct DetailsView<'a> {
+    pub rows: &'a [String],
+    pub top: &'a mut usize,
+}
+
+pub struct View<'a> {
     pub query: &'a str,
     pub focused: bool,
     pub top: &'a mut usize,
     pub follow_selected: bool,
     pub modal_lines: Option<&'a [String]>,
+    pub details: Option<DetailsView<'a>>,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -247,12 +253,39 @@ fn editor(frame: &mut Frame<'_>, area: Rect, editor: render::DashboardEditor<'_>
     }
 }
 
+fn details(frame: &mut Frame<'_>, area: Rect, view: DetailsView<'_>, color: bool) {
+    let height = details_height(area);
+    *view.top = (*view.top).min(view.rows.len().saturating_sub(height));
+    for (offset, row) in view.rows.iter().skip(*view.top).take(height).enumerate() {
+        let style = if color && *view.top == 0 && offset == 0 {
+            Style::default().fg(ACCENT).add_modifier(Modifier::BOLD)
+        } else {
+            Style::default()
+        };
+        frame.render_widget(
+            Paragraph::new(row.clone()).style(style),
+            Rect::new(area.x, area.y + offset as u16, area.width, 1),
+        );
+    }
+    if height < usize::from(area.height) {
+        let style = if color {
+            Style::default().fg(Color::DarkGray)
+        } else {
+            Style::default()
+        };
+        frame.render_widget(
+            Paragraph::new("-".repeat(area.width.into())).style(style),
+            Rect::new(area.x, area.y + area.height - 1, area.width, 1),
+        );
+    }
+}
+
 pub fn draw(
     frame: &mut Frame<'_>,
     rows: &[panel::ListRow],
     statuses: &HashMap<i64, &str>,
     selected: Option<i64>,
-    list_view: ListView<'_>,
+    list_view: View<'_>,
     editor_state: render::DashboardEditor<'_>,
     color: bool,
 ) {
@@ -270,8 +303,8 @@ pub fn draw(
     }
     let Panes {
         list,
+        details: details_area,
         editor: editor_area,
-        ..
     } = panes(area, selected.is_some());
     let list_height = usize::from(list.height.saturating_sub(3));
     *list_view.top = if list_view.follow_selected {
@@ -333,6 +366,9 @@ pub fn draw(
         Paragraph::new("-".repeat(list.width.into())).style(separator_style),
         Rect::new(list.x, list.y + list.height - 1, list.width, 1),
     );
+    if let (Some(area), Some(view)) = (details_area, list_view.details) {
+        details(frame, area, view, color);
+    }
     editor(frame, editor_area, editor_state, color);
     if list_view.focused {
         frame.set_cursor_position((list.x + filter_cursor, list.y + 1));

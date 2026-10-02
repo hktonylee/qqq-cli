@@ -46,6 +46,117 @@ fn click(
 }
 
 #[test]
+fn selected_task_renders_details_between_list_and_editor() {
+    let rows = panel::rows("ID STATUS TASK\n1 New Selected", 70);
+    let detail_rows = [
+        "Task #1 | New",
+        "Messages (1)",
+        "#1 reviewer",
+        "Latest message",
+        "Created: now",
+    ]
+    .map(str::to_owned);
+    let layout = render::Layout::new(&["Dirty draft".into()], &[], 72);
+    let chrome = render::Chrome {
+        title: "Editor",
+        title_status_color: None,
+        keys: render::KEYS,
+        message: "",
+    };
+    let mut terminal = Terminal::new(TestBackend::new(72, 18)).unwrap();
+    terminal
+        .draw(|frame| {
+            dashboard::draw(
+                frame,
+                &rows,
+                &HashMap::from([(1, "new")]),
+                Some(1),
+                dashboard::View {
+                    query: "",
+                    focused: false,
+                    top: &mut 0,
+                    follow_selected: true,
+                    modal_lines: None,
+                    details: Some(dashboard::DetailsView {
+                        rows: &detail_rows,
+                        top: &mut 0,
+                    }),
+                },
+                render::DashboardEditor {
+                    layout: &layout,
+                    cursor: 0,
+                    top: &mut 0,
+                    chrome: &chrome,
+                    message_is_error: false,
+                    follow_cursor: true,
+                },
+                false,
+            )
+        })
+        .unwrap();
+    let buffer = terminal.backend().buffer();
+    assert!(line(buffer, 3).contains("Selected"));
+    assert!(line(buffer, 6).starts_with("Task #1"));
+    assert!(line(buffer, 9).starts_with("Latest message"));
+    assert!(line(buffer, 11).starts_with("---"));
+    assert!(line(buffer, 12).starts_with("Editor"));
+    assert!(line(buffer, 13).starts_with("Dirty draft"));
+    assert_eq!(
+        terminal.get_cursor_position().unwrap(),
+        Position::new(0, 13)
+    );
+}
+
+#[test]
+fn details_scroll_clamps_without_moving_editor() {
+    let detail_rows: Vec<_> = (0..10).map(|index| format!("Detail {index}")).collect();
+    let layout = render::Layout::new(&["Draft".into()], &[], 72);
+    let chrome = render::Chrome {
+        title: "Editor",
+        title_status_color: None,
+        keys: render::KEYS,
+        message: "",
+    };
+    let mut details_top = 99;
+    let mut editor_top = 0;
+    let mut terminal = Terminal::new(TestBackend::new(72, 18)).unwrap();
+    terminal
+        .draw(|frame| {
+            dashboard::draw(
+                frame,
+                &[],
+                &HashMap::new(),
+                Some(1),
+                dashboard::View {
+                    query: "",
+                    focused: false,
+                    top: &mut 0,
+                    follow_selected: true,
+                    modal_lines: None,
+                    details: Some(dashboard::DetailsView {
+                        rows: &detail_rows,
+                        top: &mut details_top,
+                    }),
+                },
+                render::DashboardEditor {
+                    layout: &layout,
+                    cursor: 0,
+                    top: &mut editor_top,
+                    chrome: &chrome,
+                    message_is_error: false,
+                    follow_cursor: true,
+                },
+                false,
+            )
+        })
+        .unwrap();
+    assert_eq!(details_top, 5);
+    assert_eq!(editor_top, 0);
+    assert!(line(terminal.backend().buffer(), 6).starts_with("Detail 5"));
+    assert!(line(terminal.backend().buffer(), 13).starts_with("Draft"));
+}
+
+#[test]
 fn selected_task_geometry_and_details_hit_test_share_rectangles() {
     use ratatui::layout::Rect;
     for height in [8, 12, 18, 24] {
@@ -201,7 +312,7 @@ fn manual_list_scroll_does_not_snap_to_selected_task() {
         message: "",
     };
     let mut top = 0;
-    let mut terminal = Terminal::new(TestBackend::new(72, 16)).unwrap();
+    let mut terminal = Terminal::new(TestBackend::new(72, 24)).unwrap();
     terminal
         .draw(|frame| {
             dashboard::draw(
@@ -209,12 +320,13 @@ fn manual_list_scroll_does_not_snap_to_selected_task() {
                 &rows,
                 &HashMap::new(),
                 Some(10),
-                dashboard::ListView {
+                dashboard::View {
                     query: "",
                     focused: false,
                     top: &mut top,
                     follow_selected: false,
                     modal_lines: None,
+                    details: None,
                 },
                 render::DashboardEditor {
                     layout: &layout,
@@ -237,12 +349,13 @@ fn manual_list_scroll_does_not_snap_to_selected_task() {
                 &rows,
                 &HashMap::new(),
                 Some(10),
-                dashboard::ListView {
+                dashboard::View {
                     query: "",
                     focused: false,
                     top: &mut top,
                     follow_selected: true,
                     modal_lines: None,
+                    details: None,
                 },
                 render::DashboardEditor {
                     layout: &layout,
@@ -279,12 +392,13 @@ fn manual_editor_scroll_keeps_viewport_then_keyboard_reveals_caret() {
                 &[],
                 &HashMap::new(),
                 None,
-                dashboard::ListView {
+                dashboard::View {
                     query: "",
                     focused: false,
                     top: &mut 0,
                     follow_selected: true,
                     modal_lines: None,
+                    details: None,
                 },
                 render::DashboardEditor {
                     layout: &layout,
@@ -299,7 +413,7 @@ fn manual_editor_scroll_keeps_viewport_then_keyboard_reveals_caret() {
         })
         .unwrap();
     assert_eq!(top, 0);
-    assert!(line(terminal.backend().buffer(), 9).starts_with("A"));
+    assert!(line(terminal.backend().buffer(), 6).starts_with("A"));
     assert_eq!(terminal.get_cursor_position().unwrap(), Position::new(0, 0));
     terminal
         .draw(|frame| {
@@ -308,12 +422,13 @@ fn manual_editor_scroll_keeps_viewport_then_keyboard_reveals_caret() {
                 &[],
                 &HashMap::new(),
                 None,
-                dashboard::ListView {
+                dashboard::View {
                     query: "",
                     focused: false,
                     top: &mut 0,
                     follow_selected: true,
                     modal_lines: None,
+                    details: None,
                 },
                 render::DashboardEditor {
                     layout: &layout,
@@ -327,8 +442,8 @@ fn manual_editor_scroll_keeps_viewport_then_keyboard_reveals_caret() {
             )
         })
         .unwrap();
-    assert_eq!(top, 4);
-    assert!(line(terminal.backend().buffer(), 9).starts_with("E"));
+    assert_eq!(top, 1);
+    assert!(line(terminal.backend().buffer(), 6).starts_with("B"));
     assert_eq!(
         terminal.get_cursor_position().unwrap(),
         Position::new(1, 14)
@@ -356,7 +471,7 @@ fn manual_offsets_clamp_after_resize() {
     };
     let mut list_top = 6;
     let mut editor_top = 4;
-    let mut terminal = Terminal::new(TestBackend::new(72, 24)).unwrap();
+    let mut terminal = Terminal::new(TestBackend::new(72, 36)).unwrap();
     terminal
         .draw(|frame| {
             dashboard::draw(
@@ -364,12 +479,13 @@ fn manual_offsets_clamp_after_resize() {
                 &rows,
                 &HashMap::new(),
                 Some(10),
-                dashboard::ListView {
+                dashboard::View {
                     query: "",
                     focused: false,
                     top: &mut list_top,
                     follow_selected: false,
                     modal_lines: None,
+                    details: None,
                 },
                 render::DashboardEditor {
                     layout: &layout,
@@ -386,7 +502,7 @@ fn manual_offsets_clamp_after_resize() {
     assert_eq!(list_top, 2);
     assert_eq!(editor_top, 0);
     assert!(line(terminal.backend().buffer(), 2).contains("Task 2"));
-    assert!(line(terminal.backend().buffer(), 13).starts_with("A"));
+    assert!(line(terminal.backend().buffer(), 25).starts_with("A"));
 }
 
 #[test]
@@ -398,7 +514,7 @@ fn filter_bar_shows_empty_result_and_takes_cursor_only_while_focused() {
         keys: render::KEYS,
         message: "",
     };
-    let mut terminal = Terminal::new(TestBackend::new(72, 16)).unwrap();
+    let mut terminal = Terminal::new(TestBackend::new(72, 24)).unwrap();
     terminal
         .draw(|frame| {
             dashboard::draw(
@@ -406,12 +522,13 @@ fn filter_bar_shows_empty_result_and_takes_cursor_only_while_focused() {
                 &[],
                 &HashMap::new(),
                 Some(99),
-                dashboard::ListView {
+                dashboard::View {
                     query: "absent",
                     focused: true,
                     top: &mut 0,
                     follow_selected: true,
                     modal_lines: None,
+                    details: None,
                 },
                 render::DashboardEditor {
                     layout: &layout,
@@ -428,7 +545,7 @@ fn filter_bar_shows_empty_result_and_takes_cursor_only_while_focused() {
     let buffer = terminal.backend().buffer();
     assert!(line(buffer, 1).starts_with("Filter: absent"));
     assert!(line(buffer, 2).starts_with("No matching tasks."));
-    assert!(line(buffer, 8).starts_with("qqq task editor"));
+    assert!(line(buffer, 16).starts_with("qqq task editor"));
     assert_eq!(
         terminal.get_cursor_position().unwrap(),
         Position::new(14, 1)
@@ -452,12 +569,13 @@ fn small_dashboard_keeps_filter_row_and_plain_style() {
                 &[],
                 &HashMap::new(),
                 None,
-                dashboard::ListView {
+                dashboard::View {
                     query: "abcdefghijklmnop",
                     focused: true,
                     top: &mut 0,
                     follow_selected: true,
                     modal_lines: None,
+                    details: None,
                 },
                 render::DashboardEditor {
                     layout: &layout,
@@ -500,12 +618,13 @@ fn minimum_dashboard_height_still_shows_selected_task() {
                 &rows,
                 &HashMap::from([(1, "new")]),
                 Some(1),
-                dashboard::ListView {
+                dashboard::View {
                     query: "",
                     focused: false,
                     top: &mut 0,
                     follow_selected: true,
                     modal_lines: None,
+                    details: None,
                 },
                 render::DashboardEditor {
                     layout: &layout,
@@ -532,7 +651,7 @@ fn split_dashboard_keeps_list_above_editor() {
         keys: render::KEYS,
         message: "",
     };
-    let mut terminal = Terminal::new(TestBackend::new(72, 16)).unwrap();
+    let mut terminal = Terminal::new(TestBackend::new(72, 24)).unwrap();
     let mut list_top = 0;
     let mut editor_top = 0;
     terminal
@@ -542,12 +661,13 @@ fn split_dashboard_keeps_list_above_editor() {
                 &rows,
                 &HashMap::from([(1, "new")]),
                 Some(1),
-                dashboard::ListView {
+                dashboard::View {
                     query: "",
                     focused: false,
                     top: &mut list_top,
                     follow_selected: true,
                     modal_lines: None,
+                    details: None,
                 },
                 render::DashboardEditor {
                     layout: &layout,
@@ -566,10 +686,13 @@ fn split_dashboard_keeps_list_above_editor() {
     assert!(line(buffer, 1).starts_with("Filter: "));
     assert!(line(buffer, 2).starts_with("  ID     STATUS"));
     assert!(line(buffer, 3).starts_with("> 1      New"));
-    assert!(line(buffer, 8).starts_with("qqq task editor"));
-    assert!(line(buffer, 9).starts_with("Draft"));
-    assert!(line(buffer, 15).starts_with("Ctrl-S"));
-    assert_eq!(terminal.get_cursor_position().unwrap(), Position::new(0, 9));
+    assert!(line(buffer, 16).starts_with("qqq task editor"));
+    assert!(line(buffer, 17).starts_with("Draft"));
+    assert!(line(buffer, 23).starts_with("Ctrl-S"));
+    assert_eq!(
+        terminal.get_cursor_position().unwrap(),
+        Position::new(0, 17)
+    );
 }
 
 #[test]
@@ -589,12 +712,13 @@ fn narrow_dashboard_shows_plain_resize_hint() {
                 &[],
                 &HashMap::new(),
                 None,
-                dashboard::ListView {
+                dashboard::View {
                     query: "",
                     focused: false,
                     top: &mut 0,
                     follow_selected: true,
                     modal_lines: None,
+                    details: None,
                 },
                 render::DashboardEditor {
                     layout: &layout,
@@ -624,7 +748,7 @@ fn no_color_dashboard_keeps_default_cell_styles() {
         keys: render::KEYS,
         message: "",
     };
-    let mut terminal = Terminal::new(TestBackend::new(72, 16)).unwrap();
+    let mut terminal = Terminal::new(TestBackend::new(72, 24)).unwrap();
     terminal
         .draw(|frame| {
             dashboard::draw(
@@ -632,12 +756,13 @@ fn no_color_dashboard_keeps_default_cell_styles() {
                 &rows,
                 &HashMap::from([(1, "error")]),
                 Some(1),
-                dashboard::ListView {
+                dashboard::View {
                     query: "",
                     focused: false,
                     top: &mut 0,
                     follow_selected: true,
                     modal_lines: None,
+                    details: None,
                 },
                 render::DashboardEditor {
                     layout: &layout,
@@ -652,7 +777,7 @@ fn no_color_dashboard_keeps_default_cell_styles() {
         })
         .unwrap();
     let buffer = terminal.backend().buffer();
-    for y in 0..16 {
+    for y in 0..24 {
         for x in 0..72 {
             assert_eq!(buffer[(x, y)].fg, Color::Reset, "cell {x},{y}");
             assert_eq!(buffer[(x, y)].bg, Color::Reset, "cell {x},{y}");
@@ -678,7 +803,7 @@ fn status_selection_and_editor_images_use_distinct_colors() {
         keys: render::KEYS,
         message: "Saved #1. New task",
     };
-    let mut terminal = Terminal::new(TestBackend::new(72, 16)).unwrap();
+    let mut terminal = Terminal::new(TestBackend::new(72, 24)).unwrap();
     terminal
         .draw(|frame| {
             dashboard::draw(
@@ -691,12 +816,13 @@ fn status_selection_and_editor_images_use_distinct_colors() {
                     (4, "error"),
                 ]),
                 Some(1),
-                dashboard::ListView {
+                dashboard::View {
                     query: "",
                     focused: false,
                     top: &mut 0,
                     follow_selected: true,
                     modal_lines: None,
+                    details: None,
                 },
                 render::DashboardEditor {
                     layout: &layout,
@@ -718,11 +844,11 @@ fn status_selection_and_editor_images_use_distinct_colors() {
     assert_eq!(buffer[(2, 4)].fg, Color::Indexed(81));
     assert_eq!(buffer[(2, 5)].fg, Color::DarkGray);
     assert_eq!(buffer[(2, 6)].fg, Color::Red);
-    assert_eq!(buffer[(0, 9)].fg, Color::Indexed(252));
-    assert_eq!(buffer[(0, 9)].bg, Color::Indexed(236));
-    assert_eq!(buffer[(1, 9)].fg, Color::Indexed(81));
-    assert_eq!(buffer[(0, 10)].bg, Color::Indexed(236));
-    assert_eq!(buffer[(0, 15)].fg, Color::Yellow);
+    assert_eq!(buffer[(0, 17)].fg, Color::Indexed(252));
+    assert_eq!(buffer[(0, 17)].bg, Color::Indexed(236));
+    assert_eq!(buffer[(1, 17)].fg, Color::Indexed(81));
+    assert_eq!(buffer[(0, 18)].bg, Color::Indexed(236));
+    assert_eq!(buffer[(0, 23)].fg, Color::Yellow);
 }
 
 #[test]
@@ -743,7 +869,7 @@ fn dashboard_paste_label_uses_gold_while_body_stays_neutral() {
         keys: render::KEYS,
         message: "",
     };
-    let mut terminal = Terminal::new(TestBackend::new(72, 16)).unwrap();
+    let mut terminal = Terminal::new(TestBackend::new(72, 24)).unwrap();
     terminal
         .draw(|frame| {
             dashboard::draw(
@@ -751,12 +877,13 @@ fn dashboard_paste_label_uses_gold_while_body_stays_neutral() {
                 &[],
                 &HashMap::new(),
                 None,
-                dashboard::ListView {
+                dashboard::View {
                     query: "",
                     focused: false,
                     top: &mut 0,
                     follow_selected: true,
                     modal_lines: None,
+                    details: None,
                 },
                 render::DashboardEditor {
                     layout: &layout,
@@ -785,7 +912,7 @@ fn failed_save_footer_uses_error_color() {
         keys: render::KEYS,
         message: "Task description cannot be empty",
     };
-    let mut terminal = Terminal::new(TestBackend::new(72, 16)).unwrap();
+    let mut terminal = Terminal::new(TestBackend::new(72, 24)).unwrap();
     terminal
         .draw(|frame| {
             dashboard::draw(
@@ -793,12 +920,13 @@ fn failed_save_footer_uses_error_color() {
                 &[],
                 &HashMap::new(),
                 None,
-                dashboard::ListView {
+                dashboard::View {
                     query: "",
                     focused: false,
                     top: &mut 0,
                     follow_selected: true,
                     modal_lines: None,
+                    details: None,
                 },
                 render::DashboardEditor {
                     layout: &layout,
@@ -812,5 +940,5 @@ fn failed_save_footer_uses_error_color() {
             );
         })
         .unwrap();
-    assert_eq!(terminal.backend().buffer()[(0, 15)].fg, Color::Red);
+    assert_eq!(terminal.backend().buffer()[(0, 23)].fg, Color::Red);
 }
