@@ -229,11 +229,13 @@ fn compose_inner(description: &str, mut mode: Mode<'_, '_>) -> Result<Option<Out
                 &rows,
                 target_id,
                 &mut list_top,
-                &layout,
-                draft.cursor(),
-                &mut top,
+                render::DashboardEditor {
+                    layout: &layout,
+                    cursor: draft.cursor(),
+                    top: &mut top,
+                    chrome: &chrome,
+                },
                 size,
-                &chrome,
                 terminal.color,
             )?;
         } else {

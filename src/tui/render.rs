@@ -22,6 +22,13 @@ pub struct Chrome<'a> {
     pub message: &'a str,
 }
 
+pub struct DashboardEditor<'a> {
+    pub layout: &'a Layout,
+    pub cursor: usize,
+    pub top: &'a mut usize,
+    pub chrome: &'a Chrome<'a>,
+}
+
 pub struct Layout {
     pub rows: Vec<String>,
     pub positions: Vec<(usize, usize)>,
@@ -131,12 +138,11 @@ fn paint_editor(
     layout: &Layout,
     cursor: usize,
     top: &mut usize,
-    width: u16,
-    start: u16,
-    height: u16,
+    area: (u16, u16, u16),
     chrome: &Chrome<'_>,
     color: bool,
 ) -> io::Result<()> {
+    let (width, start, height) = area;
     let body_height = height as usize - 2;
     let (row, column) = layout.positions[cursor];
     if row < *top {
@@ -220,7 +226,15 @@ pub fn draw(
         )?;
         return output.flush();
     }
-    paint_editor(output, layout, cursor, top, width, 0, height, chrome, color)?;
+    paint_editor(
+        output,
+        layout,
+        cursor,
+        top,
+        (width, 0, height),
+        chrome,
+        color,
+    )?;
     output.flush()
 }
 
@@ -229,11 +243,8 @@ pub fn draw_dashboard(
     rows: &[panel::ListRow],
     selected: Option<i64>,
     list_top: &mut usize,
-    layout: &Layout,
-    cursor: usize,
-    editor_top: &mut usize,
+    editor: DashboardEditor<'_>,
     size: (u16, u16),
-    chrome: &Chrome<'_>,
     color: bool,
 ) -> io::Result<()> {
     let (width, height) = size;
@@ -273,13 +284,11 @@ pub fn draw_dashboard(
     )?;
     paint_editor(
         output,
-        layout,
-        cursor,
-        editor_top,
-        width,
-        panel_height,
-        height - panel_height,
-        chrome,
+        editor.layout,
+        editor.cursor,
+        editor.top,
+        (width, panel_height, height - panel_height),
+        editor.chrome,
         color,
     )?;
     output.flush()

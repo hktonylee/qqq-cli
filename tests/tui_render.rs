@@ -37,11 +37,13 @@ fn dashboard_places_list_above_editor_and_keeps_cursor_in_lower_panel() {
         &rows,
         Some(1),
         &mut 0,
-        &layout,
-        0,
-        &mut 0,
+        render::DashboardEditor {
+            layout: &layout,
+            cursor: 0,
+            top: &mut 0,
+            chrome: &chrome(""),
+        },
         (72, 16),
-        &chrome(""),
         false,
     )
     .unwrap();
@@ -59,11 +61,13 @@ fn dashboard_places_list_above_editor_and_keeps_cursor_in_lower_panel() {
         &rows,
         None,
         &mut 0,
-        &layout,
-        0,
-        &mut 0,
+        render::DashboardEditor {
+            layout: &layout,
+            cursor: 0,
+            top: &mut 0,
+            chrome: &chrome(""),
+        },
         (10, 7),
-        &chrome(""),
         true,
     )
     .unwrap();
