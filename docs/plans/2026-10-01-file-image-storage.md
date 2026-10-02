@@ -75,4 +75,4 @@ SELECT media_type,bytes FROM images WHERE id=? AND task_id=?;
 - [x] Change README storage/backup text: SQLite holds metadata; `.qqq/images` holds bytes; stop writers and copy whole `.qqq` for backup; schema versions 1–5 migrate to 6; `VACUUM` can reclaim old free pages if automatic compaction failed.
 - [x] Run `cargo fmt --all -- --check`, strict `cargo clippy --locked --all-targets -- -D warnings`, full `cargo test --locked`, and `git diff --check`; require exit 0.
 - [x] Request read-only code review. Fix verified Critical/Important findings and rerun affected checks.
-- [ ] Rebase onto current local `master`, fast-forward locally, run integrated full suite, remove owned worktree, delete merged branch. Complete task 53 with `qqq --json complete 53`; verify `qqq --json show 53` reports completed. Resume `qqq --json next --wait --local` once.
+- [x] Rebase onto current local `master`, fast-forward locally, run integrated full suite, remove owned worktree, delete merged branch. Complete task 53 with `qqq --json complete 53`; verify `qqq --json show 53` reports completed. Resume `qqq --json next --wait --local` once.
