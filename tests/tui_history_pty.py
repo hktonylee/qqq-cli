@@ -131,7 +131,7 @@ with tempfile.TemporaryDirectory(prefix="qqq-history-test-") as folder:
         else:
             read_until(f"Saved #{expected_id}. New task".encode())
             assert child.poll() is None
-            assert b"qqq task editor - new task" in screen
+            assert b"Task Editor - new task" in screen
             if next_task is not None:
                 screen.clear()
                 send(next_task + b"\x13")

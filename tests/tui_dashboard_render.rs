@@ -282,7 +282,7 @@ fn selected_task_renders_details_between_list_and_editor() {
                 .unwrap();
             assert_eq!(details_top, requested_top);
             let buffer = terminal.backend().buffer();
-            assert!(line(buffer, 3).contains("Selected"));
+            assert!(line(buffer, 2).contains("Selected"));
             for (offset, (text, _, foreground, modifier)) in
                 expected.iter().skip(details_top).take(3).enumerate()
             {
@@ -452,7 +452,7 @@ fn selected_task_geometry_and_details_hit_test_share_rectangles() {
 fn new_draft_hit_test_keeps_three_panes() {
     assert_eq!(
         dashboard::wheel_area((72, 18), 5, 3),
-        Some(dashboard::WheelArea::List(3))
+        Some(dashboard::WheelArea::List(4))
     );
     assert_eq!(
         dashboard::wheel_area((72, 18), 5, 7),
@@ -468,11 +468,11 @@ fn new_draft_hit_test_keeps_three_panes() {
 fn wheel_hit_test_uses_list_editor_and_excludes_edges() {
     assert_eq!(
         dashboard::wheel_area((72, 24), 5, 3),
-        Some(dashboard::WheelArea::List(5))
+        Some(dashboard::WheelArea::List(6))
     );
     assert_eq!(
         dashboard::wheel_area((72, 24), 5, 1),
-        Some(dashboard::WheelArea::List(5))
+        Some(dashboard::WheelArea::List(6))
     );
     assert_eq!(dashboard::wheel_area((72, 24), 5, 7), None);
     assert_eq!(
@@ -507,11 +507,11 @@ fn click_target_maps_rendered_task_rows_and_editor_caret() {
     let hit = |column, row, list_top, editor_top| {
         click((72, 24), column, row, &rows, list_top, editor_top, &layout)
     };
+    assert_eq!(hit(5, 2, 0, 0), Some(dashboard::ClickTarget::Task(1)));
     assert_eq!(hit(5, 3, 0, 0), Some(dashboard::ClickTarget::Task(1)));
-    assert_eq!(hit(5, 4, 0, 0), Some(dashboard::ClickTarget::Task(1)));
-    assert_eq!(hit(70, 5, 0, 0), Some(dashboard::ClickTarget::Task(2)));
-    assert_eq!(hit(5, 2, 2, 0), Some(dashboard::ClickTarget::Task(1)));
-    assert_eq!(hit(5, 3, 2, 0), Some(dashboard::ClickTarget::Task(2)));
+    assert_eq!(hit(70, 4, 0, 0), Some(dashboard::ClickTarget::Task(2)));
+    assert_eq!(hit(5, 1, 2, 0), Some(dashboard::ClickTarget::Task(1)));
+    assert_eq!(hit(5, 2, 2, 0), Some(dashboard::ClickTarget::Task(2)));
     assert_eq!(hit(2, 14, 0, 0), Some(dashboard::ClickTarget::Editor(2)));
     assert_eq!(hit(10, 14, 0, 0), Some(dashboard::ClickTarget::Editor(3)));
     assert_eq!(hit(1, 14, 0, 1), Some(dashboard::ClickTarget::Editor(5)));
@@ -524,7 +524,7 @@ fn click_target_ignores_non_content_and_out_of_bounds() {
     for (column, row) in [
         (5, 0),
         (5, 1),
-        (5, 2),
+        (5, 3),
         (5, 4),
         (5, 7),
         (5, 8),
@@ -588,7 +588,7 @@ fn manual_list_scroll_does_not_snap_to_selected_task() {
         })
         .unwrap();
     assert_eq!(top, 0);
-    assert!(line(terminal.backend().buffer(), 2).contains("ID"));
+    assert!(line(terminal.backend().buffer(), 1).contains("ID"));
     terminal
         .draw(|frame| {
             dashboard::draw(
@@ -616,7 +616,7 @@ fn manual_list_scroll_does_not_snap_to_selected_task() {
             )
         })
         .unwrap();
-    assert_eq!(top, 6);
+    assert_eq!(top, 5);
     assert!(line(terminal.backend().buffer(), 6).contains("Task 10"));
 }
 
@@ -746,7 +746,7 @@ fn manual_offsets_clamp_after_resize() {
             )
         })
         .unwrap();
-    assert_eq!(list_top, 1);
+    assert_eq!(list_top, 0);
     assert_eq!(editor_top, 0);
     assert!(line(terminal.backend().buffer(), 2).contains("Task 1"));
     assert!(line(terminal.backend().buffer(), 21).starts_with("A"));
@@ -756,7 +756,7 @@ fn manual_offsets_clamp_after_resize() {
 fn filter_bar_shows_empty_result_and_takes_cursor_only_while_focused() {
     let layout = render::Layout::new(&["Unsaved".into()], &[], 72);
     let chrome = render::Chrome {
-        title: "qqq task editor - new task",
+        title: "Task Editor - new task",
         title_status_color: None,
         keys: render::KEYS,
         message: "",
@@ -790,12 +790,12 @@ fn filter_bar_shows_empty_result_and_takes_cursor_only_while_focused() {
         })
         .unwrap();
     let buffer = terminal.backend().buffer();
-    assert!(line(buffer, 1).starts_with("Filter: absent"));
-    assert!(line(buffer, 2).starts_with("No matching tasks."));
-    assert!(line(buffer, 13).starts_with("qqq task editor"));
+    assert!(line(buffer, 0).starts_with("Filter: absent"));
+    assert!(line(buffer, 1).starts_with("No matching tasks."));
+    assert!(line(buffer, 13).starts_with("Task Editor"));
     assert_eq!(
         terminal.get_cursor_position().unwrap(),
-        Position::new(14, 1)
+        Position::new(14, 0)
     );
 }
 
@@ -836,9 +836,9 @@ fn small_dashboard_keeps_filter_row_and_plain_style() {
             );
         })
         .unwrap();
-    assert_eq!(terminal.get_cursor_position().unwrap().y, 1);
+    assert_eq!(terminal.get_cursor_position().unwrap().y, 0);
     let buffer = terminal.backend().buffer();
-    assert!(line(buffer, 1).starts_with("Filter: "));
+    assert!(line(buffer, 0).starts_with("Filter: "));
     for y in 0..8 {
         for x in 0..12 {
             assert_eq!(buffer[(x, y)].fg, Color::Reset);
@@ -890,10 +890,13 @@ fn minimum_dashboard_height_still_shows_selected_task() {
 
 #[test]
 fn split_dashboard_keeps_list_above_editor() {
-    let rows = panel::rows("ID     STATUS       TASK\n1      New          First", 70);
+    let rows = panel::rows(
+        "ID     STATUS       TASK\n1      New          First\n2      New          Second\n3      New          Third\n4      New          Fourth\n5      New          Fifth",
+        70,
+    );
     let layout = render::Layout::new(&["Draft".into()], &[], 72);
     let chrome = render::Chrome {
-        title: "qqq task editor - task #1 (New)",
+        title: "Task Editor - task #1 (New)",
         title_status_color: None,
         keys: render::KEYS,
         message: "",
@@ -929,11 +932,12 @@ fn split_dashboard_keeps_list_above_editor() {
         })
         .unwrap();
     let buffer = terminal.backend().buffer();
-    assert!(line(buffer, 0).starts_with("qqq tasks"));
-    assert!(line(buffer, 1).starts_with("Filter: "));
-    assert!(line(buffer, 2).starts_with("  ID     STATUS"));
-    assert!(line(buffer, 3).starts_with("> 1      New"));
-    assert!(line(buffer, 13).starts_with("qqq task editor"));
+    assert!(line(buffer, 0).starts_with("Filter: "));
+    assert!(line(buffer, 1).starts_with("  ID     STATUS"));
+    assert!(line(buffer, 2).starts_with("> 1      New"));
+    assert!(!line(buffer, 0).contains("qqq tasks"));
+    assert!(line(buffer, 6).contains("Fifth"));
+    assert!(line(buffer, 13).starts_with("Task Editor"));
     assert!(line(buffer, 14).starts_with("Draft"));
     assert!(line(buffer, 23).starts_with("Ctrl-S"));
     assert_eq!(
@@ -946,7 +950,7 @@ fn split_dashboard_keeps_list_above_editor() {
 fn narrow_dashboard_shows_plain_resize_hint() {
     let layout = render::Layout::new(&["Draft".into()], &[], 10);
     let chrome = render::Chrome {
-        title: "qqq task editor",
+        title: "Task Editor",
         title_status_color: None,
         keys: render::KEYS,
         message: "",
@@ -990,7 +994,7 @@ fn no_color_dashboard_keeps_default_cell_styles() {
     let rows = panel::rows("ID     STATUS       TASK\n1      Error        Failed", 70);
     let layout = render::Layout::new(&["Draft".into()], &[], 72);
     let chrome = render::Chrome {
-        title: "qqq task editor",
+        title: "Task Editor",
         title_status_color: None,
         keys: render::KEYS,
         message: "",
@@ -1045,7 +1049,7 @@ fn status_selection_and_editor_images_use_distinct_colors() {
         72,
     );
     let chrome = render::Chrome {
-        title: "qqq task editor - task #1 (New)",
+        title: "Task Editor - task #1 (New)",
         title_status_color: None,
         keys: render::KEYS,
         message: "Saved #1. New task",
@@ -1086,12 +1090,12 @@ fn status_selection_and_editor_images_use_distinct_colors() {
             .unwrap();
         let buffer = terminal.backend().buffer();
         for (y, id, foreground) in [
+            (2, 1, Color::Reset),
             (3, 1, Color::Reset),
             (4, 1, Color::Reset),
-            (5, 1, Color::Reset),
-            (6, 2, Color::Indexed(81)),
-            (7, 3, Color::DarkGray),
-            (8, 4, Color::Red),
+            (5, 2, Color::Indexed(81)),
+            (6, 3, Color::DarkGray),
+            (7, 4, Color::Red),
         ] {
             let is_selected = selected == Some(id);
             for x in 0..72 {
@@ -1115,7 +1119,7 @@ fn status_selection_and_editor_images_use_distinct_colors() {
                 }
             );
         }
-        for y in [0, 1, 2, 9] {
+        for y in [0, 1, 9] {
             assert_eq!(buffer[(71, y)].bg, Color::Reset);
         }
         let body_y = 18;
@@ -1140,7 +1144,7 @@ fn dashboard_paste_label_uses_gold_while_body_stays_neutral() {
         72,
     );
     let chrome = render::Chrome {
-        title: "qqq task editor",
+        title: "Task Editor",
         title_status_color: None,
         keys: render::KEYS,
         message: "",
@@ -1193,7 +1197,7 @@ fn hotkey_footer_colors_shortcuts_and_clears_styles_for_messages() {
                 (render::KEYS, "", false),
             ] {
                 let chrome = render::Chrome {
-                    title: "qqq task editor",
+                    title: "Task Editor",
                     title_status_color: None,
                     keys,
                     message,
@@ -1278,7 +1282,7 @@ fn hotkey_footer_colors_shortcuts_and_clears_styles_for_messages() {
 fn failed_save_footer_uses_error_color() {
     let layout = render::Layout::new(&["Draft".into()], &[], 72);
     let chrome = render::Chrome {
-        title: "qqq task editor",
+        title: "Task Editor",
         title_status_color: None,
         keys: render::KEYS,
         message: "Task description cannot be empty",

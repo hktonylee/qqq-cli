@@ -561,7 +561,7 @@ fn compose_inner(
         };
         let (title, status_start) = match (mode.db().is_some(), target_id) {
             (true, Some(id)) => {
-                let prefix = format!("qqq task editor - task #{id} ");
+                let prefix = format!("Task Editor - task #{id} ");
                 let label = crate::output::status_label(
                     target_status.as_deref().expect("selected task has status"),
                 );
@@ -569,12 +569,12 @@ fn compose_inner(
             }
             (true, None) => (
                 match draft_parent_id {
-                    Some(parent) => format!("qqq task editor - new task (parent #{parent})"),
-                    None => "qqq task editor - new task".to_owned(),
+                    Some(parent) => format!("Task Editor - new task (parent #{parent})"),
+                    None => "Task Editor - new task".to_owned(),
                 },
                 None,
             ),
-            (false, _) => ("qqq task editor".to_owned(), None),
+            (false, _) => ("Task Editor".to_owned(), None),
         };
         let chrome = render::Chrome {
             title: &title,

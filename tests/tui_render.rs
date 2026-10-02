@@ -7,7 +7,7 @@ mod render;
 
 fn chrome(message: &str) -> render::Chrome<'_> {
     render::Chrome {
-        title: "qqq task editor",
+        title: "Task Editor",
         title_status_color: None,
         keys: render::KEYS,
         message,
@@ -118,7 +118,7 @@ fn editor_paints_only_body_rows_and_resets_colors_for_header_and_footer() {
         let output = String::from_utf8(output).unwrap();
         assert!(output.starts_with("\x1b[0m"), "{output:?}");
         let background = output.find("\x1b[48;5;236m").unwrap();
-        assert!(output.find("qqq task editor").unwrap() < background);
+        assert!(output.find("Task Editor").unwrap() < background);
         assert!(output.contains("\x1b[38;5;252m"));
         let blank = " ".repeat(40);
         for row in 2..8 {

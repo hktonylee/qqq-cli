@@ -181,7 +181,7 @@ pub fn wheel_area(size: (u16, u16), column: u16, row: u16) -> Option<WheelArea> 
         editor,
     } = panes(Rect::new(0, 0, size.0, size.1));
     if row < list.y + list.height - 1 {
-        Some(WheelArea::List(usize::from(list.height.saturating_sub(3))))
+        Some(WheelArea::List(usize::from(list.height.saturating_sub(2))))
     } else if details_content(details).contains(Position::new(column, row)) {
         Some(WheelArea::Details(details_height(details)))
     } else if row >= editor.y && row < editor.y + editor.height - 1 {
@@ -210,8 +210,8 @@ pub fn click_target(
         return None;
     }
     let Panes { list, editor, .. } = panes(Rect::new(0, 0, size.0, size.1));
-    if row >= list.y + 2 && row < list.y + list.height - 1 {
-        let index = hit.list_top + usize::from(row - list.y - 2);
+    if row > list.y && row < list.y + list.height - 1 {
+        let index = hit.list_top + usize::from(row - list.y - 1);
         return hit.rows.get(index)?.task_id.map(ClickTarget::Task);
     }
     if row > editor.y && row < editor.y + editor.height - 1 {
@@ -432,21 +432,12 @@ pub fn draw(
         details: details_area,
         editor: editor_area,
     } = panes(area);
-    let list_height = usize::from(list.height.saturating_sub(3));
+    let list_height = usize::from(list.height.saturating_sub(2));
     *list_view.top = if list_view.follow_selected {
         panel::scroll_to(rows, selected, *list_view.top, list_height)
     } else {
         (*list_view.top).min(rows.len().saturating_sub(list_height))
     };
-    let heading_style = if color {
-        Style::default().fg(ACCENT).add_modifier(Modifier::BOLD)
-    } else {
-        Style::default()
-    };
-    frame.render_widget(
-        Paragraph::new("qqq tasks").style(heading_style),
-        Rect::new(list.x, list.y, list.width, 1),
-    );
     let (filter_label, filter_cursor) = filter_text(list_view.query, usize::from(list.width));
     let filter_style = if color && list_view.focused {
         Style::default().fg(ACCENT).add_modifier(Modifier::BOLD)
@@ -457,12 +448,12 @@ pub fn draw(
     };
     frame.render_widget(
         Paragraph::new(filter_label).style(filter_style),
-        Rect::new(list.x, list.y + 1, list.width, 1),
+        Rect::new(list.x, list.y, list.width, 1),
     );
     if rows.is_empty() {
         frame.render_widget(
             Paragraph::new("No matching tasks."),
-            Rect::new(list.x, list.y + 2, list.width, 1),
+            Rect::new(list.x, list.y + 1, list.width, 1),
         );
     }
     for (offset, row) in rows
@@ -480,7 +471,7 @@ pub fn draw(
         );
         frame.render_widget(
             Paragraph::new(format!("{marker}{}", row.text)).style(style),
-            Rect::new(list.x, list.y + 2 + offset as u16, list.width, 1),
+            Rect::new(list.x, list.y + 1 + offset as u16, list.width, 1),
         );
     }
     let separator_style = if color {
@@ -504,7 +495,7 @@ pub fn draw(
     details(frame, details_area, details_view, color);
     editor(frame, editor_area, editor_state, color);
     if list_view.focused {
-        frame.set_cursor_position((list.x + filter_cursor, list.y + 1));
+        frame.set_cursor_position((list.x + filter_cursor, list.y));
     }
     if let Some(lines) = list_view.modal_lines {
         popup(frame, lines, color);
