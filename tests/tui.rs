@@ -83,6 +83,12 @@ fn tui_dashboard_click_selects_rows_and_places_caret() {
 }
 
 #[test]
+fn tui_dashboard_workflow_states_and_cleanup() {
+    dashboard_scenario("workflow_empty");
+    dashboard_scenario("workflow_status");
+}
+
+#[test]
 fn tui_dashboard_status_colors_respect_no_color() {
     dashboard_scenario("color");
     dashboard_scenario("no_color");

@@ -97,7 +97,17 @@ with tempfile.TemporaryDirectory(prefix="qqq-dashboard-test-") as folder:
         return json.loads(result.stdout)
 
     cli("init")
-    if scenario == "click":
+    if scenario == "workflow_empty":
+        pass
+    elif scenario == "workflow_status":
+        cli("add", "Finished item")
+        cli("add", "Failed item")
+        cli("add", "Fresh item")
+        cli("next", "--local", "--session", "worker")
+        cli("complete", "1", "--session", "worker")
+        cli("next", "--local", "--session", "worker")
+        cli("edit", "2", "--set-status", "error", "--reason", "Failed", "--session", "worker")
+    elif scenario == "click":
         cli("add", "Parent\nParent detail")
         cli("add", "Child start\nChild detail " + "word " * 12, "--parent", "1")
     elif scenario == "click_filter":
@@ -202,6 +212,7 @@ with tempfile.TemporaryDirectory(prefix="qqq-dashboard-test-") as folder:
         assert "qqq tasks" in visible.text(), visible.text()
         read_until(b"\x1b[?1000h")
         read_until(b"\x1b[?1006h")
+        read_until(b"\x1b[?2004h")
         if scenario == "color":
             read_until(b"38;5;81")
             clear_capture()
@@ -210,11 +221,25 @@ with tempfile.TemporaryDirectory(prefix="qqq-dashboard-test-") as folder:
         elif scenario in ("no_color", "dumb", "pasteboard_no_color", "filter_no_color"):
             assert b"\x1b[38;" not in screen, screen[-2000:]
             assert b"\x1b[48;" not in screen, screen[-2000:]
-        if scenario not in ("scroll", "wheel", "click", "click_filter", "filter", "filter_no_color"):
+        if scenario not in ("scroll", "wheel", "click", "click_filter", "workflow_empty", "workflow_status", "filter", "filter_no_color"):
             read_until(b"Second")
             assert "First" in visible.text() and "Second" in visible.text(), visible.text()
         assert not select.select([child.stdout], [], [], 0)[0], "TUI wrote stdout while open"
-        if scenario == "click":
+        if scenario == "workflow_empty":
+            wait_visible(lambda: "No tasks yet." in visible.text().splitlines()[2])
+            assert cli("list") == []
+            assert visible.text().splitlines()[8].startswith("qqq task editor - new task")
+        elif scenario == "workflow_status":
+            wait_visible(lambda: "Completed" in visible.text()
+                         and "Error" in visible.text()
+                         and "Fresh item" in visible.text())
+            clear_capture()
+            send(b"\x1b[1;2A" * 2)
+            wait_visible(lambda: "task #2 (Error)" in visible.text().splitlines()[8])
+            clear_capture()
+            send(b"\x1b[1;2A")
+            wait_visible(lambda: "task #1 (Completed)" in visible.text().splitlines()[8])
+        elif scenario == "click":
             initial_tasks = cli("list")
             wait_visible(lambda: "Parent detail" in visible.text() and "Child" in visible.text())
             settle()
@@ -627,7 +652,7 @@ with tempfile.TemporaryDirectory(prefix="qqq-dashboard-test-") as folder:
             read_until(b"Saved #3. New task")
             assert cli("show", "3")["task"]["description"] == "Draft"
         if scenario != "wheel_error":
-            send(b"\x03" if scenario in ("scroll", "color", "wheel", "click_error") else b"\x1b")
+            send(b"\x03" if scenario in ("scroll", "color", "wheel", "click_error", "workflow_status") else b"\x1b")
         deadline = time.monotonic() + 5
         while child.poll() is None:
             assert time.monotonic() < deadline, f"TUI failed to exit: {screen[-1000:]!r}\n{visible.text()}"
@@ -643,6 +668,8 @@ with tempfile.TemporaryDirectory(prefix="qqq-dashboard-test-") as folder:
         assert before[3] == termios.tcgetattr(slave)[3], "Terminal flags not restored"
         assert b"\x1b[?1049l" in screen, "Alternate screen not restored"
         assert b"\x1b[?1000l" in screen and b"\x1b[?1006l" in screen, "Mouse capture not restored"
+        assert b"\x1b[?2004l" in screen, "Bracketed paste not restored"
+        assert screen.index(b"\x1b[?2004l") < screen.index(b"\x1b[?1049l")
     finally:
         if child.poll() is None:
             child.kill()

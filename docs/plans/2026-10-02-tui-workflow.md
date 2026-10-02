@@ -14,9 +14,9 @@
 
 **Files:** `tests/tui_dashboard_pty.py`, `tests/tui.rs`
 
-- [ ] Add scenarios `workflow_empty` and `workflow_status`. Skip seed inserts for empty; assert `No tasks yet.` and blank editor. For status, seed three tasks, claim/complete first, claim/fail second using `qqq edit 2 --set-status error --reason Failed --session worker`, and assert Completed, Error, New list labels plus status in selected editor heading.
-- [ ] Assert startup emits `\x1b[?2004h` and exit emits `\x1b[?2004l`; retain existing raw mode, alternate-screen, mouse capture, and stdout assertions. On induced `wheel_error`, assert all restoration sequences and raw mode recovery.
-- [ ] Run `cargo test --locked --test tui tui_dashboard_workflow_states -- --nocapture`; fix any failing state assertions. Commit.
+- [x] Add scenarios `workflow_empty` and `workflow_status`. Skip seed inserts for empty; assert `No tasks yet.` and blank editor. For status, seed three tasks, claim/complete first, claim/fail second using `qqq edit 2 --set-status error --reason Failed --session worker`, and assert Completed, Error, New list labels plus status in selected editor heading.
+- [x] Assert startup emits `\x1b[?2004h` and exit emits `\x1b[?2004l`; retain existing raw mode, alternate-screen, mouse capture, and stdout assertions. On induced `wheel_error`, assert all restoration sequences and raw mode recovery.
+- [x] Run `cargo test --locked --test tui tui_dashboard_workflow_states_and_cleanup -- --nocapture`; fix any failing state assertions. Commit.
 
 ### Task 2: Combined edit and create session
 
