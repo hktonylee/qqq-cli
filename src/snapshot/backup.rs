@@ -80,6 +80,15 @@ pub fn run(db: &mut Db, db_path: &Path, destination: &Path) -> Result<Value> {
                 destination.display()
             )
         })?;
+    if let Err(error) = sync_directory(&parent) {
+        if let Err(cleanup) = fs::remove_file(&destination) {
+            anyhow::bail!(
+                "Backup directory sync failed: {error}; cannot remove {}: {cleanup}",
+                destination.display()
+            );
+        }
+        return Err(error).context("Backup directory sync failed; destination removed");
+    }
     Ok(json!({
         "destination": destination,
         "tasks": tasks,
@@ -132,14 +141,17 @@ fn copy_images(conn: &Connection, store: &ImageStore, stage: &Path) -> Result<Ve
         let filename = source_path
             .file_name()
             .context("Image path has no filename")?;
-        let relative = Path::new("images").join(task_id.to_string()).join(filename);
+        let relative = format!(
+            "images/{task_id}/{}",
+            filename.to_str().context("Image filename is not UTF-8")?
+        );
         let data = store.read(task_id, id, &media_type, expected_bytes)?;
         let output = stage.join(task_id.to_string()).join(filename);
         fs::create_dir_all(output.parent().context("Image path has no parent")?)?;
         fs::write(&output, &data)?;
-        let FileMeta { bytes, sha256 } = hash_reader(Cursor::new(data))?;
+        let FileMeta { bytes, sha256 } = hash_reader(fs::File::open(&output)?)?;
         images.push(ImageMeta {
-            path: relative.to_string_lossy().into_owned(),
+            path: relative,
             bytes,
             sha256,
         });
@@ -172,5 +184,16 @@ fn append_bytes(archive: &mut Builder<&mut fs::File>, name: &str, data: &[u8]) -
     header.set_mode(0o600);
     header.set_cksum();
     archive.append_data(&mut header, name, Cursor::new(data))?;
+    Ok(())
+}
+
+#[cfg(unix)]
+fn sync_directory(path: &Path) -> Result<()> {
+    fs::File::open(path)?.sync_all()?;
+    Ok(())
+}
+
+#[cfg(not(unix))]
+fn sync_directory(_path: &Path) -> Result<()> {
     Ok(())
 }

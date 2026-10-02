@@ -13,7 +13,7 @@ use std::{
     collections::{HashMap, HashSet},
     fs,
     io::{Read, Write},
-    path::{Component, Path, PathBuf},
+    path::{Path, PathBuf},
 };
 use tar::{Archive, Entry};
 use tempfile::TempDir;
@@ -56,6 +56,7 @@ pub fn run(source: &Path) -> Result<Value> {
     let (manifest, bytes) = extract(&source, &staged_project)?;
     let tasks = validate_database(&staged_project.join(DATABASE_NAME))?;
     validate_database_images(&staged_project, &manifest)?;
+    sync_staged_tree(&staged_project, &manifest)?;
     install(&staged_project, &target, existing_empty)?;
     Ok(json!({
         "source": source,
@@ -104,6 +105,19 @@ fn extract(source: &Path, staged_project: &Path) -> Result<(Manifest, u64)> {
     let manifest: Manifest =
         serde_json::from_slice(&manifest_bytes).context("Invalid snapshot manifest")?;
     manifest.validate()?;
+    let payload_bytes =
+        manifest
+            .images
+            .iter()
+            .try_fold(manifest.database.bytes, |total, image| {
+                total
+                    .checked_add(image.bytes)
+                    .context("Snapshot payload size overflow")
+            })?;
+    ensure!(
+        payload_bytes <= bytes,
+        "Snapshot payload exceeds archive size"
+    );
     drop(first);
 
     let mut expected: HashSet<String> = manifest
@@ -171,18 +185,12 @@ fn extract(source: &Path, staged_project: &Path) -> Result<(Manifest, u64)> {
 }
 
 fn entry_name(entry: &Entry<'_, fs::File>) -> Result<String> {
-    let path = entry.path()?;
-    ensure!(
-        path.components()
-            .all(|component| matches!(component, Component::Normal(_))),
-        "Unsafe archive path"
-    );
-    let name = path
-        .to_str()
+    let bytes = entry.path_bytes();
+    let name = std::str::from_utf8(bytes.as_ref())
         .context("Archive path is not UTF-8")?
         .to_owned();
     ensure!(
-        !name.contains('\\') && !name.contains("//"),
+        !name.starts_with('/') && !name.contains('\\') && !name.contains("//"),
         "Unsafe archive path"
     );
     ensure!(
@@ -229,12 +237,13 @@ fn validate_database_images(project: &Path, manifest: &Manifest) -> Result<()> {
     for row in rows {
         let (id, task_id, media_type, bytes) = row?;
         let path = store.path(task_id, id, &media_type)?;
-        let relative = path
-            .strip_prefix(project)?
-            .to_str()
-            .context("Image path is not UTF-8")?;
+        let filename = path
+            .file_name()
+            .and_then(|name| name.to_str())
+            .context("Image filename is not UTF-8")?;
+        let relative = format!("images/{task_id}/{filename}");
         let manifest_bytes = expected
-            .remove(relative)
+            .remove(relative.as_str())
             .with_context(|| format!("Snapshot missing image {relative}"))?;
         ensure!(
             bytes >= 0 && bytes as u64 == manifest_bytes,
@@ -259,5 +268,39 @@ fn install(staged: &Path, target: &Path, existing_empty: bool) -> Result<()> {
         }
         return Err(error).context("Cannot install snapshot");
     }
+    sync_directory(target.parent().context("Restore target has no parent")?)
+        .context("Restore installed but directory sync failed; inspect .qqq before retrying")?;
+    Ok(())
+}
+
+fn sync_staged_tree(project: &Path, manifest: &Manifest) -> Result<()> {
+    let mut directories = HashSet::new();
+    for image in &manifest.images {
+        let image_dir = project
+            .join(&image.path)
+            .parent()
+            .context("Image path has no parent")?
+            .to_path_buf();
+        directories.insert(image_dir);
+    }
+    for directory in directories {
+        sync_directory(&directory)?;
+    }
+    if project.join("images").is_dir() {
+        sync_directory(&project.join("images"))?;
+    }
+    sync_directory(project)?;
+    sync_directory(project.parent().context("Staging project has no parent")?)?;
+    Ok(())
+}
+
+#[cfg(unix)]
+fn sync_directory(path: &Path) -> Result<()> {
+    fs::File::open(path)?.sync_all()?;
+    Ok(())
+}
+
+#[cfg(not(unix))]
+fn sync_directory(_path: &Path) -> Result<()> {
     Ok(())
 }

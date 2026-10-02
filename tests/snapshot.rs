@@ -164,6 +164,7 @@ fn backup_contains_database_manifest_and_all_images() {
     let manifest = manifest.unwrap();
     manifest.validate().unwrap();
     assert_eq!(manifest.images.len(), 1);
+    assert_eq!(manifest.images[0].path, "images/1/1.png");
     assert_eq!(manifest.database.bytes, db_bytes.len() as u64);
     fs::write(path.join("snapshot.db"), db_bytes).unwrap();
     let conn = rusqlite::Connection::open(path.join("snapshot.db")).unwrap();

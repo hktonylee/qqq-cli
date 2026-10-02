@@ -422,11 +422,11 @@ qqq list # run updated CLI
 Check task data before removing old DB. New CLI does not discover root-level
 `qqq.db`; `qqq init` without migration creates separate empty DB.
 
-Compatible DBs at schema versions 1–5 migrate to version 6. Existing image
-blobs copy to `.qqq/images/` before SQLite drops its `data` column. Migration
-tries `VACUUM` to reclaim old blob pages; if compaction reports a warning, stop
+Compatible DBs at schema versions 1–8 migrate to version 9. Version 6 moves
+existing image blobs to `.qqq/images/` before SQLite drops its `data` column.
+Migration tries `VACUUM` to reclaim old blob pages. If compaction warns, stop
 writers and run `sqlite3 .qqq/qqq.db 'VACUUM;'` later. Upgrade other qqq workers
-before migration; older binaries cannot open version 6. Legacy `title` or
+before migration; older binaries cannot open version 9. Legacy `title` or
 `pending` schemas need manual conversion; newer unknown schemas fail. Back up
 before conversion.
 
