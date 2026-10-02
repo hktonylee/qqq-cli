@@ -222,6 +222,7 @@ unarchive, `p` to set priority (-100..100), or `d` to set parent by positive
 task ID or `none`. Esc closes menu or prompt. State changes ask for `y` before
 running; priority and parent changes ask when draft has unsaved edits. Successful
 action refreshes task and list; rejected action keeps draft and shows DB error.
+Error view wraps long messages; Up/Down scrolls, Esc closes it.
 
 ## Dependencies and images
 

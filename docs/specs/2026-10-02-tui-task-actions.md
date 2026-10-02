@@ -9,8 +9,9 @@ Input errors keep prompt/value visible. Menu and prompts never edit draft.
 
 State actions confirm before running; priority/parent confirm when draft dirty.
 Confirmation says draft will be discarded on success. Cancel keeps draft.
-DB/API failure closes modal, shows exact error, keeps dirty draft and current
-selection. Success reloads task, clears stale draft, refreshes list/filter;
+DB/API failure closes action prompt, opens wrapped error view, keeps dirty draft
+and current selection. Up/Down scrolls long errors; Esc closes error view.
+Success reloads task, clears stale draft, refreshes list/filter;
 archiving hidden task selects blank draft while keeping query. Confirmation
 and action UI do not write stdout. Ctrl-C exits with existing terminal cleanup.
 

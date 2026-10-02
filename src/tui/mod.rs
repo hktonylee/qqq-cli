@@ -20,6 +20,7 @@ use ratatui::{Terminal, backend::CrosstermBackend};
 use std::collections::HashMap;
 use std::io::{self, IsTerminal};
 use unicode_segmentation::UnicodeSegmentation;
+use unicode_width::UnicodeWidthStr;
 
 pub struct Outcome {
     pub composition: Composition,
@@ -76,15 +77,18 @@ impl TaskAction {
         }
     }
 
-    fn success(self) -> &'static str {
+    fn success(self) -> String {
         match self {
-            Self::Complete(_) => "Completed",
-            Self::Retry(_) => "Retried",
-            Self::Reopen(_) => "Reopened",
-            Self::SetArchived(_, true) => "Archived",
-            Self::SetArchived(_, false) => "Unarchived",
-            Self::Priority(_, _) => "Priority set for",
-            Self::Parent(_, _) => "Parent set for",
+            Self::Complete(id) => format!("Completed #{id}"),
+            Self::Retry(id) => format!("Retried #{id}"),
+            Self::Reopen(id) => format!("Reopened #{id}"),
+            Self::SetArchived(id, true) => format!("Archived #{id}"),
+            Self::SetArchived(id, false) => format!("Unarchived #{id}"),
+            Self::Priority(id, priority) => format!("Priority #{id}: {priority}"),
+            Self::Parent(id, crate::db::ParentChange::Set(parent)) => {
+                format!("Parent #{id}: #{parent}")
+            }
+            Self::Parent(id, crate::db::ParentChange::Clear) => format!("Parent cleared #{id}"),
         }
     }
 }
@@ -106,9 +110,42 @@ enum ActionUi {
         value: String,
         error: String,
     },
+    Error {
+        text: String,
+        top: usize,
+    },
 }
 
-fn action_lines(ui: &ActionUi) -> Vec<String> {
+fn wrap_modal(text: &str, width: usize) -> Vec<String> {
+    let width = width.max(1);
+    let mut lines = Vec::new();
+    let mut line = String::new();
+    for word in text.split_whitespace() {
+        let word_width = word.width();
+        if !line.is_empty() && line.width() + 1 + word_width > width {
+            lines.push(std::mem::take(&mut line));
+        }
+        if word_width > width {
+            for grapheme in word.graphemes(true) {
+                if !line.is_empty() && line.width() + grapheme.width() > width {
+                    lines.push(std::mem::take(&mut line));
+                }
+                line.push_str(grapheme);
+            }
+        } else {
+            if !line.is_empty() {
+                line.push(' ');
+            }
+            line.push_str(word);
+        }
+    }
+    if !line.is_empty() {
+        lines.push(line);
+    }
+    lines
+}
+
+fn action_lines(ui: &ActionUi, width: usize, height: usize) -> Vec<String> {
     match ui {
         ActionUi::Menu { id, archived } => vec![
             format!("Task actions #{id}"),
@@ -130,16 +167,24 @@ fn action_lines(ui: &ActionUi) -> Vec<String> {
                 ActionInputKind::Priority => {
                     vec![format!("Priority task #{id}"), "Enter -100..100".to_owned()]
                 }
-                ActionInputKind::Parent => vec![
-                    format!("Parent task #{id}"),
-                    "Positive ID or none".to_owned(),
-                ],
+                ActionInputKind::Parent => {
+                    vec![format!("Parent task #{id}"), "ID / none".to_owned()]
+                }
             };
             lines.push(format!("> {value}"));
             if !error.is_empty() {
-                lines.push(error.clone());
+                lines.extend(wrap_modal(error, width));
             }
             lines.push("Enter apply  Esc cancel".to_owned());
+            lines
+        }
+        ActionUi::Error { text, top } => {
+            let wrapped = wrap_modal(text, width);
+            let available = height.saturating_sub(2);
+            let start = (*top).min(wrapped.len().saturating_sub(available));
+            let mut lines = vec!["Action error".to_owned()];
+            lines.extend(wrapped.into_iter().skip(start).take(available));
+            lines.push("Up/Down Esc".to_owned());
             lines
         }
     }
@@ -511,18 +556,17 @@ fn compose_inner(
             };
             list_row_count = rows.len();
             visible_ids = Some(filtered.ordered_ids);
-            let modal_lines =
-                action_ui
-                    .as_ref()
-                    .map(action_lines)
-                    .or_else(|| match &confirmation {
-                        Some(Confirmation::Action { action, dirty }) => Some(vec![
-                            format!("{} task #{}?", action.label(), action.id()),
-                            if *dirty { "Success discards draft" } else { "" }.to_owned(),
-                            "y confirm  n/Esc cancel".to_owned(),
-                        ]),
-                        _ => None,
-                    });
+            let modal_lines = action_ui
+                .as_ref()
+                .map(|ui| action_lines(ui, usize::from(size.0), usize::from(size.1)))
+                .or_else(|| match &confirmation {
+                    Some(Confirmation::Action { action, dirty }) => Some(vec![
+                        format!("{} task #{}?", action.label(), action.id()),
+                        if *dirty { "Lose draft?" } else { "" }.to_owned(),
+                        "y confirm  n/Esc cancel".to_owned(),
+                    ]),
+                    _ => None,
+                });
             dashboard_terminal
                 .as_mut()
                 .expect("dashboard has Ratatui terminal")
@@ -736,13 +780,16 @@ fn compose_inner(
                                             );
                                             list_follow_selected = true;
                                             editor_follow_cursor = true;
-                                            message =
-                                                format!("{} #{}", action.success(), action.id());
+                                            message = action.success();
                                             message_is_error = false;
                                         }
                                         Err(error) => {
                                             message = format!("{error:#}");
                                             message_is_error = true;
+                                            action_ui = Some(ActionUi::Error {
+                                                text: message.clone(),
+                                                top: 0,
+                                            });
                                         }
                                     }
                                 }
@@ -858,12 +905,16 @@ fn compose_inner(
                                         );
                                         list_follow_selected = true;
                                         editor_follow_cursor = true;
-                                        message = format!("{} #{}", action.success(), action.id());
+                                        message = action.success();
                                         message_is_error = false;
                                     }
                                     Err(failure) => {
                                         message = format!("{failure:#}");
                                         message_is_error = true;
+                                        action_ui = Some(ActionUi::Error {
+                                            text: message.clone(),
+                                            top: 0,
+                                        });
                                     }
                                 },
                                 Err(problem) => {
@@ -884,6 +935,18 @@ fn compose_inner(
                                     error,
                                 })
                             }
+                        },
+                        ActionUi::Error { text, mut top } => match key.code {
+                            KeyCode::Esc | KeyCode::Enter => (),
+                            KeyCode::Up | KeyCode::Char('k') => {
+                                top = top.saturating_sub(1);
+                                action_ui = Some(ActionUi::Error { text, top });
+                            }
+                            KeyCode::Down | KeyCode::Char('j') => {
+                                top = top.saturating_add(1);
+                                action_ui = Some(ActionUi::Error { text, top });
+                            }
+                            _ => action_ui = Some(ActionUi::Error { text, top }),
                         },
                     }
                     continue;

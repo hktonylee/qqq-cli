@@ -154,6 +154,8 @@ with tempfile.TemporaryDirectory(prefix="qqq-dashboard-test-") as folder:
         cli("add", "Second")
     if scenario in ("color", "no_color", "dumb"):
         cli("next", "--local", "--session", "worker")
+    if scenario == "actions_narrow":
+        cli("next", "--local", "--session", "worker")
     if scenario in ("scroll", "wheel"):
         for index in range(3, 21):
             description = ("\n".join(f"Line{line:02}" for line in range(1, 16))
@@ -170,7 +172,7 @@ with tempfile.TemporaryDirectory(prefix="qqq-dashboard-test-") as folder:
     fcntl.ioctl(slave, termios.TIOCSCTTY, 0)
     signal.signal(signal.SIGHUP, signal.SIG_IGN)
     args = [binary, "--json", "tui"] if scenario in ("empty_json", "save_json") else [binary, "tui"]
-    if scenario in ("actions_basic", "actions_rejected"):
+    if scenario in ("actions_basic", "actions_rejected", "actions_narrow"):
         args.extend(["--session", "worker"])
     if scenario in ("archive_included", "actions_basic", "actions_rejected"):
         args.append("--include-archived")
@@ -375,6 +377,8 @@ with tempfile.TemporaryDirectory(prefix="qqq-dashboard-test-") as folder:
             assert cli("show", "4")["task"]["priority"] == 0
             action("c", "Complete task #4?")
             send(b"y")
+            wait_visible(lambda: "Task 4 is not claimed by session worker" in visible.text())
+            send(b"\x1b")
             wait_visible(lambda: "XFresh item" in visible.text() and
                          "Task 4 is not claimed by session worker" in visible.text().splitlines()[-1])
             assert cli("show", "4")["task"]["status"] == "new"
@@ -383,12 +387,27 @@ with tempfile.TemporaryDirectory(prefix="qqq-dashboard-test-") as folder:
 
             action("p", "Priority task #4")
             send(b"7\r")
-            read_until(b"Priority set for #4")
+            read_until(b"Priority #4: 7")
             assert cli("show", "4")["task"]["priority"] == 7
+            send(b"Y")
+            wait_visible(lambda: "YFresh item" in visible.text())
+            action("p", "Priority task #4")
+            send(b"-5\r")
+            wait_visible(lambda: "Set priority task #4?" in visible.text() and
+                         "Lose draft?" in visible.text())
+            send(b"y")
+            read_until(b"Priority #4: -5")
+            assert cli("show", "4")["task"]["priority"] == -5
+            assert cli("show", "4")["task"]["description"] == "Fresh item"
+            wait_visible(lambda: visible.text().splitlines()[9].startswith("Fresh item"))
             action("d", "Parent task #4")
             send(b"3\r")
-            read_until(b"Parent set for #4")
+            read_until(b"Parent #4: #3")
             assert cli("show", "4")["task"]["parent_id"] == 3
+            action("d", "Parent task #4")
+            send(b"none\r")
+            read_until(b"Parent cleared #4")
+            assert cli("show", "4")["task"]["parent_id"] is None
             action("a", "Archive task #4?")
             send(b"y")
             read_until(b"Archived #4")
@@ -414,6 +433,8 @@ with tempfile.TemporaryDirectory(prefix="qqq-dashboard-test-") as folder:
                 clear_capture()
                 send(b"y")
                 read_until(error.encode())
+                send(b"\x1b")
+                wait_visible(lambda: f"task #{task_id}" in visible.text().splitlines()[8])
                 assert f"task #{task_id}" in visible.text().splitlines()[8]
 
             wait_visible(lambda: "Owned item" in visible.text() and "Hidden item" in visible.text())
@@ -436,6 +457,7 @@ with tempfile.TemporaryDirectory(prefix="qqq-dashboard-test-") as folder:
             wait_visible(lambda: "task #4" in visible.text().splitlines()[8])
             send(b"\x07d4\r")
             read_until(b"Task 4 cannot depend on itself")
+            send(b"\x1b")
             assert cli("show", "4")["task"]["parent_id"] is None
             assert cli("show", "4")["task"]["priority"] == 0
             assert not select.select([child.stdout], [], [], 0)[0], "TUI wrote stdout"
@@ -469,12 +491,32 @@ with tempfile.TemporaryDirectory(prefix="qqq-dashboard-test-") as folder:
             wait_visible(lambda: "Enter -100" in visible.text())
             send(b"5\r")
             assert cli("show", "1")["task"]["priority"] == 5
+            send(b"\x07p101\r")
+            wait_visible(lambda: "Priority must be -100..100" in
+                         " ".join(row.strip() for row in visible.text().splitlines()[3:7]))
+            send(b"\x1b")
+            wait_visible(lambda: "qqq tasks" in visible.text().splitlines()[0])
+            send(b"\x07d0\r")
+            wait_visible(lambda: "Parent must be a positive task ID or none" in
+                         " ".join(row.strip() for row in visible.text().splitlines()[3:8]))
+            send(b"\x1b")
+            wait_visible(lambda: "qqq tasks" in visible.text().splitlines()[0])
+            send(b"X\x07p-1\r")
+            wait_visible(lambda: "Lose draft?" in visible.text())
+            send(b"y")
+            assert cli("show", "1")["task"]["priority"] == -1
+            send(b"\x07a")
+            wait_visible(lambda: "Archive task" in visible.text())
+            send(b"y")
+            wait_visible(lambda: "Task 1 is in progress and cannot be archived" in
+                         " ".join(row.strip() for row in visible.text().splitlines()[1:7]))
+            send(b"\x1b")
             fcntl.ioctl(slave, termios.TIOCSWINSZ, struct.pack("HHHH", 16, 72, 0, 0))
             visible.resize(72, 16)
             clear_capture()
             os.kill(child.pid, signal.SIGWINCH)
             read_until(b"qqq task editor - task #1")
-            wait_visible(lambda: "Priority set for #1" in visible.text())
+            wait_visible(lambda: "Task 1 is in progress and cannot be archived" in visible.text())
             settle()
         elif scenario == "click":
             initial_tasks = cli("list")
@@ -828,6 +870,9 @@ with tempfile.TemporaryDirectory(prefix="qqq-dashboard-test-") as folder:
             send(b"\x1b[1;2A")
             read_until(b"task #3")
             read_until(b"[Pasted Content 1001 chars]")
+            wait_visible(lambda: "task #3" in visible.text().splitlines()[8] and
+                         "[Pasted Content 1001 chars]" in visible.text() and
+                         visible.text().splitlines()[-1].startswith("Ctrl-S save"))
             if scenario == "pasteboard":
                 assert b"38;5;222" in screen, "Reloaded paste accent missing"
             else:
