@@ -118,6 +118,39 @@ fn watch_streams_initial_list_and_committed_changes_without_idle_repeats() {
 }
 
 #[test]
+fn watch_applies_query_and_status_to_each_json_snapshot() {
+    let dir = project();
+    let p = dir.path();
+    let watch = Watcher::start(
+        p,
+        &[
+            "list", "--watch", "--json", "--query", "needle", "--status", "new",
+        ],
+    );
+    assert_eq!(watch.snapshot(), serde_json::json!([]));
+    ok(p, &["add", "Other"]);
+    assert_eq!(watch.snapshot(), serde_json::json!([]));
+    ok(p, &["add", "Needle task"]);
+    let matched = watch.snapshot();
+    assert_eq!(matched.as_array().unwrap().len(), 1);
+    assert_eq!(matched[0]["description"], "Needle task");
+    ok(p, &["next", "--session", "a"]);
+    assert_eq!(watch.snapshot()[0]["description"], "Needle task");
+    ok(p, &["next", "--session", "b"]);
+    assert_eq!(watch.snapshot(), serde_json::json!([]));
+}
+
+#[test]
+fn watch_human_filter_reports_empty_matches() {
+    let dir = project();
+    let p = dir.path();
+    let watch = Watcher::start(p, &["list", "--watch", "--query", "needle"]);
+    assert_eq!(watch.line(), "No matching tasks.");
+    ok(p, &["add", "Other"]);
+    assert_eq!(watch.line(), "No matching tasks.");
+}
+
+#[test]
 fn human_watch_handles_tree_alias_and_nested_directory_without_ansi_in_pipes() {
     let dir = project();
     let p = dir.path();

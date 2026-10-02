@@ -470,6 +470,8 @@ fn run() -> Result<Option<String>> {
     if let Commands::List {
         watch: true,
         max_completed,
+        query,
+        statuses,
         ..
     } = &cli.command
     {
@@ -477,6 +479,8 @@ fn run() -> Result<Option<String>> {
             cli.json,
             max_completed.or(display_limit),
             display_limit.is_some(),
+            query.as_deref(),
+            statuses,
         )?;
         return Ok(None);
     }
