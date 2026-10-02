@@ -159,6 +159,23 @@ fn doctor_finds_missing_changed_and_orphan_images() {
 }
 
 #[test]
+fn doctor_reports_empty_unreferenced_image_directory() {
+    let dir = project();
+    let orphan = dir.path().join(".qqq/images/999");
+    fs::create_dir_all(&orphan).unwrap();
+    let orphan = fs::canonicalize(orphan).unwrap();
+    let (status, result) = report(dir.path());
+    assert_eq!(status, 1);
+    assert_eq!(result["ok"], false);
+    assert!(
+        result["issues"].as_array().unwrap().iter().any(|issue| {
+            issue["code"] == "IMAGE_ORPHAN" && issue["path"] == orphan.display().to_string()
+        }),
+        "{result}"
+    );
+}
+
+#[test]
 fn doctor_reports_damaged_image_metadata_and_unsafe_path() {
     let dir = project();
     let path = dir.path();

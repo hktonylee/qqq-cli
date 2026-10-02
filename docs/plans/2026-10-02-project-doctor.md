@@ -50,5 +50,5 @@ if metadata.len() != expected_bytes {
 **Files:** `README.md`, this plan.
 
 - [x] Document `qqq doctor`, JSON/exit codes, read-only scope, backup/restore recovery and stop-writers guidance. Run `qqq doctor --help`, focused tests; commit.
-- [ ] Run full `cargo test --locked --quiet`, format, Clippy, diff check. Request read-only review, fix Critical/Important findings, rerun affected checks.
+- [x] Run full `cargo test --locked --quiet`, format, Clippy, diff check. Request read-only review, fix Critical/Important findings, rerun affected checks.
 - [ ] Rebase and fast-forward local master, rerun integrated checks, install CLI, `qqq --json complete 68`, mark plan complete, remove owned worktree/branch, call `qqq --json next --wait --local` once.

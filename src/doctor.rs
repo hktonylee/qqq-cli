@@ -84,24 +84,7 @@ pub fn run() -> Result<Value> {
             return Ok(serde_json::to_value(report)?);
         }
     }
-    for suffix in ["-wal", "-shm", "-journal"] {
-        let sidecar = PathBuf::from(format!("{}{suffix}", db_path.display()));
-        match fs::symlink_metadata(&sidecar) {
-            Ok(_) => report.issue(
-                "DB_SIDECAR",
-                &sidecar,
-                "SQLite sidecar exists; read-only check deferred",
-                "Stop qqq writers, checkpoint or recover SQLite, then rerun qqq doctor.",
-            ),
-            Err(error) if error.kind() == std::io::ErrorKind::NotFound => (),
-            Err(error) => report.issue(
-                "DB_SIDECAR",
-                &sidecar,
-                format!("Cannot inspect SQLite sidecar: {error}"),
-                "Fix path permissions, then rerun qqq doctor.",
-            ),
-        }
-    }
+    check_sidecars(&db_path, &mut report);
     if !report.ok {
         return Ok(serde_json::to_value(report)?);
     }
@@ -126,6 +109,15 @@ pub fn run() -> Result<Value> {
         );
         return Ok(serde_json::to_value(report)?);
     }
+    if let Err(error) = begin_snapshot(&conn) {
+        report.issue(
+            "DB_UNREADABLE",
+            &db_path,
+            format!("Cannot start read snapshot: {error}"),
+            "Stop qqq writers, then rerun qqq doctor.",
+        );
+        return finish_report(report, &db_path);
+    }
     let integrity: rusqlite::Result<String> =
         conn.pragma_query_value(None, "integrity_check", |row| row.get(0));
     match integrity {
@@ -144,7 +136,7 @@ pub fn run() -> Result<Value> {
         ),
     }
     if !report.ok {
-        return Ok(serde_json::to_value(report)?);
+        return finish_report(report, &db_path);
     }
     match conn
         .prepare("PRAGMA foreign_key_check")
@@ -173,7 +165,7 @@ pub fn run() -> Result<Value> {
                 format!("Cannot read database schema version: {error}"),
                 "Restore database from a verified backup.",
             );
-            return Ok(serde_json::to_value(report)?);
+            return finish_report(report, &db_path);
         }
     };
     if report.schema_version != Some(9) {
@@ -183,7 +175,7 @@ pub fn run() -> Result<Value> {
             "Unsupported database schema version",
             "Use a compatible qqq version or restore a verified backup.",
         );
-        return Ok(serde_json::to_value(report)?);
+        return finish_report(report, &db_path);
     }
     match conn.query_row("SELECT count(*) FROM tasks", [], |row| row.get(0)) {
         Ok(count) => report.tasks = Some(count),
@@ -209,6 +201,46 @@ pub fn run() -> Result<Value> {
             db_path.parent().expect("database has parent"),
             &mut report,
         );
+    }
+    finish_report(report, &db_path)
+}
+
+fn begin_snapshot(conn: &Connection) -> rusqlite::Result<()> {
+    conn.execute_batch("BEGIN")?;
+    // First read pins SQLite snapshot until report is finalized. In rollback
+    // journal mode, a concurrent writer cannot commit during image scan.
+    conn.query_row("SELECT count(*) FROM sqlite_master", [], |row| {
+        row.get::<_, i64>(0)
+    })?;
+    Ok(())
+}
+
+fn check_sidecars(db_path: &Path, report: &mut Report) {
+    for suffix in ["-wal", "-shm", "-journal"] {
+        let sidecar = PathBuf::from(format!("{}{suffix}", db_path.display()));
+        match fs::symlink_metadata(&sidecar) {
+            Ok(_) => report.issue(
+                "DB_SIDECAR",
+                &sidecar,
+                "SQLite sidecar exists; read-only check deferred",
+                "Stop qqq writers, checkpoint or recover SQLite, then rerun qqq doctor.",
+            ),
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => (),
+            Err(error) => report.issue(
+                "DB_SIDECAR",
+                &sidecar,
+                format!("Cannot inspect SQLite sidecar: {error}"),
+                "Fix path permissions, then rerun qqq doctor.",
+            ),
+        }
+    }
+}
+
+fn finish_report(mut report: Report, db_path: &Path) -> Result<Value> {
+    let mut concurrent = Report::new(db_path);
+    check_sidecars(db_path, &mut concurrent);
+    if !concurrent.ok {
+        report = concurrent;
     }
     report
         .issues
@@ -400,6 +432,8 @@ fn check_image(
 }
 
 fn scan_images(root: &Path, expected: &HashSet<PathBuf>, report: &mut Report) {
+    let expected_directories: HashSet<&Path> =
+        expected.iter().filter_map(|path| path.parent()).collect();
     let metadata = match fs::symlink_metadata(root) {
         Ok(metadata) => metadata,
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => return,
@@ -457,7 +491,19 @@ fn scan_images(root: &Path, expected: &HashSet<PathBuf>, report: &mut Report) {
                     "Image path is a symlink",
                     "Move unsafe path aside, then rerun qqq doctor.",
                 ),
-                Ok(meta) if meta.is_dir() && depth < 1 => stack.push((path, depth + 1)),
+                Ok(meta)
+                    if meta.is_dir()
+                        && depth < 1
+                        && expected_directories.contains(path.as_path()) =>
+                {
+                    stack.push((path, depth + 1));
+                }
+                Ok(meta) if meta.is_dir() && depth < 1 => report.issue(
+                    "IMAGE_ORPHAN",
+                    &path,
+                    "Image directory has no database rows",
+                    "Inspect path, then move orphan data outside .qqq/images.",
+                ),
                 Ok(meta) if meta.is_dir() => report.issue(
                     "IMAGE_ORPHAN",
                     &path,
@@ -479,5 +525,41 @@ fn scan_images(root: &Path, expected: &HashSet<PathBuf>, report: &mut Report) {
                 ),
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn concurrent_sidecar_supersedes_incomplete_image_diagnostics() {
+        let directory = tempfile::TempDir::new().unwrap();
+        let db_path = directory.path().join("qqq.db");
+        let writer = Connection::open(&db_path).unwrap();
+        writer.busy_timeout(std::time::Duration::ZERO).unwrap();
+        writer
+            .execute_batch("CREATE TABLE sample (id INTEGER)")
+            .unwrap();
+        let reader =
+            Connection::open_with_flags(&db_path, OpenFlags::SQLITE_OPEN_READ_ONLY).unwrap();
+        begin_snapshot(&reader).unwrap();
+        writer
+            .execute_batch("BEGIN IMMEDIATE; INSERT INTO sample VALUES (1)")
+            .unwrap();
+        assert!(writer.execute_batch("COMMIT").is_err());
+        let mut report = Report::new(&db_path);
+        report.issue(
+            "IMAGE_ORPHAN",
+            &directory.path().join("images/1/1.png"),
+            "Image path has no database row",
+            "Inspect path.",
+        );
+        assert!(directory.path().join("qqq.db-journal").exists());
+        let output = finish_report(report, &db_path).unwrap();
+        assert_eq!(output["ok"], false);
+        assert_eq!(output["issues"].as_array().unwrap().len(), 1);
+        assert_eq!(output["issues"][0]["code"], "DB_SIDECAR");
+        writer.execute_batch("ROLLBACK").unwrap();
     }
 }

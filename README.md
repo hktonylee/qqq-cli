@@ -418,7 +418,7 @@ qqq --json doctor
 ```
 
 Doctor checks SQLite integrity, foreign keys, schema, image paths, byte counts,
-signatures, and orphan files. Healthy project exits 0. Issues print recovery
+signatures, and orphan files/directories. Healthy project exits 0. Issues print recovery
 actions and exit 1; JSON includes `ok`, counts, and `issues` with code, path,
 message, and action. Doctor never migrates DB. If SQLite journal/WAL sidecars
 exist, stop writers and recover or checkpoint SQLite before rerunning doctor.

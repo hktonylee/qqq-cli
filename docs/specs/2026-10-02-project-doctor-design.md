@@ -7,14 +7,17 @@ version check (current version 9). Missing database, unreadable/corrupt SQLite,
 unsupported schema, or active SQLite journal/WAL sidecars become diagnostics.
 Sidecars are rejected before opening database to avoid creating or changing
 shared-memory files. Run doctor when other writers have stopped if sidecars
-are present.
+are present. SQLite reads run in one pinned snapshot through filesystem scan;
+sidecars are checked again before report. A writer that stages image files
+during scan therefore yields only a deferred sidecar diagnostic, not false
+image damage guidance.
 
 For supported database, read all image rows. For each, derive expected path
 from task/image IDs and media type, reject unsafe path components, inspect
 regular file without following symlinks, compare file size with DB bytes, and
 compare header signature with DB media type (PNG/JPEG/GIF/WebP). Scan
 `.qqq/images` without following links; report files absent from image rows,
-unexpected directories, symlinks, unreadable paths, and unsupported image
+unreferenced or nested directories, symlinks, unreadable paths, and unsupported image
 metadata. Missing image root is healthy only when DB has no image rows.
 
 Report is stable JSON:
