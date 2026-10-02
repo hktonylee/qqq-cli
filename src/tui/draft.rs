@@ -44,50 +44,80 @@ fn fenced(text: &str) -> String {
     format!("{ticks}pasteboard\n{text}\n{ticks}")
 }
 
+fn fence_marker(line: &str) -> Option<(u8, usize, &str, usize)> {
+    let indent = line.bytes().take_while(|byte| *byte == b' ').count();
+    if indent > 3 {
+        return None;
+    }
+    let marker = *line.as_bytes().get(indent)?;
+    if !matches!(marker, b'`' | b'~') {
+        return None;
+    }
+    let count = line[indent..]
+        .bytes()
+        .take_while(|byte| *byte == marker)
+        .count();
+    (count >= 3).then_some((marker, count, &line[indent + count..], indent))
+}
+
+fn fence_closes(line: &str, marker: u8, opening_count: usize) -> bool {
+    fence_marker(line).is_some_and(|(closing, count, rest, _)| {
+        closing == marker
+            && count >= opening_count
+            && rest.chars().all(|ch| matches!(ch, ' ' | '\t' | '\r'))
+    })
+}
+
 fn find_pasteboard(description: &str, from: usize) -> Option<PasteboardBlock<'_>> {
-    let mut search = from;
-    while search < description.len() {
-        let start = search + description[search..].find('`')?;
-        search = start + 1;
-        if start > 0 && description.as_bytes()[start - 1] != b'\n' {
-            continue;
-        }
-        let ticks = description[start..]
-            .bytes()
-            .take_while(|byte| *byte == b'`')
-            .count();
-        if ticks < 3 || !description[start + ticks..].starts_with("pasteboard\n") {
-            continue;
-        }
-        let payload_start = start + ticks + "pasteboard\n".len();
-        let mut line_start = payload_start;
-        loop {
-            let line_end = description[line_start..]
-                .find('\n')
-                .map_or(description.len(), |offset| line_start + offset);
-            let line = &description[line_start..line_end];
-            let closing_ticks = line.bytes().take_while(|byte| *byte == b'`').count();
-            if closing_ticks >= ticks
-                && line[closing_ticks..]
-                    .chars()
-                    .all(|ch| matches!(ch, ' ' | '\t' | '\r'))
-            {
-                let payload_end = if line_start == payload_start {
-                    line_start
-                } else {
-                    line_start - 1
-                };
-                return Some(PasteboardBlock {
-                    start,
-                    end: line_end,
-                    payload: &description[payload_start..payload_end],
-                });
+    let mut start = from;
+    let mut enclosing: Option<(u8, usize)> = None;
+    while start < description.len() {
+        let end = description[start..]
+            .find('\n')
+            .map_or(description.len(), |offset| start + offset);
+        let line = &description[start..end];
+        if let Some((marker, count)) = enclosing {
+            if fence_closes(line, marker, count) {
+                enclosing = None;
             }
-            if line_end == description.len() {
-                break;
+        } else if let Some((marker, count, rest, indent)) = fence_marker(line) {
+            if marker == b'~' || !rest.contains('`') {
+                if marker == b'`'
+                    && indent == 0
+                    && rest.trim_end_matches([' ', '\t', '\r']) == "pasteboard"
+                    && end < description.len()
+                {
+                    let payload_start = end + 1;
+                    let mut line_start = payload_start;
+                    loop {
+                        let line_end = description[line_start..]
+                            .find('\n')
+                            .map_or(description.len(), |offset| line_start + offset);
+                        if fence_closes(&description[line_start..line_end], marker, count) {
+                            let payload_end = if line_start == payload_start {
+                                line_start
+                            } else {
+                                line_start - 1
+                            };
+                            return Some(PasteboardBlock {
+                                start,
+                                end: line_end,
+                                payload: &description[payload_start..payload_end],
+                            });
+                        }
+                        if line_end == description.len() {
+                            break;
+                        }
+                        line_start = line_end + 1;
+                    }
+                }
+                enclosing = Some((marker, count));
             }
-            line_start = line_end + 1;
         }
+        if end == description.len() {
+            break;
+        }
+        start = end + 1;
     }
     None
 }
@@ -151,7 +181,7 @@ impl Draft {
         let mut fences = Vec::new();
         let mut scan = 0;
         while let Some(block) = find_pasteboard(description, scan) {
-            scan = block.end;
+            scan = (block.end + 1).min(description.len());
             fences.push(block);
         }
         let markdown = references
@@ -451,8 +481,12 @@ impl Draft {
         for image in &contents.images {
             image.media_type()?;
         }
+        let has_content = self.atoms.iter().any(|atom| match atom {
+            Atom::Text(text) | Atom::Paste { text, .. } => !text.trim().is_empty(),
+            Atom::Image { .. } | Atom::StoredImage { .. } => true,
+        });
         ensure!(
-            !contents.description.trim().is_empty(),
+            has_content && !contents.description.trim().is_empty(),
             "Task description cannot be empty; task not saved"
         );
         Ok(contents)

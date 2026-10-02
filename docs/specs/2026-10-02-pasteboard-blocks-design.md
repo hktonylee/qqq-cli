@@ -12,7 +12,7 @@ content
 ```
 ````
 
-The fence uses at least three backticks and one more than the longest backtick run in the payload. A line break before the opener and after the closer is inserted only when neighboring description text needs it for a valid block. The payload's exact characters, including CRLF and trailing newlines, round-trip. `Draft::from_saved` recognizes complete, line-start `pasteboard` fences and restores one atomic paste item; incomplete or differently tagged fences receive no pasteboard interpretation. It preserves the original fence bytes when saving an untouched loaded item. Ordinary existing long descriptions still display collapsed as before and save without a new fence unless the user pastes new content.
+The fence uses at least three backticks and one more than the longest backtick run in the payload. A line break before the opener and after the closer is inserted only when neighboring description text needs it for a valid block. The payload's exact characters, including CRLF and trailing newlines, round-trip. `Draft::from_saved` recognizes complete, line-start `pasteboard` fences outside other fenced code blocks and restores one atomic paste item; incomplete or differently tagged fences receive no pasteboard interpretation. It preserves the original fence bytes when saving an untouched loaded item. Ordinary existing long descriptions still display collapsed as before and save without a new fence unless the user pastes new content. Blank-only paste payload cannot bypass task description validation.
 
 ## Components
 

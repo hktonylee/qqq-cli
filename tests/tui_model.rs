@@ -134,6 +134,19 @@ fn incomplete_or_wrong_language_fence_stays_literal_text() {
 }
 
 #[test]
+fn pasteboard_marker_inside_other_code_fence_stays_literal_text() {
+    for description in [
+        "```text\n```pasteboard\nx\n```\n```",
+        "~~~~text\n```pasteboard\nx\n```\n~~~~",
+        "  ```text\n```pasteboard\nx\n```\n```",
+    ] {
+        let draft = Draft::from_saved(description, 1, &[]).unwrap();
+        assert_eq!(draft.fragments().concat(), description);
+        assert_eq!(draft.finish().unwrap().description, description);
+    }
+}
+
+#[test]
 fn multiple_pasteboard_blocks_keep_image_syntax_inside_payload() {
     let image = ImageReference {
         id: 1,
@@ -532,6 +545,20 @@ fn draft_rejects_blank_body_but_allows_image_on_first_line() {
     let result = draft.finish().unwrap();
     assert_eq!(result.description, "[Image: x.png]");
     assert_eq!(result.images.len(), 1);
+}
+
+#[test]
+fn whitespace_only_large_paste_cannot_bypass_blank_body_validation() {
+    let mut draft = Draft::new("");
+    draft.paste(&" ".repeat(1001));
+    assert_eq!(
+        draft.finish().err().unwrap().to_string(),
+        "Task description cannot be empty; task not saved"
+    );
+
+    let restored =
+        Draft::from_saved(&format!("```pasteboard\n{}\n```", " ".repeat(1001)), 1, &[]).unwrap();
+    assert!(restored.finish().is_err());
 }
 
 #[test]

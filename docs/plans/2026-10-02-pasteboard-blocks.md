@@ -67,6 +67,6 @@ let layout = render::Layout::with_paste(
 
 **Files:** `docs/plans/2026-10-02-pasteboard-blocks.md`
 
-- [ ] Run `cargo test --locked`, `cargo clippy --locked --all-targets -- -D warnings`, `cargo fmt --all -- --check`, and `git diff --check`; require exit 0.
+- [x] Run `cargo test --locked`, `cargo clippy --locked --all-targets -- -D warnings`, `cargo fmt --all -- --check`, and `git diff --check`; require exit 0.
 - [ ] Request read-only code review; fix confirmed Critical/Important findings and rerun affected checks.
 - [ ] Rebase onto current local master, fast-forward local master, run integrated full suite, remove owned worktree/branch, install current CLI, complete task 58, verify status, then resume one blocking `qqq --json next --wait --local` call.
