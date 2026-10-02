@@ -19,6 +19,7 @@ use draft::{Composition, Draft};
 use ratatui::{Terminal, backend::CrosstermBackend};
 use std::collections::HashMap;
 use std::io::{self, IsTerminal};
+use std::time::{Duration, Instant};
 use unicode_segmentation::UnicodeSegmentation;
 use unicode_width::UnicodeWidthStr;
 
@@ -529,8 +530,11 @@ fn compose_inner(
         let mut visible_ids = None;
         let mut list_row_count = 0;
         let mut rows = Vec::new();
+        let mut list_version = None;
         if dashboard {
             let db = mode.db().expect("dashboard has database");
+            // Capture before listing so commits during rendering trigger another refresh.
+            list_version = Some(db.data_version()?);
             let tasks = if include_archived {
                 db.list_with_archived(None, true)?
             } else {
@@ -615,7 +619,20 @@ fn compose_inner(
                 terminal.color,
             )?;
         }
+        let refresh_interval = Duration::from_millis(250);
+        let mut refresh_deadline = Instant::now() + refresh_interval;
         let input = loop {
+            if dashboard {
+                let timeout = refresh_deadline.saturating_duration_since(Instant::now());
+                if !event::poll(timeout)? || Instant::now() >= refresh_deadline {
+                    let db = mode.db().expect("dashboard has database");
+                    if Some(db.data_version()?) != list_version {
+                        break None;
+                    }
+                    refresh_deadline = Instant::now() + refresh_interval;
+                    continue;
+                }
+            }
             let input = event::read()?;
             if let Event::Mouse(mouse) = &input {
                 let active = dashboard
@@ -641,7 +658,10 @@ fn compose_inner(
                     continue;
                 }
             }
-            break input;
+            break Some(input);
+        };
+        let Some(input) = input else {
+            continue;
         };
         match input {
             Event::Paste(text) if confirmation.is_none() => {

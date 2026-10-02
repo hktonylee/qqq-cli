@@ -211,6 +211,10 @@ Ctrl-C exits from new draft. Ctrl-V or terminal paste inserts text; pasting
 image file path attaches image. Saves commit immediately. TUI needs terminal
 and writes no stdout, including with `--json`.
 
+Task list refreshes after external DB commits without keyboard input. Refresh
+keeps current editor draft, filter query, and manual scroll positions. Selected
+task text stays in editor until reloaded or saved.
+
 Mouse wheel scrolls task list or editor under pointer. Both panes keep separate
 scroll positions; scrolling editor never edits or saves text. Shift-Up/Down
 returns list to selected task. Editor keys reveal caret after manual scroll.

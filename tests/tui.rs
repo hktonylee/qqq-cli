@@ -76,6 +76,26 @@ fn tui_dashboard_escape_and_ctrl_c_return_to_new_before_exit() {
 }
 
 #[test]
+fn tui_dashboard_refreshes_external_commits_without_keyboard_input() {
+    dashboard_scenario("live_refresh");
+}
+
+#[test]
+fn tui_dashboard_external_refresh_preserves_filter_and_dirty_editor() {
+    dashboard_scenario("live_refresh_filter");
+}
+
+#[test]
+fn tui_dashboard_external_refresh_keeps_manual_list_scroll() {
+    dashboard_scenario("live_refresh_scroll");
+}
+
+#[test]
+fn tui_dashboard_refresh_is_not_starved_by_ignored_mouse_events() {
+    dashboard_scenario("live_refresh_motion");
+}
+
+#[test]
 fn tui_dashboard_hides_archived_unless_explicitly_included() {
     dashboard_scenario("archive_hidden");
     dashboard_scenario("archive_included");

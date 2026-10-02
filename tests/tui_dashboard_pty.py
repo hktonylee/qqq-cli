@@ -14,6 +14,7 @@ import subprocess
 import sys
 import tempfile
 import termios
+import threading
 import time
 from pathlib import Path
 
@@ -162,7 +163,7 @@ with tempfile.TemporaryDirectory(prefix="qqq-dashboard-test-") as folder:
         cli("next", "--local", "--session", "worker")
     if scenario == "actions_narrow":
         cli("next", "--local", "--session", "worker")
-    if scenario in ("scroll", "wheel"):
+    if scenario in ("scroll", "wheel", "live_refresh_scroll"):
         for index in range(3, 21):
             description = ("\n".join(f"Line{line:02}" for line in range(1, 16))
                            if scenario == "wheel" and index == 20 else f"Task {index}")
@@ -262,7 +263,7 @@ with tempfile.TemporaryDirectory(prefix="qqq-dashboard-test-") as folder:
         elif scenario in ("no_color", "dumb", "pasteboard_no_color", "filter_no_color"):
             assert b"\x1b[38;" not in screen, screen[-2000:]
             assert b"\x1b[48;" not in screen, screen[-2000:]
-        if scenario not in ("tree_navigation", "scroll", "wheel", "click", "click_filter", "workflow", "workflow_empty", "workflow_status", "filter", "filter_no_color", "archive_hidden", "archive_included", "actions_basic", "actions_rejected", "actions_hidden"):
+        if scenario not in ("live_refresh_scroll", "tree_navigation", "scroll", "wheel", "click", "click_filter", "workflow", "workflow_empty", "workflow_status", "filter", "filter_no_color", "archive_hidden", "archive_included", "actions_basic", "actions_rejected", "actions_hidden"):
             read_until(b"Second")
             assert "First" in visible.text() and "Second" in visible.text(), visible.text()
         assert not select.select([child.stdout], [], [], 0)[0], "TUI wrote stdout while open"
@@ -273,7 +274,78 @@ with tempfile.TemporaryDirectory(prefix="qqq-dashboard-test-") as folder:
                 assert "Hidden" not in visible.text(), visible.text()
             else:
                 assert "[archived] Hidden" in visible.text(), visible.text()
-        if scenario == "tree_navigation":
+        if scenario == "live_refresh":
+            settle()
+            clear_capture()
+            cli("add", "External task")
+            wait_visible(lambda: "External task" in visible.text())
+            assert "new task" in visible.text().splitlines()[8]
+            cli("edit", "2", "--description", "Changed externally")
+            wait_visible(lambda: "Changed externally" in visible.text())
+            cli("next", "--local", "--session", "worker")
+            wait_visible(lambda: "In progress" in visible.text())
+            cli("complete", "1", "--session", "worker")
+            wait_visible(lambda: "Completed" in visible.text())
+            cli("archive", "2")
+            wait_visible(lambda: "Changed externally" not in visible.text())
+            cli("unarchive", "2")
+            wait_visible(lambda: "Changed externally" in visible.text())
+            cli("edit", "3", "--set-parent", "1")
+            wait_visible(lambda: "External task" in visible.text().splitlines()[4]
+                         and "Changed externally" in visible.text().splitlines()[5])
+            settle()
+            clear_capture()
+            with sqlite3.connect(os.path.join(folder, ".qqq", "qqq.db")) as db:
+                db.execute("UPDATE tasks SET description='Rolled back' WHERE id=2")
+                db.rollback()
+            readable, _, _ = select.select([master], [], [], 0.8)
+            if readable:
+                capture(os.read(master, 65536))
+            assert not screen, f"Unchanged DB redrew TUI: {screen[-500:]!r}"
+        elif scenario == "live_refresh_filter":
+            send(b"\x1b[1;2A")
+            wait_visible(lambda: "task #2 (" in visible.text().splitlines()[8])
+            send(b"Unsaved " + CTRL_SLASH + b"second")
+            wait_visible(lambda: visible.text().splitlines()[9].startswith("Unsaved Second")
+                         and visible.text().splitlines()[1].strip() == "Filter: second"
+                         and (visible.x, visible.y) == (len("Filter: second"), 1))
+            cursor_before = (visible.x, visible.y)
+            cli("edit", "2", "--description", "Updated second externally")
+            wait_visible(lambda: "Updated second externally" in visible.text().splitlines()[3])
+            cli("add", "Second external task")
+            wait_visible(lambda: "Second external task" in visible.text()
+                         and (visible.x, visible.y) == cursor_before)
+            assert "First" not in visible.text()
+            assert visible.text().splitlines()[9].startswith("Unsaved Second")
+            assert "task #2 (" in visible.text().splitlines()[8]
+            assert visible.text().splitlines()[1].strip() == "Filter: second"
+            assert (visible.x, visible.y) == cursor_before
+            assert cli("show", "2")["task"]["description"] == "Updated second externally"
+        elif scenario == "live_refresh_motion":
+            stop = threading.Event()
+            def mouse_motion():
+                while not stop.is_set():
+                    os.write(master, b"\x1b[<35;6;4M")
+                    stop.wait(0.02)
+            motion = threading.Thread(target=mouse_motion)
+            motion.start()
+            try:
+                cli("add", "Added during motion")
+                wait_visible(lambda: "Added during motion" in visible.text())
+                assert motion.is_alive()
+            finally:
+                stop.set()
+                motion.join(timeout=1)
+        elif scenario == "live_refresh_scroll":
+            send(b"\x1b[1;2A")
+            wait_visible(lambda: "task #20 (" in visible.text().splitlines()[8])
+            send(b"\x1b[<64;6;4M")
+            wait_visible(lambda: "Task 13" in visible.text().splitlines()[2])
+            cli("edit", "13", "--description", "Refreshed row")
+            wait_visible(lambda: "Refreshed row" in visible.text().splitlines()[2])
+            assert "task #20 (" in visible.text().splitlines()[8]
+            assert visible.text().splitlines()[9].startswith("Task 20")
+        elif scenario == "tree_navigation":
             expected = (2, 3, 1)
             for task_id in expected:
                 clear_capture()
