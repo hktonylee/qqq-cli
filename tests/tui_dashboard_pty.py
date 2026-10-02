@@ -106,9 +106,11 @@ with tempfile.TemporaryDirectory(prefix="qqq-dashboard-test-") as folder:
         cli("add", "Second")
     if scenario in ("color", "no_color", "dumb"):
         cli("next", "--local", "--session", "worker")
-    if scenario == "scroll":
+    if scenario in ("scroll", "wheel"):
         for index in range(3, 21):
-            cli("add", f"Task {index}")
+            description = ("\n".join(f"Line{line:02}" for line in range(1, 16))
+                           if scenario == "wheel" and index == 20 else f"Task {index}")
+            cli("add", description)
 
     master, slave = pty.openpty()
     os.set_blocking(master, False)
@@ -173,6 +175,8 @@ with tempfile.TemporaryDirectory(prefix="qqq-dashboard-test-") as folder:
     try:
         read_until(b"qqq task editor - new task")
         assert "qqq tasks" in visible.text(), visible.text()
+        read_until(b"\x1b[?1000h")
+        read_until(b"\x1b[?1006h")
         if scenario == "color":
             read_until(b"38;5;81")
             clear_capture()
@@ -181,11 +185,84 @@ with tempfile.TemporaryDirectory(prefix="qqq-dashboard-test-") as folder:
         elif scenario in ("no_color", "dumb", "pasteboard_no_color", "filter_no_color"):
             assert b"\x1b[38;" not in screen, screen[-2000:]
             assert b"\x1b[48;" not in screen, screen[-2000:]
-        if scenario not in ("scroll", "filter", "filter_no_color"):
+        if scenario not in ("scroll", "wheel", "filter", "filter_no_color"):
             read_until(b"Second")
             assert "First" in visible.text() and "Second" in visible.text(), visible.text()
         assert not select.select([child.stdout], [], [], 0)[0], "TUI wrote stdout while open"
-        if scenario == "slash_edit":
+        if scenario == "wheel_error":
+            with sqlite3.connect(os.path.join(folder, ".qqq", "qqq.db")) as db:
+                db.execute("DROP TABLE tasks")
+            clear_capture()
+            send(b"\x1b[<65;6;4M")
+            deadline = time.monotonic() + 5
+            while child.poll() is None:
+                assert time.monotonic() < deadline, "TUI failed to exit after DB error"
+                if select.select([master], [], [], 0.05)[0]:
+                    try:
+                        capture(os.read(master, 65536))
+                    except OSError:
+                        pass
+            assert child.returncode != 0
+            assert b"\x1b[?1000l" in screen and b"\x1b[?1006l" in screen, screen[-2000:]
+            assert screen.index(b"\x1b[?1006l") < screen.index(b"\x1b[?1049l")
+            assert before[3] == termios.tcgetattr(slave)[3], "Terminal flags not restored after error"
+        elif scenario == "wheel":
+            initial_tasks = cli("list")
+            assert "Line01" in visible.text(), visible.text()
+            clear_capture()
+            send(b"\x1b[1;2A")
+            read_until(b"task #20")
+            wait_visible(lambda: visible.text().splitlines()[9].startswith("Line01"))
+
+            clear_capture()
+            send(b"\x1b[<64;6;4M")
+            wait_visible(lambda: "Task 13" in visible.text().splitlines()[2])
+            assert visible.text().splitlines()[9].startswith("Line01"), visible.text()
+            clear_capture()
+            send(b"\x1b[<65;6;11M")
+            wait_visible(lambda: visible.text().splitlines()[9].startswith("Line04"))
+            assert "Task 13" in visible.text().splitlines()[2], visible.text()
+
+            clear_capture()
+            send(b"\x1b[<65;6;8M\x1b[<65;6;16M")
+            time.sleep(0.1)
+            assert "Task 13" in visible.text().splitlines()[2], visible.text()
+            assert visible.text().splitlines()[9].startswith("Line04"), visible.text()
+            clear_capture()
+            send(b"\x1b[<64;6;11M" * 10)
+            wait_visible(lambda: visible.text().splitlines()[9].startswith("Line01"))
+            clear_capture()
+            send(b"\x1b[<65;6;11M" * 10)
+            wait_visible(lambda: visible.text().splitlines()[9].startswith("Line10"))
+            assert "Task 13" in visible.text().splitlines()[2], visible.text()
+            clear_capture()
+            send(b"\x1b[<64;6;4M" * 10)
+            wait_visible(lambda: "ID" in visible.text().splitlines()[2])
+            assert visible.text().splitlines()[9].startswith("Line10"), visible.text()
+            clear_capture()
+            send(b"\x1b[<65;6;4M" * 10)
+            wait_visible(lambda: "Line11" in visible.text().splitlines()[2])
+
+            fcntl.ioctl(slave, termios.TIOCSWINSZ, struct.pack("HHHH", 24, 72, 0, 0))
+            visible.resize(72, 24)
+            clear_capture()
+            os.kill(child.pid, signal.SIGWINCH)
+            wait_visible(lambda: "Line07" in visible.text().splitlines()[2]
+                         and visible.text().splitlines()[13].startswith("Line06"))
+            time.sleep(0.1)
+            clear_capture()
+            send(b"!")
+            wait_visible(lambda: visible.text().splitlines()[13].startswith("!Line01"))
+            assert cli("list") == initial_tasks
+            clear_capture()
+            send(b"\x1b[1;2A")
+            read_until(b"Discard changes and switch? (y/N)")
+            clear_capture()
+            send(b"y")
+            read_until(b"task #19")
+            wait_visible(lambda: "Task 19" in visible.text().splitlines()[2])
+            assert cli("list") == initial_tasks
+        elif scenario == "slash_edit":
             send(b"\x1b/")
             wait_visible(lambda: visible.text().splitlines()[9].startswith("/"))
             send(b"path\x13")
@@ -377,7 +454,8 @@ with tempfile.TemporaryDirectory(prefix="qqq-dashboard-test-") as folder:
             send(b"\x13")
             read_until(b"Saved #3. New task")
             assert cli("show", "3")["task"]["description"] == "Draft"
-        send(b"\x03" if scenario in ("scroll", "color") else b"\x1b")
+        if scenario != "wheel_error":
+            send(b"\x03" if scenario in ("scroll", "color", "wheel") else b"\x1b")
         deadline = time.monotonic() + 5
         while child.poll() is None:
             assert time.monotonic() < deadline, f"TUI failed to exit: {screen[-1000:]!r}\n{visible.text()}"
@@ -387,10 +465,12 @@ with tempfile.TemporaryDirectory(prefix="qqq-dashboard-test-") as folder:
                 except OSError:
                     pass
         stdout, _ = child.communicate(timeout=5)
-        assert child.returncode == 0, screen[-2000:]
+        if scenario != "wheel_error":
+            assert child.returncode == 0, screen[-2000:]
         assert stdout == b"", stdout
         assert before[3] == termios.tcgetattr(slave)[3], "Terminal flags not restored"
         assert b"\x1b[?1049l" in screen, "Alternate screen not restored"
+        assert b"\x1b[?1000l" in screen and b"\x1b[?1006l" in screen, "Mouse capture not restored"
     finally:
         if child.poll() is None:
             child.kill()

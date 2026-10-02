@@ -69,6 +69,12 @@ fn tui_dashboard_scrolls_to_selected_task() {
 }
 
 #[test]
+fn tui_dashboard_mouse_wheel_scrolls_both_panes() {
+    dashboard_scenario("wheel");
+    dashboard_scenario("wheel_error");
+}
+
+#[test]
 fn tui_dashboard_status_colors_respect_no_color() {
     dashboard_scenario("color");
     dashboard_scenario("no_color");

@@ -8,8 +8,8 @@ use anyhow::{Result, bail, ensure};
 use crossterm::{
     cursor::Show,
     event::{
-        self, DisableBracketedPaste, EnableBracketedPaste, Event, KeyCode, KeyEventKind,
-        KeyModifiers,
+        self, DisableBracketedPaste, DisableMouseCapture, EnableBracketedPaste, EnableMouseCapture,
+        Event, KeyCode, KeyEventKind, KeyModifiers, MouseEventKind,
     },
     execute,
     style::ResetColor,
@@ -108,9 +108,10 @@ fn load_target(
 
 struct TerminalGuard {
     color: bool,
+    mouse: bool,
 }
 impl TerminalGuard {
-    fn enter() -> Result<Self> {
+    fn enter(mouse: bool) -> Result<Self> {
         ensure!(
             io::stdin().is_terminal() && io::stderr().is_terminal(),
             "Interactive editor requires terminal input and stderr"
@@ -118,6 +119,7 @@ impl TerminalGuard {
         terminal::enable_raw_mode()?;
         let guard = Self {
             color: crate::output::color_enabled(io::stderr().is_terminal()),
+            mouse,
         };
         execute!(
             io::stderr(),
@@ -125,11 +127,17 @@ impl TerminalGuard {
             EnableBracketedPaste,
             Show
         )?;
+        if mouse {
+            execute!(io::stderr(), EnableMouseCapture)?;
+        }
         Ok(guard)
     }
 }
 impl Drop for TerminalGuard {
     fn drop(&mut self) {
+        if self.mouse {
+            let _ = execute!(io::stderr(), DisableMouseCapture);
+        }
         if self.color {
             let _ = execute!(io::stderr(), ResetColor);
         }
@@ -221,7 +229,6 @@ fn compose_inner(
     mut mode: Mode<'_, '_>,
     initial_draft: Option<Draft>,
 ) -> Result<Option<Outcome>> {
-    let terminal = TerminalGuard::enter()?;
     let dashboard = matches!(
         mode,
         Mode::Continuous {
@@ -229,6 +236,7 @@ fn compose_inner(
             ..
         }
     );
+    let terminal = TerminalGuard::enter(dashboard)?;
     let mut dashboard_terminal = if dashboard {
         Some(Terminal::new(CrosstermBackend::new(io::stderr()))?)
     } else {
@@ -240,6 +248,8 @@ fn compose_inner(
     let mut target_status = None;
     let mut top = 0;
     let mut list_top = 0;
+    let mut list_follow_selected = true;
+    let mut editor_follow_cursor = true;
     let mut filter_query = String::new();
     let mut filter_focused = false;
     let mut message = String::new();
@@ -295,6 +305,7 @@ fn compose_inner(
             message: footer,
         };
         let mut visible_ids = None;
+        let mut list_row_count = 0;
         if dashboard {
             let tasks = mode.db().expect("dashboard has database").list(None)?;
             let filter_views: Vec<_> = tasks
@@ -325,6 +336,7 @@ fn compose_inner(
                 );
                 panel::rows(&tree)
             };
+            list_row_count = rows.len();
             visible_ids = Some(filtered.ordered_ids);
             dashboard_terminal
                 .as_mut()
@@ -339,7 +351,7 @@ fn compose_inner(
                             query: &filter_query,
                             focused: filter_focused,
                             top: &mut list_top,
-                            follow_selected: true,
+                            follow_selected: list_follow_selected,
                         },
                         render::DashboardEditor {
                             layout: &layout,
@@ -347,7 +359,7 @@ fn compose_inner(
                             top: &mut top,
                             chrome: &chrome,
                             message_is_error: confirmation.is_none() && message_is_error,
-                            follow_cursor: true,
+                            follow_cursor: editor_follow_cursor,
                         },
                         terminal.color,
                     );
@@ -368,12 +380,32 @@ fn compose_inner(
                 if filter_focused {
                     filter_query.extend(text.chars().filter(|ch| !ch.is_control()));
                     list_top = 0;
+                    list_follow_selected = true;
                 } else {
+                    editor_follow_cursor = true;
                     let result = paste(&mut draft, &text);
                     message_is_error = result.is_err();
                     message = result
                         .err()
                         .map_or_else(String::new, |error| format!("{error:#}"));
+                }
+            }
+            Event::Mouse(mouse) if dashboard && confirmation.is_none() => {
+                let down = match mouse.kind {
+                    MouseEventKind::ScrollDown => true,
+                    MouseEventKind::ScrollUp => false,
+                    _ => continue,
+                };
+                match dashboard::wheel_area(size, mouse.column, mouse.row) {
+                    Some(dashboard::WheelArea::List(height)) => {
+                        list_follow_selected = false;
+                        list_top = panel::wheel_top(list_top, list_row_count, height, down);
+                    }
+                    Some(dashboard::WheelArea::Editor(height)) => {
+                        editor_follow_cursor = false;
+                        top = panel::wheel_top(top, layout.rows.len(), height, down);
+                    }
+                    None => (),
                 }
             }
             Event::Key(key) if key.kind != KeyEventKind::Release => {
@@ -398,6 +430,8 @@ fn compose_inner(
                                         &mut baseline,
                                         &mut top,
                                     );
+                                    list_follow_selected = true;
+                                    editor_follow_cursor = true;
                                     message.clear();
                                     message_is_error = false;
                                 }
@@ -434,6 +468,8 @@ fn compose_inner(
                                     &mut baseline,
                                     &mut top,
                                 );
+                                list_follow_selected = true;
+                                editor_follow_cursor = true;
                                 message.clear();
                                 message_is_error = false;
                             }
@@ -470,6 +506,7 @@ fn compose_inner(
                     if control && key.code == KeyCode::Char('u') {
                         filter_query.clear();
                         list_top = 0;
+                        list_follow_selected = true;
                     } else if !key
                         .modifiers
                         .intersects(KeyModifiers::CONTROL | KeyModifiers::ALT | KeyModifiers::SUPER)
@@ -480,6 +517,7 @@ fn compose_inner(
                             KeyCode::Esc => {
                                 filter_query.clear();
                                 list_top = 0;
+                                list_follow_selected = true;
                             }
                             KeyCode::Backspace => {
                                 if let Some((index, _)) =
@@ -487,17 +525,20 @@ fn compose_inner(
                                 {
                                     filter_query.truncate(index);
                                     list_top = 0;
+                                    list_follow_selected = true;
                                 }
                             }
                             KeyCode::Char(character) => {
                                 filter_query.push(character);
                                 list_top = 0;
+                                list_follow_selected = true;
                             }
                             _ => (),
                         }
                     }
                     continue;
                 }
+                editor_follow_cursor = true;
                 if control {
                     match key.code {
                         KeyCode::Char('s') => match draft.finish() {
@@ -519,6 +560,7 @@ fn compose_inner(
                                                 &mut baseline,
                                                 &mut top,
                                             );
+                                            list_follow_selected = true;
                                             message = format!("Saved #{id}. New task");
                                             message_is_error = false;
                                         }
