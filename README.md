@@ -1,27 +1,28 @@
 # qqq
 
-Local-first task queue for coding agents. Tasks, messages, image bytes,
-ownership, history live in each project's `.qqq/qqq.db`. No server needed.
+Local task queue for coding agents. Task data, including images, lives in each
+project's `.qqq/qqq.db`. No server needed.
 
 ## Install
 
-Requires Rust 1.85+ and C compiler for bundled SQLite. Crate: `qqq-cli`;
-command: `qqq`.
-
-```sh
-cargo install qqq-cli --locked
-```
-
-To install from source, run in repo root:
+Requires Rust 1.85+ and C compiler. Install current source from repo root:
 
 ```sh
 cargo install --path . --locked
 ```
 
+Command name: `qqq`; crate name: `qqq-cli`. Published crates.io version 0.1.0
+predates `.qqq/` layout and continuous add. After next release, install from
+crates.io with:
+
+```sh
+cargo install qqq-cli --locked
+```
+
 ## Quick start
 
-Run `init` in project root. Other task commands use nearest `.qqq` directory
-in current directory or parents; missing `qqq.db` there causes error. Config
+Run `init` in project root. Task commands use nearest `.qqq` directory in
+current directory or parents; missing `qqq.db` there causes error. Config
 commands need no DB.
 
 ```sh
@@ -35,14 +36,11 @@ qqq complete 1 --session worker-1
 qqq next --session worker-1
 ```
 
-Tasks start `new`. `next` claims oldest ready task as `in_progress`; `complete`
-marks it `completed`. Task 2 becomes ready after task 1 completes. Use IDs
-returned by `add` and `next` in existing queues. Run `qqq --help` or
-`qqq <command> --help` for all flags.
+`next` claims oldest ready task. `complete` frees its dependent tasks. Use IDs
+returned by `add` and `next`; examples above assume fresh DB. See `qqq --help`
+or `qqq <command> --help` for all flags.
 
-## Tasks
-
-### List and show
+## List and show
 
 ```sh
 qqq list
@@ -54,27 +52,23 @@ qqq list --watch
 qqq list --watch --json
 ```
 
-`list` shows IDs, statuses, first description lines as dependency tree. `show`
-includes full description, messages, image metadata, ownership history and
-Herdr link. Negative indexes work with `show` and `edit`, counting tasks by
-creation order across all statuses.
+`list` shows status and first description line in dependency tree. `show` adds
+full description, messages, images, ownership history and Herdr link. Negative
+indexes work with `show` and `edit`; `-1` selects newest task.
 
-`--max-completed N` keeps N most recent completions plus unfinished tasks,
-including errors. `0` hides completed tasks. Completion history sets recency;
-hidden parents make children display as roots. `--all` conflicts with explicit
-limit.
+`--max-completed N` keeps N most recent completions plus unfinished tasks;
+`0` hides completed tasks. Hidden parents display children as roots. `--all`
+bypasses configured limit; it conflicts with `--max-completed`.
 
-`--watch` prints initial list, then checks for DB commits every 250 ms. Human
-terminal output redraws; pipes, `TERM=dumb` and JSON append snapshots. Ctrl-C
-stops watching.
+`--watch` prints initial list, then refreshes after DB commits. Terminal output
+redraws; pipes, `TERM=dumb` and JSON append snapshots. Ctrl-C stops watching.
 
-Commands print text by default. Global `--json` works before or after
-subcommands. JSON lists stay flat, preserve full descriptions and `parent_id`;
-watch emits one array per line. Empty lists return `[]`; no ready task returns
-`null`. Errors use stderr (exit 1 for runtime, 2 for arguments). Disable
-terminal colors with `NO_COLOR=1` or `TERM=dumb`; pipes and JSON stay plain.
+Global `--json` works before or after commands. JSON lists stay flat, preserve
+full descriptions and `parent_id`; watch prints one array per line. Empty lists
+return `[]`; no ready task returns `null`. Errors use stderr (exit 1 for runtime,
+2 for arguments). `NO_COLOR=1` or `TERM=dumb` disables color.
 
-### Edit descriptions
+## Add and edit
 
 ```sh
 qqq add "Fix login"
@@ -83,28 +77,26 @@ qqq edit 1 --description "Updated details"
 qqq edit -1                         # edit newest task interactively
 ```
 
-Descriptions preserve whitespace and newlines; blank-only text fails. `add`
-without text and `edit` without update flags open built-in terminal editor.
-Ctrl-S saves; Esc prompts before discarding nonempty draft; Ctrl-C exits;
-Ctrl-W deletes previous word without crossing line; Ctrl-V pastes clipboard text
-or image. Large pastes collapse into placeholders, then expand on save. Ctrl-V
-needs desktop clipboard support.
+Descriptions preserve whitespace and newlines; blank-only text fails. On a
+terminal, `add` without text or `edit` without update flags opens built-in
+editor. Ctrl-S saves, Esc exits blank draft or confirms discard of nonempty
+draft, Ctrl-C exits, Ctrl-W deletes previous word on same line, Ctrl-V pastes
+clipboard text or image. Clipboard paste needs desktop clipboard support.
 
-In built-in `qqq add` editor, Shift+Up loads newest task, then older tasks by ID;
-Shift+Down moves toward newer tasks, then returns to blank new-task draft. Header
-shows selected task ID. Ctrl-S updates selected task or creates one from new
-draft, then clears editor for next task. Each save commits immediately. Esc on
-blank draft or Ctrl-C ends session; prior saves remain. JSON output returns
-array of saved tasks on exit.
+In built-in `qqq add`, Ctrl-S creates or updates task, clears editor, then waits
+for next task. Saves commit immediately; exit keeps prior saves. Shift+Up loads
+newest task, then older tasks; Shift+Down moves toward newer tasks, then blank
+draft. Header shows selected ID. JSON output returns saved tasks as array on
+exit. Exit without any save returns error.
 
-Switching away from changed text or new image asks before discarding it; N,
-Enter, or Esc keeps draft. Navigation includes completed and active tasks and
-skips deleted IDs. `--parent` applies to every newly created task; supplied
-`--image` files attach only to first successful save, whether new or existing.
-Inline add, external editor and `qqq edit` stay one-shot; they do not navigate.
+Switching from changed draft asks before discard; N, Enter, or Esc keeps it.
+Navigation includes completed and active tasks; deleted IDs are skipped.
+`--parent` applies to each new task. `--image` files attach only to first
+successful save, including when updating existing task. Inline add, external
+editor and `qqq edit` save once.
 
-Use `--edit` (`-e`) to force external editor; nonterminal interactive calls also
-need `$EDITOR`. Editor must wait until editing finishes.
+Use `--edit` (`-e`) to force `$EDITOR`; nonterminal interactive calls also need
+it. Editor command must wait until editing finishes.
 
 ```sh
 export EDITOR='vim'
@@ -112,15 +104,14 @@ qqq add --edit
 qqq edit 1 --edit --description "Prefilled draft"
 ```
 
-Editor UI uses stderr; stdout holds final result. Cancelling draft saves
-nothing; earlier batch saves remain. Inline content edits skip editor; omitted
-fields, ownership and attachments stay.
+Editor UI uses stderr; stdout holds result on exit. Cancelling draft keeps
+earlier saves. Direct edits preserve omitted fields, ownership and attachments.
 
-### Dependencies and images
+## Dependencies and images
 
-Each task has at most one parent. New child becomes claimable only when parent
-completes. Parent must exist; self-parenting and cycles are rejected. Changing
-parent affects future claims, preserving already active ownership.
+Each task has at most one parent. Child becomes ready when parent completes.
+Parent must exist; self-parenting and cycles fail. Parent changes affect future
+claims without removing active ownership.
 
 ```sh
 qqq add "Build client" --parent 1
@@ -136,14 +127,12 @@ qqq show 2
 qqq show 2 --export-image 1 --output ./exported.png
 ```
 
-Image IDs come from `show`; exported image must belong to selected task.
-Destination must not exist. Images support PNG, JPEG, GIF and WebP signatures,
-up to 20 MiB each. Signature checks do not fully validate image contents.
-Bytes are copied into DB, so source files can be removed. Pasting image paths
-or clipboard images into built-in editor also attaches them.
+Image IDs come from `show`. Export needs selected task's image ID and new output
+path. PNG, JPEG, GIF and WebP signatures supported, up to 20 MiB each; signature
+check does not fully validate file. Bytes copy into DB. Built-in editor also
+accepts pasted image paths or clipboard images.
 
-Combined description, status, parent and image updates save atomically;
-validation failures leave task unchanged.
+Description, status, parent and image updates save atomically.
 
 ## Agents and recovery
 
@@ -157,27 +146,25 @@ qqq complete 1
 qqq next --wait
 ```
 
-`--session` overrides `QQQ_SESSION`. Each owner has one active task; repeated
-`next` returns it. Concurrent workers cannot claim same task. Claims never
-expire. `--wait` waits for ready work; without it, empty queue prints
-`No ready tasks.` and exits successfully. Error tasks and blocked children stay
-out of queue.
+`--session` overrides `QQQ_SESSION`. Each owner gets one active task; repeated
+`next` returns it. Claims never expire. `--wait` blocks until work is ready;
+without it, empty queue prints `No ready tasks.` and exits successfully. Error
+tasks and blocked children stay out of queue.
 
 Without `--session` or `QQQ_SESSION`, owner discovery uses:
 
 1. Exact Herdr pane from `HERDR_PANE_ID` or `HERDR_ENV=1` (requires pane ID).
 2. Native Codex `CODEX_THREAD_ID`, then `CODEX_SESSION_ID` fallback.
-3. Unique Herdr agent whose cwd matches project root (parent of `.qqq`).
+3. Unique Herdr agent at project root (`foreground_cwd` before `cwd`).
 
-Explicit IDs and native Codex ownership work without Herdr when dispatch is
-disabled or `next --local` is used. Exact Herdr context takes precedence over
-native Codex discovery. `next --local` skips dispatch but still resolves owner.
+Explicit session IDs and native Codex ownership work without Herdr when dispatch is
+disabled or `next --local` is used. Exact Herdr context takes precedence.
+`next --local` skips dispatch, still resolves owner.
 
-Completion, release and error marking require task owner. Lookup uses original
-session token, then uniquely matching displayed `harness_session`; use
-`--harness-name` for duplicate public sessions. JSON assignment fields:
-`harness_name`, `harness_session`, `orchestrator_name`, `orchestrator_session`.
-Override flags appear in command help.
+Completion, release and error marking require owner. Use original session token
+or uniquely matching displayed `harness_session`; add `--harness-name` when
+public sessions overlap. JSON assignment fields: `harness_name`,
+`harness_session`, `orchestrator_name`, `orchestrator_session`.
 
 ### Return or retry work
 
@@ -194,11 +181,9 @@ qqq edit 1 --set-status error --reason "Missing credentials" --session worker-1
 qqq edit 1 --set-status new          # retry error task; no session required
 ```
 
-`--set-pending` equals `--set-status new`. Active tasks require owner; any local
-caller can retry error task. Error marking requires nonblank reason, clears
-assignment and saves reason as message. Error tasks stay blocked until retried.
-New and completed tasks cannot be returned to queue. Status updates skip editor;
-`--set-pending` conflicts with `--set-status` and `--edit`.
+`--set-pending` equals `--set-status new`. Active tasks require owner; error
+tasks can be retried without one. Error marking requires nonblank reason,
+clears assignment, records reason as message. Status updates skip editor.
 
 For abandoned active work, inspect task before forcing return:
 
@@ -207,17 +192,16 @@ qqq show 1
 qqq edit 1 --set-status new --force
 ```
 
-`--force` skips ownership matching and Herdr discovery for active or error tasks.
-It requires literal `--set-status new`; it cannot combine with `--set-pending`,
-`--set-status error` or `--edit`. Return/retry preserves content, dependencies,
-messages, attachments and saved Herdr link.
+`--force` skips ownership matching and Herdr discovery. It requires literal
+`--set-status new`; cannot combine with `--set-pending` or `--edit`. Return/retry
+preserves content, dependencies, messages, images and Herdr link.
 
 Session IDs coordinate local agents; they do not authenticate users. Any local
 caller can edit task content or append messages regardless of ownership.
 
 ## Config and aliases
 
-Config path: `~/.config/qqq/config.toml`, based on `HOME`.
+Config: `~/.config/qqq/config.toml` (under `HOME`).
 
 ```sh
 qqq config --list
@@ -228,18 +212,17 @@ qqq config display.max-completed 10
 qqq config --unset alias.ls
 ```
 
-Keys use TOML dotted-key syntax; quote literal dots, e.g. `'alias."with.dot"'`.
-Alias values stay strings. `herdr.next-to-new-agent` accepts booleans;
-`display.max-completed` accepts non-negative integers up to `i64::MAX`.
-Other values accept TOML literals, falling back to strings.
+Keys use TOML dotted syntax; quote literal dots: `'alias."with.dot"'`.
+Alias values are strings; `herdr.next-to-new-agent` is boolean;
+`display.max-completed` is non-negative integer. Other values accept TOML
+literals, falling back to strings.
 
-Reads do not create files. `--list` shows sorted, explicitly stored values;
-`--get` can inspect incorrectly typed settings so they can be repaired. Writes
-validate known settings, preserve comments and unknown keys, and use atomic
-replacement. `--json` returns typed values. Unsetting restores default behavior.
+Reads do not create files. `--list` shows stored values; `--get` can inspect
+invalid settings. Writes validate known settings, preserve comments and unknown
+keys. `--json` returns typed values; unset restores default.
 
 Completion limit config affects human lists only; explicit `--max-completed`
-applies to text and JSON. `--all` bypasses config. Missing limit means unlimited.
+affects text and JSON. Missing limit means unlimited.
 
 Example config:
 
@@ -254,14 +237,13 @@ done = "complete"
 bug = "add"
 ```
 
-`qqq bug "Fix login"` expands to `qqq add "Fix login"`. Extra arguments keep
-original boundaries. Alias values support quoting and other aliases; built-in
-commands take precedence. No shell expansion: variables, globs and command
-substitutions stay literal. Cycles, invalid quoting and `!` aliases are rejected.
+`qqq bug "Fix login"` expands to `qqq add "Fix login"`. Aliases support quoting
+and chains; built-in commands take precedence. No shell expansion. Cycles,
+invalid quoting and `!` aliases fail.
 
 ## Herdr
 
-Optional Herdr integration links tasks to live coding-agent panes:
+Optional Herdr integration links tasks to live agent panes:
 
 ```sh
 qqq herdr link 1
@@ -269,15 +251,13 @@ qqq herdr find 1
 qqq herdr link 1 --agent codex --agent-session session-123 --server work
 ```
 
-Automatic discovery selects exact caller pane or unique agent at project root.
-`foreground_cwd` takes precedence over `cwd`; symlinks are resolved. Ambiguous or
-missing identity fails before claiming. When agent-session hooks are absent,
-Herdr terminal ID plus agent kind supplies stable identity. Active claims retain
-saved identity as hooks appear or disappear.
+Discovery selects exact caller pane or unique agent at project root. Ambiguous
+identity fails before claim. Without agent-session hooks, terminal ID plus agent
+kind supplies identity. Active claims retain identity as hooks change.
 
-`link` stores association without transferring ownership. `find` locates current
-pane by saved identity; moved panes remain discoverable. These commands require
-Herdr CLI and running server. Explicit local `--session` claims do not auto-link.
+`link` stores association without changing owner; `find` searches live panes for
+saved link identity. Both require Herdr CLI and server. Explicit `--session`
+claims do not auto-link.
 
 To dispatch ready work into new Codex agent tab:
 
@@ -286,14 +266,14 @@ qqq config herdr.next-to-new-agent true
 qqq next
 ```
 
-Dispatch requires `HERDR_ENV=1` and `HERDR_WORKSPACE_ID`. It reuses caller's
-existing task; otherwise reserves oldest ready task, opens unfocused sibling tab
-in caller's workspace, starts agent and submits task prompt. Empty or blocked
-queues create no tabs. `qqq next --local` bypasses dispatch. Default: disabled.
+Dispatch needs `HERDR_ENV=1` and `HERDR_WORKSPACE_ID`. It reuses caller's active
+task; otherwise reserves ready task, opens sibling tab, starts agent and submits
+prompt. Empty or blocked queues create no tab. `next --local` skips dispatch.
+Default: disabled.
 
-Startup failure returns unchanged reservation to `new`; created tabs stay open.
-Prompt errors keep claim and link because delivery may have happened. Inspect
-agent before retrying or forcing recovery.
+Startup failure releases dispatch reservation; created tabs stay open. Prompt
+errors keep claim and link because delivery may have happened. Inspect agent
+before retry or forced release.
 
 ## Data
 
@@ -303,9 +283,8 @@ Keep `.qqq/` out of Git. Back up through SQLite while workers may be running:
 sqlite3 .qqq/qqq.db '.backup backup.sqlite'
 ```
 
-To move existing root-level `qqq.db` into new layout, stop all qqq workers and
-other DB writers first. From project root, before running new `qqq init`, check
-that `.qqq/qqq.db` does not already exist:
+To move old root-level `qqq.db`, stop DB writers. Before `qqq init`, check that
+`.qqq/qqq.db` does not exist. From project root:
 
 ```sh
 mkdir -p .qqq
@@ -313,13 +292,12 @@ sqlite3 qqq.db ".backup '.qqq/qqq.db'"
 qqq list # run updated CLI
 ```
 
-Check task data before removing old `qqq.db`. New CLI does not discover old
-root-level database; `qqq init` without migration creates separate empty DB.
-Existing `.qqq/` directory may hold future files such as `.qqq/images`.
+Check task data before removing old DB. New CLI does not discover root-level
+`qqq.db`; `qqq init` without migration creates separate empty DB.
 
-Compatible single-description DBs at schema versions 1–4 migrate automatically
-to version 5. Legacy `title` or `pending` schemas need manual conversion; newer
-unknown schemas are rejected. Back up before converting old data.
+Compatible DBs at schema versions 1–4 migrate to version 5. Legacy `title` or
+`pending` schemas need manual conversion; newer unknown schemas fail. Back up
+before conversion.
 
 ## Development
 
@@ -330,15 +308,13 @@ cargo clippy --locked --all-targets -- -D warnings
 cargo build --locked --release
 ```
 
-[CI](.github/workflows/ci.yml) runs checks on Ubuntu 24.04 and macOS 14, builds
-and smoke-tests release binary, then uploads `qqq-<OS>-<ARCH>` archives. Download
-artifacts from workflow run within 14 days.
+[CI](.github/workflows/ci.yml) checks Ubuntu 24.04 and macOS 14, builds release
+binary, uploads `qqq-<OS>-<ARCH>` archives (14-day retention).
 
 ### Publish to crates.io
 
-[Publish workflow](.github/workflows/publish.yml) checks pushed `v<version>` tags
-against `Cargo.toml`, runs formatting, Clippy, tests and package dry run, then
-publishes `qqq-cli`. Setup:
+[Publish workflow](.github/workflows/publish.yml) checks `v<version>` tag against
+`Cargo.toml`, runs checks and package dry run, then publishes `qqq-cli`. Setup:
 
 1. Sign in to crates.io, verify email, create token allowed to publish `qqq-cli`.
 2. Add GitHub Actions repo secret `CARGO_REGISTRY_TOKEN`.
@@ -351,8 +327,8 @@ git tag v0.1.1
 git push origin v0.1.1
 ```
 
-For manual validation, run **Publish to crates.io** with existing `tag`; leave
-`dry_run` enabled (default). No token needed. Disable it to publish unpublished
-version. Published versions cannot be overwritten.
+For manual validation, run **Publish to crates.io** with existing `tag` and
+default `dry_run=true`. Set `dry_run=false` to publish new version. Published
+versions cannot be overwritten.
 
 License: [MIT](LICENSE).
