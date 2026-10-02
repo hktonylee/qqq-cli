@@ -206,8 +206,9 @@ Shift-Up/Down selects tasks in displayed tree order, then blank draft. Ctrl-S
 updates selected task or creates new task, keeping saved task open for further
 edits or task actions. Shift-Down past last displayed task opens blank draft. Esc/Ctrl-C in
 selected task returns to blank draft; Esc asks before discarding unsaved edits.
-Press again in blank draft to exit. Esc in nonempty new draft asks before discard;
-Ctrl-C exits from new draft. Ctrl-V or terminal paste inserts text; pasting
+Press again in blank draft to exit. Esc/Ctrl-C in dirty new draft asks before
+discard; `y` exits without saving, `n` keeps draft for editing or Ctrl-S save.
+Repeated Ctrl-C keeps confirmation open. Ctrl-V or terminal paste inserts text; pasting
 image file path attaches image. Saves commit immediately. TUI needs terminal
 and writes no stdout, including with `--json`.
 

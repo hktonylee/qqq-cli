@@ -767,6 +767,16 @@ fn compose_inner(
             Event::Key(key) if key.kind != KeyEventKind::Release => {
                 let control = key.modifiers.contains(KeyModifiers::CONTROL);
                 let cancel_key = control && key.code == KeyCode::Char('c');
+                if dashboard
+                    && target_id.is_none()
+                    && cancel_key
+                    && draft.is_dirty_against(&baseline)
+                {
+                    confirmation = Some(Confirmation::Exit);
+                    action_ui = None;
+                    filter_focused = false;
+                    continue;
+                }
                 let editor_escape = key.code == KeyCode::Esc
                     && confirmation.is_none()
                     && action_ui.is_none()

@@ -76,6 +76,15 @@ fn tui_dashboard_escape_and_ctrl_c_return_to_new_before_exit() {
 }
 
 #[test]
+fn tui_dashboard_ctrl_c_confirms_dirty_new_drafts() {
+    dashboard_scenario("ctrl_c_new_keep");
+    dashboard_scenario("ctrl_c_new_filter");
+    dashboard_scenario("ctrl_c_new_discard");
+    dashboard_scenario("ctrl_c_new_image");
+    dashboard_scenario("ctrl_c_new_whitespace");
+}
+
+#[test]
 fn tui_dashboard_refreshes_external_commits_without_keyboard_input() {
     dashboard_scenario("live_refresh");
 }

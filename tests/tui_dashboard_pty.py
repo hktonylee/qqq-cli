@@ -274,7 +274,40 @@ with tempfile.TemporaryDirectory(prefix="qqq-dashboard-test-") as folder:
                 assert "Hidden" not in visible.text(), visible.text()
             else:
                 assert "[archived] Hidden" in visible.text(), visible.text()
-        if scenario == "live_refresh":
+        if scenario.startswith("ctrl_c_new_"):
+            initial_tasks = cli("list")
+            if scenario == "ctrl_c_new_image":
+                image_path = Path(folder) / "unsaved.png"
+                image_path.write_bytes(base64.b64decode(
+                    "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aGD8AAAAASUVORK5CYII="
+                ))
+                send(b"\x1b[200~" + str(image_path).encode() + b"\x1b[201~")
+                wait_visible(lambda: "[Image #1: unsaved.png]" in visible.text())
+            else:
+                send(b"   " if scenario == "ctrl_c_new_whitespace" else b"Unsaved draft")
+                wait_visible(lambda: visible.x > 0 and visible.y == 9)
+            if scenario == "ctrl_c_new_filter":
+                send(CTRL_SLASH + b"first")
+                wait_visible(lambda: visible.text().splitlines()[1].strip() == "Filter: first")
+            clear_capture()
+            send(b"\x03")
+            read_until(b"Discard draft? (y/N)")
+            assert cli("list") == initial_tasks
+            assert child.poll() is None
+            settle()
+            clear_capture()
+            send(b"\x03")
+            wait_visible(lambda: bool(screen)
+                         and visible.text().splitlines()[-1].startswith("Discard draft? (y/N)"))
+            assert child.poll() is None
+            if scenario in ("ctrl_c_new_keep", "ctrl_c_new_filter"):
+                send(b"n")
+                wait_visible(lambda: visible.text().splitlines()[-1].startswith("Ctrl-S save")
+                             and visible.text().splitlines()[9].startswith("Unsaved draft"))
+                send(b"\x13")
+                wait_visible(lambda: "task #3 (" in visible.text().splitlines()[8])
+                assert cli("show", "3")["task"]["description"] == "Unsaved draft"
+        elif scenario == "live_refresh":
             settle()
             clear_capture()
             cli("add", "External task")
@@ -1101,7 +1134,11 @@ with tempfile.TemporaryDirectory(prefix="qqq-dashboard-test-") as folder:
             read_until(b"Saved #3")
             assert cli("show", "3")["task"]["description"] == "Draft"
         if scenario != "wheel_error":
-            send(b"\x1b" if scenario in ("empty", "empty_json", "workflow_empty", "escape_selected", "escape_dirty_selected") else b"\x03\x03")
+            if scenario in ("ctrl_c_new_discard", "ctrl_c_new_image", "ctrl_c_new_whitespace"):
+                send(b"y")
+                assert cli("list") == initial_tasks
+            else:
+                send(b"\x1b" if scenario in ("empty", "empty_json", "workflow_empty", "escape_selected", "escape_dirty_selected") else b"\x03\x03y")
         deadline = time.monotonic() + 5
         while child.poll() is None:
             assert time.monotonic() < deadline, f"TUI failed to exit: {screen[-1000:]!r}\n{visible.text()}"
