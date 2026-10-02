@@ -376,7 +376,7 @@ print(json.dumps({"result": result}))
             read_until(b"38;5;81")
             clear_capture()
             send(b"\x1b[1;2A")
-            read_until(b"48;5;24")
+            read_until(b"48;5;17")
             settle()
             assert b"\x1b[4m" not in screen, screen[-2000:]
             assert b"48;5;81" not in screen, screen[-2000:]

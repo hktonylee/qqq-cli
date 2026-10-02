@@ -11,7 +11,7 @@ use unicode_segmentation::UnicodeSegmentation;
 use unicode_width::UnicodeWidthStr;
 
 const ACCENT: Color = Color::Indexed(81);
-const SELECTION_BG: Color = Color::Indexed(24);
+const SELECTION_BG: Color = Color::Indexed(17);
 const BODY_FG: Color = Color::Indexed(252);
 const BODY_BG: Color = Color::Indexed(236);
 
