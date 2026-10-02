@@ -45,6 +45,7 @@ or `qqq <command> --help` for all flags.
 
 ```sh
 qqq list
+qqq list --oneline
 qqq show 1
 qqq show -1                         # newest task; -2 is second newest
 qqq list --max-completed 10
@@ -62,6 +63,9 @@ terminal with a known width, it shows full descriptions with wrapped, aligned
 continuation lines; piped output keeps first-line previews. `show` adds
 messages, images, ownership history and Herdr link. Negative indexes work with
 `show`, `edit`, `archive`, `unarchive`, and `reopen`; `-1` selects newest task.
+
+`--oneline` limits terminal and watch views to each description's first line.
+JSON and search still use full descriptions.
 
 `--max-completed N` keeps N most recent completions plus unfinished tasks;
 `0` hides completed tasks. Hidden parents display children as roots. `--all`

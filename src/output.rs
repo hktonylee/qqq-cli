@@ -16,6 +16,7 @@ pub enum Format {
     Task,
     Tasks,
     PriorityTasks,
+    OnelinePriorityTasks,
     Detail,
     Message,
     Link,
@@ -34,6 +35,7 @@ impl From<&Commands> for Format {
             Commands::Config { value: Some(_), .. } => Self::ConfigSet,
             Commands::Config { .. } => Self::ConfigGet,
             Commands::Init => Self::Database,
+            Commands::List { oneline: true, .. } => Self::OnelinePriorityTasks,
             Commands::List { .. } => Self::PriorityTasks,
             Commands::Show { .. } => Self::Detail,
             Commands::Message { .. } => Self::Message,
@@ -260,7 +262,13 @@ fn link(value: &Value, color: bool) -> String {
     )
 }
 
-fn task_tree(tasks: &[Value], color: bool, columns: Option<usize>, show_priority: bool) -> String {
+fn task_tree(
+    tasks: &[Value],
+    color: bool,
+    columns: Option<usize>,
+    show_priority: bool,
+    oneline: bool,
+) -> String {
     if tasks.is_empty() {
         return "No tasks yet.".to_owned();
     }
@@ -328,13 +336,18 @@ fn task_tree(tasks: &[Value], color: bool, columns: Option<usize>, show_priority
         if task["archived"].as_bool() == Some(true) {
             description = format!("[archived] {description}");
         }
+        let display = if oneline {
+            description.lines().next().unwrap_or("")
+        } else {
+            &description
+        };
         let available = columns
             .and_then(|width| width.checked_sub(first_prefix.width()))
             .filter(|&width| width > 0);
         let row_color = status_color(task, color);
         if let Some(width) = available {
             let mut first = true;
-            for line in description.lines() {
+            for line in display.lines() {
                 for part in wrap_line(&clean(line), width) {
                     let padding = if first {
                         &first_prefix
@@ -349,7 +362,7 @@ fn task_tree(tasks: &[Value], color: bool, columns: Option<usize>, show_priority
                 lines.push(styled(&first_prefix, row_color));
             }
         } else {
-            let first_line = clean(description.lines().next().unwrap_or(""));
+            let first_line = clean(display.lines().next().unwrap_or(""));
             lines.push(styled(&format!("{first_prefix}{first_line}"), row_color));
         }
         for (position, &child) in children[index].iter().enumerate().rev() {
@@ -459,11 +472,20 @@ pub fn render(format: Format, value: &Value, color: bool, columns: Option<usize>
             color,
             columns,
             false,
+            false,
         ),
         Format::PriorityTasks => task_tree(
             value.as_array().expect("task list is an array"),
             color,
             columns,
+            true,
+            false,
+        ),
+        Format::OnelinePriorityTasks => task_tree(
+            value.as_array().expect("task list is an array"),
+            color,
+            columns,
+            true,
             true,
         ),
         Format::Detail => detail::render(value, color),

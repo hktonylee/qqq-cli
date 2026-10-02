@@ -103,7 +103,7 @@ enum Commands {
         #[arg(long)]
         include_archived: bool,
     },
-    /// List first description lines as a dependency tree; JSON preserves whole text.
+    /// List tasks as a dependency tree; JSON preserves whole text.
     List {
         /// Include archived tasks; default list hides them.
         #[arg(long)]
@@ -120,6 +120,9 @@ enum Commands {
         /// Keep watching database commits and refresh the task list. Ctrl-C stops.
         #[arg(long)]
         watch: bool,
+        /// Show first description line only in human terminal output.
+        #[arg(long)]
+        oneline: bool,
         /// Show all completed tasks, bypassing display.max-completed.
         #[arg(short = 'a', long, conflicts_with = "max_completed")]
         all: bool,
@@ -609,6 +612,7 @@ fn run() -> Result<(Option<String>, bool)> {
         watch: true,
         max_completed,
         include_archived,
+        oneline,
         query,
         statuses,
         ..
@@ -618,6 +622,7 @@ fn run() -> Result<(Option<String>, bool)> {
             cli.json,
             max_completed.or(display_limit),
             *include_archived,
+            *oneline,
             display_limit.is_some(),
             query.as_deref(),
             statuses,
@@ -644,7 +649,9 @@ fn run() -> Result<(Option<String>, bool)> {
             let color = output::color_enabled(terminal);
             let columns = if matches!(
                 &format,
-                output::Format::Tasks | output::Format::PriorityTasks
+                output::Format::Tasks
+                    | output::Format::PriorityTasks
+                    | output::Format::OnelinePriorityTasks
             ) {
                 output::terminal_columns(terminal)
             } else {

@@ -15,6 +15,7 @@ pub fn run(
     json_output: bool,
     max_completed: Option<i64>,
     include_archived: bool,
+    oneline: bool,
     display_limited: bool,
     query: Option<&str>,
     statuses: &[ListStatus],
@@ -42,7 +43,11 @@ pub fn run(
             "No tasks to display.".to_owned()
         } else {
             output::render(
-                Format::PriorityTasks,
+                if oneline {
+                    Format::OnelinePriorityTasks
+                } else {
+                    Format::PriorityTasks
+                },
                 &tasks,
                 color,
                 output::terminal_columns(stdout_terminal),
