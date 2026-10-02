@@ -135,6 +135,7 @@ fn tui_dashboard_escape_and_ctrl_c_return_to_new_before_exit() {
     dashboard_scenario("ctrl_c_dirty_selected_filter_editor");
     dashboard_scenario("ctrl_c_dirty_selected_filter_focused");
     dashboard_scenario("ctrl_c_selected_filter_menu");
+    dashboard_scenario("ctrl_c_filter_empty");
 }
 
 #[test]

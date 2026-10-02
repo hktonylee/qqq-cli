@@ -227,7 +227,7 @@ further edits or task actions. Loaded and saved tasks place cursor at descriptio
 end; editor scrolls to keep cursor visible. Set `tui.after_save_new` to `open_new`
 to clear editor after creating task; existing-task edits stay open. Shift-Down past last
 displayed task opens blank draft. Esc/Ctrl-C in
-selected task returns to blank draft; Esc asks before discarding unsaved edits.
+selected task returns to blank draft; both ask before discarding unsaved edits.
 Press Esc/Ctrl-C again in blank draft to exit. Esc/Ctrl-C in dirty new draft asks before
 discard; `y` exits without saving, `n` keeps draft for editing or Ctrl-S save.
 Repeated Ctrl-C keeps confirmation open. Ctrl-V or terminal paste inserts text; pasting

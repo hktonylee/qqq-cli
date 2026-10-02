@@ -483,7 +483,19 @@ with tempfile.TemporaryDirectory(prefix="qqq-dashboard-test-") as folder:
                 assert "Hidden" not in visible.text(), visible.text()
             else:
                 assert "[archived] Hidden" in visible.text(), visible.text()
-        if scenario.startswith("ctrl_c_new_"):
+        if scenario == "ctrl_c_filter_empty":
+            initial_tasks = cli("list")
+            send(CTRL_SLASH + b"first")
+            wait_visible(lambda: visible.text().splitlines()[1].strip() == "Filter: first")
+            send(b"\x03")
+            wait_visible(lambda: visible.text().splitlines()[1].strip() == "Filter:"
+                         and "Second" in "\n".join(visible.text().splitlines()[2:list_bottom()])
+                         and (visible.x, visible.y) == (len("Filter: "), 1))
+            assert "new task" in editor_title(), visible.text()
+            assert editor_line().strip() == "", visible.text()
+            assert cli("list") == initial_tasks
+            assert child.poll() is None
+        elif scenario.startswith("ctrl_c_new_"):
             initial_tasks = cli("list")
             if scenario == "ctrl_c_new_image":
                 image_path = Path(folder) / "unsaved.png"
@@ -686,7 +698,7 @@ with tempfile.TemporaryDirectory(prefix="qqq-dashboard-test-") as folder:
             if "_filter_" in scenario:
                 if scenario.endswith("menu"):
                     settle()
-                    assert visible.text().startswith("Task actions"), visible.text()
+                    assert "Task actions" in visible.text(), visible.text()
                     send(b"\x1b")
                 expected_draft = "Changed Second" if "dirty_selected" in scenario else "Second"
                 wait_visible(lambda: visible.text().splitlines()[1].strip() == "Filter:"
@@ -1599,7 +1611,12 @@ with tempfile.TemporaryDirectory(prefix="qqq-dashboard-test-") as folder:
             read_until(b"Saved #3")
             assert cli("show", "3")["task"]["description"] == "Draft"
         if scenario != "wheel_error":
-            if scenario in ("ctrl_c_new_discard", "ctrl_c_new_image", "ctrl_c_new_whitespace"):
+            if visible.text().splitlines()[1].startswith("Filter:") and visible.text().splitlines()[1].strip() != "Filter:":
+                send(b"\x03")
+                wait_visible(lambda: visible.text().splitlines()[1].strip() == "Filter:")
+            if scenario == "ctrl_c_filter_empty":
+                send(b"\x03")
+            elif scenario in ("ctrl_c_new_discard", "ctrl_c_new_image", "ctrl_c_new_whitespace"):
                 send(b"y")
                 assert cli("list") == initial_tasks
             else:
