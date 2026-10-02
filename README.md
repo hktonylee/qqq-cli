@@ -204,8 +204,10 @@ qqq tui
 Upper panel lists unarchived tasks by default; lower panel edits current task.
 Selection underlines task text; plain mode uses `>` marker.
 Shift-Up/Down selects tasks in displayed tree order, then blank draft. Ctrl-S
-updates selected task or creates new task, keeping saved task open for further
-edits or task actions. Shift-Down past last displayed task opens blank draft. Esc/Ctrl-C in
+updates selected task or creates new task. By default, saved task stays open for
+further edits or task actions. Set `tui.after_save_new` to `open_new` to clear
+editor after creating task; existing-task edits stay open. Shift-Down past last
+displayed task opens blank draft. Esc/Ctrl-C in
 selected task returns to blank draft; Esc asks before discarding unsaved edits.
 Press again in blank draft to exit. Esc/Ctrl-C in dirty new draft asks before
 discard; `y` exits without saving, `n` keeps draft for editing or Ctrl-S save.
@@ -346,13 +348,15 @@ qqq config alias.ls 'list --watch'
 qqq config --get alias.ls
 qqq config alias.ls                 # same as --get
 qqq config display.max-completed 10
+qqq config tui.after_save_new open_new
 qqq config --unset alias.ls
 ```
 
 Keys use TOML dotted syntax; quote literal dots: `'alias."with.dot"'`.
 Alias values are strings; `herdr.next-to-new-agent` is boolean;
-`display.max-completed` is non-negative integer. Other values accept TOML
-literals, falling back to strings.
+`display.max-completed` is non-negative integer. `tui.after_save_new` accepts
+`open_saved` (default) or `open_new`, loaded when `qqq tui` starts. Other values
+accept TOML literals, falling back to strings.
 
 Reads do not create files. `--list` shows stored values; `--get` can inspect
 invalid settings. Writes validate known settings, preserve comments and unknown
@@ -366,6 +370,9 @@ Example config:
 ```toml
 [display]
 max-completed = 10
+
+[tui]
+after_save_new = "open_saved"
 
 [alias]
 ls = "list"

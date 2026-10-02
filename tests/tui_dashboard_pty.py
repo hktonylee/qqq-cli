@@ -102,6 +102,10 @@ with tempfile.TemporaryDirectory(prefix="qqq-dashboard-test-") as folder:
         return json.loads(result.stdout)
 
     cli("init")
+    if scenario.startswith("after_save_"):
+        cli("config", "tui.after_save_new", "open_saved" if scenario == "after_save_open_saved" else "open_new")
+        if scenario == "after_save_default_restored":
+            cli("config", "--unset", "tui.after_save_new")
     if scenario == "workflow_empty":
         pass
     elif scenario == "workflow_status":
@@ -451,7 +455,7 @@ with tempfile.TemporaryDirectory(prefix="qqq-dashboard-test-") as folder:
                          and visible.text().splitlines()[9].strip() == "")
             assert cli("list") == initial_tasks
             assert child.poll() is None
-        elif scenario == "save_selected":
+        elif scenario in ("save_selected", "after_save_open_saved", "after_save_default_restored"):
             send(b"Created\x13")
             wait_visible(lambda: "task #3 (New)" in visible.text().splitlines()[8]
                          and visible.text().splitlines()[9].startswith("Created"))
@@ -464,6 +468,37 @@ with tempfile.TemporaryDirectory(prefix="qqq-dashboard-test-") as folder:
             assert cli("show", "3")["task"]["description"] == "Created updated"
             send(b"\x1b[1;2B")
             wait_visible(lambda: "new task" in visible.text().splitlines()[8])
+        elif scenario in ("after_save_open_new", "after_save_open_new_error"):
+            if scenario == "after_save_open_new_error":
+                with sqlite3.connect(os.path.join(folder, ".qqq", "qqq.db")) as db:
+                    db.execute("CREATE TRIGGER reject_new BEFORE INSERT ON tasks BEGIN SELECT RAISE(ABORT, 'New task rejected'); END")
+            send(b"Created\x13")
+            if scenario == "after_save_open_new_error":
+                wait_visible(lambda: "New task rejected" in visible.text().splitlines()[-1]
+                             and visible.text().splitlines()[9].startswith("Created"))
+                assert len(cli("list")) == 2
+                with sqlite3.connect(os.path.join(folder, ".qqq", "qqq.db")) as db:
+                    db.execute("DROP TRIGGER reject_new")
+                send(b"\x13")
+            wait_visible(lambda: "new task" in visible.text().splitlines()[8]
+                         and visible.text().splitlines()[9].strip() == ""
+                         and visible.text().splitlines()[-1].startswith("Saved #3. New task")
+                         and (visible.x, visible.y) == (0, 9))
+            assert cli("show", "3")["task"]["description"] == "Created"
+            send(b"Next\x13")
+            wait_visible(lambda: "new task" in visible.text().splitlines()[8]
+                         and visible.text().splitlines()[9].strip() == ""
+                         and visible.text().splitlines()[-1].startswith("Saved #4. New task"))
+            assert cli("show", "4")["task"]["description"] == "Next"
+            send(b"\x1b[1;2A")
+            wait_visible(lambda: "task #4 (New)" in visible.text().splitlines()[8])
+            send(b"\x05 updated\x13")
+            wait_visible(lambda: "task #4 (New)" in visible.text().splitlines()[8]
+                         and visible.text().splitlines()[9].startswith("Next updated")
+                         and visible.text().splitlines()[-1].startswith("Saved #4")
+                         and (visible.x, visible.y) == (0, 9))
+            assert len(cli("list")) == 4
+            assert cli("show", "4")["task"]["description"] == "Next updated"
         elif scenario == "workflow":
             initial_tasks = cli("list")
             clear_capture()

@@ -4,6 +4,7 @@ pub mod draft;
 mod panel;
 mod render;
 
+use crate::config::AfterSaveNew;
 use anyhow::{Result, bail, ensure};
 use crossterm::{
     cursor::Show,
@@ -342,6 +343,7 @@ enum Mode<'a, 'b> {
         action: Option<&'b mut ActionHandler<'b>>,
         dashboard: bool,
         include_archived: bool,
+        after_save_new: AfterSaveNew,
     },
 }
 type ActionHandler<'a> = dyn FnMut(&mut crate::db::Db, TaskAction) -> Result<crate::db::Task> + 'a;
@@ -404,6 +406,7 @@ pub fn compose_continuously(
             action: None,
             dashboard: false,
             include_archived: false,
+            after_save_new: AfterSaveNew::OpenNew,
         },
         None,
     )
@@ -412,6 +415,7 @@ pub fn compose_continuously(
 pub fn compose_dashboard(
     db: &mut crate::db::Db,
     include_archived: bool,
+    after_save_new: AfterSaveNew,
     save: &mut dyn FnMut(&mut crate::db::Db, Outcome) -> Result<i64>,
     action: &mut ActionHandler<'_>,
 ) -> Result<()> {
@@ -423,6 +427,7 @@ pub fn compose_dashboard(
             action: Some(action),
             dashboard: true,
             include_archived,
+            after_save_new,
         },
         None,
     )
@@ -447,6 +452,10 @@ fn compose_inner(
             ..
         }
     );
+    let after_save_new = match &mode {
+        Mode::Continuous { after_save_new, .. } => *after_save_new,
+        Mode::Single(_) => AfterSaveNew::default(),
+    };
     let terminal = TerminalGuard::enter(dashboard)?;
     let mut dashboard_terminal = if dashboard {
         Some(Terminal::new(CrosstermBackend::new(io::stderr()))?)
@@ -1165,6 +1174,9 @@ fn compose_inner(
                     match key.code {
                         KeyCode::Char('s') => match draft.finish() {
                             Ok(composition) => {
+                                let keep_saved = dashboard
+                                    && (target_id.is_some()
+                                        || after_save_new == AfterSaveNew::OpenSaved);
                                 let outcome = Outcome {
                                     composition,
                                     target_id,
@@ -1173,7 +1185,7 @@ fn compose_inner(
                                     Mode::Single(_) => return Ok(Some(outcome)),
                                     Mode::Continuous { db, save, .. } => match save(db, outcome)
                                         .and_then(|id| {
-                                            let target = if dashboard {
+                                            let target = if keep_saved {
                                                 let task = db.task(id)?;
                                                 task_target(db, id, task.description, task.status)?
                                             } else {
@@ -1193,7 +1205,7 @@ fn compose_inner(
                                             );
                                             list_follow_selected = true;
                                             editor_follow_cursor = true;
-                                            message = if dashboard {
+                                            message = if keep_saved {
                                                 format!("Saved #{id}")
                                             } else {
                                                 format!("Saved #{id}. New task")

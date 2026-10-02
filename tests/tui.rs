@@ -68,6 +68,18 @@ fn tui_dashboard_save_keeps_new_task_open() {
 }
 
 #[test]
+fn tui_dashboard_after_save_new_config_controls_new_tasks_only() {
+    dashboard_scenario("after_save_open_saved");
+    dashboard_scenario("after_save_open_new");
+    dashboard_scenario("after_save_default_restored");
+}
+
+#[test]
+fn tui_dashboard_after_save_open_new_preserves_failed_draft() {
+    dashboard_scenario("after_save_open_new_error");
+}
+
+#[test]
 fn tui_dashboard_escape_and_ctrl_c_return_to_new_before_exit() {
     dashboard_scenario("escape_selected");
     dashboard_scenario("ctrl_c_selected");

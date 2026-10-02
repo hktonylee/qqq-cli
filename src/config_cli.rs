@@ -170,6 +170,7 @@ fn mutate(path: &Path, key: &str, keys: &[Key], value: Option<&str>) -> Result<V
     if let Some(limit) = display.display.max_completed {
         i64::try_from(limit).context("display.max-completed is too large")?;
     }
+    toml::from_str::<config::TuiConfig>(&content).context("Invalid TUI config value")?;
     let result = if setting {
         lookup(&content, key, keys)?
     } else {

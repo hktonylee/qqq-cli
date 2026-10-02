@@ -360,9 +360,11 @@ fn execute(cli: Cli, display_limit: Option<i64>) -> Result<Value> {
             }
         }
         Commands::Tui { include_archived } => {
+            let settings = config::load_tui()?;
             tui::compose_dashboard(
                 &mut db,
                 include_archived,
+                settings.tui.after_save_new,
                 &mut |db, outcome| {
                     let task =
                         db.save_composition(outcome.target_id, None, &outcome.composition)?;

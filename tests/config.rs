@@ -283,6 +283,51 @@ fn config_validates_display_setting_and_applies_it_to_human_lists() {
     );
 }
 
+#[test]
+fn config_validates_tui_after_save_new_and_preserves_invalid_edits() {
+    let p = UserConfig::new();
+    for value in ["open_saved", "open_new"] {
+        assert_eq!(
+            p.ok(&["config", "tui.after_save_new", value]),
+            json!({"key":"tui.after_save_new","value":value})
+        );
+        assert_eq!(p.ok(&["config", "--get", "tui.after_save_new"]), value);
+    }
+    let before = fs::read(p.path()).unwrap();
+    for value in ["other", "false", "1", "['open_new']", "'OPEN_NEW'"] {
+        let out = p.run(&["config", "tui.after_save_new", value]);
+        assert_eq!(out.status.code(), Some(1), "{value}");
+        assert!(out.stdout.is_empty());
+        assert_eq!(fs::read(p.path()).unwrap(), before, "{value}");
+    }
+    p.ok(&["config", "--unset", "tui.after_save_new"]);
+    assert!(
+        !p.run(&["config", "--get", "tui.after_save_new"])
+            .status
+            .success()
+    );
+    assert!(!p.home.path().join(".qqq/qqq.db").exists());
+}
+
+#[test]
+fn invalid_tui_config_fails_before_terminal_entry_and_keeps_other_sections_independent() {
+    let p = UserConfig::new();
+    p.ok(&["init"]);
+    p.write("[tui]\nafter_save_new = 'unknown'\n[alias]\nls = 'list'\n");
+    assert_eq!(p.ok(&["config", "--get", "tui.after_save_new"]), "unknown");
+    assert_eq!(p.ok(&["ls"]), json!([]));
+    assert_eq!(p.ok(&["list"]), json!([]));
+    let out = p.run(&["tui"]);
+    assert_eq!(out.status.code(), Some(1));
+    assert!(out.stdout.is_empty());
+    let error = String::from_utf8(out.stderr).unwrap();
+    assert!(
+        error.contains("open_saved") && error.contains("open_new"),
+        "{error}"
+    );
+    assert!(!error.contains('\u{1b}'));
+}
+
 #[cfg(unix)]
 #[test]
 fn config_updates_preserve_symlink_and_target_permissions() {

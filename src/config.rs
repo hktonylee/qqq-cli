@@ -28,6 +28,26 @@ pub struct Display {
     pub max_completed: Option<u64>,
 }
 
+#[derive(Default, Deserialize)]
+pub struct TuiConfig {
+    #[serde(default)]
+    pub tui: Tui,
+}
+
+#[derive(Default, Deserialize)]
+pub struct Tui {
+    #[serde(default)]
+    pub after_save_new: AfterSaveNew,
+}
+
+#[derive(Clone, Copy, Default, Deserialize, Eq, PartialEq)]
+#[serde(rename_all = "snake_case")]
+pub enum AfterSaveNew {
+    #[default]
+    OpenSaved,
+    OpenNew,
+}
+
 pub fn path() -> Option<PathBuf> {
     std::env::var_os("HOME")
         .filter(|home| !home.is_empty())
@@ -40,8 +60,11 @@ pub fn load() -> Result<Config> {
 pub fn load_display() -> Result<DisplayConfig> {
     load_section()
 }
+pub fn load_tui() -> Result<TuiConfig> {
+    load_section()
+}
 
-// Display settings are independent of alias/Herdr settings.
+// Commands load their own settings independently of unrelated sections.
 fn load_section<T: Default + DeserializeOwned>() -> Result<T> {
     let Some(path) = path() else {
         return Ok(T::default());
