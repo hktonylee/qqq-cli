@@ -158,26 +158,36 @@ impl Draft {
     pub fn fragments(&self) -> Vec<String> {
         self.atoms.iter().map(Atom::label).collect()
     }
-    pub fn finish(&self) -> Result<Composition> {
+    pub fn is_dirty_against(&self, baseline: &str) -> bool {
+        let contents = self.contents();
+        contents.description != baseline || !contents.images.is_empty()
+    }
+    fn contents(&self) -> Composition {
         let mut text = String::new();
         let mut images = Vec::new();
         for atom in &self.atoms {
             match atom {
                 Atom::Text(value) | Atom::Paste { text: value, .. } => text.push_str(value),
                 Atom::Image { input, .. } => {
-                    input.media_type()?;
                     text.push_str(&format!("[Image: {}]", input.name));
                     images.push(input.clone());
                 }
             }
         }
-        ensure!(
-            !text.trim().is_empty(),
-            "Task description cannot be empty; task not saved"
-        );
-        Ok(Composition {
+        Composition {
             description: text,
             images,
-        })
+        }
+    }
+    pub fn finish(&self) -> Result<Composition> {
+        let contents = self.contents();
+        for image in &contents.images {
+            image.media_type()?;
+        }
+        ensure!(
+            !contents.description.trim().is_empty(),
+            "Task description cannot be empty; task not saved"
+        );
+        Ok(contents)
     }
 }

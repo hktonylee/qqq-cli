@@ -9,6 +9,32 @@ use draft::Draft;
 use images::ImageInput;
 
 #[test]
+fn dirty_check_ignores_cursor_motion_and_reverted_edits() {
+    let mut draft = Draft::new("Saved");
+    assert!(!draft.is_dirty_against("Saved"));
+    draft.left();
+    assert!(!draft.is_dirty_against("Saved"));
+    draft.insert("!");
+    assert!(draft.is_dirty_against("Saved"));
+    draft.backspace();
+    assert!(!draft.is_dirty_against("Saved"));
+}
+
+#[test]
+fn dirty_check_tracks_new_image_until_removed() {
+    let mut draft = Draft::new("Saved");
+    draft
+        .image(ImageInput {
+            name: "x.png".into(),
+            data: b"\x89PNG\r\n\x1a\nbytes".to_vec(),
+        })
+        .unwrap();
+    assert!(draft.is_dirty_against("Saved"));
+    draft.backspace();
+    assert!(!draft.is_dirty_against("Saved"));
+}
+
+#[test]
 fn whole_body_seed_and_paste_preserve_short_and_large_line_endings() {
     for text in [
         "First\r\nSecond\rThird\n".to_owned(),
