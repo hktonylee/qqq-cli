@@ -83,7 +83,8 @@ fn blank_draft_keeps_details_pane_and_editor_position() {
         .unwrap();
     let buffer = terminal.backend().buffer();
     assert!(line(buffer, 8).starts_with("Select task to view details."));
-    assert!(line(buffer, 12).starts_with("---"));
+    assert_eq!(line(buffer, 7), "─".repeat(72));
+    assert_eq!(line(buffer, 12), "─".repeat(72));
     assert!(line(buffer, 13).starts_with("Editor"));
     assert!(line(buffer, 14).starts_with("Draft"));
     assert_eq!(
@@ -145,7 +146,8 @@ fn selected_task_renders_details_between_list_and_editor() {
     assert!(line(buffer, 3).contains("Selected"));
     assert!(line(buffer, 8).starts_with("Task #1"));
     assert!(line(buffer, 11).starts_with("Latest message"));
-    assert!(line(buffer, 12).starts_with("---"));
+    assert_eq!(line(buffer, 7), "─".repeat(72));
+    assert_eq!(line(buffer, 12), "─".repeat(72));
     assert!(line(buffer, 13).starts_with("Editor"));
     assert!(line(buffer, 14).starts_with("Dirty draft"));
     assert_eq!(

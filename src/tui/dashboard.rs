@@ -269,7 +269,7 @@ fn details(frame: &mut Frame<'_>, area: Rect, view: DetailsView<'_>, color: bool
             Style::default()
         };
         frame.render_widget(
-            Paragraph::new("-".repeat(area.width.into())).style(style),
+            Paragraph::new("─".repeat(area.width.into())).style(style),
             Rect::new(area.x, area.y + area.height - 1, area.width, 1),
         );
     }
@@ -358,7 +358,7 @@ pub fn draw(
         Style::default()
     };
     frame.render_widget(
-        Paragraph::new("-".repeat(list.width.into())).style(separator_style),
+        Paragraph::new("─".repeat(list.width.into())).style(separator_style),
         Rect::new(list.x, list.y + list.height - 1, list.width, 1),
     );
     let empty_details = ["Select task to view details.".to_owned()];

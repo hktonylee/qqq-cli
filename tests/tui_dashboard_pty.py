@@ -257,7 +257,7 @@ with tempfile.TemporaryDirectory(prefix="qqq-dashboard-test-") as folder:
 
     def list_bottom():
         return next((index for index, row in enumerate(visible.text().splitlines())
-                     if row and set(row) == {"-"}), 0)
+                     if row and set(row) == {"─"}), 0)
 
     def editor_row():
         return next((index for index, row in enumerate(visible.text().splitlines())
