@@ -52,6 +52,7 @@ qqq list --all                      # bypass configured completion limit
 qqq list --query "parser error"     # search full descriptions, ignoring case
 qqq list --status new --status error
 qqq list --query "parser" --status in_progress --all
+qqq list --filter 'like(task_name, "%auth%") and priority > 0'
 qqq list --watch
 qqq list --watch --json
 qqq list --include-archived
@@ -78,6 +79,12 @@ completed tasks. Visible ancestors of matches appear as `[context]` rows even
 when they do not match filters. JSON stays flat and marks those ancestors with
 `context_only: true`; direct matches keep existing task fields. Empty filtered
 results return `[]` in JSON or `No matching tasks.` in human output.
+
+`list --filter EXPR` and `next --filter EXPR` compile a typed Luau expression
+to SQLite with bound values. List filters combine with query/status and retain
+visible ancestor context. See [filter guide](docs/filter.md),
+[default variables](docs/filter-variables.md),
+[SQLite functions](docs/filter-functions.md).
 
 `--watch` prints initial list, then refreshes after DB commits. Terminal output
 redraws; pipes, `TERM=dumb` and JSON append snapshots. Ctrl-C stops watching.
@@ -297,6 +304,10 @@ qqq next --wait
 `next` returns it. Claims never expire. `--wait` blocks until work is ready;
 without it, empty queue prints `No ready tasks.` and exits successfully. Error
 tasks and blocked children stay out of queue.
+
+`next --filter 'priority >= 5'` selects matching new candidates using same
+priority/readiness rules. Existing owned task still returns regardless of filter.
+Combine with `--wait` or Herdr dispatch; no matching ready candidate yields no claim.
 
 Without `--session` or `QQQ_SESSION`, owner discovery uses:
 

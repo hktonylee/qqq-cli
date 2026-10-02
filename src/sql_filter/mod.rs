@@ -63,7 +63,7 @@ pub fn compile(source: &str) -> Result<CompiledFilter> {
 fn compile_inner(source: &str) -> Result<CompiledFilter> {
     ensure!(!source.trim().is_empty(), "expression is empty");
     ensure!(source.len() <= 16_384, "expression exceeds 16 KiB");
-    // Bound recursive parser work first; comments/strings count as single tokens.
+    // Bound recursive parser work first; comments are excluded, strings count once.
     let tokens = match Lexer::new(source, LuaVersion::luau()).collect() {
         LexerResult::Ok(tokens) => tokens,
         LexerResult::Fatal(errors) | LexerResult::Recovered(_, errors) => {

@@ -169,6 +169,33 @@ fn invalid_filter_fails_before_database_open_or_claim_changes() {
 }
 
 #[test]
+fn runtime_filter_error_rolls_back_new_claim_and_owned_task_bypasses_predicate() {
+    let dir = project();
+    let p = dir.path();
+    ok(p, &["add", "Task"]);
+    let before = ok(p, &["show", "1"]);
+    let filter = "like(description, '%', 'xx')";
+    let output = run(
+        p,
+        &["next", "--local", "--session", "a", "--filter", filter],
+    );
+    assert!(!output.status.success());
+    assert!(
+        String::from_utf8_lossy(&output.stderr)
+            .contains("ESCAPE expression must be a single character")
+    );
+    assert_eq!(ok(p, &["show", "1"]), before);
+    assert_eq!(ok(p, &["next", "--local", "--session", "a"])["id"], 1);
+    assert_eq!(
+        ok(
+            p,
+            &["next", "--local", "--session", "a", "--filter", filter]
+        )["id"],
+        1
+    );
+}
+
+#[test]
 fn next_filters_only_new_ready_candidates_keeps_owned_task() {
     let dir = project();
     let p = dir.path();

@@ -107,7 +107,7 @@ fn watch_applies_luau_filter_to_each_commit() {
 }
 ```
 
-- [x] Run `cargo test --test filters --test watch`; expect unsupported `--filter`.
+- [x] Run `cargo test --test filters list_combines_luau_search_status_and_parent_context`; expect unsupported `--filter`.
 - [x] Add both CLI flags with `EXPR` help and compile once in `run` before opening DB. Pass `Option<&CompiledFilter>` to `execute`. Add `Db::list_filtered(max_completed, include_archived, filter)` returning `(Vec<Task>, Option<HashSet<i64>>)`. Append static compiled predicate as column 14, bind filter params followed by completion/archive parameters; use shifted numbered placeholders. Read matches and rows from same SQL snapshot. Extend `filter_tasks` with optional ID set and existing AND/context traversal.
 
 ```rust
@@ -142,8 +142,8 @@ Files: create `docs/filter.md`, `docs/filter-variables.md`, `docs/filter-functio
 
 - [x] Write exhaustive usage/variables/functions tables matching compiler mappings and restrictions; include quoted shell examples for list, next, watch/wait, nil checks, dates, LIKE escape, logic truthiness, bound limits, current-claim behavior. Link README and CLI help.
 - [ ] Run `cargo fmt --check`, `cargo clippy --all-targets -- -D warnings`, `cargo test` with shared target directory. Expect zero failures; disclose unresolved failures instead of claiming pass.
-- [ ] Request read-only code review using existing reviewer under requesting-code-review skill; resolve findings, rerun affected checks. Mark completed checkboxes, commit final verified implementation/docs.
-- [ ] Rebase task-88 onto current master, fast-forward master, rerun focused filter/dispatch/watch checks. Install via `cargo install --path . --locked --force`. Run installed binary in temporary initialized project using `list --filter 'like(task_name, "%auth%")'` and `next --local --session smoke --filter 'priority >= 0'`; confirm matching rows only.
+- [x] Request read-only code review using existing reviewer under requesting-code-review skill; resolve findings, rerun affected checks. Mark completed checkboxes, commit final verified implementation/docs.
+- [ ] Rebase task-88 onto current master, fast-forward master, rerun full suite plus fmt/clippy on combined tree (master also gained task 87 during implementation). Install via `cargo install --path . --locked --force`. Run installed binary in temporary initialized project using `list --filter 'like(task_name, "%auth%")'` and `next --local --session smoke --filter 'priority >= 0'`; confirm matching rows only.
 - [ ] Complete task 88 explicitly; remove worktree and merged branch; resume single blocking queue waiter.
 
 Self-review: all spec paths covered, public names/types aligned, ownership/archive/context unchanged, no schema migration. No unresolved design choices.
