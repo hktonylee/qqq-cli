@@ -382,11 +382,15 @@ with tempfile.TemporaryDirectory(prefix="qqq-dashboard-test-") as folder:
             assert "Task #2 | New | Priority 0" in details_text(), visible.text()
             assert "reviewer" in details_text(), visible.text()
             send(b"\x1b[6~")
-            wait_visible(lambda: "Latest message" in details_text() and "Message continuation" in details_text())
+            wait_visible(lambda: "Latest message" in details_text()
+                         and "Message continuation" in details_text()
+                         and details_text().splitlines()[2] == "W" * 66
+                         and (visible.x, visible.y) == (len("Second"), editor_row() + 1))
             assert editor_row() == 13 and editor_line().startswith("Second"), visible.text()
             assert details_text().splitlines()[2] == "W" * 66, visible.text()
             send(b"\x1b[6~")
-            wait_visible(lambda: details_text().splitlines()[0] == "TAIL")
+            wait_visible(lambda: details_text().splitlines()[0] == "TAIL"
+                         and (visible.x, visible.y) == (len("Second"), editor_row() + 1))
             send(b"\x1b[5~" * 2)
             wait_visible(lambda: details_text().startswith("Task #2"))
             assert editor_line().startswith("Second"), visible.text()
