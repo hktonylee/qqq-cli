@@ -29,9 +29,9 @@
 
 **Files:** `tests/reopen.rs`, `tests/watch.rs`, `README.md`.
 
-- [ ] Write failing tests: reopening completed parent leaves completed descendants complete but blocks new descendants until parent recompletes; claim priority still applies after reopen; archived completed target fails; completed child beneath archived unfinished parent fails; unarchive parent permits reopen. Run focused tests and verify expected failures.
-- [ ] Extend DB parent guard or transition as needed to make dependency/archive tests pass. Add watcher test: completed→reopen snapshot changes to new, rejected reopen emits no snapshot. Run `cargo test --locked --test reopen --test watch`; commit.
-- [ ] Document `qqq reopen ID`, archived prerequisite, no-op rejection, history preservation, and descendant readiness in `README.md`. Check `qqq reopen --help` and focused CLI tests; commit.
+- [x] Test reopening completed parent: completed descendants stay complete, new descendants wait until parent recompletes; claim priority applies. Test archived target and child beneath archived unfinished parent reject, then unarchive permits reopen. Existing DB parent guard passed these checks.
+- [x] Test watcher: completed→reopen snapshot changes to new, rejected reopen emits no snapshot. Run `cargo test --locked --test reopen --test watch`; commit.
+- [x] Document `qqq reopen ID`, archived prerequisite, rejection, history preservation, and descendant readiness in `README.md`. Check `qqq reopen --help` and focused CLI tests; commit.
 
 ### Task 4: Review and integration
 

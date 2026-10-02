@@ -61,7 +61,7 @@ qqq list --include-archived
 terminal with a known width, it shows full descriptions with wrapped, aligned
 continuation lines; piped output keeps first-line previews. `show` adds
 messages, images, ownership history and Herdr link. Negative indexes work with
-`show`, `edit`, `archive`, and `unarchive`; `-1` selects newest task.
+`show`, `edit`, `archive`, `unarchive`, and `reopen`; `-1` selects newest task.
 
 `--max-completed N` keeps N most recent completions plus unfinished tasks;
 `0` hides completed tasks. Hidden parents display children as roots. `--all`
@@ -126,6 +126,23 @@ cannot be archived. An unfinished parent cannot be archived while a visible
 unfinished child depends on it; adding or reparenting an unfinished child, or
 unarchiving one, under an archived unfinished parent also fails. Archived
 completed parents still release dependent tasks.
+
+## Reopen completed work
+
+```sh
+qqq reopen 12
+qqq reopen -1 --session reviewer
+```
+
+`reopen` returns a completed task to `new` and records a reopen event. It keeps
+description, priority, parent, messages, images, creation time, and prior
+history. A task in any other status fails without changes; repeating `reopen`
+also fails. Archived completed tasks require `unarchive` first. A completed
+child under an archived unfinished parent cannot reopen until parent is
+unarchived or completed. Completed descendants stay completed; new descendants
+wait for reopened parent to complete again. Reopened tasks return to default
+lists, including `--max-completed 0`, and become claimable when dependencies
+permit.
 
 On a terminal, `add` without text or `edit` without update flags opens built-in
 editor. Ctrl-S saves, Esc exits blank draft or confirms discard of nonempty

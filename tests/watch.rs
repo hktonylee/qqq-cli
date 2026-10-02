@@ -118,6 +118,24 @@ fn watch_streams_initial_list_and_committed_changes_without_idle_repeats() {
 }
 
 #[test]
+fn watch_shows_reopened_task_and_ignores_rejected_reopen() {
+    let dir = project();
+    let path = dir.path();
+    ok(path, &["add", "Again"]);
+    ok(path, &["next", "--local", "--session", "worker"]);
+    ok(path, &["complete", "1", "--session", "worker"]);
+    let mut watch = Watcher::start(path, &["list", "--watch", "--max-completed", "0", "--json"]);
+    assert_eq!(watch.snapshot(), serde_json::json!([]));
+    ok(path, &["reopen", "1"]);
+    let snapshot = watch.snapshot();
+    assert_eq!(snapshot[0]["id"], 1);
+    assert_eq!(snapshot[0]["status"], "new");
+    let rejected = command(path).args(["reopen", "1"]).output().unwrap();
+    assert_eq!(rejected.status.code(), Some(1));
+    watch.idle();
+}
+
+#[test]
 fn watch_respects_archive_visibility_on_every_snapshot() {
     let dir = project();
     let path = dir.path();

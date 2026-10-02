@@ -1,5 +1,5 @@
 use rusqlite::Connection;
-use serde_json::Value;
+use serde_json::{Value, json};
 use std::{
     path::Path,
     process::{Command, Output, Stdio},
@@ -164,6 +164,17 @@ fn reopen_preserves_content_and_history_and_returns_new_task() {
     ok(path, &["message", "2", "Keep note"]);
     ok(path, &["next", "--session", "worker"]);
     ok(path, &["complete", "2", "--session", "worker"]);
+    let conn = Connection::open(path.join(".qqq/qqq.db")).unwrap();
+    conn.execute(
+        "INSERT INTO herdr_links(task_id,link_json) VALUES (2,?)",
+        [json!({
+            "server": null,
+            "identity": {"agent": "codex", "kind": "id", "value": "legacy-session"},
+            "pane": {"pane_id": "p1", "workspace_id": "w1", "tab_id": "t1"}
+        })
+        .to_string()],
+    )
+    .unwrap();
     let before = ok(path, &["show", "2"]);
     std::thread::sleep(std::time::Duration::from_millis(5));
     let reopened = ok(path, &["reopen", "-1", "--session", "reviewer"]);
@@ -179,6 +190,7 @@ fn reopen_preserves_content_and_history_and_returns_new_task() {
     assert_eq!(after["messages"], before["messages"]);
     assert_eq!(after["images"], before["images"]);
     assert_eq!(after["herdr"], before["herdr"]);
+    assert_eq!(after["herdr"]["identity"]["value"], "legacy-session");
     assert_eq!(
         &after["events"].as_array().unwrap()[..2],
         before["events"].as_array().unwrap()
@@ -189,6 +201,40 @@ fn reopen_preserves_content_and_history_and_returns_new_task() {
     fail(path, &["reopen", "2"], "must be completed");
     assert_eq!(ok(path, &["show", "2"]), after);
     assert!(human(path, &["reopen", "1"]).contains("Status: New"));
+}
+
+#[test]
+fn concurrent_reopen_commits_once() {
+    let dir = project();
+    let path = dir.path();
+    ok(path, &["add", "Done"]);
+    ok(path, &["next", "--session", "worker"]);
+    ok(path, &["complete", "1", "--session", "worker"]);
+    let children: Vec<_> = (0..2)
+        .map(|_| command(path).arg("reopen").arg("1").spawn().unwrap())
+        .collect();
+    let outputs: Vec<_> = children
+        .into_iter()
+        .map(|child| child.wait_with_output().unwrap())
+        .collect();
+    assert_eq!(
+        outputs
+            .iter()
+            .filter(|output| output.status.success())
+            .count(),
+        1
+    );
+    assert_eq!(
+        outputs
+            .iter()
+            .filter(|output| output.status.code() == Some(1))
+            .count(),
+        1
+    );
+    let detail = ok(path, &["show", "1"]);
+    assert_eq!(detail["task"]["status"], "new");
+    assert_eq!(detail["events"].as_array().unwrap().len(), 3);
+    assert_eq!(detail["events"][2]["action"], "reopen");
 }
 
 #[test]
@@ -225,4 +271,63 @@ fn reopen_rejects_non_completed_without_mutation() {
             before[(id - 1) as usize]
         );
     }
+}
+
+#[test]
+fn reopened_parent_blocks_new_descendants_but_keeps_completed_descendants() {
+    let dir = project();
+    let path = dir.path();
+    ok(path, &["add", "Parent", "--priority", "8"]);
+    ok(path, &["next", "--session", "worker"]);
+    ok(path, &["complete", "1", "--session", "worker"]);
+    ok(path, &["add", "Finished child", "--parent", "1"]);
+    ok(path, &["next", "--session", "worker"]);
+    ok(path, &["complete", "2", "--session", "worker"]);
+    ok(
+        path,
+        &["add", "Waiting child", "--parent", "1", "--priority", "100"],
+    );
+    ok(path, &["add", "Other", "--priority", "4"]);
+    ok(path, &["reopen", "1"]);
+    assert_eq!(ok(path, &["show", "2"])["task"]["status"], "completed");
+    assert_eq!(ok(path, &["next", "--session", "worker"])["id"], 1);
+    assert_eq!(ok(path, &["next", "--session", "other"])["id"], 4);
+    assert!(ok(path, &["next", "--session", "third"]).is_null());
+    ok(path, &["complete", "1", "--session", "worker"]);
+    assert_eq!(ok(path, &["next", "--session", "third"])["id"], 3);
+}
+
+#[test]
+fn archived_completed_task_requires_unarchive_before_reopen() {
+    let dir = project();
+    let path = dir.path();
+    ok(path, &["add", "Done"]);
+    ok(path, &["next", "--session", "worker"]);
+    ok(path, &["complete", "1", "--session", "worker"]);
+    ok(path, &["archive", "1"]);
+    let before = ok(path, &["show", "1"]);
+    fail(path, &["reopen", "1"], "unarchive first");
+    assert_eq!(ok(path, &["show", "1"]), before);
+    ok(path, &["unarchive", "1"]);
+    assert_eq!(ok(path, &["reopen", "1"])["status"], "new");
+}
+
+#[test]
+fn reopen_rejects_completed_child_under_archived_unfinished_parent() {
+    let dir = project();
+    let path = dir.path();
+    ok(path, &["add", "Parent"]);
+    ok(path, &["next", "--session", "worker"]);
+    ok(path, &["complete", "1", "--session", "worker"]);
+    ok(path, &["add", "Child", "--parent", "1"]);
+    ok(path, &["next", "--session", "worker"]);
+    ok(path, &["complete", "2", "--session", "worker"]);
+    ok(path, &["reopen", "1"]);
+    ok(path, &["archive", "1"]);
+    let before = ok(path, &["show", "2"]);
+    fail(path, &["reopen", "2"], "archived unfinished parent");
+    assert_eq!(ok(path, &["show", "2"]), before);
+    ok(path, &["unarchive", "1"]);
+    assert_eq!(ok(path, &["reopen", "2"])["status"], "new");
+    assert!(ok(path, &["next", "--session", "worker"])["id"] == 1);
 }
