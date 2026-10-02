@@ -82,6 +82,8 @@ class TerminalScreen:
 
 
 binary, scenario = sys.argv[1:]
+# Legacy terminals send this byte for Ctrl+/; Crossterm reads it as Ctrl+7.
+CTRL_SLASH = b"\x1f"
 with tempfile.TemporaryDirectory(prefix="qqq-dashboard-test-") as folder:
     env = dict(os.environ, HOME=folder, TERM="xterm-256color")
     env.pop("NO_COLOR", None)
@@ -270,7 +272,7 @@ with tempfile.TemporaryDirectory(prefix="qqq-dashboard-test-") as folder:
         if scenario == "workflow":
             initial_tasks = cli("list")
             clear_capture()
-            send(b"/target")
+            send(CTRL_SLASH + b"target")
             read_until(b"Filter: target")
             clear_capture()
             send(b"\x1b[<64;6;4M")
@@ -463,7 +465,7 @@ with tempfile.TemporaryDirectory(prefix="qqq-dashboard-test-") as folder:
             assert not select.select([child.stdout], [], [], 0)[0], "TUI wrote stdout"
         elif scenario == "actions_hidden":
             clear_capture()
-            send(b"/Filtered")
+            send(CTRL_SLASH + b"Filtered")
             wait_visible(lambda: "Filter: Filtered" in visible.text() and
                          "Filtered item" in visible.text() and "Visible" not in visible.text())
             send(b"\x1b[1;2A")
@@ -560,7 +562,7 @@ with tempfile.TemporaryDirectory(prefix="qqq-dashboard-test-") as folder:
         elif scenario == "click_filter":
             initial_tasks = cli("list")
             clear_capture()
-            send(b"Unsaved/needle")
+            send(b"Unsaved" + CTRL_SLASH + b"needle")
             read_until(b"Filter: needle")
             clear_capture()
             send(b"\x1b[<64;6;4M" * 10)
@@ -575,7 +577,7 @@ with tempfile.TemporaryDirectory(prefix="qqq-dashboard-test-") as folder:
             click(3, 10)
             wait_visible(lambda: visible.text().splitlines()[-1].startswith("Ctrl-S save"))
             clear_capture()
-            send(b"/")
+            send(CTRL_SLASH)
             wait_visible(lambda: visible.text().splitlines()[-1].startswith("Type to filter"))
             clear_capture()
             click(6, task_row("Needle 14"))
@@ -738,17 +740,46 @@ with tempfile.TemporaryDirectory(prefix="qqq-dashboard-test-") as folder:
             send(b"\x1b[1;2A")
             read_until(b"No older task")
             wait_visible(lambda: "First" in visible.text().splitlines()[2])
+        elif scenario == "filter_shortcuts":
+            initial_tasks = cli("list")
+            send(b"Draft/path")
+            wait_visible(lambda: visible.text().splitlines()[9].startswith("Draft/path"))
+            for shortcut in (
+                CTRL_SLASH,
+                b"\x1b[47;5u",       # CSI-u Ctrl+/.
+                b"\x1b[95;6u",       # CSI-u Ctrl+Shift+_ (same legacy byte).
+            ):
+                clear_capture()
+                send(shortcut + b"First")
+                wait_visible(lambda: visible.text().splitlines()[1].strip() == "Filter: First"
+                             and visible.text().splitlines()[-1].startswith("Type to filter"))
+                assert "Second" not in visible.text(), visible.text()
+                assert visible.text().splitlines()[9].startswith("Draft/path"), visible.text()
+                send(shortcut + b"/")
+                wait_visible(lambda: visible.text().splitlines()[1].strip() == "Filter: First/")
+                assert cli("list") == initial_tasks
+                send(b"\x1b")
+                wait_visible(lambda: visible.text().splitlines()[1].strip() == "Filter:")
+                send(b"\x1b")
+                wait_visible(lambda: visible.text().splitlines()[-1].startswith("Ctrl-S save")
+                             and "Ctrl+/ filter" in visible.text().splitlines()[-1])
+            send(b"\x13")
+            read_until(b"Saved #3. New task")
+            assert cli("show", "3")["task"]["description"] == "Draft/path"
         elif scenario == "slash_edit":
+            send(b"/")
+            wait_visible(lambda: visible.text().splitlines()[9].startswith("/")
+                         and visible.text().splitlines()[-1].startswith("Ctrl-S save"))
             send(b"\x1b/")
-            wait_visible(lambda: visible.text().splitlines()[9].startswith("/"))
+            wait_visible(lambda: visible.text().splitlines()[9].startswith("//"))
             send(b"path\x13")
             read_until(b"Saved #3. New task")
-            assert cli("show", "3")["task"]["description"] == "/path"
+            assert cli("show", "3")["task"]["description"] == "//path"
         elif scenario in ("filter", "filter_no_color"):
             initial_tasks = cli("list")
             send(b"Unsaved")
             clear_capture()
-            send(b"/needle")
+            send(CTRL_SLASH + b"needle")
             read_until(b"Filter: needle")
             clear_capture()
             send(b"\x7f")
@@ -773,7 +804,8 @@ with tempfile.TemporaryDirectory(prefix="qqq-dashboard-test-") as folder:
             assert "Unsaved" in visible.text(), visible.text()
             clear_capture()
             send(b"/zzzz")
-            read_until(b"No matching tasks.")
+            wait_visible(lambda: visible.text().splitlines()[1].strip() == "Filter: needle/zzzz"
+                         and "No matching tasks." in visible.text())
             assert cli("list") == initial_tasks
             clear_capture()
             send(b"\x1b")
@@ -786,7 +818,7 @@ with tempfile.TemporaryDirectory(prefix="qqq-dashboard-test-") as folder:
             wait_visible(lambda: "Unsaved!" in visible.text())
 
             clear_capture()
-            send(b"/needle\t")
+            send(CTRL_SLASH + b"needle\t")
             read_until(b"Filter: needle")
             clear_capture()
             send(b"\x13")
@@ -807,7 +839,7 @@ with tempfile.TemporaryDirectory(prefix="qqq-dashboard-test-") as folder:
             assert cli("list")[0:3] == initial_tasks
 
             clear_capture()
-            send(b"/")
+            send(CTRL_SLASH)
             wait_visible(lambda: visible.y == 1 and visible.text().splitlines()[1].strip() == "Filter: needle")
             fcntl.ioctl(slave, termios.TIOCSWINSZ, struct.pack("HHHH", 7, 10, 0, 0))
             visible.resize(10, 7)

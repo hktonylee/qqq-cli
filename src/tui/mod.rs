@@ -1036,12 +1036,15 @@ fn compose_inner(
                         continue;
                     }
                 }
+                // Legacy Ctrl+/ sends 0x1f, which Crossterm decodes as Ctrl+7.
+                // Extended keyboard protocols can report Ctrl+/ or Ctrl+_.
                 if dashboard
                     && !filter_focused
-                    && key.code == KeyCode::Char('/')
+                    && control
+                    && matches!(key.code, KeyCode::Char('/' | '_' | '7'))
                     && !key
                         .modifiers
-                        .intersects(KeyModifiers::CONTROL | KeyModifiers::ALT | KeyModifiers::SUPER)
+                        .intersects(KeyModifiers::ALT | KeyModifiers::SUPER)
                 {
                     filter_focused = true;
                     continue;

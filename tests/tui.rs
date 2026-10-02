@@ -132,8 +132,13 @@ fn tui_dashboard_filter_keeps_draft_and_navigates_visible_tasks() {
 }
 
 #[test]
-fn tui_dashboard_alt_slash_inserts_literal_slash() {
+fn tui_dashboard_plain_and_alt_slash_insert_literal_slash() {
     dashboard_scenario("slash_edit");
+}
+
+#[test]
+fn tui_dashboard_ctrl_slash_accepts_legacy_and_extended_keys() {
+    dashboard_scenario("filter_shortcuts");
 }
 
 #[test]
