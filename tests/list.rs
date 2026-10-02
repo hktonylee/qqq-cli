@@ -47,10 +47,12 @@ fn query_searches_full_unicode_description_and_treats_sql_text_literally() {
     ok(p, &["add", "First line\nCafé needle"]);
     ok(p, &["add", "Unrelated"]);
     ok(p, &["add", "Literal %' OR 1=1 -- text"]);
+    ok(p, &["add", "Leading --dash flag"]);
 
     assert_eq!(ids(&ok(p, &["list", "--query", "CAFÉ NEEDLE"])), [1]);
     assert_eq!(ids(&ok(p, &["list", "--query", "needle"])), [1]);
     assert_eq!(ids(&ok(p, &["list", "--query", "%' OR 1=1 --"])), [3]);
+    assert_eq!(ids(&ok(p, &["list", "--query", "--dash"])), [4]);
     assert_eq!(ok(p, &["list", "--query", "absent"]), serde_json::json!([]));
 }
 

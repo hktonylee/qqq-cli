@@ -96,7 +96,7 @@ enum Commands {
     /// List first description lines as a dependency tree; JSON preserves whole text.
     List {
         /// Match text anywhere in the full description, ignoring Unicode case.
-        #[arg(long, value_name = "TEXT")]
+        #[arg(long, value_name = "TEXT", allow_hyphen_values = true)]
         query: Option<String>,
         /// Include a status; repeat to match any supplied status.
         #[arg(long = "status", value_enum, value_name = "STATUS")]
