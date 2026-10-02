@@ -8,8 +8,8 @@
 
 ### Task 1: Filter model
 
-- [ ] Add failing `panel` model tests for case-insensitive full description, parent chain, empty/no-match query, and visible-ID navigation.
-- [ ] Add pure filter function over task views and adjacent visible ID selection. Run focused tests and commit.
+- [x] Add failing `panel` model tests for case-insensitive full description, parent chain, empty/no-match query, and visible-ID navigation.
+- [x] Add pure filter function over task views and adjacent visible ID selection. Run focused tests and commit.
 
 ### Task 2: Dashboard layout
 

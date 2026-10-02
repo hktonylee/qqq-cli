@@ -1,3 +1,61 @@
+use std::collections::{HashMap, HashSet};
+
+pub struct FilterTask<'a> {
+    pub id: i64,
+    pub parent_id: Option<i64>,
+    pub description: &'a str,
+}
+
+pub struct FilteredTasks {
+    pub included_ids: HashSet<i64>,
+    pub ordered_ids: Vec<i64>,
+}
+
+pub fn filter_tasks(tasks: &[FilterTask<'_>], query: &str) -> FilteredTasks {
+    let query = query.to_lowercase();
+    let positions: HashMap<_, _> = tasks
+        .iter()
+        .enumerate()
+        .map(|(index, task)| (task.id, index))
+        .collect();
+    let mut included_ids = HashSet::new();
+    for task in tasks {
+        if !query.is_empty() && !task.description.to_lowercase().contains(&query) {
+            continue;
+        }
+        let mut current = Some(task.id);
+        while let Some(id) = current {
+            let Some(&index) = positions.get(&id) else {
+                break;
+            };
+            if !included_ids.insert(id) {
+                break;
+            }
+            current = tasks[index].parent_id;
+        }
+    }
+    let ordered_ids = tasks
+        .iter()
+        .filter(|task| included_ids.contains(&task.id))
+        .map(|task| task.id)
+        .collect();
+    FilteredTasks {
+        included_ids,
+        ordered_ids,
+    }
+}
+
+pub fn adjacent_visible_id(ids: &[i64], current: Option<i64>, older: bool) -> Option<i64> {
+    if older {
+        ids.iter()
+            .rev()
+            .copied()
+            .find(|id| current.is_none_or(|current| *id < current))
+    } else {
+        current.and_then(|current| ids.iter().copied().find(|id| *id > current))
+    }
+}
+
 pub struct ListRow {
     pub text: String,
     pub task_id: Option<i64>,
