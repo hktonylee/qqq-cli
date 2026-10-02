@@ -209,6 +209,15 @@ with tempfile.TemporaryDirectory(prefix="qqq-dashboard-test-") as folder:
         elif scenario == "wheel":
             initial_tasks = cli("list")
             assert "Line01" in visible.text(), visible.text()
+            time.sleep(0.1)
+            while select.select([master], [], [], 0)[0]:
+                capture(os.read(master, 65536))
+            clear_capture()
+            send(b"\x1b[<35;6;4M" * 20)
+            time.sleep(0.1)
+            while select.select([master], [], [], 0)[0]:
+                capture(os.read(master, 65536))
+            assert not screen, f"Mouse movement redrew TUI: {screen[-500:]!r}"
             clear_capture()
             send(b"\x1b[1;2A")
             read_until(b"task #20")
@@ -222,6 +231,12 @@ with tempfile.TemporaryDirectory(prefix="qqq-dashboard-test-") as folder:
             send(b"\x1b[<65;6;11M")
             wait_visible(lambda: visible.text().splitlines()[9].startswith("Line04"))
             assert "Task 13" in visible.text().splitlines()[2], visible.text()
+            clear_capture()
+            send(b"\x11")
+            time.sleep(0.1)
+            while select.select([master], [], [], 0)[0]:
+                capture(os.read(master, 65536))
+            assert visible.text().splitlines()[9].startswith("Line04"), visible.text()
 
             clear_capture()
             send(b"\x1b[<65;6;8M\x1b[<65;6;16M")
@@ -262,6 +277,16 @@ with tempfile.TemporaryDirectory(prefix="qqq-dashboard-test-") as folder:
             read_until(b"task #19")
             wait_visible(lambda: "Task 19" in visible.text().splitlines()[2])
             assert cli("list") == initial_tasks
+            clear_capture()
+            send(b"\x1b[1;2A" * 18)
+            wait_visible(lambda: "task #1 (" in visible.text().splitlines()[12])
+            clear_capture()
+            send(b"\x1b[<65;6;4M" * 10)
+            wait_visible(lambda: "Line07" in visible.text().splitlines()[2])
+            clear_capture()
+            send(b"\x1b[1;2A")
+            read_until(b"No older task")
+            wait_visible(lambda: "First" in visible.text().splitlines()[2])
         elif scenario == "slash_edit":
             send(b"\x1b/")
             wait_visible(lambda: visible.text().splitlines()[9].startswith("/"))

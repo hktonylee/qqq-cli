@@ -375,7 +375,22 @@ fn compose_inner(
                 terminal.color,
             )?;
         }
-        match event::read()? {
+        let input = loop {
+            let input = event::read()?;
+            if let Event::Mouse(mouse) = &input
+                && (!dashboard
+                    || confirmation.is_some()
+                    || !matches!(
+                        mouse.kind,
+                        MouseEventKind::ScrollUp | MouseEventKind::ScrollDown
+                    )
+                    || dashboard::wheel_area(size, mouse.column, mouse.row).is_none())
+            {
+                continue;
+            }
+            break input;
+        };
+        match input {
             Event::Paste(text) if confirmation.is_none() => {
                 if filter_focused {
                     filter_query.extend(text.chars().filter(|ch| !ch.is_control()));
@@ -474,6 +489,7 @@ fn compose_inner(
                                 message_is_error = false;
                             }
                             Ok(None) => {
+                                list_follow_selected = true;
                                 message_is_error = false;
                                 message = if older {
                                     "No older task".to_owned()
@@ -538,7 +554,6 @@ fn compose_inner(
                     }
                     continue;
                 }
-                editor_follow_cursor = true;
                 if control {
                     match key.code {
                         KeyCode::Char('s') => match draft.finish() {
@@ -578,6 +593,7 @@ fn compose_inner(
                         },
                         KeyCode::Char('c') => return cancel(saved_any, dashboard),
                         KeyCode::Char('v') => {
+                            editor_follow_cursor = true;
                             let result = clipboard::read().and_then(|value| match value {
                                 clipboard::Paste::Text(text) => paste(&mut draft, &text),
                                 clipboard::Paste::Image(image) => draft.image(image),
@@ -587,15 +603,44 @@ fn compose_inner(
                                 .err()
                                 .map_or_else(String::new, |error| format!("{error:#}"));
                         }
-                        KeyCode::Char('a') => draft.home(),
-                        KeyCode::Char('e') => draft.end(),
-                        KeyCode::Char('w') => draft.delete_previous_word(),
+                        KeyCode::Char('a') => {
+                            editor_follow_cursor = true;
+                            draft.home();
+                        }
+                        KeyCode::Char('e') => {
+                            editor_follow_cursor = true;
+                            draft.end();
+                        }
+                        KeyCode::Char('w') => {
+                            editor_follow_cursor = true;
+                            draft.delete_previous_word();
+                        }
                         _ => (),
                     }
                     continue;
                 }
                 message.clear();
                 message_is_error = false;
+                if matches!(
+                    key.code,
+                    KeyCode::Enter
+                        | KeyCode::Tab
+                        | KeyCode::Backspace
+                        | KeyCode::Delete
+                        | KeyCode::Left
+                        | KeyCode::Right
+                        | KeyCode::Home
+                        | KeyCode::End
+                        | KeyCode::Up
+                        | KeyCode::Down
+                ) || matches!(key.code, KeyCode::Char(character)
+                    if !key.modifiers.intersects(KeyModifiers::ALT | KeyModifiers::SUPER)
+                        || (character == '/'
+                            && key.modifiers.contains(KeyModifiers::ALT)
+                            && !key.modifiers.contains(KeyModifiers::SUPER)))
+                {
+                    editor_follow_cursor = true;
+                }
                 match key.code {
                     KeyCode::Esc if draft.is_empty() => return cancel(saved_any, dashboard),
                     KeyCode::Esc => confirmation = Some(Confirmation::Exit),
