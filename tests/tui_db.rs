@@ -13,6 +13,9 @@ mod identity;
 #[allow(dead_code)]
 #[path = "../src/images.rs"]
 mod images;
+#[allow(dead_code)]
+#[path = "../src/sql_filter/mod.rs"]
+mod sql_filter;
 mod tui {
     pub use crate::draft;
 }

@@ -23,6 +23,7 @@ pub fn next(
     db: &mut Db,
     caller: Option<&str>,
     overrides: &crate::identity::Identity,
+    filter: Option<&crate::sql_filter::CompiledFilter>,
 ) -> Result<Option<Task>> {
     let caller = match caller {
         Some(session) => {
@@ -34,7 +35,7 @@ pub fn next(
     if let Some(task) = db.owned_with_identity(&caller, overrides)? {
         return Ok(Some(task));
     }
-    if !db.has_ready()? {
+    if !db.has_ready_filtered(filter)? {
         return Ok(None);
     }
     ensure!(
@@ -60,7 +61,7 @@ pub fn next(
         .to_string_lossy()
         .to_ascii_lowercase();
     let name = format!("{name}-{:x}", std::process::id());
-    let Some(task) = db.next(&name, None)? else {
+    let Some(task) = db.next_filtered(&name, None, filter)? else {
         return Ok(None);
     };
     let mut location = "before tab creation".to_owned();

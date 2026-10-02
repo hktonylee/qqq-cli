@@ -13,6 +13,7 @@ mod list_filter;
 mod output;
 mod session;
 mod snapshot;
+mod sql_filter;
 mod tui;
 mod watch;
 use anyhow::{Context, Result, ensure};
@@ -108,6 +109,9 @@ enum Commands {
         /// Include archived tasks; default list hides them.
         #[arg(long)]
         include_archived: bool,
+        /// Match a Luau expression compiled to SQLite; see docs/filter.md.
+        #[arg(long, value_name = "EXPR", allow_hyphen_values = true)]
+        filter: Option<String>,
         /// Match text anywhere in the full description, ignoring Unicode case.
         #[arg(long, value_name = "TEXT", allow_hyphen_values = true)]
         query: Option<String>,
@@ -194,6 +198,9 @@ enum Commands {
     },
     /// Return owned task or atomically claim highest-priority ready task (oldest ID on ties).
     Next {
+        /// Filter new candidates with a Luau expression; owned task still returns. See docs/filter.md.
+        #[arg(long, value_name = "EXPR", allow_hyphen_values = true)]
+        filter: Option<String>,
         /// Wait until a task is available; concurrent sessions claim each task once.
         #[arg(long)]
         wait: bool,
@@ -257,7 +264,11 @@ fn local_owner(cli: &Cli, project_dir: &std::path::Path, db: &db::Db) -> Result<
     }
     session::owner(None, project_dir, db)
 }
-fn execute(cli: Cli, display_limit: Option<i64>) -> Result<Value> {
+fn execute(
+    cli: Cli,
+    display_limit: Option<i64>,
+    filter: Option<&sql_filter::CompiledFilter>,
+) -> Result<Value> {
     if let Commands::Config {
         list,
         get,
@@ -408,11 +419,16 @@ fn execute(cli: Cli, display_limit: Option<i64>) -> Result<Value> {
             statuses,
             include_archived,
             ..
-        } => json!(list_filter::filter_tasks(
-            db.list_with_archived(max_completed.or(display_limit), include_archived)?,
-            query.as_deref(),
-            &statuses
-        )),
+        } => {
+            let (tasks, matches) =
+                db.list_filtered(max_completed.or(display_limit), include_archived, filter)?;
+            json!(list_filter::filter_tasks(
+                tasks,
+                query.as_deref(),
+                &statuses,
+                matches.as_ref()
+            ))
+        }
         Commands::Show {
             id,
             export_image,
@@ -538,13 +554,14 @@ fn execute(cli: Cli, display_limit: Option<i64>) -> Result<Value> {
         Commands::Next { wait, .. } => {
             loop {
                 let task = match &next_owner {
-                    Some(owner) => db.next_with_identity(
+                    Some(owner) => db.next_with_identity_filtered(
                         &owner.key,
                         owner.link.as_ref(),
                         owner.metadata.as_ref(),
                         &overrides,
+                        filter,
                     )?,
-                    None => dispatch::next(&mut db, session_input, &overrides)?,
+                    None => dispatch::next(&mut db, session_input, &overrides, filter)?,
                 };
                 if task.is_some() || !wait {
                     break json!(task);
@@ -594,11 +611,17 @@ fn execute(cli: Cli, display_limit: Option<i64>) -> Result<Value> {
 }
 fn run() -> Result<(Option<String>, bool)> {
     let cli = Cli::parse_from(aliases::expand(std::env::args_os().collect())?);
+    let filter = match &cli.command {
+        Commands::List { filter, .. } | Commands::Next { filter, .. } => {
+            filter.as_deref().map(sql_filter::compile).transpose()?
+        }
+        _ => None,
+    };
     let is_tui = matches!(&cli.command, Commands::Tui { .. });
     let filtered_list = match &cli.command {
         Commands::List {
             query, statuses, ..
-        } => query.is_some() || !statuses.is_empty(),
+        } => query.is_some() || !statuses.is_empty() || filter.is_some(),
         _ => false,
     };
     let display_limit = match &cli.command {
@@ -623,21 +646,22 @@ fn run() -> Result<(Option<String>, bool)> {
         ..
     } = &cli.command
     {
-        watch::run(
-            cli.json,
-            max_completed.or(display_limit),
-            *include_archived,
-            *oneline,
-            display_limit.is_some(),
-            query.as_deref(),
+        watch::run(watch::WatchOptions {
+            json_output: cli.json,
+            max_completed: max_completed.or(display_limit),
+            include_archived: *include_archived,
+            oneline: *oneline,
+            display_limited: display_limit.is_some(),
+            query: query.as_deref(),
             statuses,
-        )?;
+            filter: filter.as_ref(),
+        })?;
         return Ok((None, false));
     }
     let json = cli.json;
     let is_doctor = matches!(&cli.command, Commands::Doctor);
     let format = output::Format::from(&cli.command);
-    let value = execute(cli, display_limit)?;
+    let value = execute(cli, display_limit, filter.as_ref())?;
     if is_tui {
         return Ok((None, false));
     }

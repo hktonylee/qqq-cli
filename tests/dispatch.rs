@@ -112,6 +112,34 @@ print(json.dumps({'result':result}))
 }
 
 #[test]
+fn dispatch_filters_preflight_and_atomic_claim() {
+    let p = Project::new();
+    p.ok(&["add", "Other", "--priority", "100"]);
+    assert!(
+        p.ok(&["next", "--filter", "like(description, 'Match%')"])
+            .is_null()
+    );
+    assert!(
+        !p.calls()
+            .iter()
+            .any(|call| call.first().map(String::as_str) == Some("tab"))
+    );
+    p.ok(&["add", "Match", "--priority", "1"]);
+    assert_eq!(
+        p.ok(&["next", "--filter", "like(description, 'Match%')"])["id"],
+        2
+    );
+    assert_eq!(p.ok(&["show", "1"])["task"]["status"], "new");
+    assert_eq!(
+        p.calls()
+            .iter()
+            .filter(|call| call.first().map(String::as_str) == Some("tab"))
+            .count(),
+        1
+    );
+}
+
+#[test]
 fn dispatch_claims_for_new_agent_links_before_prompt_and_can_find_session() {
     let p = Project::new();
     p.ok(&["add", "Task\n\nDetails"]);

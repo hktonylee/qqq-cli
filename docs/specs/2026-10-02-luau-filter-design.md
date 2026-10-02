@@ -10,7 +10,7 @@ Support literals, parentheses, comparison, `and`, `or`, `not`, numeric `+ - * /`
 
 Function allowlist: `like(text, pattern[, escape])`, `glob(text, pattern)`, `lower`, `upper`, `length`, `substr`, `trim`, `ltrim`, `rtrim`, `replace`, `instr`, `abs`, `round`, `coalesce`, `nullif`, scalar `min`/`max`, `date`, `time`, `datetime`, `strftime`, `julianday`, `unixepoch`. Functions follow documented SQLite behavior, including Unicode/case limitations and date modifiers. All SQL names are static. LIKE takes text first, pattern second. Booleans remain distinct from numeric arguments.
 
-Strings support Luau quoted/long-bracket literals and escapes; reject byte strings that cannot be represented as UTF-8. Numbers support decimal, hexadecimal, binary, separators, and finite floats; reject integer literals outside Luau's exact integer range. Bound compilation: 16 KiB source, 128 non-trivia tokens, 32 AST levels, 128 AST nodes, 64 KiB generated SQL. Check token count before recursive parsing. Error text identifies `--filter` and links documentation.
+Strings support Luau quoted/long-bracket literals and escapes; reject byte strings that cannot be represented as UTF-8. Numbers support decimal floats, hexadecimal/binary integers, separators; require finite values with magnitude at most 2^53, checking source digits at rounding boundary. Hexadecimal floats are unavailable. Bound compilation: 16 KiB source, 128 non-trivia tokens, 32 AST levels, 128 AST nodes, 64 KiB generated SQL. Check token count before recursive parsing. Error text identifies `--filter` and links documentation.
 
 ## List
 

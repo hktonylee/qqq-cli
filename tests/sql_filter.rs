@@ -33,6 +33,7 @@ fn luau_precedence_nil_and_truthiness() {
         "not false and not nil",
         "(nil and true) == nil",
         "(nil or false) == false",
+        "(nullif(archived, false) and true) == nil",
         "parent_id == harness_name",
         "not not 0",
         "not not ''",
@@ -79,6 +80,38 @@ fn literals_decode_luau_strings_and_numbers() {
         "9007199254740993 == id",
     ] {
         assert!(sql_filter::compile(expression).is_err(), "{expression}");
+    }
+}
+
+#[test]
+fn string_escape_edges_follow_luau_lexer() {
+    for expression in [
+        "[=[a\rb]=] == 'a\\rb'",
+        "[=[\ra]=] == '\\ra'",
+        "[=[\r\na\r\nb]=] == 'a\\nb'",
+        r#"'\/' == '/' and '\q' == 'q'"#,
+    ] {
+        assert!(evaluate(expression), "{expression}");
+    }
+}
+
+#[test]
+fn rounded_integer_spellings_cannot_bypass_literal_bound() {
+    for expression in [
+        "9007199254740993e0 == id",
+        "9007199254740993.0 == id",
+        "9007199254740992.1 == id",
+        "9.007199254740993e15 == id",
+        "0x20000000000001p0 == id",
+    ] {
+        assert!(sql_filter::compile(expression).is_err(), "{expression}");
+    }
+    for expression in [
+        "9007199254740992.0 == 9007199254740992",
+        "9.007199254740992e15 == 9007199254740992",
+        "0x20000000000000 == 9007199254740992",
+    ] {
+        assert!(evaluate(expression), "{expression}");
     }
 }
 

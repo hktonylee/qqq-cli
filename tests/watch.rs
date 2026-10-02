@@ -93,6 +93,22 @@ impl Drop for Watcher {
 }
 
 #[test]
+fn watch_applies_luau_filter_to_each_commit() {
+    let dir = project();
+    let p = dir.path();
+    let mut watch = Watcher::start(
+        p,
+        &["list", "--watch", "--json", "--filter", "priority > 0"],
+    );
+    assert_eq!(watch.snapshot(), serde_json::json!([]));
+    ok(p, &["add", "Low"]);
+    assert_eq!(watch.snapshot(), serde_json::json!([]));
+    ok(p, &["edit", "1", "--priority", "5"]);
+    assert_eq!(watch.snapshot()[0]["id"], 1);
+    watch.idle();
+}
+
+#[test]
 fn watch_streams_initial_list_and_committed_changes_without_idle_repeats() {
     let dir = project();
     let p = dir.path();

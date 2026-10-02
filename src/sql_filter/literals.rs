@@ -22,49 +22,44 @@ pub(super) fn number(source: &str) -> Result<Value> {
         );
         return Ok(Value::Integer(value as i64));
     }
-    let value = if source.starts_with("0x") || source.starts_with("0X") {
-        let mut parts = source[2..].split(['p', 'P']);
-        let mantissa = parts.next().context("missing hex mantissa")?;
-        let exponent = parts
-            .next()
-            .map(str::parse::<i32>)
-            .transpose()?
-            .unwrap_or(0);
-        ensure!(parts.next().is_none(), "invalid hexadecimal number");
-        let mut value = 0.0;
-        let mut scale = 1.0;
-        let mut fraction = false;
-        for byte in mantissa.bytes() {
-            if byte == b'.' {
-                ensure!(!fraction, "invalid hexadecimal number");
-                fraction = true;
-                continue;
-            }
-            let digit = char::from(byte)
-                .to_digit(16)
-                .context("invalid hexadecimal digit")?;
-            if fraction {
-                scale /= 16.0;
-                value += f64::from(digit) * scale;
-            } else {
-                value = value * 16.0 + f64::from(digit);
-            }
-        }
-        value * 2_f64.powi(exponent)
-    } else {
-        source.parse::<f64>()?
-    };
+    let value = source.parse::<f64>()?;
     ensure!(value.is_finite(), "number must be finite");
     ensure!(
-        value.fract() != 0.0 || value.abs() <= 9_007_199_254_740_992.0,
+        value.abs() <= 9_007_199_254_740_992.0
+            && (value != 9_007_199_254_740_992.0 || !above_exact_range(&source)?),
         "integer exceeds Luau's exact range (2^53)"
     );
     Ok(Value::Real(value))
 }
 
+// At 2^53, f64 rounding can hide an out-of-range literal. Compare source digits
+// at that boundary instead of trusting the already-rounded floating value.
+fn above_exact_range(source: &str) -> Result<bool> {
+    let (mantissa, exponent) = source.split_once(['e', 'E']).unwrap_or((source, "0"));
+    let exponent = exponent.parse::<i32>()?;
+    let fractional = mantissa
+        .split_once('.')
+        .map_or(0, |(_, digits)| digits.len());
+    let digits = mantissa.replace('.', "");
+    let digits = digits.trim_start_matches('0');
+    let integer_digits = digits.len() as i64 - fractional as i64 + i64::from(exponent);
+    if integer_digits != 16 {
+        return Ok(integer_digits > 16);
+    }
+    let mut integer = digits.chars().take(16).collect::<String>();
+    while integer.len() < 16 {
+        integer.push('0');
+    }
+    Ok(integer.as_str() > "9007199254740992"
+        || (integer == "9007199254740992"
+            && digits
+                .get(16..)
+                .is_some_and(|rest| rest.bytes().any(|digit| digit != b'0'))))
+}
+
 pub(super) fn string(source: &str, quote: StringLiteralQuoteType) -> Result<String> {
     if quote == StringLiteralQuoteType::Brackets {
-        let normalized = source.replace("\r\n", "\n").replace('\r', "\n");
+        let normalized = source.replace("\r\n", "\n");
         return Ok(normalized
             .strip_prefix('\n')
             .unwrap_or(&normalized)
@@ -140,7 +135,10 @@ pub(super) fn string(source: &str, quote: StringLiteralQuoteType) -> Result<Stri
                 ensure!(value <= 255, "decimal string escape exceeds 255");
                 output.push(value as u8);
             }
-            _ => bail!("unsupported string escape \\{escape}"),
+            _ => {
+                let mut buffer = [0; 4];
+                output.extend_from_slice(escape.encode_utf8(&mut buffer).as_bytes());
+            }
         }
     }
     String::from_utf8(output).context("SQLite text requires UTF-8 string literals")

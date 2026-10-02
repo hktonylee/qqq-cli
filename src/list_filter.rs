@@ -22,8 +22,13 @@ impl ListStatus {
     }
 }
 
-pub fn filter_tasks(tasks: Vec<Task>, query: Option<&str>, statuses: &[ListStatus]) -> Vec<Task> {
-    if query.is_none() && statuses.is_empty() {
+pub fn filter_tasks(
+    tasks: Vec<Task>,
+    query: Option<&str>,
+    statuses: &[ListStatus],
+    matches: Option<&HashSet<i64>>,
+) -> Vec<Task> {
+    if query.is_none() && statuses.is_empty() && matches.is_none() {
         return tasks;
     }
 
@@ -36,6 +41,7 @@ pub fn filter_tasks(tasks: Vec<Task>, query: Option<&str>, statuses: &[ListStatu
                 .is_none_or(|needle| task.description.to_lowercase().contains(needle))
                 && (statuses.is_empty()
                     || statuses.iter().any(|status| status.as_str() == task.status))
+                && matches.is_none_or(|matches| matches.contains(&task.id))
         })
         .collect();
     let positions: HashMap<i64, usize> = tasks

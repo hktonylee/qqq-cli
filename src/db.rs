@@ -1,11 +1,14 @@
 use crate::images::{ImageInput, ImageReference, ImageStore, PendingFiles};
+use crate::sql_filter::CompiledFilter;
 use anyhow::{Context, Result, bail, ensure};
 use rusqlite::{
     Connection, OpenFlags, OptionalExtension, Transaction, TransactionBehavior, params,
+    params_from_iter,
 };
 use serde::Serialize;
 use serde_json::{Value, json};
 use std::{
+    collections::HashSet,
     ops::Range,
     path::{Path, PathBuf},
     time::Duration,
@@ -534,6 +537,51 @@ impl Db {
              ORDER BY id"
         )?.query_map(params![max_completed, include_archived],task_row)?.collect::<rusqlite::Result<_>>()?)
     }
+    /// Evaluate matches in the same snapshot as base rows; ancestors remain available.
+    pub fn list_filtered(
+        &self,
+        max_completed: Option<i64>,
+        include_archived: bool,
+        filter: Option<&CompiledFilter>,
+    ) -> Result<(Vec<Task>, Option<HashSet<i64>>)> {
+        let Some(filter) = filter else {
+            return Ok((
+                self.list_with_archived(max_completed, include_archived)?,
+                None,
+            ));
+        };
+        let limit = filter.params().len() + 1;
+        let archive = limit + 1;
+        let sql = format!(
+            "SELECT id,description,status,claim_key,created_at,updated_at,parent_id,harness_name,harness_session,orchestrator_name,orchestrator_session,priority,archived,({predicate}) FROM tasks
+             WHERE (?{archive} OR archived=0) AND (?{limit} IS NULL OR status!='completed' OR id IN (
+                 SELECT id FROM tasks WHERE status='completed' AND (?{archive} OR archived=0)
+                 ORDER BY (SELECT MAX(id) FROM events WHERE task_id=tasks.id AND action='complete') DESC,
+                          updated_at DESC, id DESC LIMIT COALESCE(?{limit},-1)
+             )) ORDER BY id",
+            predicate = filter.sql()
+        );
+        let mut values = filter.params().to_vec();
+        values.push(max_completed.map_or(
+            rusqlite::types::Value::Null,
+            rusqlite::types::Value::Integer,
+        ));
+        values.push(rusqlite::types::Value::Integer(i64::from(include_archived)));
+        let mut statement = self.conn.prepare(&sql)?;
+        let rows = statement.query_map(params_from_iter(values.iter()), |row| {
+            Ok((task_row(row)?, row.get::<_, bool>(13)?))
+        })?;
+        let mut tasks = Vec::new();
+        let mut matches = HashSet::new();
+        for row in rows {
+            let (task, matched) = row?;
+            if matched {
+                matches.insert(task.id);
+            }
+            tasks.push(task);
+        }
+        Ok((tasks, Some(matches)))
+    }
     pub fn data_version(&self) -> Result<i64> {
         Ok(self
             .conn
@@ -858,6 +906,19 @@ impl Db {
             [], |row| row.get(0),
         )?)
     }
+    pub fn has_ready_filtered(&self, filter: Option<&CompiledFilter>) -> Result<bool> {
+        let Some(filter) = filter else {
+            return self.has_ready();
+        };
+        let sql = format!(
+            "SELECT EXISTS(SELECT 1 FROM tasks WHERE status='new' AND archived=0 AND
+             (parent_id IS NULL OR EXISTS(SELECT 1 FROM tasks parent WHERE parent.id=tasks.parent_id AND parent.status='completed'))
+             AND ({}))", filter.sql()
+        );
+        Ok(self
+            .conn
+            .query_row(&sql, params_from_iter(filter.params()), |row| row.get(0))?)
+    }
     pub fn next(
         &mut self,
         session: &str,
@@ -872,7 +933,37 @@ impl Db {
         metadata: Option<&crate::identity::Identity>,
         overrides: &crate::identity::Identity,
     ) -> Result<Option<Task>> {
-        self.claim(session, link, metadata, overrides, true)
+        self.claim(session, link, metadata, overrides, true, None)
+    }
+    pub fn next_filtered(
+        &mut self,
+        session: &str,
+        link: Option<&crate::herdr::Link>,
+        filter: Option<&CompiledFilter>,
+    ) -> Result<Option<Task>> {
+        match filter {
+            None => self.next(session, link),
+            Some(filter) => self.next_with_identity_filtered(
+                session,
+                link,
+                None,
+                &crate::identity::Identity::default(),
+                Some(filter),
+            ),
+        }
+    }
+    pub fn next_with_identity_filtered(
+        &mut self,
+        session: &str,
+        link: Option<&crate::herdr::Link>,
+        metadata: Option<&crate::identity::Identity>,
+        overrides: &crate::identity::Identity,
+        filter: Option<&CompiledFilter>,
+    ) -> Result<Option<Task>> {
+        match filter {
+            None => self.next_with_identity(session, link, metadata, overrides),
+            Some(filter) => self.claim(session, link, metadata, overrides, true, Some(filter)),
+        }
     }
     /// Retrieve an existing assignment without claiming queued work if it vanished.
     pub fn owned_with_identity(
@@ -880,7 +971,7 @@ impl Db {
         session: &str,
         overrides: &crate::identity::Identity,
     ) -> Result<Option<Task>> {
-        self.claim(session, None, None, overrides, false)
+        self.claim(session, None, None, overrides, false, None)
     }
     fn claim(
         &mut self,
@@ -889,6 +980,7 @@ impl Db {
         metadata: Option<&crate::identity::Identity>,
         overrides: &crate::identity::Identity,
         allow_new: bool,
+        filter: Option<&CompiledFilter>,
     ) -> Result<Option<Task>> {
         nonempty(session, "Session")?;
         overrides.validate()?;
@@ -908,16 +1000,19 @@ impl Db {
             .optional()?;
         let id = match owned {
             Some(id) => Some(id),
-            None if allow_new => tx
-                .query_row(
-                    "SELECT id FROM tasks WHERE status='new' AND archived=0
+            None if allow_new => {
+                let predicate = filter.map_or("1", CompiledFilter::sql);
+                let sql = format!("SELECT id FROM tasks WHERE status='new' AND archived=0
                      AND (parent_id IS NULL OR EXISTS
                          (SELECT 1 FROM tasks parent WHERE parent.id=tasks.parent_id AND parent.status='completed'))
-                     ORDER BY priority DESC,id ASC LIMIT 1",
-                    [],
+                     AND ({predicate}) ORDER BY priority DESC,id ASC LIMIT 1");
+                tx.query_row(
+                    &sql,
+                    params_from_iter(filter.map_or(&[][..], CompiledFilter::params)),
                     |r| r.get(0),
                 )
-                .optional()?,
+                .optional()?
+            }
             None => None,
         };
         if let Some(id) = id {
