@@ -1,0 +1,9 @@
+# Reopen Completed Tasks Design
+
+`qqq reopen ID` changes an unarchived completed task to `new`. Positive IDs and negative creation indexes follow `show` and `archive`. Any other status fails without writes. Archived completed tasks must be explicitly unarchived first; reopening never changes archive visibility. A completed task with an archived unfinished parent also fails until that parent is unarchived or completed, preventing newly stranded work.
+
+The transition runs in `BEGIN IMMEDIATE`: verify task state and parent, update only `status`, clear already-null ownership fields defensively, set `updated_at`, and append a `reopen` event using supplied session identity or `cli`. Description, priority, parent, messages, images, Herdr link, creation time, and prior events stay intact. Reopening is intentionally not idempotent: repeated call fails because task is no longer completed. Active and completed descendants keep their statuses. New descendants wait until reopened parent completes again; existing claim logic already enforces this.
+
+Schema version 9 rebuilds `events` to admit `reopen` in its action CHECK. Migration copies rows and their IDs/timestamps, preserves AUTOINCREMENT high-water mark, rebuilds `events_task`, and sets `user_version=9`. Concurrent openers use the existing immediate transaction and recheck. Existing tasks need no new columns.
+
+CLI JSON returns the new task state with `status: "new"`; human output uses existing task summary. Default and include-archived lists show reopened unarchived tasks as new. Watch refreshes on committed transition, with no refresh on rejected attempts. Tests cover migration, transaction rollback, content/history retention, parent/descendant readiness, archive guards, CLI output, and watch snapshots. README documents the explicit transition and dependency effects.
