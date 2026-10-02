@@ -133,16 +133,16 @@ qqq tui
 
 Upper panel lists all tasks; lower panel edits current task. Shift-Up/Down
 selects tasks, then blank draft. Ctrl-S updates selected task or creates new
-task, then clears editor for next task. Esc exits blank draft or confirms
-discard of nonempty draft; Ctrl-C exits. Saves commit immediately. TUI needs
-terminal and writes no stdout, including with `--json`.
+task, then clears editor for next task without leaving TUI. Esc exits blank
+draft or confirms discard of nonempty draft; Ctrl-C exits. Ctrl-V or terminal
+paste inserts text; pasting image file path attaches image. Saves commit
+immediately. TUI needs terminal and writes no stdout, including with `--json`.
 
 Mouse wheel scrolls task list or editor under pointer. Both panes keep separate
 scroll positions; scrolling editor never edits or saves text. Shift-Up/Down
 returns list to selected task. Editor keys reveal caret after manual scroll.
-Left-click a task row to load it in editor, including indented or wrapped
-rows. Left-click editor text to place caret; dirty drafts ask before switching
-tasks.
+Left-click task row to load it in editor, including indented or wrapped rows.
+Left-click editor text to place caret; dirty drafts ask before switching tasks.
 
 Filter bar stays visible above task list. `/` focuses it; type to match any
 part of full description, ignoring case. Matching tasks retain parent chain;

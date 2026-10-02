@@ -22,9 +22,9 @@
 
 **Files:** `tests/tui_dashboard_pty.py`, `tests/tui.rs`, `README.md`, production TUI file only if regression appears
 
-- [ ] Seed at least 12 matching tasks plus a nonmatching task. In PTY scenario `workflow`, type `/target`, wheel list up, click visible `Target` row, click editor, edit and Ctrl-S. Assert DB update and cleared new-task editor while child remains alive with empty stdout.
-- [ ] Type new task body, send bracketed text paste (`\x1b[200~...\x1b[201~`), then paste path of tiny PNG fixture from `tests/tui_pty.py`. Ctrl-S; assert new task body and image metadata in `qqq show`, plus visible save footer. Verify blank-draft Ctrl-S error remains recoverable before creating new task.
-- [ ] Add README TUI key/mouse help covering Shift-Up/Down, `/` and Alt+/, Tab/Enter, Ctrl-S, Esc/Ctrl-C, wheel, click, dirty confirmation, bracketed paste/image. Run focused PTY test and commit.
+- [x] Seed at least 12 matching tasks plus a nonmatching task. In PTY scenario `workflow`, type `/target`, wheel list up, click visible `Target` row, click editor, edit and Ctrl-S. Assert DB update and cleared new-task editor while child remains alive with empty stdout.
+- [x] Type new task body, send bracketed text paste (`\x1b[200~...\x1b[201~`), then paste path of tiny PNG fixture from `tests/tui_pty.py`. Ctrl-S; assert new task body and image metadata in `qqq show`, plus visible save footer. Verify blank-draft Ctrl-S error remains recoverable before creating new task.
+- [x] Add README TUI key/mouse help covering Shift-Up/Down, `/` and Alt+/, Tab/Enter, Ctrl-S, Esc/Ctrl-C, wheel, click, dirty confirmation, bracketed paste/image. Run focused PTY test and commit.
 
 ### Task 3: Verify and integrate
 

@@ -89,6 +89,11 @@ fn tui_dashboard_workflow_states_and_cleanup() {
 }
 
 #[test]
+fn tui_dashboard_complete_workflow() {
+    dashboard_scenario("workflow");
+}
+
+#[test]
 fn tui_dashboard_status_colors_respect_no_color() {
     dashboard_scenario("color");
     dashboard_scenario("no_color");

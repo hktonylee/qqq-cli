@@ -1,5 +1,6 @@
 """Exercise two-panel qqq tui through a real terminal."""
 
+import base64
 import codecs
 import fcntl
 import json
@@ -14,6 +15,7 @@ import sys
 import tempfile
 import termios
 import time
+from pathlib import Path
 
 
 class TerminalScreen:
@@ -107,6 +109,14 @@ with tempfile.TemporaryDirectory(prefix="qqq-dashboard-test-") as folder:
         cli("complete", "1", "--session", "worker")
         cli("next", "--local", "--session", "worker")
         cli("edit", "2", "--set-status", "error", "--reason", "Failed", "--session", "worker")
+    elif scenario == "workflow":
+        cli("add", "Other")
+        for index in range(2, 21):
+            cli("add", f"Target {index}")
+        image_path = Path(folder) / "workflow.png"
+        image_path.write_bytes(base64.b64decode(
+            "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aGD8AAAAASUVORK5CYII="
+        ))
     elif scenario == "click":
         cli("add", "Parent\nParent detail")
         cli("add", "Child start\nChild detail " + "word " * 12, "--parent", "1")
@@ -221,11 +231,56 @@ with tempfile.TemporaryDirectory(prefix="qqq-dashboard-test-") as folder:
         elif scenario in ("no_color", "dumb", "pasteboard_no_color", "filter_no_color"):
             assert b"\x1b[38;" not in screen, screen[-2000:]
             assert b"\x1b[48;" not in screen, screen[-2000:]
-        if scenario not in ("scroll", "wheel", "click", "click_filter", "workflow_empty", "workflow_status", "filter", "filter_no_color"):
+        if scenario not in ("scroll", "wheel", "click", "click_filter", "workflow", "workflow_empty", "workflow_status", "filter", "filter_no_color"):
             read_until(b"Second")
             assert "First" in visible.text() and "Second" in visible.text(), visible.text()
         assert not select.select([child.stdout], [], [], 0)[0], "TUI wrote stdout while open"
-        if scenario == "workflow_empty":
+        if scenario == "workflow":
+            initial_tasks = cli("list")
+            clear_capture()
+            send(b"/target")
+            read_until(b"Filter: target")
+            clear_capture()
+            send(b"\x1b[<64;6;4M")
+            wait_visible(lambda: "Target 13" in visible.text().splitlines()[2])
+            settle()
+            clear_capture()
+            click(6, task_row("Target 14"))
+            read_until(b"task #14")
+            wait_visible(lambda: visible.text().splitlines()[9].startswith("Target 14"))
+            clear_capture()
+            click(10, 10)
+            send(b" updated")
+            wait_visible(lambda: visible.text().splitlines()[9].startswith("Target 14 updated"))
+            assert cli("list") == initial_tasks
+            clear_capture()
+            send(b"\x13")
+            read_until(b"Saved #14. New task")
+            assert cli("show", "14")["task"]["description"] == "Target 14 updated"
+            assert child.poll() is None
+            assert not select.select([child.stdout], [], [], 0)[0], "TUI wrote stdout after update"
+            wait_visible(lambda: "new task" in visible.text().splitlines()[8]
+                         and visible.text().splitlines()[9].strip() == "")
+            clear_capture()
+            send(b"\x13")
+            read_until(b"Task description cannot be empty")
+            clear_capture()
+            send(b"New target ")
+            send(b"\x1b[200~details\x1b[201~")
+            wait_visible(lambda: visible.text().splitlines()[9].startswith("New target details"))
+            clear_capture()
+            send(b"\x1b[200~" + str(image_path).encode() + b"\x1b[201~")
+            read_until(b"[Image #1: workflow.png]")
+            clear_capture()
+            send(b"\x13")
+            read_until(b"Saved #21. New task")
+            saved = cli("show", "21")
+            assert saved["task"]["description"].startswith("New target details")
+            assert "![workflow.png](.qqq/images/21/1.png)" in saved["task"]["description"]
+            assert [image["name"] for image in saved["images"]] == ["workflow.png"]
+            assert child.poll() is None
+            assert not select.select([child.stdout], [], [], 0)[0], "TUI wrote stdout after new task"
+        elif scenario == "workflow_empty":
             wait_visible(lambda: "No tasks yet." in visible.text().splitlines()[2])
             assert cli("list") == []
             assert visible.text().splitlines()[8].startswith("qqq task editor - new task")
@@ -233,6 +288,7 @@ with tempfile.TemporaryDirectory(prefix="qqq-dashboard-test-") as folder:
             wait_visible(lambda: "Completed" in visible.text()
                          and "Error" in visible.text()
                          and "Fresh item" in visible.text())
+            assert "New          Fresh item" in visible.text(), visible.text()
             clear_capture()
             send(b"\x1b[1;2A" * 2)
             wait_visible(lambda: "task #2 (Error)" in visible.text().splitlines()[8])
