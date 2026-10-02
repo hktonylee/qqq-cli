@@ -307,6 +307,41 @@ with tempfile.TemporaryDirectory(prefix="qqq-dashboard-test-") as folder:
                 send(b"\x13")
                 wait_visible(lambda: "task #3 (" in visible.text().splitlines()[8])
                 assert cli("show", "3")["task"]["description"] == "Unsaved draft"
+        elif scenario in ("live_title", "live_title_filtered"):
+            cli("edit", "2", "--priority", "8")
+            send(b"\x1b[1;2A")
+            wait_visible(lambda: "task #2 (New)" in visible.text().splitlines()[8])
+            send(b"Draft ")
+            wait_visible(lambda: visible.text().splitlines()[9].startswith("Draft Second"))
+            if scenario == "live_title_filtered":
+                send(CTRL_SLASH + b"first")
+                wait_visible(lambda: visible.text().splitlines()[1].strip() == "Filter: first"
+                             and "Second" not in "\n".join(visible.text().splitlines()[2:7]))
+            def title_status(status):
+                wait_visible(lambda: f"task #2 ({status})" in visible.text().splitlines()[8])
+                assert visible.text().splitlines()[9].startswith("Draft Second")
+            assert cli("next", "--local", "--session", "worker")["id"] == 2
+            title_status("In progress")
+            cli("complete", "2", "--session", "worker")
+            title_status("Completed")
+            cli("reopen", "2")
+            title_status("New")
+            cli("next", "--local", "--session", "worker")
+            title_status("In progress")
+            cli("edit", "2", "--set-status", "error", "--reason", "Failure", "--session", "worker")
+            title_status("Error")
+            cli("edit", "2", "--set-status", "new")
+            title_status("New")
+            cli("next", "--local", "--session", "worker")
+            title_status("In progress")
+            cli("edit", "2", "--set-status", "error", "--reason", "Failure", "--session", "worker")
+            title_status("Error")
+            cli("archive", "2")
+            wait_visible(lambda: "Second" not in "\n".join(visible.text().splitlines()[2:7]))
+            cli("edit", "2", "--set-status", "new")
+            title_status("New")
+            assert cli("show", "2")["task"]["archived"]
+            assert cli("show", "2")["task"]["description"] == "Second"
         elif scenario == "live_refresh":
             settle()
             clear_capture()

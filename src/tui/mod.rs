@@ -478,6 +478,25 @@ fn compose_inner(
         } else {
             render::Layout::new(&fragments, &image_mask, size.0 as usize)
         };
+        let (dashboard_tasks, list_version) = if dashboard {
+            let db = mode.db().expect("dashboard has database");
+            // Capture before listing so commits during rendering trigger another refresh.
+            let version = db.data_version()?;
+            let mut tasks = if include_archived || target_id.is_some() {
+                db.list_with_archived(None, true)?
+            } else {
+                db.list(None)?
+            };
+            if let Some(task) = tasks.iter().find(|task| Some(task.id) == target_id) {
+                target_status = Some(task.status.clone());
+            }
+            if !include_archived {
+                tasks.retain(|task| !task.archived);
+            }
+            (Some(tasks), Some(version))
+        } else {
+            (None, None)
+        };
         let footer = match &confirmation {
             Some(Confirmation::Exit) if usize::from(size.0) < "Discard draft? (y/N)".len() => {
                 "Discard? y/N"
@@ -530,16 +549,10 @@ fn compose_inner(
         let mut visible_ids = None;
         let mut list_row_count = 0;
         let mut rows = Vec::new();
-        let mut list_version = None;
         if dashboard {
-            let db = mode.db().expect("dashboard has database");
-            // Capture before listing so commits during rendering trigger another refresh.
-            list_version = Some(db.data_version()?);
-            let tasks = if include_archived {
-                db.list_with_archived(None, true)?
-            } else {
-                db.list(None)?
-            };
+            let tasks = dashboard_tasks
+                .as_ref()
+                .expect("dashboard has task snapshot");
             let filter_views: Vec<_> = tasks
                 .iter()
                 .map(|task| panel::FilterTask {

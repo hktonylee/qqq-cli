@@ -214,7 +214,8 @@ and writes no stdout, including with `--json`.
 
 Task list refreshes after external DB commits without keyboard input. Refresh
 keeps current editor draft, filter query, and manual scroll positions. Selected
-task text stays in editor until reloaded or saved.
+task status updates in editor title; task text stays in editor until reloaded
+or saved.
 
 Mouse wheel scrolls task list or editor under pointer. Both panes keep separate
 scroll positions; scrolling editor never edits or saves text. Shift-Up/Down

@@ -95,6 +95,12 @@ fn tui_dashboard_external_refresh_preserves_filter_and_dirty_editor() {
 }
 
 #[test]
+fn tui_dashboard_refreshes_selected_title_status_without_replacing_draft() {
+    dashboard_scenario("live_title");
+    dashboard_scenario("live_title_filtered");
+}
+
+#[test]
 fn tui_dashboard_external_refresh_keeps_manual_list_scroll() {
     dashboard_scenario("live_refresh_scroll");
 }
