@@ -993,6 +993,101 @@ fn dashboard_paste_label_uses_gold_while_body_stays_neutral() {
 }
 
 #[test]
+fn hotkey_footer_colors_shortcuts_and_clears_styles_for_messages() {
+    for width in [12, 17, 72] {
+        let layout = render::Layout::new(&["Draft".into()], &[], width.into());
+        let mut terminal = Terminal::new(TestBackend::new(width, 24)).unwrap();
+        for color in [true, false] {
+            for (keys, message, error) in [
+                (render::DASHBOARD_KEYS, "", false),
+                (render::DASHBOARD_KEYS, "Ctrl-S save failed", true),
+                (render::DASHBOARD_KEYS, "Saved #1. New task", false),
+                (render::FILTER_KEYS, "", false),
+                (render::KEYS, "", false),
+            ] {
+                let chrome = render::Chrome {
+                    title: "qqq task editor",
+                    title_status_color: None,
+                    keys,
+                    message,
+                };
+                terminal
+                    .draw(|frame| {
+                        dashboard::draw(
+                            frame,
+                            &[],
+                            &HashMap::new(),
+                            None,
+                            dashboard::View {
+                                query: "",
+                                focused: false,
+                                top: &mut 0,
+                                follow_selected: true,
+                                modal_lines: None,
+                                details: None,
+                            },
+                            render::DashboardEditor {
+                                layout: &layout,
+                                cursor: 0,
+                                top: &mut 0,
+                                chrome: &chrome,
+                                message_is_error: error,
+                                follow_cursor: true,
+                            },
+                            color,
+                        );
+                    })
+                    .unwrap();
+                let buffer = terminal.backend().buffer();
+                let text = if message.is_empty() { keys } else { message };
+                let clipped = render::clipped(text, width.into());
+                assert_eq!(line(buffer, 23).trim_end(), clipped.trim_end());
+                for (x, _) in clipped.chars().enumerate() {
+                    let shortcut = message.is_empty()
+                        && [
+                            "Ctrl-S",
+                            "Ctrl-P",
+                            "Ctrl-G",
+                            "Shift-Up/Down",
+                            "Ctrl+/",
+                            "Backspace",
+                            "Esc",
+                            "Tab/Enter",
+                            "Ctrl-V",
+                        ]
+                        .iter()
+                        .any(|key| {
+                            keys.find(key)
+                                .is_some_and(|start| (start..start + key.len()).contains(&x))
+                        });
+                    let foreground = if !color {
+                        Color::Reset
+                    } else if !message.is_empty() {
+                        if error { Color::Red } else { Color::Yellow }
+                    } else if shortcut {
+                        Color::Indexed(81)
+                    } else {
+                        Color::Gray
+                    };
+                    let cell = &buffer[(x as u16, 23)];
+                    assert_eq!(cell.fg, foreground, "{text:?} column {x} width {width}");
+                    assert_eq!(cell.bg, Color::Reset);
+                    assert_eq!(
+                        cell.modifier,
+                        if color && shortcut {
+                            Modifier::BOLD
+                        } else {
+                            Modifier::empty()
+                        },
+                        "{text:?} column {x} width {width}",
+                    );
+                }
+            }
+        }
+    }
+}
+
+#[test]
 fn failed_save_footer_uses_error_color() {
     let layout = render::Layout::new(&["Draft".into()], &[], 72);
     let chrome = render::Chrome {

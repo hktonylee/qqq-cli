@@ -187,6 +187,34 @@ fn editor_line(layout: &render::Layout, index: usize, color: bool) -> Line<'stat
     Line::from(spans)
 }
 
+fn hotkey_line(keys: &str, color: bool) -> Line<'static> {
+    let safe = render::clipped(keys, usize::MAX);
+    if !color {
+        return Line::from(safe);
+    }
+    let key_style = Style::default().fg(ACCENT).add_modifier(Modifier::BOLD);
+    let mut spans = Vec::new();
+    for part in safe.split_inclusive(' ') {
+        let key = part.trim_end_matches(' ');
+        let shortcut = key.starts_with("Ctrl-")
+            || key.starts_with("Shift-")
+            || matches!(
+                key,
+                "Ctrl+/" | "Esc" | "Esc/Ctrl-C" | "Backspace" | "Tab/Enter"
+            );
+        spans.push(Span::styled(
+            key.to_owned(),
+            if shortcut {
+                key_style
+            } else {
+                Style::default()
+            },
+        ));
+        spans.push(Span::raw(part[key.len()..].to_owned()));
+    }
+    Line::from(spans)
+}
+
 fn editor(frame: &mut Frame<'_>, area: Rect, editor: render::DashboardEditor<'_>, color: bool) {
     let body = Rect::new(area.x, area.y + 1, area.width, area.height - 2);
     let (row, column) = editor.layout.positions[editor.cursor];
@@ -223,9 +251,9 @@ fn editor(frame: &mut Frame<'_>, area: Rect, editor: render::DashboardEditor<'_>
         .collect();
     frame.render_widget(Paragraph::new(lines).style(body_style), body);
     let footer = if editor.chrome.message.is_empty() {
-        editor.chrome.keys
+        hotkey_line(editor.chrome.keys, color)
     } else {
-        editor.chrome.message
+        Line::from(render::clipped(editor.chrome.message, area.width.into()))
     };
     let footer_style = if !color {
         Style::default()
@@ -237,7 +265,7 @@ fn editor(frame: &mut Frame<'_>, area: Rect, editor: render::DashboardEditor<'_>
         Style::default().fg(Color::Yellow)
     };
     frame.render_widget(
-        Paragraph::new(render::clipped(footer, area.width.into())).style(footer_style),
+        Paragraph::new(footer).style(footer_style),
         Rect::new(area.x, area.y + area.height - 1, area.width, 1),
     );
     if row >= *editor.top && row < editor.top.saturating_add(body_height) {
