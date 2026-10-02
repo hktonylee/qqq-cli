@@ -90,6 +90,8 @@ enum Commands {
         #[arg(long = "image", value_name = "PATH")]
         images: Vec<PathBuf>,
     },
+    /// Browse tasks above a continuous interactive editor.
+    Tui,
     /// List first description lines as a dependency tree; JSON preserves whole text.
     List {
         /// Maximum completed tasks to show; overrides human display default. 0 hides completed tasks.
@@ -276,6 +278,13 @@ fn execute(cli: Cli, display_limit: Option<i64>) -> Result<Value> {
                 }
             }
         }
+        Commands::Tui => {
+            tui::compose_dashboard(&mut db, &mut |db, outcome| {
+                let task = db.save_composition(outcome.target_id, None, &outcome.composition)?;
+                Ok(task.id)
+            })?;
+            Value::Null
+        }
         Commands::List { max_completed, .. } => json!(db.list(max_completed.or(display_limit))?),
         Commands::Show {
             id,
@@ -429,6 +438,7 @@ fn execute(cli: Cli, display_limit: Option<i64>) -> Result<Value> {
 }
 fn run() -> Result<Option<String>> {
     let cli = Cli::parse_from(aliases::expand(std::env::args_os().collect())?);
+    let is_tui = matches!(&cli.command, Commands::Tui);
     let display_limit = match &cli.command {
         Commands::List {
             all: false,
@@ -457,6 +467,9 @@ fn run() -> Result<Option<String>> {
     let json = cli.json;
     let format = output::Format::from(&cli.command);
     let value = execute(cli, display_limit)?;
+    if is_tui {
+        return Ok(None);
+    }
     Ok(Some(if json {
         serde_json::to_string_pretty(&value).expect("JSON value is serializable")
     } else if display_limit.is_some() && value.as_array().is_some_and(Vec::is_empty) {

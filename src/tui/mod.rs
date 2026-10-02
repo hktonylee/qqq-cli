@@ -1,5 +1,6 @@
 mod clipboard;
 pub mod draft;
+mod panel;
 mod render;
 
 use anyhow::{Result, bail, ensure};
@@ -117,6 +118,7 @@ enum Mode<'a, 'b> {
     Continuous {
         db: &'a mut crate::db::Db,
         save: &'b mut dyn FnMut(&mut crate::db::Db, Outcome) -> Result<i64>,
+        dashboard: bool,
     },
 }
 impl Mode<'_, '_> {
@@ -127,8 +129,8 @@ impl Mode<'_, '_> {
         }
     }
 }
-fn cancel(saved_any: bool) -> Result<Option<Outcome>> {
-    if saved_any {
+fn cancel(saved_any: bool, dashboard: bool) -> Result<Option<Outcome>> {
+    if saved_any || dashboard {
         Ok(None)
     } else {
         bail!("Editor cancelled; task not saved")
@@ -142,7 +144,29 @@ pub fn compose_continuously(
     db: &mut crate::db::Db,
     save: &mut dyn FnMut(&mut crate::db::Db, Outcome) -> Result<i64>,
 ) -> Result<()> {
-    compose_inner("", Mode::Continuous { db, save }).map(|_| ())
+    compose_inner(
+        "",
+        Mode::Continuous {
+            db,
+            save,
+            dashboard: false,
+        },
+    )
+    .map(|_| ())
+}
+pub fn compose_dashboard(
+    db: &mut crate::db::Db,
+    save: &mut dyn FnMut(&mut crate::db::Db, Outcome) -> Result<i64>,
+) -> Result<()> {
+    compose_inner(
+        "",
+        Mode::Continuous {
+            db,
+            save,
+            dashboard: true,
+        },
+    )
+    .map(|_| ())
 }
 fn compose_inner(description: &str, mut mode: Mode<'_, '_>) -> Result<Option<Outcome>> {
     let terminal = TerminalGuard::enter()?;
@@ -150,10 +174,18 @@ fn compose_inner(description: &str, mut mode: Mode<'_, '_>) -> Result<Option<Out
     let mut baseline = description.to_owned();
     let mut target_id = None;
     let mut top = 0;
+    let mut list_top = 0;
     let mut message = String::new();
     let mut confirmation: Option<Confirmation> = None;
     let mut saved_any = false;
     loop {
+        let dashboard = matches!(
+            mode,
+            Mode::Continuous {
+                dashboard: true,
+                ..
+            }
+        );
         let size = terminal::size()?;
         let layout = render::Layout::new(&draft.fragments(), &draft.image_mask(), size.0 as usize);
         let footer = match &confirmation {
@@ -174,23 +206,47 @@ fn compose_inner(description: &str, mut mode: Mode<'_, '_>) -> Result<Option<Out
             (true, None) => "qqq task editor - new task".to_owned(),
             (false, _) => "qqq task editor".to_owned(),
         };
-        render::draw(
-            &mut io::stderr(),
-            &layout,
-            draft.cursor(),
-            &mut top,
-            size,
-            &render::Chrome {
-                title: &title,
-                keys: match &mode {
-                    Mode::Continuous { .. } => render::ADD_KEYS,
-                    Mode::Single(Some(_)) => render::NAV_KEYS,
-                    Mode::Single(None) => render::KEYS,
-                },
-                message: footer,
+        let chrome = render::Chrome {
+            title: &title,
+            keys: match &mode {
+                Mode::Continuous { .. } => render::ADD_KEYS,
+                Mode::Single(Some(_)) => render::NAV_KEYS,
+                Mode::Single(None) => render::KEYS,
             },
-            terminal.color,
-        )?;
+            message: footer,
+        };
+        if dashboard {
+            let tasks = mode.db().expect("dashboard has database").list(None)?;
+            let tree = crate::output::render(
+                crate::output::Format::Tasks,
+                &serde_json::json!(tasks),
+                false,
+                Some(usize::from(size.0).saturating_sub(2)),
+            );
+            let rows = panel::rows(&tree);
+            render::draw_dashboard(
+                &mut io::stderr(),
+                &rows,
+                target_id,
+                &mut list_top,
+                &layout,
+                draft.cursor(),
+                &mut top,
+                size,
+                &chrome,
+                terminal.color,
+            )?;
+        } else {
+            render::draw(
+                &mut io::stderr(),
+                &layout,
+                draft.cursor(),
+                &mut top,
+                size,
+                &chrome,
+                terminal.color,
+            )?;
+        }
         match event::read()? {
             Event::Paste(text) if confirmation.is_none() => {
                 message = paste(&mut draft, &text)
@@ -201,7 +257,7 @@ fn compose_inner(description: &str, mut mode: Mode<'_, '_>) -> Result<Option<Out
                 let control = key.modifiers.contains(KeyModifiers::CONTROL);
                 if let Some(pending) = confirmation.take() {
                     if control && key.code == KeyCode::Char('c') {
-                        return cancel(saved_any);
+                        return cancel(saved_any, dashboard);
                     }
                     if !key
                         .modifiers
@@ -209,7 +265,7 @@ fn compose_inner(description: &str, mut mode: Mode<'_, '_>) -> Result<Option<Out
                     {
                         match key.code {
                             KeyCode::Char('y' | 'Y') => match pending {
-                                Confirmation::Exit => return cancel(saved_any),
+                                Confirmation::Exit => return cancel(saved_any, dashboard),
                                 Confirmation::Switch(target) => {
                                     load_target(
                                         target,
@@ -275,7 +331,7 @@ fn compose_inner(description: &str, mut mode: Mode<'_, '_>) -> Result<Option<Out
                                 };
                                 match &mut mode {
                                     Mode::Single(_) => return Ok(Some(outcome)),
-                                    Mode::Continuous { db, save } => match save(db, outcome) {
+                                    Mode::Continuous { db, save, .. } => match save(db, outcome) {
                                         Ok(id) => {
                                             saved_any = true;
                                             load_target(
@@ -293,7 +349,7 @@ fn compose_inner(description: &str, mut mode: Mode<'_, '_>) -> Result<Option<Out
                             }
                             Err(error) => message = error.to_string(),
                         },
-                        KeyCode::Char('c') => return cancel(saved_any),
+                        KeyCode::Char('c') => return cancel(saved_any, dashboard),
                         KeyCode::Char('v') => {
                             let result = clipboard::read().and_then(|value| match value {
                                 clipboard::Paste::Text(text) => paste(&mut draft, &text),
@@ -312,7 +368,7 @@ fn compose_inner(description: &str, mut mode: Mode<'_, '_>) -> Result<Option<Out
                 }
                 message.clear();
                 match key.code {
-                    KeyCode::Esc if draft.is_empty() => return cancel(saved_any),
+                    KeyCode::Esc if draft.is_empty() => return cancel(saved_any, dashboard),
                     KeyCode::Esc => confirmation = Some(Confirmation::Exit),
                     KeyCode::Char(character)
                         if !key

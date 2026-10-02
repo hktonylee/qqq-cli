@@ -107,8 +107,21 @@ qqq add --edit
 qqq edit 1 --edit --description "Prefilled draft"
 ```
 
-Editor UI uses stderr; stdout holds result on exit. Cancelling draft keeps
-earlier saves. Direct edits preserve omitted fields, ownership and attachments.
+Built-in add/edit editor uses stderr; stdout holds result on exit. Cancelling
+draft keeps earlier saves. Direct edits preserve omitted fields, ownership and
+attachments.
+
+## Task TUI
+
+```sh
+qqq tui
+```
+
+Upper panel lists all tasks; lower panel edits current task. Shift-Up/Down
+selects tasks, then blank draft. Ctrl-S updates selected task or creates new
+task, then clears editor for next task. Esc exits blank draft or confirms
+discard of changed draft; Ctrl-C exits. Saves commit immediately. TUI needs
+terminal and writes no stdout, including with `--json`.
 
 ## Dependencies and images
 

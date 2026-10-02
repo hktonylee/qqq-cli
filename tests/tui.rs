@@ -33,6 +33,51 @@ fn history_scenario(name: &str) {
     );
 }
 
+fn dashboard_scenario(name: &str) {
+    let output = Command::new("python3")
+        .arg(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/tests/tui_dashboard_pty.py"
+        ))
+        .arg(env!("CARGO_BIN_EXE_qqq"))
+        .arg(name)
+        .output()
+        .unwrap();
+    assert!(
+        output.status.success(),
+        "{}\n{}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+}
+
+#[test]
+fn tui_dashboard_edits_and_adds_without_leaving_screen() {
+    dashboard_scenario("save");
+}
+
+#[test]
+fn tui_dashboard_empty_exit_succeeds() {
+    dashboard_scenario("empty");
+    dashboard_scenario("empty_json");
+}
+
+#[test]
+fn tui_dashboard_scrolls_to_selected_task() {
+    dashboard_scenario("scroll");
+}
+
+#[test]
+fn tui_dashboard_keeps_dirty_draft_and_survives_resize() {
+    dashboard_scenario("dirty");
+    dashboard_scenario("resize");
+}
+
+#[test]
+fn tui_dashboard_keeps_draft_after_failed_save() {
+    dashboard_scenario("save_error");
+}
+
 #[test]
 fn tui_add_history_saves_selected_task() {
     history_scenario("history_save");

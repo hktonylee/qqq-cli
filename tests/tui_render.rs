@@ -1,4 +1,7 @@
 #[allow(dead_code)]
+#[path = "../src/tui/panel.rs"]
+mod panel;
+#[allow(dead_code)]
 #[path = "../src/tui/render.rs"]
 mod render;
 
@@ -8,6 +11,65 @@ fn chrome(message: &str) -> render::Chrome<'_> {
         keys: render::KEYS,
         message,
     }
+}
+
+#[test]
+fn dashboard_rows_keep_task_identity_across_continuations() {
+    let rows = panel::rows(
+        "ID     STATUS       TASK\n1      New          One\n                    detail\n2      New          Two",
+    );
+    assert_eq!(rows[0].task_id, None);
+    assert_eq!(rows[1].task_id, Some(1));
+    assert_eq!(rows[2].task_id, Some(1));
+    assert_eq!(rows[3].task_id, Some(2));
+    assert_eq!(panel::scroll_to(&rows, Some(1), 2, 2), 1);
+    assert_eq!(panel::scroll_to(&rows, Some(2), 0, 2), 2);
+    assert_eq!(panel::scroll_to(&rows, None, 0, 2), 2);
+}
+
+#[test]
+fn dashboard_places_list_above_editor_and_keeps_cursor_in_lower_panel() {
+    let rows = panel::rows("ID     STATUS       TASK\n1      New          First");
+    let layout = render::Layout::new(&["Draft".into()], &[], 72);
+    let mut output = Vec::new();
+    render::draw_dashboard(
+        &mut output,
+        &rows,
+        Some(1),
+        &mut 0,
+        &layout,
+        0,
+        &mut 0,
+        (72, 16),
+        &chrome(""),
+        false,
+    )
+    .unwrap();
+    let drawn = String::from_utf8(output).unwrap();
+    assert!(drawn.contains("qqq tasks"));
+    assert!(drawn.contains("> 1      New"), "{drawn:?}");
+    assert!(drawn.contains("\x1b[9;1Hqqq task editor"), "{drawn:?}");
+    assert!(drawn.contains("\x1b[10;1HDraft"), "{drawn:?}");
+    assert!(drawn.contains("\x1b[16;1HCtrl-S"), "{drawn:?}");
+    assert!(drawn.ends_with("\x1b[10;1H"), "{drawn:?}");
+
+    let mut output = Vec::new();
+    render::draw_dashboard(
+        &mut output,
+        &rows,
+        None,
+        &mut 0,
+        &layout,
+        0,
+        &mut 0,
+        (10, 7),
+        &chrome(""),
+        true,
+    )
+    .unwrap();
+    let small = String::from_utf8(output).unwrap();
+    assert!(small.contains("Resize ter"));
+    assert!(!small.contains("\x1b[48;"));
 }
 
 #[test]
