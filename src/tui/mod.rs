@@ -24,7 +24,11 @@ pub struct Outcome {
 
 enum Target {
     New,
-    Task { id: i64, description: String },
+    Task {
+        id: i64,
+        description: String,
+        status: String,
+    },
 }
 
 enum Confirmation {
@@ -40,8 +44,12 @@ fn adjacent_target(
     if !older && current.is_none() {
         return Ok(None);
     }
-    Ok(match db.adjacent_description(current, older)? {
-        Some((id, description)) => Some(Target::Task { id, description }),
+    Ok(match db.adjacent_task(current, older)? {
+        Some((id, description, status)) => Some(Target::Task {
+            id,
+            description,
+            status,
+        }),
         None if !older => Some(Target::New),
         None => None,
     })
@@ -51,16 +59,23 @@ fn load_target(
     target: Target,
     draft: &mut Draft,
     target_id: &mut Option<i64>,
+    target_status: &mut Option<String>,
     baseline: &mut String,
     top: &mut usize,
 ) {
     match target {
         Target::New => {
             *target_id = None;
+            *target_status = None;
             baseline.clear();
         }
-        Target::Task { id, description } => {
+        Target::Task {
+            id,
+            description,
+            status,
+        } => {
             *target_id = Some(id);
+            *target_status = Some(status);
             *baseline = description;
         }
     }
@@ -173,6 +188,7 @@ fn compose_inner(description: &str, mut mode: Mode<'_, '_>) -> Result<Option<Out
     let mut draft = Draft::new(description);
     let mut baseline = description.to_owned();
     let mut target_id = None;
+    let mut target_status = None;
     let mut top = 0;
     let mut list_top = 0;
     let mut message = String::new();
@@ -202,7 +218,12 @@ fn compose_inner(description: &str, mut mode: Mode<'_, '_>) -> Result<Option<Out
             None => &message,
         };
         let title = match (mode.db().is_some(), target_id) {
-            (true, Some(id)) => format!("qqq task editor - task #{id}"),
+            (true, Some(id)) => format!(
+                "qqq task editor - task #{id} ({})",
+                crate::output::status_label(
+                    target_status.as_deref().expect("selected task has status")
+                )
+            ),
             (true, None) => "qqq task editor - new task".to_owned(),
             (false, _) => "qqq task editor".to_owned(),
         };
@@ -273,6 +294,7 @@ fn compose_inner(description: &str, mut mode: Mode<'_, '_>) -> Result<Option<Out
                                         target,
                                         &mut draft,
                                         &mut target_id,
+                                        &mut target_status,
                                         &mut baseline,
                                         &mut top,
                                     );
@@ -306,6 +328,7 @@ fn compose_inner(description: &str, mut mode: Mode<'_, '_>) -> Result<Option<Out
                                     target,
                                     &mut draft,
                                     &mut target_id,
+                                    &mut target_status,
                                     &mut baseline,
                                     &mut top,
                                 );
@@ -340,6 +363,7 @@ fn compose_inner(description: &str, mut mode: Mode<'_, '_>) -> Result<Option<Out
                                                 Target::New,
                                                 &mut draft,
                                                 &mut target_id,
+                                                &mut target_status,
                                                 &mut baseline,
                                                 &mut top,
                                             );

@@ -369,26 +369,26 @@ impl Db {
             .optional()?
             .with_context(|| format!("No task at recent creation index {reference}"))
     }
-    pub fn adjacent_description(
+    pub fn adjacent_task(
         &self,
         current: Option<i64>,
         older: bool,
-    ) -> Result<Option<(i64, String)>> {
+    ) -> Result<Option<(i64, String, String)>> {
         let found = match (older, current) {
             (true, None) => self.conn.query_row(
-                "SELECT id,description FROM tasks ORDER BY id DESC LIMIT 1",
+                "SELECT id,description,status FROM tasks ORDER BY id DESC LIMIT 1",
                 [],
-                |row| Ok((row.get(0)?, row.get(1)?)),
+                |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
             ),
             (true, Some(id)) => self.conn.query_row(
-                "SELECT id,description FROM tasks WHERE id < ?1 ORDER BY id DESC LIMIT 1",
+                "SELECT id,description,status FROM tasks WHERE id < ?1 ORDER BY id DESC LIMIT 1",
                 [id],
-                |row| Ok((row.get(0)?, row.get(1)?)),
+                |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
             ),
             (false, Some(id)) => self.conn.query_row(
-                "SELECT id,description FROM tasks WHERE id > ?1 ORDER BY id ASC LIMIT 1",
+                "SELECT id,description,status FROM tasks WHERE id > ?1 ORDER BY id ASC LIMIT 1",
                 [id],
-                |row| Ok((row.get(0)?, row.get(1)?)),
+                |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
             ),
             (false, None) => return Ok(None),
         };

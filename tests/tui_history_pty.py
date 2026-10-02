@@ -40,6 +40,14 @@ with tempfile.TemporaryDirectory(prefix="qqq-history-test-") as folder:
             assert cli("next", "--local", "--session", "worker")["id"] == task_id
             cli("complete", str(task_id), "--session", "worker")
         assert cli("next", "--local", "--session", "worker")["id"] == 3
+    elif scenario == "status_header":
+        for description in ("Done", "Active", "Failed", "Waiting"):
+            cli("add", description)
+        assert cli("next", "--local", "--session", "worker-1")["id"] == 1
+        cli("complete", "1", "--session", "worker-1")
+        assert cli("next", "--local", "--session", "worker-1")["id"] == 2
+        assert cli("next", "--local", "--session", "worker-2")["id"] == 3
+        cli("edit", "3", "--set-status", "error", "--reason", "Failed", "--session", "worker-2")
     elif scenario == "skip_deleted":
         for description in ("First", "Removed", "Third"):
             cli("add", description)
@@ -164,6 +172,14 @@ with tempfile.TemporaryDirectory(prefix="qqq-history-test-") as folder:
             assert [task["description"] for task in cli("list")] == ["First", "Second", "Third updated", "Fresh"]
             assert [image["name"] for image in cli("show", "3")["images"]] == ["selected.png"]
             assert cli("show", "4")["images"] == []
+        elif scenario == "status_header":
+            for task_id, status in ((4, "New"), (3, "Error"), (2, "In progress"), (1, "Completed")):
+                press(UP, f"task #{task_id} ({status})".encode())
+            for task_id, status in ((2, "In progress"), (3, "Error"), (4, "New")):
+                press(DOWN, f"task #{task_id} ({status})".encode())
+            press(DOWN, b"new task")
+            send(b"Fresh")
+            assert finish(5)[0]["description"] == "Fresh"
         elif scenario == "skip_deleted":
             press(UP, b"task #3")
             press(UP, b"task #1")

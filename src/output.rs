@@ -111,11 +111,15 @@ fn block(value: &Value, key: &str) -> String {
 }
 
 fn status(value: &Value) -> &str {
-    match value["status"].as_str() {
-        Some("new") => "New",
-        Some("in_progress") => "In progress",
-        Some("completed") => "Completed",
-        Some("error") => "Error",
+    status_label(value["status"].as_str().unwrap_or(""))
+}
+
+pub fn status_label(status: &str) -> &'static str {
+    match status {
+        "new" => "New",
+        "in_progress" => "In progress",
+        "completed" => "Completed",
+        "error" => "Error",
         _ => "Unknown",
     }
 }

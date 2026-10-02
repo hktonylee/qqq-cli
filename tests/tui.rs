@@ -85,6 +85,11 @@ fn tui_add_history_saves_selected_task() {
 }
 
 #[test]
+fn tui_add_history_shows_selected_task_status() {
+    history_scenario("status_header");
+}
+
+#[test]
 fn tui_add_history_skips_deleted_ids() {
     history_scenario("skip_deleted");
 }

@@ -89,8 +89,8 @@ needs desktop clipboard support.
 In built-in `qqq add`, Ctrl-S creates or updates task, clears editor, then waits
 for next task. Saves commit immediately; exit keeps prior saves. Shift+Up loads
 newest task, then older tasks; Shift+Down moves toward newer tasks, then blank
-draft. Header shows selected ID. JSON output returns saved tasks as array on
-exit. Exit without any save returns error.
+draft. Header shows selected ID and status. JSON output returns saved tasks as
+array on exit. Exit without any save returns error.
 
 Switching from changed draft asks before discard; N, Enter, or Esc keeps it.
 Navigation includes completed and active tasks; deleted IDs are skipped.
