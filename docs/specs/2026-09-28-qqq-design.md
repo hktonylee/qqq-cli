@@ -1,5 +1,7 @@
 # qqq CLI design
 
+Historical design. Current storage path and discovery rules: [project-local `.qqq` design](2026-10-01-qqq-directory-design.md).
+
 Rust CLI for local project tasks. `qqq init` creates `qqq.db` in current directory. Other commands search current directory and parents; no configurable DB filename. SQLite stores image bytes so moving project DB preserves attachments. JSON stdout supports agent consumers; errors go to stderr with nonzero exit.
 
 Tasks have integer IDs, title, description, status (new/in_progress/completed), owner session, timestamps. FIFO `next` runs under an immediate transaction: return caller's active task or claim oldest new task. Unique partial index allows one active task per session. Locks never expire. Only owner can complete/release. Release returns task to new. Claim events retain history. Session comes from `--session`, `QQQ_SESSION`, exact Herdr caller identity when HERDR_ENV=1, or unique Herdr agent whose cwd matches database directory. Cwd discovery normalizes symlinks, prefers foreground_cwd over cwd and rejects zero or multiple matches before mutation. Missing identity fails before claiming.

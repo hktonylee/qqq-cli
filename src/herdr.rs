@@ -203,14 +203,14 @@ pub fn current() -> Result<Link> {
         pane,
     })
 }
-/// Prefer exact caller context; outside Herdr discover a unique agent at DB root.
+/// Prefer exact caller context; outside Herdr discover a unique agent at project root.
 pub fn discover(project_dir: &Path) -> Result<Link> {
     if has_context() {
         return current();
     }
     let project_dir = project_dir
         .canonicalize()
-        .context("Cannot resolve database directory")?;
+        .context("Cannot resolve project root")?;
     let agents: Agents = call(None, &["agent", "list"])?;
     let mut matches = agents.agents.into_iter().filter(|pane| {
         pane.foreground_cwd
@@ -222,13 +222,13 @@ pub fn discover(project_dir: &Path) -> Result<Link> {
     });
     let pane = matches.next().with_context(|| {
         format!(
-            "No Herdr agent matches database directory {}; use --session or QQQ_SESSION",
+            "No Herdr agent matches project root {}; use --session or QQQ_SESSION",
             project_dir.display()
         )
     })?;
     ensure!(
         matches.next().is_none(),
-        "Multiple Herdr agents match database directory {}; use --session or run inside intended Herdr pane",
+        "Multiple Herdr agents match project root {}; use --session or run inside intended Herdr pane",
         project_dir.display()
     );
     let identity = pane_identity(&pane).context(

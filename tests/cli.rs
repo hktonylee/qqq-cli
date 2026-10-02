@@ -471,10 +471,10 @@ fn cwd_lookup_rejects_missing_ambiguous_or_unidentified_matches_before_claim() {
     let mut no_identity = agent_at(p, "unknown");
     no_identity.as_object_mut().unwrap().remove("agent_session");
     let cases = [
-        (serde_json::json!([]), "No Herdr agent matches"),
+        (serde_json::json!([]), "No Herdr agent matches project root"),
         (
             serde_json::json!([agent_at(p, "a"), agent_at(p, "b")]),
-            "Multiple Herdr agents match",
+            "Multiple Herdr agents match project root",
         ),
         (
             serde_json::json!([no_identity.clone()]),
@@ -482,7 +482,7 @@ fn cwd_lookup_rejects_missing_ambiguous_or_unidentified_matches_before_claim() {
         ),
         (
             serde_json::json!([agent_at(p, "a"), no_identity]),
-            "Multiple Herdr agents match",
+            "Multiple Herdr agents match project root",
         ),
     ];
     for (agents, error) in cases {
