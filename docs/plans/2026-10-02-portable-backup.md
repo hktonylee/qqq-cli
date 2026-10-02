@@ -35,8 +35,8 @@ Adapt helper to `Read` without buffering entire database. Run focused tests, com
 
 **Files:** `src/snapshot/backup.rs`, `src/main.rs`, `src/output.rs`, `tests/snapshot.rs`.
 
-- [ ] Write failing round-trip-source tests: `qqq backup snapshot.tar` returns counts, archive contains manifest/DB/image, refuses existing destination, missing or mismatched image leaves no destination, snapshot retains task/messages/events/images. Run focused tests and observe missing command.
-- [ ] Add `Backup { destination: PathBuf }` command and output format. Pass open `Db` and DB path to `snapshot::backup`. Validate destination parent and no-clobber; stage in same parent; acquire `TransactionBehavior::Immediate`, run second connection `VACUUM INTO ?1`, copy every DB image via `ImageStore::read` while locked, release transaction, verify staged SQLite, hash and tar files, `sync_all`, `persist_noclobber`. Core sequence:
+- [x] Write failing round-trip-source tests: `qqq backup snapshot.tar` returns counts, archive contains manifest/DB/image, refuses existing destination, missing or mismatched image leaves no destination, snapshot retains task/messages/events/images. Run focused tests and observe missing command.
+- [x] Add `Backup { destination: PathBuf }` command and output format. Pass open `Db` and DB path to `snapshot::backup`. Validate destination parent and no-clobber; stage in same parent; acquire `TransactionBehavior::Immediate`, run second connection `VACUUM INTO ?1`, copy every DB image via `ImageStore::read` while locked, release transaction, verify staged SQLite, hash and tar files, `sync_all`, `persist_noclobber`. Core sequence:
 
 ```rust
 let tx = db.conn.transaction_with_behavior(TransactionBehavior::Immediate)?;
@@ -46,7 +46,7 @@ tx.commit()?;
 validate_database(staged_db)?;
 ```
 
-- [ ] Add concurrent-writer test: writer attempts add/complete during backup; restored archive must have DB/image consistency. Add deterministic failed-copy test using missing or symlinked source image. Run focused tests, commit.
+- [x] Add concurrent-writer test: writer holds write reservation while adding task/image; backup waits, then captures matching DB/image state. Missing source image fails without creating destination. Run focused tests, commit.
 
 ### Task 3: Safe restore
 

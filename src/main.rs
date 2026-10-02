@@ -10,6 +10,7 @@ mod images;
 mod list_filter;
 mod output;
 mod session;
+mod snapshot;
 mod tui;
 mod watch;
 use anyhow::{Context, Result, ensure};
@@ -194,6 +195,8 @@ enum Commands {
         #[arg(allow_negative_numbers = true)]
         id: i64,
     },
+    /// Write consistent project snapshot with database and attachments.
+    Backup { destination: PathBuf },
     /// Append message; session, when supplied, is recorded as author.
     Message { id: i64, body: String },
     /// Link tasks to exact Herdr agent sessions, find their live panes.
@@ -488,6 +491,7 @@ fn execute(cli: Cli, display_limit: Option<i64>) -> Result<Value> {
             let id = db.resolve_task_id(id)?;
             json!(db.reopen(id, session_input.unwrap_or("cli"))?)
         }
+        Commands::Backup { destination } => snapshot::backup::run(&mut db, &path, &destination)?,
         Commands::Message { id, body } => db.message(id, &body, session_input)?,
         Commands::Herdr { command } => match command {
             HerdrCommand::Link {

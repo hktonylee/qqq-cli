@@ -20,6 +20,7 @@ pub enum Format {
     Message,
     Link,
     Pane,
+    Backup,
 }
 
 impl From<&Commands> for Format {
@@ -38,6 +39,7 @@ impl From<&Commands> for Format {
                 HerdrCommand::Find { .. } => Self::Pane,
             },
             Commands::Add { .. } => Self::AddedTask,
+            Commands::Backup { .. } => Self::Backup,
             Commands::Tui { .. } => Self::Task,
             Commands::Edit { .. }
             | Commands::Archive { .. }
@@ -361,6 +363,13 @@ pub fn render(format: Format, value: &Value, color: bool, columns: Option<usize>
         Format::ConfigSet => format!("Set {}.", field(value, "key")),
         Format::ConfigUnset => format!("Unset {}.", field(value, "key")),
         Format::Database => format!("Database: {}", field(value, "database")),
+        Format::Backup => format!(
+            "Backup: {} ({} tasks, {} images, {} bytes)",
+            field(value, "destination"),
+            field(value, "tasks"),
+            field(value, "images"),
+            field(value, "bytes")
+        ),
         Format::Task if value.is_null() => "No ready tasks.".to_owned(),
         Format::AddedTask => match value.as_array() {
             Some(tasks) => tasks
