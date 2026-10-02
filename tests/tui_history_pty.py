@@ -149,6 +149,15 @@ with tempfile.TemporaryDirectory(prefix="qqq-history-test-") as folder:
                 else:
                     pending_stdout.extend(os.read(child.stdout.fileno(), 65536))
         stdout, _ = child.communicate(timeout=5)
+        # Child exit can precede final PTY read; collect terminal cleanup bytes.
+        while select.select([master], [], [], 0)[0]:
+            try:
+                chunk = os.read(master, 65536)
+            except OSError:
+                break
+            if not chunk:
+                break
+            screen.extend(chunk)
         output = bytes(pending_stdout) + stdout
         assert before[3] == termios.tcgetattr(slave)[3], "Terminal flags not restored"
         assert b"\x1b[?1049l" in screen, "Alternate screen not restored"
