@@ -22,6 +22,7 @@ pub enum Format {
     Pane,
     Backup,
     Restore,
+    Doctor,
 }
 
 impl From<&Commands> for Format {
@@ -42,6 +43,7 @@ impl From<&Commands> for Format {
             Commands::Add { .. } => Self::AddedTask,
             Commands::Backup { .. } => Self::Backup,
             Commands::Restore { .. } => Self::Restore,
+            Commands::Doctor => Self::Doctor,
             Commands::Tui { .. } => Self::Task,
             Commands::Edit { .. }
             | Commands::Archive { .. }
@@ -379,6 +381,26 @@ pub fn render(format: Format, value: &Value, color: bool, columns: Option<usize>
             field(value, "images"),
             field(value, "bytes")
         ),
+        Format::Doctor => {
+            let mut lines = vec![if value["ok"] == true {
+                "Project healthy.".to_owned()
+            } else {
+                "Project issues found.".to_owned()
+            }];
+            lines.push(format!("Database: {}", field(value, "database")));
+            if let Some(issues) = value["issues"].as_array() {
+                for issue in issues {
+                    lines.push(format!(
+                        "{}: {}",
+                        field(issue, "code"),
+                        field(issue, "message")
+                    ));
+                    lines.push(format!("  Path: {}", field(issue, "path")));
+                    lines.push(format!("  Action: {}", field(issue, "action")));
+                }
+            }
+            lines.join("\n")
+        }
         Format::Task if value.is_null() => "No ready tasks.".to_owned(),
         Format::AddedTask => match value.as_array() {
             Some(tasks) => tasks

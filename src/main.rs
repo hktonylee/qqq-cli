@@ -3,6 +3,7 @@ mod config;
 mod config_cli;
 mod db;
 mod dispatch;
+mod doctor;
 mod editor;
 mod herdr;
 mod identity;
@@ -199,6 +200,8 @@ enum Commands {
     Backup { destination: PathBuf },
     /// Restore snapshot into new or empty project location.
     Restore { source: PathBuf },
+    /// Check project database and stored images without changing files.
+    Doctor,
     /// Append message; session, when supplied, is recorded as author.
     Message { id: i64, body: String },
     /// Link tasks to exact Herdr agent sessions, find their live panes.
@@ -257,6 +260,9 @@ fn execute(cli: Cli, display_limit: Option<i64>) -> Result<Value> {
             key.as_deref(),
             value.as_deref(),
         );
+    }
+    if matches!(&cli.command, Commands::Doctor) {
+        return doctor::run();
     }
     let overrides = identity::Identity {
         harness_name: cli.harness_name.clone(),
@@ -498,6 +504,7 @@ fn execute(cli: Cli, display_limit: Option<i64>) -> Result<Value> {
         }
         Commands::Backup { destination } => snapshot::backup::run(&mut db, &path, &destination)?,
         Commands::Restore { .. } => unreachable!("restore handled before database open"),
+        Commands::Doctor => unreachable!("doctor handled before database open"),
         Commands::Message { id, body } => db.message(id, &body, session_input)?,
         Commands::Herdr { command } => match command {
             HerdrCommand::Link {
@@ -526,7 +533,7 @@ fn execute(cli: Cli, display_limit: Option<i64>) -> Result<Value> {
         },
     })
 }
-fn run() -> Result<Option<String>> {
+fn run() -> Result<(Option<String>, bool)> {
     let cli = Cli::parse_from(aliases::expand(std::env::args_os().collect())?);
     let is_tui = matches!(&cli.command, Commands::Tui { .. });
     let filtered_list = match &cli.command {
@@ -564,38 +571,48 @@ fn run() -> Result<Option<String>> {
             query.as_deref(),
             statuses,
         )?;
-        return Ok(None);
+        return Ok((None, false));
     }
     let json = cli.json;
+    let is_doctor = matches!(&cli.command, Commands::Doctor);
     let format = output::Format::from(&cli.command);
     let value = execute(cli, display_limit)?;
     if is_tui {
-        return Ok(None);
+        return Ok((None, false));
     }
-    Ok(Some(if json {
-        serde_json::to_string_pretty(&value).expect("JSON value is serializable")
-    } else if filtered_list && value.as_array().is_some_and(Vec::is_empty) {
-        "No matching tasks.".to_owned()
-    } else if display_limit.is_some() && value.as_array().is_some_and(Vec::is_empty) {
-        "No tasks to display.".to_owned()
-    } else {
-        let terminal = std::io::stdout().is_terminal();
-        let color = output::color_enabled(terminal);
-        let columns = if matches!(
-            &format,
-            output::Format::Tasks | output::Format::PriorityTasks
-        ) {
-            output::terminal_columns(terminal)
+    let unhealthy = is_doctor && value["ok"] == false;
+    Ok((
+        Some(if json {
+            serde_json::to_string_pretty(&value).expect("JSON value is serializable")
+        } else if filtered_list && value.as_array().is_some_and(Vec::is_empty) {
+            "No matching tasks.".to_owned()
+        } else if display_limit.is_some() && value.as_array().is_some_and(Vec::is_empty) {
+            "No tasks to display.".to_owned()
         } else {
-            None
-        };
-        output::render(format, &value, color, columns)
-    }))
+            let terminal = std::io::stdout().is_terminal();
+            let color = output::color_enabled(terminal);
+            let columns = if matches!(
+                &format,
+                output::Format::Tasks | output::Format::PriorityTasks
+            ) {
+                output::terminal_columns(terminal)
+            } else {
+                None
+            };
+            output::render(format, &value, color, columns)
+        }),
+        unhealthy,
+    ))
 }
 fn main() {
     match run() {
-        Ok(Some(output)) => println!("{output}"),
-        Ok(None) => (),
+        Ok((Some(output), unhealthy)) => {
+            println!("{output}");
+            if unhealthy {
+                std::process::exit(1);
+            }
+        }
+        Ok((None, _)) => (),
         Err(error) => {
             eprintln!("error: {error:#}");
             std::process::exit(1);

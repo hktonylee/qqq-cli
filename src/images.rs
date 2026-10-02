@@ -250,16 +250,20 @@ impl ImageInput {
             self.data.len() <= MAX_IMAGE_BYTES,
             "Image exceeds 20 MiB limit"
         );
-        if self.data.starts_with(b"\x89PNG\r\n\x1a\n") {
-            Ok("image/png")
-        } else if self.data.starts_with(b"\xff\xd8\xff") {
-            Ok("image/jpeg")
-        } else if self.data.starts_with(b"GIF87a") || self.data.starts_with(b"GIF89a") {
-            Ok("image/gif")
-        } else if self.data.starts_with(b"RIFF") && self.data.get(8..12) == Some(b"WEBP") {
-            Ok("image/webp")
-        } else {
-            bail!("Unsupported image signature; expected PNG, JPEG, GIF or WebP")
-        }
+        sniff_media_type(&self.data)
+    }
+}
+
+pub fn sniff_media_type(data: &[u8]) -> Result<&'static str> {
+    if data.starts_with(b"\x89PNG\r\n\x1a\n") {
+        Ok("image/png")
+    } else if data.starts_with(b"\xff\xd8\xff") {
+        Ok("image/jpeg")
+    } else if data.starts_with(b"GIF87a") || data.starts_with(b"GIF89a") {
+        Ok("image/gif")
+    } else if data.starts_with(b"RIFF") && data.get(8..12) == Some(b"WEBP") {
+        Ok("image/webp")
+    } else {
+        bail!("Unsupported image signature; expected PNG, JPEG, GIF or WebP")
     }
 }

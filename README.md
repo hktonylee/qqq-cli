@@ -410,6 +410,22 @@ with empty `.qqq`; existing data and nested projects are rejected. Invalid
 archives leave project unchanged. Relative snapshot paths resolve from current
 directory.
 
+Check project health without changing DB or attachments:
+
+```sh
+qqq doctor
+qqq --json doctor
+```
+
+Doctor checks SQLite integrity, foreign keys, schema, image paths, byte counts,
+signatures, and orphan files. Healthy project exits 0. Issues print recovery
+actions and exit 1; JSON includes `ok`, counts, and `issues` with code, path,
+message, and action. Doctor never migrates DB. If SQLite journal/WAL sidecars
+exist, stop writers and recover or checkpoint SQLite before rerunning doctor.
+For damaged DB or images, restore verified snapshot into new directory first;
+inspect recovered data before replacing damaged project files. Keep damaged
+copy until recovery is verified.
+
 To move old root-level `qqq.db`, stop DB writers. Before `qqq init`, check that
 `.qqq/qqq.db` does not exist. From project root:
 
