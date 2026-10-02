@@ -107,17 +107,16 @@ fn row_style(status: Option<&str>, selected: bool, color: bool) -> Style {
     if !color {
         return Style::default();
     }
-    if selected {
-        return Style::default()
-            .fg(Color::Black)
-            .bg(ACCENT)
-            .add_modifier(Modifier::BOLD);
-    }
-    match status {
+    let style = match status {
         Some("in_progress") => Style::default().fg(ACCENT),
         Some("completed") => Style::default().fg(Color::DarkGray),
         Some("error") => Style::default().fg(Color::Red),
         _ => Style::default(),
+    };
+    if selected {
+        style.add_modifier(Modifier::UNDERLINED)
+    } else {
+        style
     }
 }
 
@@ -274,7 +273,7 @@ pub fn draw(
             color,
         );
         frame.render_widget(
-            Paragraph::new(format!("{marker}{}", row.text)).style(style),
+            Paragraph::new(Span::styled(format!("{marker}{}", row.text), style)),
             Rect::new(list.x, list.y + 2 + offset as u16, list.width, 1),
         );
     }

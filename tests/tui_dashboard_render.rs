@@ -7,7 +7,13 @@ mod panel;
 #[path = "../src/tui/render.rs"]
 mod render;
 
-use ratatui::{Terminal, backend::TestBackend, buffer::Buffer, layout::Position, style::Color};
+use ratatui::{
+    Terminal,
+    backend::TestBackend,
+    buffer::Buffer,
+    layout::Position,
+    style::{Color, Modifier},
+};
 use std::collections::HashMap;
 
 fn line(buffer: &Buffer, y: u16) -> String {
@@ -531,7 +537,7 @@ fn no_color_dashboard_keeps_default_cell_styles() {
                 frame,
                 &rows,
                 &HashMap::from([(1, "error")]),
-                None,
+                Some(1),
                 dashboard::ListView {
                     query: "",
                     focused: false,
@@ -556,6 +562,7 @@ fn no_color_dashboard_keeps_default_cell_styles() {
         for x in 0..72 {
             assert_eq!(buffer[(x, y)].fg, Color::Reset, "cell {x},{y}");
             assert_eq!(buffer[(x, y)].bg, Color::Reset, "cell {x},{y}");
+            assert_eq!(buffer[(x, y)].modifier, Modifier::empty(), "cell {x},{y}");
         }
     }
 }
@@ -609,7 +616,10 @@ fn status_selection_and_editor_images_use_distinct_colors() {
         })
         .unwrap();
     let buffer = terminal.backend().buffer();
-    assert_eq!(buffer[(2, 3)].bg, Color::Indexed(81));
+    assert_eq!(buffer[(2, 3)].fg, Color::Reset);
+    assert_eq!(buffer[(2, 3)].bg, Color::Reset);
+    assert_eq!(buffer[(2, 3)].modifier, Modifier::UNDERLINED);
+    assert_eq!(buffer[(71, 3)].modifier, Modifier::empty());
     assert_eq!(buffer[(2, 4)].fg, Color::Indexed(81));
     assert_eq!(buffer[(2, 5)].fg, Color::DarkGray);
     assert_eq!(buffer[(2, 6)].fg, Color::Red);

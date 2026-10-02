@@ -202,6 +202,7 @@ qqq tui
 ```
 
 Upper panel lists unarchived tasks by default; lower panel edits current task.
+Selection underlines task text; plain mode uses `>` marker.
 Shift-Up/Down selects tasks in displayed tree order, then blank draft. Ctrl-S
 updates selected task or creates new task, keeping saved task open for further
 edits or task actions. Shift-Down past last displayed task opens blank draft. Esc/Ctrl-C in
