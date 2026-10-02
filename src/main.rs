@@ -72,7 +72,7 @@ enum Commands {
     },
     /// Create .qqq/qqq.db in current directory (safe to repeat).
     Init,
-    /// Create a task; built-in editor can browse and edit existing tasks.
+    /// Create tasks; built-in editor can browse and edit existing tasks.
     Add {
         /// Whole task description. Omit to compose interactively.
         #[arg(conflicts_with = "description")]

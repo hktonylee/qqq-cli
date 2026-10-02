@@ -68,6 +68,10 @@ with tempfile.TemporaryDirectory(prefix="qqq-history-test-") as folder:
     args = [binary, "--json", "add"]
     if scenario == "existing_and_flagged_images":
         args.extend(["--image", str(flagged)])
+    if scenario == "history_save":
+        image = Path(folder) / "selected.png"
+        image.write_bytes(b"\x89PNG\r\n\x1a\nbytes")
+        args.extend(["--image", str(image)])
     child = subprocess.Popen(args, cwd=folder, env=env,
                              stdin=slave, stderr=slave, stdout=subprocess.PIPE)
     screen = bytearray()
@@ -158,6 +162,8 @@ with tempfile.TemporaryDirectory(prefix="qqq-history-test-") as folder:
             assert saved["harness_session"] == "worker"
             assert batch[1]["id"] == 4 and batch[1]["description"] == "Fresh"
             assert [task["description"] for task in cli("list")] == ["First", "Second", "Third updated", "Fresh"]
+            assert [image["name"] for image in cli("show", "3")["images"]] == ["selected.png"]
+            assert cli("show", "4")["images"] == []
         elif scenario == "skip_deleted":
             press(UP, b"task #3")
             press(UP, b"task #1")
