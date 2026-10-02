@@ -35,7 +35,7 @@
 
 **Files:** Modify `README.md` if current list docs need one-line TTY behavior note.
 
-- [ ] Run `cargo fmt --check`, `cargo clippy --locked --all-targets -- -D warnings`, `cargo test --locked --quiet`, `git diff --check` with `CARGO_TARGET_DIR=/private/tmp/qqq-task49-target` where applicable; require exit 0.
-- [ ] Request read-only code review; fix verified findings and rerun affected checks.
-- [ ] Rebase branch onto current master, fast-forward local master, run integrated full suite, remove task worktree, delete merged branch.
-- [ ] Complete queue task 49 with `qqq --json complete 49`; verify `qqq --json show 49` reports completed.
+- [x] Run `cargo fmt --check`, `cargo clippy --locked --all-targets -- -D warnings`, `cargo test --locked --quiet`, `git diff --check` with `CARGO_TARGET_DIR=/private/tmp/qqq-task49-target` where applicable; require exit 0.
+- [x] Request read-only code review; fix verified findings and rerun affected checks.
+- [x] Rebase branch onto current master, fast-forward local master, run integrated full suite, remove task worktree, delete merged branch.
+- [x] Complete queue task 49 with `qqq --json complete 49`; verify `qqq --json show 49` reports completed.
