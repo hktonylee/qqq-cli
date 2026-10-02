@@ -18,7 +18,7 @@ mod tui {
 }
 
 use db::Db;
-use draft::Composition;
+use draft::{Composition, Draft};
 use images::{ImageInput, ImageStore};
 
 fn database() -> (Db, tempfile::TempDir) {
@@ -51,7 +51,80 @@ fn composition() -> Composition {
             name: "ok.png".into(),
             data: b"\x89PNG\r\n\x1a\n".to_vec(),
         }],
+        image_spans: Vec::new(),
     }
+}
+#[test]
+fn pasted_images_get_stored_markdown_paths_after_image_ids_are_allocated() {
+    let (mut db, dir) = database();
+    let mut draft = Draft::new("See ");
+    draft
+        .image(ImageInput {
+            name: "a]b.png".into(),
+            data: b"\x89PNG\r\n\x1a\n".to_vec(),
+        })
+        .unwrap();
+    let mut composition = draft.finish().unwrap();
+    composition.images.push(ImageInput {
+        name: "flag.png".into(),
+        data: b"\x89PNG\r\n\x1a\n".to_vec(),
+    });
+    let task = db.save_composition(None, None, &composition).unwrap();
+    assert_eq!(task.description, "See ![a\\]b.png](.qqq/images/1/1.png)");
+    assert_eq!(
+        db.show(task.id).unwrap()["images"]
+            .as_array()
+            .unwrap()
+            .len(),
+        2
+    );
+    let references = db.image_references(task.id).unwrap();
+    assert_eq!(
+        (references[0].id, references[0].name.as_str()),
+        (1, "a]b.png")
+    );
+    assert_eq!(
+        (references[1].id, references[1].name.as_str()),
+        (2, "flag.png")
+    );
+    assert!(dir.path().join("images/1/1.png").exists());
+    assert!(dir.path().join("images/1/2.png").exists());
+
+    let mut edit = Draft::new(&task.description);
+    edit.image(ImageInput {
+        name: "second.png".into(),
+        data: b"\x89PNG\r\n\x1a\n".to_vec(),
+    })
+    .unwrap();
+    let updated = db
+        .save_composition(Some(task.id), None, &edit.finish().unwrap())
+        .unwrap();
+    assert_eq!(
+        updated.description,
+        "See ![a\\]b.png](.qqq/images/1/1.png)![second.png](.qqq/images/1/3.png)"
+    );
+}
+#[test]
+fn failed_pasted_image_save_rolls_back_link_and_file() {
+    let (mut db, dir) = database();
+    let task = db.add("Original", None, &[]).unwrap();
+    db.conn.execute_batch("CREATE TRIGGER reject_image BEFORE INSERT ON images WHEN NEW.name='fail.png' BEGIN SELECT RAISE(ABORT,'image rejected'); END;").unwrap();
+    let mut draft = Draft::new("Changed ");
+    for name in ["ok.png", "fail.png"] {
+        draft
+            .image(ImageInput {
+                name: name.into(),
+                data: b"\x89PNG\r\n\x1a\n".to_vec(),
+            })
+            .unwrap();
+    }
+    assert!(
+        db.save_composition(Some(task.id), None, &draft.finish().unwrap())
+            .is_err()
+    );
+    assert_eq!(db.task(task.id).unwrap().description, "Original");
+    assert!(db.image_references(task.id).unwrap().is_empty());
+    assert!(!dir.path().join("images/1/1.png").exists());
 }
 #[test]
 fn composition_saves_task_and_image_bytes_together() {

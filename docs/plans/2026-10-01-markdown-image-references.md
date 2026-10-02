@@ -24,10 +24,10 @@
 
 **Files:** `src/db.rs`, `src/editor.rs`, `tests/tui_db.rs`, `tests/images.rs`
 
-- [ ] Add failing `tests/tui_db.rs` case: `Db::save_composition(None, ...)` with a pasted image returns description `![name](.qqq/images/1/1.png)`, file exists, `Db::image_references(1)` identifies same image; subsequent edit with another pasted image uses next image ID while retaining old Markdown; appended flag image has no auto-link. Add rollback case with image-insert trigger: description and file state remain unchanged.
-- [ ] Run `cargo test --locked --test tui_db`; confirm expected failures.
-- [ ] Make `save_images` return inserted IDs. Add `Db::image_references(task_id)` typed metadata query ordered by image ID. Keep public `add`/`edit` wrappers with no spans. Route `save_composition` through internal add/edit variants receiving spans. In each transaction, after image insertion, replace validated spans with `ImageReference::markdown` using corresponding IDs; update `tasks.description` before commit. Reject invalid span count/order/bounds. Keep existing file cleanup guard and transaction semantics.
-- [ ] Set external editor composition `image_spans` to empty; update any test composition literals. Run `cargo test --locked --test tui_db --test images --test cli`; require pass. Commit `[Feat] Persist Markdown Image Links Atomically`.
+- [x] Add failing `tests/tui_db.rs` case: `Db::save_composition(None, ...)` with a pasted image returns description `![name](.qqq/images/1/1.png)`, file exists, `Db::image_references(1)` identifies same image; subsequent edit with another pasted image uses next image ID while retaining old Markdown; appended flag image has no auto-link. Add rollback case with image-insert trigger: description and file state remain unchanged.
+- [x] Run `cargo test --locked --test tui_db`; confirm expected failures.
+- [x] Make `save_images` return inserted IDs. Add `Db::image_references(task_id)` typed metadata query ordered by image ID. Keep public `add`/`edit` wrappers with no spans. Route `save_composition` through internal add/edit variants receiving spans. In each transaction, after image insertion, replace validated spans with `ImageReference::markdown` using corresponding IDs; update `tasks.description` before commit. Reject invalid span count/order/bounds. Keep existing file cleanup guard and transaction semantics.
+- [x] Set external editor composition `image_spans` to empty; update any test composition literals. Run `cargo test --locked --test tui_db --test images --test cli`; require pass. Commit `[Feat] Persist Markdown Image Links Atomically`.
 
 ### Task 3: Reload via TUI and PTY regression
 

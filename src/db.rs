@@ -1,4 +1,4 @@
-use crate::images::{ImageInput, ImageStore, PendingFiles};
+use crate::images::{ImageInput, ImageReference, ImageStore, PendingFiles};
 use anyhow::{Context, Result, bail, ensure};
 use rusqlite::{
     Connection, OpenFlags, OptionalExtension, Transaction, TransactionBehavior, params,
@@ -6,6 +6,7 @@ use rusqlite::{
 use serde::Serialize;
 use serde_json::{Value, json};
 use std::{
+    ops::Range,
     path::{Path, PathBuf},
     time::Duration,
 };
@@ -83,6 +84,53 @@ fn task_row(r: &rusqlite::Row<'_>) -> rusqlite::Result<Task> {
 pub fn nonempty(value: &str, name: &str) -> Result<()> {
     ensure!(!value.trim().is_empty(), "{name} must not be empty");
     Ok(())
+}
+
+fn image_description(
+    source: &str,
+    spans: &[Range<usize>],
+    images: &[ImageInput],
+    image_ids: &[i64],
+    task_id: i64,
+) -> Result<String> {
+    ensure!(
+        spans.len() <= images.len() && image_ids.len() == images.len(),
+        "Invalid image reference count"
+    );
+    let mut description = String::new();
+    let mut cursor = 0;
+    for (index, span) in spans.iter().enumerate() {
+        ensure!(
+            span.start >= cursor && span.end > span.start,
+            "Invalid image reference span"
+        );
+        let prefix = source
+            .get(cursor..span.start)
+            .context("Invalid image reference span")?;
+        let marker = source
+            .get(span.clone())
+            .context("Invalid image reference span")?;
+        ensure!(
+            marker == format!("[Image: {}]", images[index].name),
+            "Invalid image reference marker"
+        );
+        description.push_str(prefix);
+        description.push_str(
+            &ImageReference {
+                id: image_ids[index],
+                name: images[index].name.clone(),
+                media_type: images[index].media_type()?.to_owned(),
+            }
+            .markdown(task_id)?,
+        );
+        cursor = span.end;
+    }
+    description.push_str(
+        source
+            .get(cursor..)
+            .context("Invalid image reference span")?,
+    );
+    Ok(description)
 }
 fn ensure_description_schema(conn: &Connection) -> Result<()> {
     ensure!(
@@ -244,6 +292,15 @@ impl Db {
         parent_id: Option<i64>,
         images: &[ImageInput],
     ) -> Result<Task> {
+        self.add_with_spans(description, parent_id, images, &[])
+    }
+    fn add_with_spans(
+        &mut self,
+        description: &str,
+        parent_id: Option<i64>,
+        images: &[ImageInput],
+        image_spans: &[Range<usize>],
+    ) -> Result<Task> {
         nonempty(description, "Description")?;
         if let Some(id) = parent_id {
             self.task(id)?;
@@ -260,7 +317,14 @@ impl Db {
             params![description, parent_id],
         )?;
         let id = tx.last_insert_rowid();
-        Self::save_images(&tx, &self.image_store, &mut pending, id, images)?;
+        let image_ids = Self::save_images(&tx, &self.image_store, &mut pending, id, images)?;
+        if !image_spans.is_empty() {
+            let description = image_description(description, image_spans, images, &image_ids, id)?;
+            tx.execute(
+                "UPDATE tasks SET description=? WHERE id=?",
+                params![description, id],
+            )?;
+        }
         let task = tx.query_row("SELECT id,description,status,claim_key,created_at,updated_at,parent_id,harness_name,harness_session,orchestrator_name,orchestrator_session FROM tasks WHERE id=?", [id], task_row)?;
         commit_with_files(tx, &mut pending)?;
         Ok(task)
@@ -272,9 +336,34 @@ impl Db {
         draft: &crate::tui::draft::Composition,
     ) -> Result<Task> {
         match id {
-            Some(id) => self.edit(id, Some(&draft.description), None, &draft.images, None),
-            None => self.add(&draft.description, parent, &draft.images),
+            Some(id) => self.edit_with_spans(
+                id,
+                Some(&draft.description),
+                None,
+                &draft.images,
+                None,
+                &draft.image_spans,
+            ),
+            None => self.add_with_spans(
+                &draft.description,
+                parent,
+                &draft.images,
+                &draft.image_spans,
+            ),
         }
+    }
+    pub fn image_references(&self, task_id: i64) -> Result<Vec<ImageReference>> {
+        Ok(self
+            .conn
+            .prepare("SELECT id,name,media_type FROM images WHERE task_id=? ORDER BY id")?
+            .query_map([task_id], |row| {
+                Ok(ImageReference {
+                    id: row.get(0)?,
+                    name: row.get(1)?,
+                    media_type: row.get(2)?,
+                })
+            })?
+            .collect::<rusqlite::Result<Vec<_>>>()?)
     }
     pub fn list(&self, max_completed: Option<i64>) -> Result<Vec<Task>> {
         Ok(self.conn.prepare(
@@ -300,6 +389,17 @@ impl Db {
         transition: Option<EditTransition<'_>>,
         images: &[ImageInput],
         parent: Option<ParentChange>,
+    ) -> Result<Task> {
+        self.edit_with_spans(id, description, transition, images, parent, &[])
+    }
+    fn edit_with_spans(
+        &mut self,
+        id: i64,
+        description: Option<&str>,
+        transition: Option<EditTransition<'_>>,
+        images: &[ImageInput],
+        parent: Option<ParentChange>,
+        image_spans: &[Range<usize>],
     ) -> Result<Task> {
         if let Some(description) = description {
             nonempty(description, "Description")?;
@@ -409,7 +509,15 @@ impl Db {
             None => {}
         }
         ensure!(tx.execute("UPDATE tasks SET description=COALESCE(?,description),updated_at=strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE id=?",params![description,id])?==1,"Task {id} not found");
-        Self::save_images(&tx, &self.image_store, &mut pending, id, images)?;
+        let image_ids = Self::save_images(&tx, &self.image_store, &mut pending, id, images)?;
+        if !image_spans.is_empty() {
+            let source = description.context("Image references require description")?;
+            let description = image_description(source, image_spans, images, &image_ids, id)?;
+            tx.execute(
+                "UPDATE tasks SET description=? WHERE id=?",
+                params![description, id],
+            )?;
+        }
         let task = tx.query_row(
             "SELECT id,description,status,claim_key,created_at,updated_at,parent_id,harness_name,harness_session,orchestrator_name,orchestrator_session FROM tasks WHERE id=?",
             [id], task_row,
@@ -696,22 +804,19 @@ impl Db {
         pending: &mut PendingFiles,
         id: i64,
         images: &[ImageInput],
-    ) -> Result<()> {
+    ) -> Result<Vec<i64>> {
+        let mut ids = Vec::with_capacity(images.len());
         for image in images {
             let media_type = image.media_type()?;
             conn.execute(
                 "INSERT INTO images(task_id,name,media_type,bytes) VALUES (?,?,?,?)",
                 params![id, image.name, media_type, image.data.len() as i64],
             )?;
-            store.write(
-                pending,
-                id,
-                conn.last_insert_rowid(),
-                media_type,
-                &image.data,
-            )?;
+            let image_id = conn.last_insert_rowid();
+            store.write(pending, id, image_id, media_type, &image.data)?;
+            ids.push(image_id);
         }
-        Ok(())
+        Ok(ids)
     }
     pub fn image_export(&self, task_id: i64, id: i64, path: &Path) -> Result<Value> {
         use std::io::Write;
