@@ -225,3 +225,63 @@ fn priority_rejects_out_of_range_and_non_integer_without_writes() {
             .is_err()
     );
 }
+
+#[test]
+fn claims_highest_ready_priority_then_oldest_id_without_displacing_owner() {
+    let dir = project();
+    let path = dir.path();
+    ok(path, &["add", "Parent", "--priority", "1"]);
+    ok(
+        path,
+        &["add", "Blocked child", "--parent", "1", "--priority", "100"],
+    );
+    ok(path, &["add", "High first", "--priority", "10"]);
+    ok(path, &["add", "High second", "--priority", "10"]);
+    assert_eq!(ok(path, &["next", "--session", "a"])["id"], 3);
+    assert_eq!(ok(path, &["next", "--session", "a"])["id"], 3);
+    assert_eq!(ok(path, &["next", "--session", "b"])["id"], 4);
+    assert_eq!(ok(path, &["next", "--session", "c"])["id"], 1);
+    assert!(ok(path, &["next", "--session", "d"]).is_null());
+    ok(path, &["edit", "3", "--priority", "-100"]);
+    assert_eq!(ok(path, &["next", "--session", "a"])["id"], 3);
+    ok(path, &["complete", "1", "--session", "c"]);
+    assert_eq!(ok(path, &["next", "--session", "d"])["id"], 2);
+}
+
+#[test]
+fn concurrent_sessions_claim_unique_highest_priority_tasks() {
+    let dir = project();
+    let path = dir.path();
+    for (description, priority) in [
+        ("Low", "1"),
+        ("Highest first", "9"),
+        ("Highest second", "9"),
+        ("Middle", "5"),
+        ("Default", "0"),
+    ] {
+        ok(path, &["add", description, "--priority", priority]);
+    }
+    let children: Vec<_> = (0..3)
+        .map(|index| {
+            command(path)
+                .args(["next", "--session", &format!("worker-{index}")])
+                .spawn()
+                .unwrap()
+        })
+        .collect();
+    let mut claimed: Vec<i64> = children
+        .into_iter()
+        .map(|child| {
+            let output = child.wait_with_output().unwrap();
+            assert!(
+                output.status.success(),
+                "{}",
+                String::from_utf8_lossy(&output.stderr)
+            );
+            let task: Value = serde_json::from_slice(&output.stdout).unwrap();
+            task["id"].as_i64().unwrap()
+        })
+        .collect();
+    claimed.sort();
+    assert_eq!(claimed, [2, 3, 4]);
+}

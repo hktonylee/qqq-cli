@@ -38,8 +38,8 @@ PRAGMA user_version=7;
 
 **Files:** `src/db.rs`, `tests/priority.rs`
 
-- [ ] Add failing tests: high-priority task claims before older low-priority task; equal priority ties use smallest ID; high-priority child remains blocked until parent completion; existing owned task returns before higher-priority new task; changing active task priority preserves claim. Spawn concurrent distinct sessions against same DB and assert unique claims from highest ready priorities. Run focused test; expect FIFO mismatch.
-- [ ] Change new-task selection in `Db::claim` to `ORDER BY priority DESC,id ASC LIMIT 1`; leave owned-task query and parent predicate unchanged. Run focused priority, dependency, ownership, and concurrency tests; commit.
+- [x] Add failing tests: high-priority task claims before older low-priority task; equal priority ties use smallest ID; high-priority child remains blocked until parent completion; existing owned task returns before higher-priority new task; changing active task priority preserves claim. Spawn concurrent distinct sessions against same DB and assert unique claims from highest ready priorities. Run focused test; expect FIFO mismatch.
+- [x] Change new-task selection in `Db::claim` to `ORDER BY priority DESC,id ASC LIMIT 1`; leave owned-task query and parent predicate unchanged. Run focused priority, dependency, ownership, and concurrency tests; commit.
 
 ### Task 4: Human output, docs, and integration
 

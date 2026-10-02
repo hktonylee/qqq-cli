@@ -826,7 +826,7 @@ impl Db {
                     "SELECT id FROM tasks WHERE status='new'
                      AND (parent_id IS NULL OR EXISTS
                          (SELECT 1 FROM tasks parent WHERE parent.id=tasks.parent_id AND parent.status='completed'))
-                     ORDER BY id LIMIT 1",
+                     ORDER BY priority DESC,id ASC LIMIT 1",
                     [],
                     |r| r.get(0),
                 )
