@@ -188,6 +188,12 @@ enum Commands {
     },
     /// Mark task completed; supplied or discovered session ID must match recorded owner.
     Complete { id: i64 },
+    /// Return completed, unarchived task to new while keeping its history.
+    Reopen {
+        /// Task ID, or negative creation index: -1 is newest.
+        #[arg(allow_negative_numbers = true)]
+        id: i64,
+    },
     /// Append message; session, when supplied, is recorded as author.
     Message { id: i64, body: String },
     /// Link tasks to exact Herdr agent sessions, find their live panes.
@@ -477,6 +483,10 @@ fn execute(cli: Cli, display_limit: Option<i64>) -> Result<Value> {
         Commands::Complete { id } => {
             let owner = session::owner(session_input, project_dir, &db)?;
             json!(db.complete(id, &owner.key, overrides.harness_name.as_deref())?)
+        }
+        Commands::Reopen { id } => {
+            let id = db.resolve_task_id(id)?;
+            json!(db.reopen(id, session_input.unwrap_or("cli"))?)
         }
         Commands::Message { id, body } => db.message(id, &body, session_input)?,
         Commands::Herdr { command } => match command {

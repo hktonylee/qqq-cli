@@ -967,6 +967,43 @@ impl Db {
         tx.commit()?;
         Ok(task)
     }
+    pub fn reopen(&mut self, id: i64, actor: &str) -> Result<Task> {
+        nonempty(actor, "Actor")?;
+        let tx = self
+            .conn
+            .transaction_with_behavior(TransactionBehavior::Immediate)?;
+        let task = tx
+            .query_row(
+                "SELECT id,description,status,claim_key,created_at,updated_at,parent_id,harness_name,harness_session,orchestrator_name,orchestrator_session,priority,archived FROM tasks WHERE id=?",
+                [id],
+                task_row,
+            )
+            .optional()?
+            .with_context(|| format!("Task {id} not found"))?;
+        ensure!(
+            task.status == "completed",
+            "Task {id} must be completed to reopen"
+        );
+        ensure!(!task.archived, "Task {id} is archived; unarchive first");
+        if let Some(parent_id) = task.parent_id {
+            ensure_parent_available(&tx, parent_id, true)?;
+        }
+        tx.execute(
+            "UPDATE tasks SET status='new',claim_key=NULL,harness_name=NULL,harness_session=NULL,orchestrator_name=NULL,orchestrator_session=NULL,updated_at=strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE id=?",
+            [id],
+        )?;
+        tx.execute(
+            "INSERT INTO events(task_id,session,action) VALUES (?,?,'reopen')",
+            params![id, actor],
+        )?;
+        let task = tx.query_row(
+            "SELECT id,description,status,claim_key,created_at,updated_at,parent_id,harness_name,harness_session,orchestrator_name,orchestrator_session,priority,archived FROM tasks WHERE id=?",
+            [id],
+            task_row,
+        )?;
+        tx.commit()?;
+        Ok(task)
+    }
     pub fn message(&self, id: i64, body: &str, session: Option<&str>) -> Result<Value> {
         nonempty(body, "Message")?;
         self.task(id)?;

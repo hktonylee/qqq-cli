@@ -43,7 +43,8 @@ impl From<&Commands> for Format {
             | Commands::Archive { .. }
             | Commands::Unarchive { .. }
             | Commands::Next { .. }
-            | Commands::Complete { .. } => Self::Task,
+            | Commands::Complete { .. }
+            | Commands::Reopen { .. } => Self::Task,
         }
     }
 }

@@ -22,8 +22,8 @@
 
 **Files:** `src/db.rs`, `src/main.rs`, `src/output.rs`, `tests/reopen.rs`.
 
-- [ ] Write failing tests for `qqq reopen ID` on completed task: status becomes new, timestamp changes, one event appended, description/priority/parent/messages/images/previous events remain. Repeated reopen and new/active/error targets fail with no mutation. `--json` returns task; human output says `Status: New`; negative index works. Run `cargo test --locked --test reopen`; expect unrecognized command.
-- [ ] Add `Db::reopen(id: i64, actor: &str) -> Result<Task>`: start immediate transaction, read task, require `status='completed'` and `archived=0`, call `ensure_parent_available` when parent exists, update `status='new'`, null ownership fields, set timestamp, insert `reopen` event, return task, commit. Add `Reopen { id: i64 }` to Clap; resolve ID; use `session_input.unwrap_or("cli")`; map output to `Format::Task`. Run focused tests; commit.
+- [x] Write failing tests for `qqq reopen ID` on completed task: status becomes new, timestamp changes, one event appended, description/priority/parent/messages/images/previous events remain. Repeated reopen and new/active/error targets fail with no mutation. `--json` returns task; human output says `Status: New`; negative index works. Run `cargo test --locked --test reopen`; expect unrecognized command.
+- [x] Add `Db::reopen(id: i64, actor: &str) -> Result<Task>`: start immediate transaction, read task, require `status='completed'` and `archived=0`, call `ensure_parent_available` when parent exists, update `status='new'`, null ownership fields, set timestamp, insert `reopen` event, return task, commit. Add `Reopen { id: i64 }` to Clap; resolve ID; use `session_input.unwrap_or("cli")`; map output to `Format::Task`. Run focused tests; commit.
 
 ### Task 3: Dependency, archive, watcher, docs
 
