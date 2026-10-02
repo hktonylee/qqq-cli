@@ -854,6 +854,7 @@ fn compose_inner(
                     filter_query.clear();
                     list_top = 0;
                     list_follow_selected = true;
+                    continue;
                 }
                 if dashboard
                     && target_id.is_none()

@@ -505,11 +505,18 @@ with tempfile.TemporaryDirectory(prefix="qqq-dashboard-test-") as folder:
                 scrolled_list = visible.text().splitlines()[:list_bottom() + 1]
             clear_capture()
             send(b"\x03")
-            read_until(b"Discard draft? (y/N)")
             if scenario == "ctrl_c_new_filter":
                 wait_visible(lambda: visible.text().splitlines()[1].strip() == "Filter:"
                              and "Second" in "\n".join(visible.text().splitlines()[2:list_bottom()])
                              and editor_line().startswith("Unsaved draft"))
+                settle()
+                assert "Discard draft?" not in visible.text(), visible.text()
+                assert "new task" in editor_title(), visible.text()
+                assert (visible.x, visible.y) == (len("Filter: "), 1), visible.text()
+                send(b"\t")
+                wait_visible(lambda: (visible.x, visible.y) == (len("Unsaved draft"), editor_row() + 1))
+                send(b"\x03")
+            read_until(b"Discard draft? (y/N)")
             assert cli("list") == initial_tasks
             assert child.poll() is None
             settle()
@@ -676,6 +683,22 @@ with tempfile.TemporaryDirectory(prefix="qqq-dashboard-test-") as folder:
             key = b"\x03" if scenario.startswith("ctrl_c") else b"\x1b"
             clear_capture()
             send(key)
+            if "_filter_" in scenario:
+                if scenario.endswith("menu"):
+                    settle()
+                    assert visible.text().startswith("Task actions"), visible.text()
+                    send(b"\x1b")
+                expected_draft = "Changed Second" if "dirty_selected" in scenario else "Second"
+                wait_visible(lambda: visible.text().splitlines()[1].strip() == "Filter:"
+                             and "task #2 (" in editor_title()
+                             and editor_line().startswith(expected_draft)
+                             and "Second" in "\n".join(visible.text().splitlines()[2:list_bottom()]))
+                settle()
+                assert "Discard changes and switch?" not in visible.text(), visible.text()
+                assert child.poll() is None
+                assert cli("list") == initial_tasks
+                clear_capture()
+                send(key)
             if "dirty_selected" in scenario:
                 read_until(b"Discard changes and switch? (y/N)")
                 assert cli("list") == initial_tasks

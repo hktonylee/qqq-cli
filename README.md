@@ -258,8 +258,9 @@ nonempty query, then exits filter focus on next press. Tab or Enter returns to
 editor. `/` or Alt+/ inserts literal `/` into editor. Shift-Up/Down navigates visible
 tasks while filter is active. Query changes do not change selected task, unsaved
 draft, or DB.
-Ctrl-C also clears filter query, including when returning to new draft or
-confirming discard of unsaved new draft.
+With nonempty filter query, Ctrl-C clears only query; selected task and editor
+draft stay intact. Next Ctrl-C follows editor cancel flow, asking before
+discarding dirty draft.
 
 Ctrl-G opens centered actions popup for selected task; dashboard stays visible
 around it. Prompts, confirmations and errors share popup; small terminals use
