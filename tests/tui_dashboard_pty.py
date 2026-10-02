@@ -97,7 +97,13 @@ with tempfile.TemporaryDirectory(prefix="qqq-dashboard-test-") as folder:
         return json.loads(result.stdout)
 
     cli("init")
-    if scenario in ("filter", "filter_no_color"):
+    if scenario == "click":
+        cli("add", "Parent\nParent detail")
+        cli("add", "Child start\nChild detail " + "word " * 12, "--parent", "1")
+    elif scenario == "click_filter":
+        for index in range(1, 21):
+            cli("add", f"Needle {index}")
+    elif scenario in ("filter", "filter_no_color"):
         cli("add", "Parent")
         cli("add", "Child\nNeEdLe on second line", "--parent", "1")
         cli("add", "Other")
@@ -172,6 +178,20 @@ with tempfile.TemporaryDirectory(prefix="qqq-dashboard-test-") as folder:
             if writable:
                 remaining = remaining[os.write(master, remaining):]
 
+    def click(column, row):
+        send(f"\x1b[<0;{column};{row}M\x1b[<0;{column};{row}m".encode())
+
+    def task_row(label):
+        for row, content in enumerate(visible.text().splitlines()[2:7], 3):
+            if label in content:
+                return row
+        raise AssertionError(f"Task row {label!r} not visible:\n{visible.text()}")
+
+    def settle():
+        time.sleep(0.1)
+        while select.select([master], [], [], 0)[0]:
+            capture(os.read(master, 65536))
+
     try:
         read_until(b"qqq task editor - new task")
         assert "qqq tasks" in visible.text(), visible.text()
@@ -185,11 +205,110 @@ with tempfile.TemporaryDirectory(prefix="qqq-dashboard-test-") as folder:
         elif scenario in ("no_color", "dumb", "pasteboard_no_color", "filter_no_color"):
             assert b"\x1b[38;" not in screen, screen[-2000:]
             assert b"\x1b[48;" not in screen, screen[-2000:]
-        if scenario not in ("scroll", "wheel", "filter", "filter_no_color"):
+        if scenario not in ("scroll", "wheel", "click", "click_filter", "filter", "filter_no_color"):
             read_until(b"Second")
             assert "First" in visible.text() and "Second" in visible.text(), visible.text()
         assert not select.select([child.stdout], [], [], 0)[0], "TUI wrote stdout while open"
-        if scenario == "wheel_error":
+        if scenario == "click":
+            initial_tasks = cli("list")
+            wait_visible(lambda: "Parent detail" in visible.text() and "Child" in visible.text())
+            settle()
+            clear_capture()
+            click(6, 1)
+            click(6, 2)
+            click(6, 3)
+            click(6, 8)
+            click(6, 9)
+            click(6, 12)
+            click(6, 16)
+            settle()
+            assert not screen, f"Inactive click redrew TUI: {screen[-500:]!r}"
+            assert cli("list") == initial_tasks
+
+            clear_capture()
+            click(5, task_row("Parent detail"))
+            read_until(b"task #1")
+            wait_visible(lambda: visible.text().splitlines()[9].startswith("Parent"))
+            clear_capture()
+            send(b"\x1b[<65;6;4M")
+            wait_visible(lambda: "word" in visible.text().splitlines()[6]
+                         and "Child detail" not in visible.text().splitlines()[6])
+            clear_capture()
+            click(5, 7)
+            read_until(b"task #2")
+            wait_visible(lambda: visible.text().splitlines()[9].startswith("Child start"))
+            clear_capture()
+            click(7, 10)
+            send(b"X")
+            wait_visible(lambda: visible.text().splitlines()[9].startswith("Child Xstart"))
+            assert cli("list") == initial_tasks
+            clear_capture()
+            send(b"\x13")
+            read_until(b"Saved #2. New task")
+            assert cli("show", "2")["task"]["description"] == (
+                "Child Xstart\nChild detail " + "word " * 12
+            )
+        elif scenario == "click_filter":
+            initial_tasks = cli("list")
+            clear_capture()
+            send(b"Unsaved/needle")
+            read_until(b"Filter: needle")
+            clear_capture()
+            send(b"\x1b[<64;6;4M")
+            wait_visible(lambda: "Needle 13" in visible.text().splitlines()[2])
+            settle()
+            clear_capture()
+            click(3, 10)
+            wait_visible(lambda: visible.text().splitlines()[-1].startswith("Ctrl-S save"))
+            clear_capture()
+            send(b"/")
+            wait_visible(lambda: visible.text().splitlines()[-1].startswith("Type to filter"))
+            clear_capture()
+            click(6, task_row("Needle 14"))
+            read_until(b"Discard changes and switch? (y/N)")
+            clear_capture()
+            send(b"n")
+            wait_visible(lambda: "new task" in visible.text().splitlines()[8]
+                         and "Unsaved" in visible.text().splitlines()[9]
+                         and visible.text().splitlines()[-1].startswith("Type to filter"))
+            assert cli("list") == initial_tasks
+            clear_capture()
+            click(6, task_row("Needle 14"))
+            read_until(b"Discard changes and switch? (y/N)")
+            send(b"y")
+            read_until(b"task #14")
+            wait_visible(lambda: visible.text().splitlines()[9].startswith("Needle 14"))
+            assert cli("list") == initial_tasks
+            clear_capture()
+            send(b"!")
+            wait_visible(lambda: visible.text().splitlines()[9].startswith("!Needle 14"))
+            clear_capture()
+            click(6, task_row("Needle 14"))
+            settle()
+            assert "Discard changes" not in visible.text(), visible.text()
+            assert "!Needle 14" in visible.text(), visible.text()
+            assert cli("list") == initial_tasks
+            clear_capture()
+            send(b"\x13")
+            read_until(b"Saved #14. New task")
+            assert cli("show", "14")["task"]["description"] == "!Needle 14"
+        elif scenario == "click_error":
+            settle()
+            clear_capture()
+            click(6, 7)
+            settle()
+            assert not screen, f"Blank list click redrew TUI: {screen[-500:]!r}"
+            send(b"Unsaved")
+            wait_visible(lambda: visible.text().splitlines()[9].startswith("Unsaved"))
+            with sqlite3.connect(os.path.join(folder, ".qqq", "qqq.db")) as db:
+                db.execute("DELETE FROM tasks WHERE id=2")
+            clear_capture()
+            click(5, 5)
+            read_until(b"Task 2 not found")
+            assert "new task" in visible.text().splitlines()[8]
+            assert visible.text().splitlines()[9].startswith("Unsaved")
+            assert cli("list")[0]["id"] == 1
+        elif scenario == "wheel_error":
             with sqlite3.connect(os.path.join(folder, ".qqq", "qqq.db")) as db:
                 db.execute("DROP TABLE tasks")
             clear_capture()
@@ -480,7 +599,7 @@ with tempfile.TemporaryDirectory(prefix="qqq-dashboard-test-") as folder:
             read_until(b"Saved #3. New task")
             assert cli("show", "3")["task"]["description"] == "Draft"
         if scenario != "wheel_error":
-            send(b"\x03" if scenario in ("scroll", "color", "wheel") else b"\x1b")
+            send(b"\x03" if scenario in ("scroll", "color", "wheel", "click_error") else b"\x1b")
         deadline = time.monotonic() + 5
         while child.poll() is None:
             assert time.monotonic() < deadline, f"TUI failed to exit: {screen[-1000:]!r}\n{visible.text()}"

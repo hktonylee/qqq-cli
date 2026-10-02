@@ -140,6 +140,9 @@ terminal and writes no stdout, including with `--json`.
 Mouse wheel scrolls task list or editor under pointer. Both panes keep separate
 scroll positions; scrolling editor never edits or saves text. Shift-Up/Down
 returns list to selected task. Editor keys reveal caret after manual scroll.
+Left-click a task row to load it in editor, including indented or wrapped
+rows. Left-click editor text to place caret; dirty drafts ask before switching
+tasks.
 
 Filter bar stays visible above task list. `/` focuses it; type to match any
 part of full description, ignoring case. Matching tasks retain parent chain;

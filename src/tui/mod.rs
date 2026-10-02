@@ -9,7 +9,7 @@ use crossterm::{
     cursor::Show,
     event::{
         self, DisableBracketedPaste, DisableMouseCapture, EnableBracketedPaste, EnableMouseCapture,
-        Event, KeyCode, KeyEventKind, KeyModifiers, MouseEventKind,
+        Event, KeyCode, KeyEventKind, KeyModifiers, MouseButton, MouseEventKind,
     },
     execute,
     style::ResetColor,
@@ -38,7 +38,17 @@ enum Target {
 
 enum Confirmation {
     Exit,
-    Switch(Target),
+    Switch { target: Target, focus_editor: bool },
+}
+
+fn task_target(db: &crate::db::Db, id: i64, description: String, status: String) -> Result<Target> {
+    let draft = Draft::from_saved(&description, id, &db.image_references(id)?)?;
+    Ok(Target::Task {
+        id,
+        description,
+        status,
+        draft,
+    })
 }
 
 fn adjacent_target(
@@ -61,15 +71,7 @@ fn adjacent_target(
         db.adjacent_task(current, older)?
     };
     Ok(match found {
-        Some((id, description, status)) => {
-            let draft = Draft::from_saved(&description, id, &db.image_references(id)?)?;
-            Some(Target::Task {
-                id,
-                description,
-                status,
-                draft,
-            })
-        }
+        Some((id, description, status)) => Some(task_target(db, id, description, status)?),
         None if !older => Some(Target::New),
         None => None,
     })
@@ -271,12 +273,12 @@ fn compose_inner(
                 "Discard? y/N"
             }
             Some(Confirmation::Exit) => "Discard draft? (y/N)",
-            Some(Confirmation::Switch(_))
+            Some(Confirmation::Switch { .. })
                 if usize::from(size.0) < "Discard changes and switch? (y/N)".len() =>
             {
                 "Switch? y/N"
             }
-            Some(Confirmation::Switch(_)) => "Discard changes and switch? (y/N)",
+            Some(Confirmation::Switch { .. }) => "Discard changes and switch? (y/N)",
             None => &message,
         };
         let title = match (mode.db().is_some(), target_id) {
@@ -306,6 +308,7 @@ fn compose_inner(
         };
         let mut visible_ids = None;
         let mut list_row_count = 0;
+        let mut rows = Vec::new();
         if dashboard {
             let tasks = mode.db().expect("dashboard has database").list(None)?;
             let filter_views: Vec<_> = tasks
@@ -325,7 +328,7 @@ fn compose_inner(
                 .iter()
                 .map(|task| (task.id, task.status.as_str()))
                 .collect();
-            let rows = if !filter_query.is_empty() && displayed.is_empty() {
+            rows = if !filter_query.is_empty() && displayed.is_empty() {
                 Vec::new()
             } else {
                 let tree = crate::output::render(
@@ -377,16 +380,28 @@ fn compose_inner(
         }
         let input = loop {
             let input = event::read()?;
-            if let Event::Mouse(mouse) = &input
-                && (!dashboard
-                    || confirmation.is_some()
-                    || !matches!(
-                        mouse.kind,
-                        MouseEventKind::ScrollUp | MouseEventKind::ScrollDown
-                    )
-                    || dashboard::wheel_area(size, mouse.column, mouse.row).is_none())
-            {
-                continue;
+            if let Event::Mouse(mouse) = &input {
+                let active = dashboard
+                    && confirmation.is_none()
+                    && match mouse.kind {
+                        MouseEventKind::ScrollUp | MouseEventKind::ScrollDown => {
+                            dashboard::wheel_area(size, mouse.column, mouse.row).is_some()
+                        }
+                        MouseEventKind::Down(MouseButton::Left) => dashboard::click_target(
+                            size,
+                            mouse.column,
+                            mouse.row,
+                            &rows,
+                            list_top,
+                            top,
+                            &layout,
+                        )
+                        .is_some(),
+                        _ => false,
+                    };
+                if !active {
+                    continue;
+                }
             }
             break input;
         };
@@ -405,7 +420,13 @@ fn compose_inner(
                         .map_or_else(String::new, |error| format!("{error:#}"));
                 }
             }
-            Event::Mouse(mouse) if dashboard && confirmation.is_none() => {
+            Event::Mouse(mouse)
+                if dashboard
+                    && matches!(
+                        mouse.kind,
+                        MouseEventKind::ScrollUp | MouseEventKind::ScrollDown
+                    ) =>
+            {
                 let down = match mouse.kind {
                     MouseEventKind::ScrollDown => true,
                     MouseEventKind::ScrollUp => false,
@@ -423,6 +444,63 @@ fn compose_inner(
                     None => (),
                 }
             }
+            Event::Mouse(mouse)
+                if dashboard && mouse.kind == MouseEventKind::Down(MouseButton::Left) =>
+            {
+                match dashboard::click_target(
+                    size,
+                    mouse.column,
+                    mouse.row,
+                    &rows,
+                    list_top,
+                    top,
+                    &layout,
+                ) {
+                    Some(dashboard::ClickTarget::Editor(cursor)) => {
+                        filter_focused = false;
+                        draft.set_cursor(cursor);
+                        editor_follow_cursor = true;
+                    }
+                    Some(dashboard::ClickTarget::Task(id)) if target_id == Some(id) => {
+                        filter_focused = false;
+                        editor_follow_cursor = true;
+                    }
+                    Some(dashboard::ClickTarget::Task(id)) => {
+                        let db = mode.db().expect("dashboard has database");
+                        let target = db.task(id).and_then(|task| {
+                            task_target(db, task.id, task.description, task.status)
+                        });
+                        match target {
+                            Ok(target) if draft.is_dirty_against(&baseline) => {
+                                confirmation = Some(Confirmation::Switch {
+                                    target,
+                                    focus_editor: true,
+                                });
+                            }
+                            Ok(target) => {
+                                load_target(
+                                    target,
+                                    &mut draft,
+                                    &mut target_id,
+                                    &mut target_status,
+                                    &mut baseline,
+                                    &mut top,
+                                );
+                                list_follow_selected = true;
+                                editor_follow_cursor = true;
+                                filter_focused = false;
+                                message.clear();
+                                message_is_error = false;
+                            }
+                            Err(error) => {
+                                message = format!("{error:#}");
+                                message_is_error = true;
+                            }
+                        }
+                    }
+                    None => (),
+                }
+            }
             Event::Key(key) if key.kind != KeyEventKind::Release => {
                 let control = key.modifiers.contains(KeyModifiers::CONTROL);
                 if let Some(pending) = confirmation.take() {
@@ -436,7 +514,10 @@ fn compose_inner(
                         match key.code {
                             KeyCode::Char('y' | 'Y') => match pending {
                                 Confirmation::Exit => return cancel(saved_any, dashboard),
-                                Confirmation::Switch(target) => {
+                                Confirmation::Switch {
+                                    target,
+                                    focus_editor,
+                                } => {
                                     load_target(
                                         target,
                                         &mut draft,
@@ -447,6 +528,9 @@ fn compose_inner(
                                     );
                                     list_follow_selected = true;
                                     editor_follow_cursor = true;
+                                    if focus_editor {
+                                        filter_focused = false;
+                                    }
                                     message.clear();
                                     message_is_error = false;
                                 }
@@ -472,7 +556,10 @@ fn compose_inner(
                         let older = key.code == KeyCode::Up;
                         match adjacent_target(db, target_id, older, visible_ids.as_deref()) {
                             Ok(Some(target)) if draft.is_dirty_against(&baseline) => {
-                                confirmation = Some(Confirmation::Switch(target));
+                                confirmation = Some(Confirmation::Switch {
+                                    target,
+                                    focus_editor: false,
+                                });
                             }
                             Ok(Some(target)) => {
                                 load_target(

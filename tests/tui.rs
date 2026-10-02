@@ -75,6 +75,13 @@ fn tui_dashboard_mouse_wheel_scrolls_both_panes() {
 }
 
 #[test]
+fn tui_dashboard_click_selects_rows_and_places_caret() {
+    dashboard_scenario("click");
+    dashboard_scenario("click_filter");
+    dashboard_scenario("click_error");
+}
+
+#[test]
 fn tui_dashboard_status_colors_respect_no_color() {
     dashboard_scenario("color");
     dashboard_scenario("no_color");
