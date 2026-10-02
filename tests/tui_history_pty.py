@@ -102,8 +102,22 @@ with tempfile.TemporaryDirectory(prefix="qqq-history-test-") as folder:
         send(data)
         read_until(needle)
 
-    def finish(expect_error=False):
+    def finish(expected_id=None, next_task=None, expect_error=False):
+        screen.clear()
         send(b"\x13")
+        if expect_error:
+            read_until(b"Task 1 not found")
+            assert child.poll() is None
+            send(b"\x03")
+        else:
+            read_until(f"Saved #{expected_id}. New task".encode())
+            assert child.poll() is None
+            assert b"qqq task editor - new task" in screen
+            if next_task is not None:
+                screen.clear()
+                send(next_task + b"\x13")
+                read_until(f"Saved #{expected_id + 1}. New task".encode())
+            send(b"\x1b")
         deadline = time.monotonic() + 5
         pending_stdout = bytearray()
         while child.poll() is None:
@@ -125,7 +139,9 @@ with tempfile.TemporaryDirectory(prefix="qqq-history-test-") as folder:
             assert child.returncode == 1 and output == b"", screen[-2000:]
             return None
         assert child.returncode == 0, screen[-2000:]
-        return json.loads(output)
+        saved = json.loads(output)
+        assert isinstance(saved, list)
+        return saved
 
     try:
         read_until(b"Ctrl-S")
@@ -134,31 +150,33 @@ with tempfile.TemporaryDirectory(prefix="qqq-history-test-") as folder:
             press(UP, b"task #2")
             press(DOWN, b"task #3")
             send(b"\x05 updated")
-            saved = finish()
+            batch = finish(3, b"Fresh")
+            saved = batch[0]
             assert saved["id"] == 3 and saved["description"] == "Third updated"
             assert saved["parent_id"] == 1
             assert saved["status"] == "in_progress"
             assert saved["harness_session"] == "worker"
-            assert [task["description"] for task in cli("list")] == ["First", "Second", "Third updated"]
+            assert batch[1]["id"] == 4 and batch[1]["description"] == "Fresh"
+            assert [task["description"] for task in cli("list")] == ["First", "Second", "Third updated", "Fresh"]
         elif scenario == "skip_deleted":
             press(UP, b"task #3")
             press(UP, b"task #1")
             press(DOWN, b"task #3")
             send(b"\x05!")
-            saved = finish()
+            saved = finish(3)[0]
             assert saved["id"] == 3 and saved["description"] == "Third!"
             assert [task["id"] for task in cli("list")] == [1, 3]
         elif scenario == "long_task_starts_at_top":
             press(UP, b"task #1")
-            read_until(b"Shift-Up/Down tasks")
+            read_until(b"Shift-Up/Down")
             assert b"Top marker" in screen, screen[-2000:]
             assert b"Bottom marker" not in screen, screen[-2000:]
-            saved = finish()
+            saved = finish(1)[0]
             assert saved["id"] == 1
         elif scenario == "existing_and_flagged_images":
             press(UP, b"task #1")
             send(b"\x05 edited")
-            saved = finish()
+            saved = finish(1)[0]
             assert saved["id"] == 1 and saved["description"] == "First edited"
             assert [image["name"] for image in cli("show", "1")["images"]] == ["existing.png", "flagged.png"]
         elif scenario == "selected_deleted":
@@ -173,7 +191,7 @@ with tempfile.TemporaryDirectory(prefix="qqq-history-test-") as folder:
             press(UP, b"task #1")
             press(DOWN, b"new task")
             send(b"Fresh")
-            saved = finish()
+            saved = finish(2)[0]
             assert saved["id"] == 2 and saved["description"] == "Fresh"
             assert cli("show", "1")["task"]["description"] == "First"
         elif scenario == "dirty_new_keep":
@@ -181,14 +199,14 @@ with tempfile.TemporaryDirectory(prefix="qqq-history-test-") as folder:
             press(UP, b"Discard changes and switch? (y/N)")
             send(b"zzz")
             press(b"n", b"new task")
-            saved = finish()
+            saved = finish(2)[0]
             assert saved["id"] == 2 and saved["description"] == "Draft"
         elif scenario == "dirty_new_discard":
             send(b"Draft")
             press(UP, b"Discard changes and switch? (y/N)")
             press(b"y", b"task #1")
             send(b"\x05 edited")
-            saved = finish()
+            saved = finish(1)[0]
             assert saved["id"] == 1 and saved["description"] == "First edited"
             assert len(cli("list")) == 1
         elif scenario == "dirty_image_discard":
@@ -199,7 +217,7 @@ with tempfile.TemporaryDirectory(prefix="qqq-history-test-") as folder:
             press(UP, b"Discard changes and switch? (y/N)")
             press(b"y", b"task #1")
             send(b"\x05 edited")
-            saved = finish()
+            saved = finish(1)[0]
             assert saved["id"] == 1 and saved["description"] == "First edited"
             assert cli("show", "1")["images"] == []
         elif scenario == "dirty_loaded_keep":
@@ -207,7 +225,7 @@ with tempfile.TemporaryDirectory(prefix="qqq-history-test-") as folder:
             send(b"\x05!")
             press(UP, b"Discard changes and switch? (y/N)")
             press(b"\x1b", b"task #2")
-            saved = finish()
+            saved = finish(2)[0]
             assert saved["id"] == 2 and saved["description"] == "Second!"
             assert cli("show", "1")["task"]["description"] == "First"
         elif scenario == "oldest_boundary":
@@ -215,12 +233,12 @@ with tempfile.TemporaryDirectory(prefix="qqq-history-test-") as folder:
             send(b"\x05!")
             press(UP, b"No older task")
             assert b"Discard changes and switch?" not in screen
-            saved = finish()
+            saved = finish(1)[0]
             assert saved["id"] == 1 and saved["description"] == "First!"
         elif scenario == "empty_boundary":
             press(UP, b"No older task")
             send(b"Fresh")
-            saved = finish()
+            saved = finish(1)[0]
             assert saved["id"] == 1 and saved["description"] == "Fresh"
         else:
             raise AssertionError(f"Unknown scenario: {scenario}")

@@ -6,6 +6,7 @@ import os
 import pty
 import select
 import signal
+import sqlite3
 import struct
 import subprocess
 import sys
@@ -41,6 +42,9 @@ with tempfile.TemporaryDirectory(prefix="qqq-tui-test-") as folder:
         args = ["edit", "-1"]
     image = Path(folder) / "test image.png"
     image.write_bytes(base64.b64decode("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aGD8AAAAASUVORK5CYII="))
+    if scenario == "continuous_flags":
+        cli("add", "Parent")
+        args.extend(["--parent", "1", "--image", str(image)])
     if scenario in ("save", "cancel", "escape_discard", "escape_keep"):
         flagged = Path(folder) / "flag image.png"
         flagged.write_bytes(image.read_bytes())
@@ -128,6 +132,53 @@ with tempfile.TemporaryDirectory(prefix="qqq-tui-test-") as folder:
             send(b" \r")
         elif scenario == "ctrl_w":
             send(b"alpha beta\x17")
+        elif scenario == "continuous":
+            send(b"First\x13")
+            read_until(b"Saved #1. New task")
+            assert child.poll() is None
+            assert cli("show", "1")["task"]["description"] == "First"
+            assert not select.select([child.stdout], [], [], 0)[0]
+            screen.clear()
+            send(b"\x13")
+            read_until(b"Task description cannot be empty")
+            assert len(cli("list")) == 1
+            screen.clear()
+            send(b"Second\x13")
+            read_until(b"Saved #2. New task")
+            assert cli("show", "2")["task"]["description"] == "Second"
+            send(b"\x1b")
+        elif scenario == "continuous_flags":
+            with sqlite3.connect(Path(folder) / ".qqq/qqq.db") as db:
+                db.execute("DELETE FROM tasks WHERE id=1")
+            send(b"First\x13")
+            read_until(b"Task 1 not found")
+            assert child.poll() is None
+            assert cli("list") == []
+            with sqlite3.connect(Path(folder) / ".qqq/qqq.db") as db:
+                db.execute("INSERT INTO tasks(id,description) VALUES (1,'Parent')")
+            screen.clear()
+            send(b"\x13")
+            read_until(b"Saved #2. New task")
+            assert child.poll() is None
+            first = cli("show", "2")
+            assert first["task"]["description"] == "First"
+            assert first["task"]["parent_id"] == 1
+            assert [item["name"] for item in first["images"]] == ["test image.png"]
+            screen.clear()
+            send(b"Second\x13")
+            read_until(b"Saved #3. New task")
+            second = cli("show", "3")
+            assert second["task"]["parent_id"] == 1
+            assert second["images"] == []
+            send(b"\x03")
+        elif scenario == "continuous_discard":
+            send(b"First\x13")
+            read_until(b"Saved #1. New task")
+            screen.clear()
+            send(b"Unsaved\x1b")
+            read_until(b"Discard draft? (y/N)")
+            assert cli("show", "1")["task"]["description"] == "First"
+            send(b"y")
         elif scenario in ("escape_image", "escape_narrow"):
             paste("'" + str(image) + "'")
             read_until(b"[Image #1:")
@@ -168,8 +219,14 @@ with tempfile.TemporaryDirectory(prefix="qqq-tui-test-") as folder:
             send(b"\x13")
         elif scenario in ("escape_empty", "escape_deleted"):
             send(b"\x1b")
+        elif scenario in ("continuous", "continuous_flags", "continuous_discard"):
+            pass
         else:
             send(b"\x03" if scenario == "cancel" else b"\x13")
+        if not cancelled and args[0] == "add" and scenario not in ("continuous", "continuous_flags", "continuous_discard"):
+            read_until(b"Saved #1. New task")
+            assert child.poll() is None
+            send(b"\x1b")
         # Keep draining terminal redraws while process exits; a PTY has a small
         # output buffer and can block editor writes before save reaches stdout.
         deadline = time.monotonic() + 5
@@ -202,6 +259,19 @@ with tempfile.TemporaryDirectory(prefix="qqq-tui-test-") as folder:
         else:
             assert child.returncode == 0, screen[-2000:]
             task = json.loads(stdout)
+            if scenario == "continuous":
+                assert [item["id"] for item in task] == [1, 2]
+                assert [item["description"] for item in task] == ["First", "Second"]
+            elif scenario == "continuous_flags":
+                assert [item["id"] for item in task] == [2, 3]
+                assert [item["description"] for item in task] == ["First", "Second"]
+                assert [item["parent_id"] for item in task] == [1, 1]
+            elif scenario == "continuous_discard":
+                assert [item["description"] for item in task] == ["First"]
+                assert [item["id"] for item in cli("list")] == [1]
+            elif args[0] == "add":
+                assert len(task) == 1
+                task = task[0]
             if scenario in ("save", "escape_keep"):
                 assert "title" not in task
                 assert task["description"] == "Title\n\n" + "\u754c" * 1001 + "\n[Image: test image.png]"
@@ -218,7 +288,7 @@ with tempfile.TemporaryDirectory(prefix="qqq-tui-test-") as folder:
                 assert task["description"] == "Recovered"
             elif scenario == "ctrl_w":
                 assert task["description"] == "alpha "
-            else:
+            elif scenario not in ("continuous", "continuous_flags", "continuous_discard"):
                 assert task["id"] == 1
                 assert task["description"] == "Original\n\nDetails amended"
                 assert task["harness_session"] == "worker"

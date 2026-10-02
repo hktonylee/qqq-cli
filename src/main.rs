@@ -251,6 +251,23 @@ fn execute(cli: Cli, display_limit: Option<i64>) -> Result<Value> {
                 .collect::<Result<Vec<_>>>()?;
             match text.or(description) {
                 Some(description) if !edit => json!(db.add(&description, parent, &images)?),
+                None if editor::uses_builtin(edit) => {
+                    let mut saved = Vec::new();
+                    let mut first_images = images;
+                    tui::compose_continuously(&mut db, &mut |db, mut outcome| {
+                        outcome
+                            .composition
+                            .images
+                            .extend(first_images.iter().cloned());
+                        let task =
+                            db.save_composition(outcome.target_id, parent, &outcome.composition)?;
+                        first_images.clear();
+                        let id = task.id;
+                        saved.push(task);
+                        Ok(id)
+                    })?;
+                    json!(saved)
+                }
                 description => {
                     let mut outcome =
                         editor::compose(description.as_deref().unwrap_or(""), edit, Some(&db))?;

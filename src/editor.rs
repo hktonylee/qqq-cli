@@ -5,12 +5,16 @@ use std::{
     process::{Command, Stdio},
 };
 
+pub fn uses_builtin(external: bool) -> bool {
+    !external && std::io::stdin().is_terminal() && std::io::stderr().is_terminal()
+}
+
 pub fn compose(
     description: &str,
     external: bool,
     navigation: Option<&crate::db::Db>,
 ) -> Result<crate::tui::Outcome> {
-    if !external && std::io::stdin().is_terminal() && std::io::stderr().is_terminal() {
+    if uses_builtin(external) {
         return crate::tui::compose(description, navigation);
     }
     let description = compose_external(description)?;

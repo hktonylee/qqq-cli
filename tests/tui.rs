@@ -97,6 +97,18 @@ fn tui_ctrl_w_deletes_previous_word() {
     scenario("ctrl_w");
 }
 #[test]
+fn tui_add_saves_multiple_tasks_without_leaving_editor() {
+    scenario("continuous");
+}
+#[test]
+fn tui_continuous_add_preserves_parent_and_uses_cli_images_once() {
+    scenario("continuous_flags");
+}
+#[test]
+fn tui_continuous_add_discards_only_unsaved_draft() {
+    scenario("continuous_discard");
+}
+#[test]
 fn tui_edit_pins_recent_target_and_preserves_ownership() {
     scenario("edit");
 }

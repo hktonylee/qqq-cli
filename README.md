@@ -85,7 +85,7 @@ qqq edit -1                         # edit newest task interactively
 
 Descriptions preserve whitespace and newlines; blank-only text fails. `add`
 without text and `edit` without update flags open built-in terminal editor.
-Ctrl-S saves; Esc prompts before discarding nonempty draft; Ctrl-C cancels;
+Ctrl-S saves; Esc prompts before discarding nonempty draft; Ctrl-C exits;
 Ctrl-W deletes previous word without crossing line; Ctrl-V pastes clipboard text
 or image. Large pastes collapse into placeholders, then expand on save. Ctrl-V
 needs desktop clipboard support.
@@ -93,11 +93,15 @@ needs desktop clipboard support.
 In built-in `qqq add` editor, Shift+Up loads newest task, then older tasks by ID;
 Shift+Down moves toward newer tasks, then returns to blank new-task draft. Header
 shows selected task ID. Ctrl-S updates selected task or creates one from new
-draft. Switching away from changed text or new image asks before discarding it;
-N, Enter, or Esc keeps draft. Navigation includes completed and active tasks and
-skips deleted IDs. `--parent` applies only when saving new task; `--image` files
-attach to whichever task Ctrl-S saves. External editor and `qqq edit` do not
-navigate tasks.
+draft, then clears editor for next task. Each save commits immediately. Esc on
+blank draft or Ctrl-C ends session; prior saves remain. JSON output returns
+array of saved tasks on exit.
+
+Switching away from changed text or new image asks before discarding it; N,
+Enter, or Esc keeps draft. Navigation includes completed and active tasks and
+skips deleted IDs. `--parent` applies to every newly created task; supplied
+`--image` files attach only to first successful save, whether new or existing.
+Inline add, external editor and `qqq edit` stay one-shot; they do not navigate.
 
 Use `--edit` (`-e`) to force external editor; nonterminal interactive calls also
 need `$EDITOR`. Editor must wait until editing finishes.
@@ -108,9 +112,9 @@ qqq add --edit
 qqq edit 1 --edit --description "Prefilled draft"
 ```
 
-Editor UI uses stderr; stdout holds final result. Cancellation or error saves
-nothing. Inline content edits skip editor; omitted fields, ownership and
-attachments stay.
+Editor UI uses stderr; stdout holds final result. Cancelling draft saves
+nothing; earlier batch saves remain. Inline content edits skip editor; omitted
+fields, ownership and attachments stay.
 
 ### Dependencies and images
 

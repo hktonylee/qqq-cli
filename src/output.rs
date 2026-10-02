@@ -269,7 +269,14 @@ pub fn render(format: Format, value: &Value, color: bool) -> String {
         Format::ConfigUnset => format!("Unset {}.", field(value, "key")),
         Format::Database => format!("Database: {}", field(value, "database")),
         Format::Task if value.is_null() => "No ready tasks.".to_owned(),
-        Format::AddedTask => task(value, false, false),
+        Format::AddedTask => match value.as_array() {
+            Some(tasks) => tasks
+                .iter()
+                .map(|item| task(item, false, false))
+                .collect::<Vec<_>>()
+                .join("\n\n"),
+            None => task(value, false, false),
+        },
         Format::Task => task(value, false, true),
         Format::Tasks => task_tree(value.as_array().expect("task list is an array"), color),
         Format::Detail => detail::render(value, color),
@@ -306,5 +313,18 @@ mod tests {
         let plain = render(Format::Tasks, &tasks, false);
         assert!(plain.contains("Error"));
         assert!(!plain.contains('\x1b'));
+    }
+
+    #[test]
+    fn interactive_add_prints_each_saved_task_in_human_output() {
+        let tasks = json!([
+            {"id":1,"description":"First","status":"new","parent_id":null},
+            {"id":2,"description":"Second","status":"new","parent_id":null},
+        ]);
+        let output = render(Format::AddedTask, &tasks, false);
+        assert!(output.contains("#1\nStatus: New"));
+        assert!(output.contains("\n\n#2\nStatus: New"));
+        assert!(output.contains("  First"));
+        assert!(output.contains("  Second"));
     }
 }

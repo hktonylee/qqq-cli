@@ -10,6 +10,7 @@ use unicode_width::UnicodeWidthStr;
 
 pub const KEYS: &str = "Ctrl-S save  Esc cancel  Ctrl-V paste  Ctrl-W word";
 pub const NAV_KEYS: &str = "Ctrl-S save  Shift-Up/Down tasks  Esc cancel  Ctrl-W word";
+pub const ADD_KEYS: &str = "Ctrl-S save  Shift-Up/Down  Esc/Ctrl-C exit  Ctrl-W word";
 const BACKGROUND: Color = Color::AnsiValue(236);
 const FOREGROUND: Color = Color::AnsiValue(252);
 const IMAGE_FOREGROUND: Color = Color::AnsiValue(81);

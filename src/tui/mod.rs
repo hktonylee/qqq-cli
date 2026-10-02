@@ -112,7 +112,39 @@ fn paste(draft: &mut Draft, text: &str) -> Result<()> {
     }
     Ok(())
 }
+enum Mode<'a, 'b> {
+    Single(Option<&'a crate::db::Db>),
+    Continuous {
+        db: &'a mut crate::db::Db,
+        save: &'b mut dyn FnMut(&mut crate::db::Db, Outcome) -> Result<i64>,
+    },
+}
+impl Mode<'_, '_> {
+    fn db(&self) -> Option<&crate::db::Db> {
+        match self {
+            Self::Single(db) => *db,
+            Self::Continuous { db, .. } => Some(db),
+        }
+    }
+}
+fn cancel(saved_any: bool) -> Result<Option<Outcome>> {
+    if saved_any {
+        Ok(None)
+    } else {
+        bail!("Editor cancelled; task not saved")
+    }
+}
 pub fn compose(description: &str, navigation: Option<&crate::db::Db>) -> Result<Outcome> {
+    compose_inner(description, Mode::Single(navigation))
+        .map(|saved| saved.expect("single editor returns saved composition"))
+}
+pub fn compose_continuously(
+    db: &mut crate::db::Db,
+    save: &mut dyn FnMut(&mut crate::db::Db, Outcome) -> Result<i64>,
+) -> Result<()> {
+    compose_inner("", Mode::Continuous { db, save }).map(|_| ())
+}
+fn compose_inner(description: &str, mut mode: Mode<'_, '_>) -> Result<Option<Outcome>> {
     let terminal = TerminalGuard::enter()?;
     let mut draft = Draft::new(description);
     let mut baseline = description.to_owned();
@@ -120,6 +152,7 @@ pub fn compose(description: &str, navigation: Option<&crate::db::Db>) -> Result<
     let mut top = 0;
     let mut message = String::new();
     let mut confirmation: Option<Confirmation> = None;
+    let mut saved_any = false;
     loop {
         let size = terminal::size()?;
         let layout = render::Layout::new(&draft.fragments(), &draft.image_mask(), size.0 as usize);
@@ -136,7 +169,7 @@ pub fn compose(description: &str, navigation: Option<&crate::db::Db>) -> Result<
             Some(Confirmation::Switch(_)) => "Discard changes and switch? (y/N)",
             None => &message,
         };
-        let title = match (navigation.is_some(), target_id) {
+        let title = match (mode.db().is_some(), target_id) {
             (true, Some(id)) => format!("qqq task editor - task #{id}"),
             (true, None) => "qqq task editor - new task".to_owned(),
             (false, _) => "qqq task editor".to_owned(),
@@ -149,10 +182,10 @@ pub fn compose(description: &str, navigation: Option<&crate::db::Db>) -> Result<
             size,
             &render::Chrome {
                 title: &title,
-                keys: if navigation.is_some() {
-                    render::NAV_KEYS
-                } else {
-                    render::KEYS
+                keys: match &mode {
+                    Mode::Continuous { .. } => render::ADD_KEYS,
+                    Mode::Single(Some(_)) => render::NAV_KEYS,
+                    Mode::Single(None) => render::KEYS,
                 },
                 message: footer,
             },
@@ -168,7 +201,7 @@ pub fn compose(description: &str, navigation: Option<&crate::db::Db>) -> Result<
                 let control = key.modifiers.contains(KeyModifiers::CONTROL);
                 if let Some(pending) = confirmation.take() {
                     if control && key.code == KeyCode::Char('c') {
-                        bail!("Editor cancelled; task not saved");
+                        return cancel(saved_any);
                     }
                     if !key
                         .modifiers
@@ -176,7 +209,7 @@ pub fn compose(description: &str, navigation: Option<&crate::db::Db>) -> Result<
                     {
                         match key.code {
                             KeyCode::Char('y' | 'Y') => match pending {
-                                Confirmation::Exit => bail!("Editor cancelled; task not saved"),
+                                Confirmation::Exit => return cancel(saved_any),
                                 Confirmation::Switch(target) => {
                                     load_target(
                                         target,
@@ -204,7 +237,7 @@ pub fn compose(description: &str, navigation: Option<&crate::db::Db>) -> Result<
                         .intersects(KeyModifiers::CONTROL | KeyModifiers::ALT | KeyModifiers::SUPER)
                     && matches!(key.code, KeyCode::Up | KeyCode::Down)
                 {
-                    if let Some(db) = navigation {
+                    if let Some(db) = mode.db() {
                         let older = key.code == KeyCode::Up;
                         match adjacent_target(db, target_id, older) {
                             Ok(Some(target)) if draft.is_dirty_against(&baseline) => {
@@ -236,14 +269,31 @@ pub fn compose(description: &str, navigation: Option<&crate::db::Db>) -> Result<
                     match key.code {
                         KeyCode::Char('s') => match draft.finish() {
                             Ok(composition) => {
-                                return Ok(Outcome {
+                                let outcome = Outcome {
                                     composition,
                                     target_id,
-                                });
+                                };
+                                match &mut mode {
+                                    Mode::Single(_) => return Ok(Some(outcome)),
+                                    Mode::Continuous { db, save } => match save(db, outcome) {
+                                        Ok(id) => {
+                                            saved_any = true;
+                                            load_target(
+                                                Target::New,
+                                                &mut draft,
+                                                &mut target_id,
+                                                &mut baseline,
+                                                &mut top,
+                                            );
+                                            message = format!("Saved #{id}. New task");
+                                        }
+                                        Err(error) => message = format!("{error:#}"),
+                                    },
+                                }
                             }
                             Err(error) => message = error.to_string(),
                         },
-                        KeyCode::Char('c') => bail!("Editor cancelled; task not saved"),
+                        KeyCode::Char('c') => return cancel(saved_any),
                         KeyCode::Char('v') => {
                             let result = clipboard::read().and_then(|value| match value {
                                 clipboard::Paste::Text(text) => paste(&mut draft, &text),
@@ -262,7 +312,7 @@ pub fn compose(description: &str, navigation: Option<&crate::db::Db>) -> Result<
                 }
                 message.clear();
                 match key.code {
-                    KeyCode::Esc if draft.is_empty() => bail!("Editor cancelled; task not saved"),
+                    KeyCode::Esc if draft.is_empty() => return cancel(saved_any),
                     KeyCode::Esc => confirmation = Some(Confirmation::Exit),
                     KeyCode::Char(character)
                         if !key
