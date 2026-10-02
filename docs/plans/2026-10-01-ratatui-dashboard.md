@@ -41,4 +41,4 @@
 
 - [x] Run `cargo fmt --all -- --check`, `cargo clippy --locked --all-targets -- -D warnings`, `cargo test --locked`, and `git diff --check`; require exit 0.
 - [x] Request read-only code review. Fix confirmed Critical/Important findings and rerun affected checks.
-- [ ] Rebase branch onto current local master; fast-forward local master; run integrated full suite. Remove owned worktree and merged branch. Complete task 56 with `qqq --json complete 56`, verify `qqq --json show 56`, then resume one blocking `qqq --json next --wait --local` call.
+- [x] Rebase branch onto current local master; fast-forward local master; run integrated full suite. Remove owned worktree and merged branch. Complete task 56 with `qqq --json complete 56`, verify `qqq --json show 56`, then resume one blocking `qqq --json next --wait --local` call.
