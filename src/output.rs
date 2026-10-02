@@ -52,10 +52,13 @@ pub fn terminal_columns(terminal: bool) -> Option<usize> {
     if !terminal {
         return None;
     }
-    crossterm::terminal::size()
+    #[cfg(unix)]
+    let columns = rustix::termios::tcgetwinsize(std::io::stdout())
         .ok()
-        .map(|(columns, _)| usize::from(columns))
-        .filter(|&columns| columns > 0)
+        .map(|size| size.ws_col);
+    #[cfg(not(unix))]
+    let columns = crossterm::terminal::size().ok().map(|(columns, _)| columns);
+    columns.map(usize::from).filter(|&columns| columns > 0)
 }
 
 // Keep user text on one line and prevent terminal control sequences in text output.

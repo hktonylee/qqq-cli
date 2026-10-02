@@ -24,13 +24,25 @@ with tempfile.TemporaryDirectory(prefix="qqq-list-tty-") as folder:
         assert result.returncode == 0, result.stderr.decode()
         return result.stdout.decode()
 
-    def terminal_list(columns, term="xterm-256color"):
+    def terminal_list(columns, term="xterm-256color", controlling_columns=None):
         master, slave = pty.openpty()
         os.set_blocking(master, False)
         fcntl.ioctl(slave, termios.TIOCSWINSZ, struct.pack("HHHH", 12, columns, 0, 0))
+        control_master = control_slave = None
+        if controlling_columns is not None:
+            control_master, control_slave = pty.openpty()
+            fcntl.ioctl(control_slave, termios.TIOCSWINSZ,
+                        struct.pack("HHHH", 12, controlling_columns, 0, 0))
+
+        def establish_control():
+            os.setsid()
+            fcntl.ioctl(0, termios.TIOCSCTTY, 0)
+
         try:
             result = subprocess.run([binary, "list"], cwd=folder, env=dict(env, TERM=term),
-                                    stdin=subprocess.DEVNULL, stdout=slave, stderr=subprocess.PIPE,
+                                    stdin=control_slave if control_slave is not None else subprocess.DEVNULL,
+                                    stdout=slave, stderr=subprocess.PIPE,
+                                    preexec_fn=establish_control if control_slave is not None else None,
                                     timeout=5)
             assert result.returncode == 0, result.stderr.decode()
             chunks = bytearray()
@@ -47,6 +59,9 @@ with tempfile.TemporaryDirectory(prefix="qqq-list-tty-") as folder:
             if slave is not None:
                 os.close(slave)
             os.close(master)
+            if control_slave is not None:
+                os.close(control_slave)
+                os.close(control_master)
 
     def terminal_watch_snapshot(columns):
         master, slave = pty.openpty()
@@ -96,3 +111,8 @@ with tempfile.TemporaryDirectory(prefix="qqq-list-tty-") as folder:
     assert " " * 20 + "MN" in rows, rows
     assert " " * 20 + "界界界界界界" in rows, rows
     assert " " * 20 + "界" in rows, rows
+
+    cli("add", "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789")
+    rows = terminal_list(40, term="dumb", controlling_columns=80).splitlines()
+    assert "5      New          ABCDEFGHIJKLMNOPQRST" in rows, rows
+    assert " " * 20 + "UVWXYZ0123456789" in rows, rows

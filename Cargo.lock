@@ -878,6 +878,7 @@ dependencies = [
  "fs2",
  "image",
  "rusqlite",
+ "rustix",
  "serde",
  "serde_json",
  "shlex",
