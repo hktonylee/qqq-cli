@@ -155,7 +155,7 @@ fn invalid_config_fails_human_list_but_full_views_remain_usable() {
 #[test]
 fn legacy_completed_tasks_without_events_use_newest_id_fallback() {
     let p = Project::new();
-    let conn = rusqlite::Connection::open(p.dir.path().join("qqq.db")).unwrap();
+    let conn = rusqlite::Connection::open(p.dir.path().join(".qqq/qqq.db")).unwrap();
     conn.execute_batch("INSERT INTO tasks(description,status) VALUES ('First','completed'),('Second','completed'),('Third','completed');").unwrap();
     p.config("[display]\nmax-completed = 1\n");
     assert_eq!(p.ids(&["list"]), vec![3]);

@@ -71,7 +71,7 @@ fn config_list_get_set_unset_work_without_project_database() {
         json!({"key":"alias.ls","value":null})
     );
     assert!(!p.run(&["config", "--get", "alias.ls"]).status.success());
-    assert!(!p.home.path().join("qqq.db").exists());
+    assert!(!p.home.path().join(".qqq/qqq.db").exists());
 }
 
 #[test]
@@ -306,5 +306,5 @@ fn config_updates_preserve_symlink_and_target_permissions() {
     );
     assert!(fs::read_to_string(&target).unwrap().contains("show"));
     assert_eq!(p.ok(&["config", "alias.ls"]), "show");
-    assert!(!Path::new(p.home.path()).join("qqq.db").exists());
+    assert!(!Path::new(p.home.path()).join(".qqq/qqq.db").exists());
 }

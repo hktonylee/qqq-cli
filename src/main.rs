@@ -20,13 +20,13 @@ use std::{io::IsTerminal, path::PathBuf, thread, time::Duration};
 #[command(
     name = "qqq",
     version,
-    about = "Local-first task queue for agent sessions. Project DB: qqq.db."
+    about = "Local-first task queue for agent sessions. Project DB: .qqq/qqq.db."
 )]
 struct Cli {
     /// Print JSON for scripts and agents instead of human-readable text.
     #[arg(long, global = true)]
     json: bool,
-    /// Stable owner identity. Falls back to exact Herdr pane, Codex session, then unique Herdr agent at DB directory.
+    /// Stable owner identity. Falls back to exact Herdr pane, Codex session, then unique Herdr agent at project root.
     #[arg(long, global = true, env = "QQQ_SESSION")]
     session: Option<String>,
     /// Override coding harness name (for example codex).
@@ -70,7 +70,7 @@ enum Commands {
         #[arg(requires = "key")]
         value: Option<String>,
     },
-    /// Create qqq.db in current directory (safe to repeat).
+    /// Create .qqq/qqq.db in current directory (safe to repeat).
     Init,
     /// Create a new task.
     Add {
@@ -164,7 +164,7 @@ enum Commands {
 }
 #[derive(Subcommand)]
 enum HerdrCommand {
-    /// Link to caller, unique agent at DB directory, or explicit agent session.
+    /// Link to caller, unique agent at project root, or explicit agent session.
     Link {
         task_id: i64,
         #[arg(long, requires = "agent_session")]
@@ -224,7 +224,8 @@ fn execute(cli: Cli, display_limit: Option<i64>) -> Result<Value> {
     let (mut db, path) = db::Db::open(matches!(cli.command, Commands::Init))?;
     let project_dir = path
         .parent()
-        .context("Database path has no parent directory")?;
+        .and_then(|directory| directory.parent())
+        .context("Database path has no project directory")?;
     let next_owner = match &cli.command {
         Commands::Next { local, .. } if *local || !config::load()?.herdr.next_to_new_agent => {
             Some(local_owner(&cli, project_dir, &db)?)

@@ -272,7 +272,7 @@ fn wait_still_fails_immediately_for_invalid_session_or_missing_database() {
         .unwrap();
     assert_eq!(output.status.code(), Some(1));
     assert!(output.stdout.is_empty());
-    assert!(String::from_utf8_lossy(&output.stderr).contains("No qqq.db found"));
+    assert!(String::from_utf8_lossy(&output.stderr).contains("No .qqq directory found"));
 }
 
 #[test]

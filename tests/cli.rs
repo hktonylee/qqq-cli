@@ -155,10 +155,67 @@ fn init_is_explicit_and_repeatable() {
     assert!(!run(d.path(), &["list"]).status.success());
     assert!(!d.path().join("qqq.db").exists());
     ok(d.path(), &["init"]);
-    assert!(d.path().join("qqq.db").is_file());
+    assert!(d.path().join(".qqq/qqq.db").is_file());
     ok(d.path(), &["add", "Keep"]);
     ok(d.path(), &["init"]);
     assert_eq!(ok(d.path(), &["list"]).as_array().unwrap().len(), 1);
+}
+
+#[test]
+fn init_creates_hidden_project_database() {
+    let d = TempDir::new().unwrap();
+    let initialized = ok(d.path(), &["init"]);
+    assert_eq!(
+        initialized["database"],
+        d.path()
+            .canonicalize()
+            .unwrap()
+            .join(".qqq/qqq.db")
+            .to_string_lossy()
+            .as_ref()
+    );
+    assert!(d.path().join(".qqq/qqq.db").is_file());
+    assert!(!d.path().join("qqq.db").exists());
+}
+
+#[test]
+fn lookup_uses_nearest_hidden_directory() {
+    let d = TempDir::new().unwrap();
+    let child = d.path().join("child");
+    let grandchild = child.join("grandchild");
+    std::fs::create_dir_all(&grandchild).unwrap();
+    ok(d.path(), &["init"]);
+    ok(d.path(), &["add", "Outer"]);
+    assert_eq!(ok(&grandchild, &["list"])[0]["description"], "Outer");
+    ok(&child, &["init"]);
+    ok(&child, &["add", "Inner"]);
+    assert_eq!(ok(&grandchild, &["list"])[0]["description"], "Inner");
+    assert_eq!(ok(d.path(), &["list"])[0]["description"], "Outer");
+}
+
+#[test]
+fn nearest_hidden_directory_without_database_does_not_fall_back() {
+    let d = TempDir::new().unwrap();
+    let child = d.path().join("child");
+    std::fs::create_dir_all(child.join(".qqq")).unwrap();
+    ok(d.path(), &["init"]);
+    let output = run(&child, &["list"]);
+    assert!(!output.status.success());
+    assert!(String::from_utf8_lossy(&output.stderr).contains("No .qqq/qqq.db found"));
+}
+
+#[test]
+fn root_level_legacy_database_is_not_discovered() {
+    let d = TempDir::new().unwrap();
+    std::fs::write(d.path().join("qqq.db"), b"legacy").unwrap();
+    let output = run(d.path(), &["list"]);
+    assert!(!output.status.success());
+    assert!(
+        String::from_utf8_lossy(&output.stderr).contains("No .qqq directory found"),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert_eq!(std::fs::read(d.path().join("qqq.db")).unwrap(), b"legacy");
 }
 #[cfg(unix)]
 #[test]
@@ -547,7 +604,7 @@ fn new_is_initial_status_and_pending_flag_is_rejected() {
     let p = d.path();
     let task = ok(p, &["add", "Fresh"]);
     assert_eq!(task["status"], "new");
-    let conn = rusqlite::Connection::open(p.join("qqq.db")).unwrap();
+    let conn = rusqlite::Connection::open(p.join(".qqq/qqq.db")).unwrap();
     assert!(
         conn.execute("UPDATE tasks SET status='pending' WHERE id=1", [])
             .is_err()
@@ -577,7 +634,7 @@ fn show_recent_uses_creation_order_across_statuses_and_id_gaps() {
     for description in ["First", "Removed", "Newest\n\nDetails"] {
         ok(p, &["add", description]);
     }
-    let conn = rusqlite::Connection::open(p.join("qqq.db")).unwrap();
+    let conn = rusqlite::Connection::open(p.join(".qqq/qqq.db")).unwrap();
     conn.execute("DELETE FROM tasks WHERE id=2", []).unwrap();
     conn.execute("UPDATE tasks SET created_at='same timestamp'", [])
         .unwrap();

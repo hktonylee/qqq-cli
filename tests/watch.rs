@@ -148,7 +148,7 @@ fn rollback_does_not_refresh_and_cancelled_watch_leaves_database_unlocked() {
     let p = dir.path();
     let mut watch = Watcher::start(p, &["--json", "list", "--watch"]);
     assert_eq!(watch.snapshot(), serde_json::json!([]));
-    let conn = rusqlite::Connection::open(p.join("qqq.db")).unwrap();
+    let conn = rusqlite::Connection::open(p.join(".qqq/qqq.db")).unwrap();
     conn.execute_batch(
         "BEGIN IMMEDIATE; INSERT INTO tasks(description) VALUES ('Rolled back'); ROLLBACK;",
     )
@@ -171,7 +171,7 @@ fn watch_requires_project_and_regular_list_still_returns_single_json() {
         .unwrap();
     assert_eq!(out.status.code(), Some(1));
     assert!(out.stdout.is_empty());
-    assert!(String::from_utf8_lossy(&out.stderr).contains("No qqq.db found"));
+    assert!(String::from_utf8_lossy(&out.stderr).contains("No .qqq directory found"));
     ok(dir.path(), &["init"]);
     assert_eq!(ok(dir.path(), &["list"]), serde_json::json!([]));
 }

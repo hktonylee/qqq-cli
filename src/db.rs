@@ -9,6 +9,7 @@ use std::{
 };
 
 pub const DB_NAME: &str = "qqq.db";
+const PROJECT_DIR_NAME: &str = ".qqq";
 pub struct Db {
     pub conn: Connection,
 }
@@ -95,12 +96,22 @@ impl Db {
     pub fn open(init: bool) -> Result<(Self, PathBuf)> {
         let cwd = std::env::current_dir()?;
         let path = if init {
-            cwd.join(DB_NAME)
+            let directory = cwd.join(PROJECT_DIR_NAME);
+            std::fs::create_dir_all(&directory)?;
+            directory.join(DB_NAME)
         } else {
-            cwd.ancestors()
-                .map(|p| p.join(DB_NAME))
-                .find(|p| p.is_file())
-                .context("No qqq.db found; run qqq init in project root")?
+            let directory = cwd
+                .ancestors()
+                .map(|parent| parent.join(PROJECT_DIR_NAME))
+                .find(|candidate| candidate.is_dir())
+                .context("No .qqq directory found; run qqq init in project root")?;
+            let path = directory.join(DB_NAME);
+            ensure!(
+                path.is_file(),
+                "No .qqq/qqq.db found in {}",
+                directory.display()
+            );
+            path
         };
         let flags = OpenFlags::SQLITE_OPEN_READ_WRITE
             | if init {

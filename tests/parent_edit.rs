@@ -88,7 +88,7 @@ fn changing_parent_preserves_existing_claim_and_task_details() {
     ok(p, &["message", "2", "Note"]);
     std::fs::write(p.join("x.png"), b"\x89PNG\r\n\x1a\nfixture").unwrap();
     ok(p, &["edit", "2", "--image", "x.png"]);
-    let conn = Connection::open(p.join("qqq.db")).unwrap();
+    let conn = Connection::open(p.join(".qqq/qqq.db")).unwrap();
     conn.execute("INSERT INTO herdr_links VALUES (2,?)", [json!({"server":null,"identity":{"agent":"codex","kind":"id","value":"child"},"pane":{"pane_id":"p1","workspace_id":"w1","tab_id":"t1"}}).to_string()]).unwrap();
     let before = ok(p, &["show", "2"]);
     for parent in ["1", "3", "none"] {
@@ -179,7 +179,7 @@ fn parent_content_status_and_images_share_atomic_transaction() {
             .success()
     );
     assert_eq!(ok(p, &["show", "2"]), before);
-    let conn = Connection::open(p.join("qqq.db")).unwrap();
+    let conn = Connection::open(p.join(".qqq/qqq.db")).unwrap();
     conn.execute_batch("CREATE TRIGGER reject_image BEFORE INSERT ON images BEGIN SELECT RAISE(ABORT,'image rejected'); END").unwrap();
     let args = [
         "edit",
@@ -292,7 +292,7 @@ fn cyclic_parent_ancestry_from_direct_sql_is_rejected_without_hanging() {
     for title in ["First", "Second", "Target"] {
         ok(p, &["add", title]);
     }
-    let conn = Connection::open(p.join("qqq.db")).unwrap();
+    let conn = Connection::open(p.join(".qqq/qqq.db")).unwrap();
     conn.execute_batch(
         "UPDATE tasks SET parent_id=2 WHERE id=1; UPDATE tasks SET parent_id=1 WHERE id=2",
     )

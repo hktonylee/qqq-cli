@@ -317,7 +317,7 @@ fn edit_recent_selects_creation_order_across_statuses_and_id_gaps() {
     for title in ["First", "Removed", "Newest"] {
         run_json(p, &["add", title]);
     }
-    let conn = rusqlite::Connection::open(p.join("qqq.db")).unwrap();
+    let conn = rusqlite::Connection::open(p.join(".qqq/qqq.db")).unwrap();
     conn.execute("DELETE FROM tasks WHERE id=2", []).unwrap();
     conn.execute("UPDATE tasks SET created_at='same timestamp'", [])
         .unwrap();

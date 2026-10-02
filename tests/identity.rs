@@ -37,7 +37,8 @@ fn assignment(task: &Value, expected: Value) {
 }
 fn version_two() -> TempDir {
     let dir = TempDir::new().unwrap();
-    let conn = Connection::open(dir.path().join("qqq.db")).unwrap();
+    std::fs::create_dir(dir.path().join(".qqq")).unwrap();
+    let conn = Connection::open(dir.path().join(".qqq/qqq.db")).unwrap();
     conn.execute_batch(include_str!("../src/schema.sql"))
         .unwrap();
     conn.execute_batch(include_str!("../src/migrate_v2.sql"))
@@ -89,7 +90,7 @@ fn task_responses_use_harness_and_orchestrator_fields() {
 #[test]
 fn v2_upgrade_preserves_data_and_enforces_renamed_constraints() {
     let d = version_two();
-    let conn = Connection::open(d.path().join("qqq.db")).unwrap();
+    let conn = Connection::open(d.path().join(".qqq/qqq.db")).unwrap();
     let before: (String, String) = conn
         .query_row(
             "SELECT created_at,updated_at FROM tasks WHERE id=1",
@@ -357,7 +358,7 @@ fn blank_overrides_fail_without_claiming() {
 #[test]
 fn v4_migration_preserves_error_rows_and_named_dispatched_claims() {
     let d = version_two();
-    let conn = Connection::open(d.path().join("qqq.db")).unwrap();
+    let conn = Connection::open(d.path().join(".qqq/qqq.db")).unwrap();
     conn.execute_batch(include_str!("../src/migrate_v3.sql"))
         .unwrap();
     conn.pragma_update(None, "foreign_keys", "OFF").unwrap();
@@ -448,7 +449,7 @@ fn stale_public_session_cannot_end_replacement_claim_while_waiting_for_lock() {
                 "visible",
             ],
         );
-        let conn = Connection::open(d.path().join("qqq.db")).unwrap();
+        let conn = Connection::open(d.path().join(".qqq/qqq.db")).unwrap();
         conn.execute_batch("BEGIN IMMEDIATE").unwrap();
         let mut args = if action == "complete" {
             vec!["complete", "1"]

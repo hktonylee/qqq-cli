@@ -101,7 +101,7 @@ fn completed_limit_handles_empty_queue_and_tasks_without_completion_history() {
     for title in ["Old", "Recent"] {
         ok(p, &["add", title]);
     }
-    let conn = Connection::open(p.join("qqq.db")).unwrap();
+    let conn = Connection::open(p.join(".qqq/qqq.db")).unwrap();
     conn.execute(
         "UPDATE tasks SET status='completed',updated_at='2026-01-01T00:00:00Z'",
         [],

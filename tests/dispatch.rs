@@ -39,7 +39,7 @@ if a[:2]==['tab','create']:
 elif a[:2]==['agent','start']: result={}
 elif a[:2]==['agent','get']:
     if os.environ.get('RECLAIM_ON_GET'):
-        db=sqlite3.connect('qqq.db')
+        db=sqlite3.connect('.qqq/qqq.db')
         visible = a[2] if os.environ.get('RECLAIM_ALIAS') else 'replacement'
         db.execute("UPDATE tasks SET claim_key='replacement',harness_name='other',harness_session=? WHERE claim_key=?", (visible,a[2]))
         db.commit()
@@ -48,7 +48,7 @@ elif a[:2]==['pane','current']: result={'pane':pane('caller')}
 elif a[:2]==['agent','list']:
     result={'agents':[json.loads(p.read_text()) for p in Path('.').glob('qqq-dispatch-*')]}
 elif a[:2]==['agent','prompt']:
-    db=sqlite3.connect('qqq.db')
+    db=sqlite3.connect('.qqq/qqq.db')
     row=db.execute('SELECT t.claim_key,h.link_json,t.harness_name,t.harness_session,t.orchestrator_name,t.orchestrator_session FROM tasks t JOIN herdr_links h ON h.task_id=t.id WHERE t.claim_key=?',(a[2],)).fetchone()
     assert row is not None,'link missing before prompt'
     expected_session=('terminal-' if os.environ.get('NO_ID') else 'session-')+a[2]

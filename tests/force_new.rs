@@ -85,7 +85,7 @@ fn force_without_session_or_herdr_preserves_details_and_releases_claim() {
     std::fs::write(p.join("x.png"), b"\x89PNG\r\n\x1a\nfixture").unwrap();
     ok(p, &["edit", "2", "--image", "x.png"]);
     ok(p, &["next", "--local", "--session", "owner"]);
-    let conn = Connection::open(p.join("qqq.db")).unwrap();
+    let conn = Connection::open(p.join(".qqq/qqq.db")).unwrap();
     let link = r#"{"server":null,"identity":{"agent":"codex","kind":"id","value":"owner"},"pane":{"pane_id":"p1","workspace_id":"w1","tab_id":"t1"}}"#;
     conn.execute("INSERT INTO herdr_links VALUES (2, ?)", [link])
         .unwrap();
@@ -265,7 +265,7 @@ fn force_combined_edits_and_release_history_roll_back_on_image_failure() {
     let p = d.path();
     ok(p, &["add", "New parent"]);
     std::fs::write(p.join("x.png"), b"\x89PNG\r\n\x1a\nfixture").unwrap();
-    let conn = Connection::open(p.join("qqq.db")).unwrap();
+    let conn = Connection::open(p.join(".qqq/qqq.db")).unwrap();
     conn.execute_batch("CREATE TRIGGER reject_image BEFORE INSERT ON images BEGIN SELECT RAISE(ABORT,'image insertion blocked'); END").unwrap();
     let before = ok(p, &["show", "1"]);
     let args = [

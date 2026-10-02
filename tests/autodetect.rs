@@ -336,7 +336,7 @@ fn native_codex_thread_claims_waits_releases_and_completes_without_herdr() {
         !p.join("native-calls").exists(),
         "Native resolution invoked Herdr"
     );
-    let db = rusqlite::Connection::open(p.join("qqq.db")).unwrap();
+    let db = rusqlite::Connection::open(p.join(".qqq/qqq.db")).unwrap();
     let owner: String = db
         .query_row(
             "SELECT session FROM events WHERE action='claim' ORDER BY rowid LIMIT 1",
@@ -557,7 +557,7 @@ fn dispatch_does_not_turn_released_native_claim_into_new_local_claim() {
         "[herdr]\nnext-to-new-agent=true\n",
     )
     .unwrap();
-    let db = rusqlite::Connection::open(p.join("qqq.db")).unwrap();
+    let db = rusqlite::Connection::open(p.join(".qqq/qqq.db")).unwrap();
     db.execute_batch("BEGIN IMMEDIATE").unwrap();
     let mut child = native(p, "native")
         .arg("next")

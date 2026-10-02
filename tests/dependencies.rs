@@ -151,7 +151,8 @@ fn concurrent_sessions_cannot_claim_blocked_children() {
 
 fn legacy_project() -> TempDir {
     let d = TempDir::new().unwrap();
-    let conn = Connection::open(d.path().join("qqq.db")).unwrap();
+    std::fs::create_dir(d.path().join(".qqq")).unwrap();
+    let conn = Connection::open(d.path().join(".qqq/qqq.db")).unwrap();
     conn.execute_batch(include_str!("../src/schema.sql"))
         .unwrap();
     conn.execute_batch(
@@ -178,7 +179,7 @@ fn legacy_project() -> TempDir {
 fn version_one_migration_preserves_data_and_is_repeatable() {
     let d = legacy_project();
     let p = d.path();
-    let conn = Connection::open(p.join("qqq.db")).unwrap();
+    let conn = Connection::open(p.join(".qqq/qqq.db")).unwrap();
     conn.pragma_update(None, "foreign_keys", "ON").unwrap();
     let before: (String, String) = conn
         .query_row("SELECT created_at,updated_at FROM tasks", [], |r| {
@@ -246,7 +247,7 @@ fn concurrent_legacy_opens_migrate_once() {
 #[test]
 fn unknown_schema_is_rejected_without_modification() {
     let d = legacy_project();
-    let conn = Connection::open(d.path().join("qqq.db")).unwrap();
+    let conn = Connection::open(d.path().join(".qqq/qqq.db")).unwrap();
     conn.pragma_update(None, "user_version", 6).unwrap();
     for command in ["init", "list"] {
         let out = run(d.path(), &[command]);

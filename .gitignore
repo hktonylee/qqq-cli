@@ -1,4 +1,5 @@
 .worktrees/
 /target/
+.qqq/
 qqq.db
 qqq.db-*

@@ -328,7 +328,7 @@ fn nested_previews_escape_terminal_controls_and_json_keeps_original_text() {
 fn human_list_renders_long_dependency_chains() {
     let d = project();
     let p = d.path();
-    let conn = rusqlite::Connection::open(p.join("qqq.db")).unwrap();
+    let conn = rusqlite::Connection::open(p.join(".qqq/qqq.db")).unwrap();
     conn.execute_batch(
         "WITH RECURSIVE ids(id) AS (SELECT 1 UNION ALL SELECT id+1 FROM ids WHERE id<512)
         INSERT INTO tasks(id,description,parent_id) SELECT id,'Task '||id,NULLIF(id-1,0) FROM ids;",

@@ -1,7 +1,7 @@
 # qqq
 
 Local-first task queue for coding agents. Task descriptions, messages, images,
-ownership and history live in per-project SQLite file `qqq.db`. No server needed.
+ownership and history live in per-project SQLite file `.qqq/qqq.db`. No server needed.
 
 ## Install
 
@@ -20,8 +20,10 @@ cargo install --path . --locked
 
 ## Quick start
 
-Run `init` in project root. Other task commands find nearest `qqq.db` in current
-folder or its parents. Config commands need no DB.
+Run `init` in project root to create `.qqq/qqq.db`. Other task commands search
+current directory, then each parent for nearest `.qqq` directory. Nearest
+directory wins; if its `qqq.db` is missing, command fails instead of opening
+outer project. Config commands need no DB.
 
 ```sh
 qqq init
@@ -153,7 +155,7 @@ Without explicit session ID, ownership discovery uses:
 
 1. Exact Herdr pane from `HERDR_PANE_ID` or `HERDR_ENV=1` (requires pane ID).
 2. Native Codex `CODEX_THREAD_ID`, then `CODEX_SESSION_ID` fallback.
-3. Unique Herdr agent whose cwd matches DB directory.
+3. Unique Herdr agent whose cwd matches project root (parent of `.qqq`).
 
 Explicit IDs and native Codex ownership work without Herdr when dispatch is
 disabled or `next --local` is used; native Codex discovery also requires being
@@ -257,7 +259,7 @@ qqq herdr find 1
 qqq herdr link 1 --agent codex --agent-session session-123 --server work
 ```
 
-Automatic discovery selects exact caller pane or unique agent at DB directory.
+Automatic discovery selects exact caller pane or unique agent at project root.
 `foreground_cwd` takes precedence over `cwd`; symlinks are resolved. Ambiguous or
 missing identity fails before claiming. When agent-session hooks are absent,
 Herdr terminal ID plus agent kind supplies stable identity. Active claims retain
@@ -285,11 +287,25 @@ agent before retrying or forcing recovery.
 
 ## Data
 
-Keep `qqq.db` out of Git. Back up through SQLite while workers may be running:
+Keep `.qqq/` out of Git. Back up through SQLite while workers may be running:
 
 ```sh
-sqlite3 qqq.db '.backup backup.sqlite'
+sqlite3 .qqq/qqq.db '.backup backup.sqlite'
 ```
+
+To move existing root-level `qqq.db` into new layout, stop all qqq workers and
+other DB writers first. From project root, before running new `qqq init`, check
+that `.qqq/qqq.db` does not already exist:
+
+```sh
+mkdir -p .qqq
+sqlite3 qqq.db ".backup '.qqq/qqq.db'"
+qqq list # run updated CLI
+```
+
+Check task data before removing old `qqq.db`. New CLI does not discover old
+root-level database; `qqq init` without migration creates separate empty DB.
+Existing `.qqq/` directory may hold future files such as `.qqq/images`.
 
 Compatible single-description DBs at schema versions 1–4 migrate automatically
 to version 5. Legacy `title` or `pending` schemas need manual conversion; newer

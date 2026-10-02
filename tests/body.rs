@@ -48,7 +48,7 @@ fn inline_and_flag_store_one_complete_body_without_title() {
     let flagged = ok(p, &["add", "--description", body]);
     assert_eq!(flagged["description"], body);
     assert!(flagged.get("title").is_none());
-    let conn = Connection::open(p.join("qqq.db")).unwrap();
+    let conn = Connection::open(p.join(".qqq/qqq.db")).unwrap();
     let columns: Vec<String> = conn
         .prepare("SELECT name FROM pragma_table_info('tasks')")
         .unwrap()
@@ -171,7 +171,8 @@ fn external_editor_round_trips_exact_prefill_and_complete_returned_buffer() {
 fn legacy_title_schema_requires_manual_update_without_writes() {
     let d = TempDir::new().unwrap();
     let p = d.path();
-    let conn = Connection::open(p.join("qqq.db")).unwrap();
+    fs::create_dir(p.join(".qqq")).unwrap();
+    let conn = Connection::open(p.join(".qqq/qqq.db")).unwrap();
     conn.execute_batch("CREATE TABLE tasks(id INTEGER PRIMARY KEY,title TEXT NOT NULL,description TEXT NOT NULL,status TEXT NOT NULL,assignee TEXT,created_at TEXT,updated_at TEXT,parent_id INTEGER);
         CREATE TABLE events(id INTEGER PRIMARY KEY,task_id INTEGER,action TEXT);
         INSERT INTO tasks VALUES (1,'First','Rest','new',NULL,'before','before',NULL);
@@ -216,7 +217,8 @@ fn legacy_schema_guard_rechecks_after_waiting_for_initialization_lock() {
     use std::{process::Stdio, thread, time::Duration};
     let d = TempDir::new().unwrap();
     let p = d.path();
-    let conn = Connection::open(p.join("qqq.db")).unwrap();
+    fs::create_dir(p.join(".qqq")).unwrap();
+    let conn = Connection::open(p.join(".qqq/qqq.db")).unwrap();
     conn.execute_batch("CREATE TABLE lock_marker(x INTEGER); BEGIN IMMEDIATE;")
         .unwrap();
     let mut child = command(p)

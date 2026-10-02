@@ -61,7 +61,7 @@ fn failed_task_needs_explicit_manual_retry_and_retains_details() {
     std::fs::write(d.path().join("x.png"), b"\x89PNG\r\n\x1a\nfixture").unwrap();
     ok(&d, &["edit", "1", "--image", "x.png"]);
     ok(&d, &["next", "--local", "--session", "worker"]);
-    let conn = Connection::open(d.path().join("qqq.db")).unwrap();
+    let conn = Connection::open(d.path().join(".qqq/qqq.db")).unwrap();
     conn.execute("INSERT INTO herdr_links VALUES (1, ?)", [LINK])
         .unwrap();
     let before = ok(&d, &["show", "1"]);
@@ -285,7 +285,8 @@ const LINK: &str = r#"{"server":null,"identity":{"agent":"codex","kind":"id","va
 
 fn legacy_project() -> TempDir {
     let d = TempDir::new().unwrap();
-    let conn = Connection::open(d.path().join("qqq.db")).unwrap();
+    std::fs::create_dir(d.path().join(".qqq")).unwrap();
+    let conn = Connection::open(d.path().join(".qqq/qqq.db")).unwrap();
     conn.execute_batch(include_str!("../src/schema.sql"))
         .unwrap();
     conn.execute_batch(include_str!("../src/migrate_v2.sql"))
@@ -309,7 +310,7 @@ fn legacy_project() -> TempDir {
 #[test]
 fn v3_migration_preserves_data_sequences_constraints_and_foreign_keys() {
     let d = legacy_project();
-    let conn = Connection::open(d.path().join("qqq.db")).unwrap();
+    let conn = Connection::open(d.path().join(".qqq/qqq.db")).unwrap();
     let before: (String, String) = conn
         .query_row(
             "SELECT created_at,updated_at FROM tasks WHERE id=1",
@@ -404,7 +405,7 @@ fn concurrent_v3_opens_upgrade_once() {
 #[test]
 fn invalid_legacy_foreign_key_aborts_migration_atomically() {
     let d = legacy_project();
-    let conn = Connection::open(d.path().join("qqq.db")).unwrap();
+    let conn = Connection::open(d.path().join(".qqq/qqq.db")).unwrap();
     conn.pragma_update(None, "foreign_keys", "OFF").unwrap();
     conn.execute(
         "INSERT INTO messages(task_id,body) VALUES (999,'Orphan')",
@@ -440,7 +441,7 @@ fn session_free_retry_cannot_release_claim_created_while_it_waits() {
     ok(&d, &["add", "Task"]);
     ok(&d, &["next", "--local", "--session", "worker"]);
     fail(&d, "1", "worker");
-    let conn = Connection::open(d.path().join("qqq.db")).unwrap();
+    let conn = Connection::open(d.path().join(".qqq/qqq.db")).unwrap();
     conn.execute_batch("BEGIN IMMEDIATE").unwrap();
     let mut child = command(&d)
         .args(["edit", "1", "--set-status", "new", "--json"])
@@ -472,7 +473,7 @@ fn failed_image_insert_rolls_back_error_reason_history_and_content() {
     ok(&d, &["add", "Task"]);
     ok(&d, &["next", "--local", "--session", "worker"]);
     std::fs::write(d.path().join("x.png"), b"\x89PNG\r\n\x1a\nfixture").unwrap();
-    let conn = Connection::open(d.path().join("qqq.db")).unwrap();
+    let conn = Connection::open(d.path().join(".qqq/qqq.db")).unwrap();
     conn.execute_batch("CREATE TRIGGER reject_image BEFORE INSERT ON images BEGIN SELECT RAISE(ABORT,'image insertion blocked'); END").unwrap();
     let before = ok(&d, &["show", "1"]);
     let args = [

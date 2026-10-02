@@ -240,7 +240,7 @@ fn invalid_attachments_leave_creation_fields_status_and_events_unchanged() {
 fn rejected_image_insert_rolls_back_new_task_and_released_edit() {
     let dir = project();
     let p = dir.path();
-    let conn = Connection::open(p.join("qqq.db")).unwrap();
+    let conn = Connection::open(p.join(".qqq/qqq.db")).unwrap();
     conn.execute_batch("CREATE TRIGGER reject_image BEFORE INSERT ON images WHEN NEW.name='b.jpg' BEGIN SELECT RAISE(ABORT,'image rejected'); END;").unwrap();
     error(
         p,
