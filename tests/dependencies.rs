@@ -203,7 +203,7 @@ fn version_one_migration_preserves_data_and_is_repeatable() {
     let version: i64 = conn
         .pragma_query_value(None, "user_version", |r| r.get(0))
         .unwrap();
-    assert_eq!(version, 8);
+    assert_eq!(version, 9);
     assert_eq!(
         std::fs::read(p.join(".qqq/images/1/1.png")).unwrap(),
         vec![1, 2, 3]
@@ -248,17 +248,17 @@ fn concurrent_legacy_opens_migrate_once() {
 fn unknown_schema_is_rejected_without_modification() {
     let d = legacy_project();
     let conn = Connection::open(d.path().join(".qqq/qqq.db")).unwrap();
-    conn.pragma_update(None, "user_version", 9).unwrap();
+    conn.pragma_update(None, "user_version", 10).unwrap();
     for command in ["init", "list"] {
         let out = run(d.path(), &[command]);
         assert!(!out.status.success());
         assert!(
-            String::from_utf8_lossy(&out.stderr).contains("Unsupported database schema version 9")
+            String::from_utf8_lossy(&out.stderr).contains("Unsupported database schema version 10")
         );
     }
     let version: i64 = conn
         .pragma_query_value(None, "user_version", |r| r.get(0))
         .unwrap();
-    assert_eq!(version, 9);
+    assert_eq!(version, 10);
     assert!(conn.prepare("SELECT parent_id FROM tasks").is_err());
 }

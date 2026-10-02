@@ -244,11 +244,11 @@ impl Db {
         conn.pragma_update(None, "foreign_keys", "ON")?;
         let version: i64 = conn.pragma_query_value(None, "user_version", |r| r.get(0))?;
         ensure!(
-            (1..=8).contains(&version) || (init && version == 0),
+            (1..=9).contains(&version) || (init && version == 0),
             "Unsupported database schema version {version}"
         );
         ensure_description_schema(&conn)?;
-        if version < 8 {
+        if version < 9 {
             // Rebuild CHECK constraints without changing references to tasks.
             // SQLite requires foreign_keys to change outside a transaction.
             let disable_foreign_keys = version < 6;
@@ -261,7 +261,7 @@ impl Db {
             // Another CLI may have migrated while we waited for the write lock.
             let version: i64 = tx.pragma_query_value(None, "user_version", |r| r.get(0))?;
             ensure!(
-                (1..=8).contains(&version) || (init && version == 0),
+                (1..=9).contains(&version) || (init && version == 0),
                 "Unsupported database schema version {version}"
             );
             ensure_description_schema(&tx)?;
@@ -314,6 +314,9 @@ impl Db {
             if version < 8 {
                 tx.execute_batch(include_str!("migrate_v8.sql"))?;
             }
+            if version < 9 {
+                tx.execute_batch(include_str!("migrate_v9.sql"))?;
+            }
             commit_with_files(tx, &mut pending)?;
             if disable_foreign_keys {
                 conn.pragma_update(None, "foreign_keys", "ON")?;
@@ -326,7 +329,7 @@ impl Db {
         }
         let version: i64 = conn.pragma_query_value(None, "user_version", |r| r.get(0))?;
         ensure!(
-            version == 8,
+            version == 9,
             "Unsupported database schema version {version}"
         );
         Ok((Self { conn, image_store }, path))

@@ -14,9 +14,9 @@
 
 **Files:** `src/migrate_v9.sql`, `src/db.rs`, `tests/reopen.rs`, `tests/tui_db.rs`, existing schema-version tests.
 
-- [ ] Write v8 fixture test: apply `schema.sql` and migrations 2–8, insert a completed task with event ID 8, insert/delete event ID 20, run CLI `show`; assert version 9, preserved task/event rows, and next `reopen` event ID 21. Run `cargo test --locked --test reopen`; expect missing version/action failure.
-- [ ] Add `migrate_v9.sql` with event-table rebuild. New action CHECK includes `claim`, `release`, `complete`, `error`, `archive`, `unarchive`, `reopen`; copy IDs and timestamps, preserve `sqlite_sequence`, recreate `events_task`, set `PRAGMA user_version=9`.
-- [ ] Update `Db::open` outer/inner version guards and final assertion to 9; apply migration 9 after 8. Apply migration to `tests/tui_db.rs` direct fixture; change successful-version assertions from 8 to 9 and unsupported-version fixture from 9 to 10. Run focused migration and DB tests; commit.
+- [x] Write v8 fixture test: apply `schema.sql` and migrations 2–8, insert a completed task with event ID 8, insert/delete event ID 20, run CLI `show`; assert version 9, preserved task/event rows, and next `reopen` event ID 21. Run `cargo test --locked --test reopen`; expect missing version/action failure.
+- [x] Add `migrate_v9.sql` with event-table rebuild. New action CHECK includes `claim`, `release`, `complete`, `error`, `archive`, `unarchive`, `reopen`; copy IDs and timestamps, preserve `sqlite_sequence`, recreate `events_task`, set `PRAGMA user_version=9`.
+- [x] Update `Db::open` outer/inner version guards and final assertion to 9; apply migration 9 after 8. Apply migration to `tests/tui_db.rs` direct fixture; change successful-version assertions from 8 to 9 and unsupported-version fixture from 9 to 10. Run focused migration and DB tests; commit.
 
 ### Task 2: Reopen transaction and CLI
 

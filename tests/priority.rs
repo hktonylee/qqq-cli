@@ -89,7 +89,7 @@ fn version_six_migration_defaults_priority_and_preserves_fifo() {
     assert_eq!(
         conn.pragma_query_value(None, "user_version", |row| row.get::<_, i64>(0))
             .unwrap(),
-        8
+        9
     );
     assert_eq!(ok(path, &["next", "--session", "a"])["id"], 1);
 }
@@ -114,7 +114,7 @@ fn concurrent_version_six_opens_migrate_once() {
     assert_eq!(
         conn.pragma_query_value(None, "user_version", |row| row.get::<_, i64>(0))
             .unwrap(),
-        8
+        9
     );
 }
 
