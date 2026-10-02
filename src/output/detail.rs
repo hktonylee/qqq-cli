@@ -106,9 +106,10 @@ pub(super) fn render(value: &Value, color: bool) -> String {
         ));
     }
     sections.push(format!(
-        "{}\n{}\n{}\n{}",
+        "{}\n{}\n{}\n{}\n{}",
         heading("Details", color),
         row("Parent:", &parent(task), color),
+        row("Priority:", &field(task, "priority"), color),
         row(
             "Created:",
             &styled(&field(task, "created_at"), color.then_some("2")),

@@ -531,7 +531,10 @@ fn run() -> Result<Option<String>> {
     } else {
         let terminal = std::io::stdout().is_terminal();
         let color = output::color_enabled(terminal);
-        let columns = if matches!(&format, output::Format::Tasks) {
+        let columns = if matches!(
+            &format,
+            output::Format::Tasks | output::Format::PriorityTasks
+        ) {
             output::terminal_columns(terminal)
         } else {
             None

@@ -41,7 +41,7 @@ pub fn run(
             "No tasks to display.".to_owned()
         } else {
             output::render(
-                Format::Tasks,
+                Format::PriorityTasks,
                 &tasks,
                 color,
                 output::terminal_columns(stdout_terminal),

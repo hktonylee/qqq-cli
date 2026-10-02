@@ -36,8 +36,9 @@ qqq complete 1 --session worker-1
 qqq next --session worker-1
 ```
 
-`next` claims oldest ready task. `complete` frees its dependent tasks. Use IDs
-returned by `add` and `next`; examples above assume fresh DB. See `qqq --help`
+`next` claims highest-priority ready task, oldest ID on ties. `complete` frees
+its dependent tasks. Use IDs returned by `add` and `next`; examples above assume
+fresh DB. See `qqq --help`
 or `qqq <command> --help` for all flags.
 
 ## List and show
@@ -55,7 +56,7 @@ qqq list --watch
 qqq list --watch --json
 ```
 
-`list` shows status and dependency tree. In a terminal with a known width, it
+`list` shows status, priority, and dependency tree in stable ID order. In a terminal with a known width, it
 shows full descriptions with wrapped, aligned continuation lines; piped output
 keeps first-line previews. `show` adds messages, images, ownership history and
 Herdr link. Negative indexes work with `show` and `edit`; `-1` selects newest
@@ -86,13 +87,21 @@ return `[]`; no ready task returns `null`. Errors use stderr (exit 1 for runtime
 
 ```sh
 qqq add "Fix login"
+qqq add "Fix urgent login" --priority 8
 qqq add --description "Fix login"   # same input, alternative flag
 qqq edit 1 --description "Updated details"
+qqq edit 1 --priority -5             # lower future claim order
 qqq edit -1                         # edit newest task interactively
 ```
 
-Descriptions preserve whitespace and newlines; blank-only text fails. On a
-terminal, `add` without text or `edit` without update flags opens built-in
+Descriptions preserve whitespace and newlines; blank-only text fails.
+Priority defaults to `0` and accepts integers from `-100` through `100`.
+Higher priority claims first among ready new tasks; equal priority uses oldest
+ID. `list` stays in ID/dependency order. Editing priority on active, completed,
+or error tasks keeps status and ownership metadata; an already-owned task still
+returns to its owner before new claims.
+
+On a terminal, `add` without text or `edit` without update flags opens built-in
 editor. Ctrl-S saves, Esc exits blank draft or confirms discard of nonempty
 draft, Ctrl-C exits, Ctrl-W deletes previous word on same line, Ctrl-V pastes
 clipboard text or image. Option+Left/Right moves cursor by word. Clipboard paste

@@ -15,6 +15,7 @@ pub enum Format {
     AddedTask,
     Task,
     Tasks,
+    PriorityTasks,
     Detail,
     Message,
     Link,
@@ -29,7 +30,7 @@ impl From<&Commands> for Format {
             Commands::Config { value: Some(_), .. } => Self::ConfigSet,
             Commands::Config { .. } => Self::ConfigGet,
             Commands::Init => Self::Database,
-            Commands::List { .. } => Self::Tasks,
+            Commands::List { .. } => Self::PriorityTasks,
             Commands::Show { .. } => Self::Detail,
             Commands::Message { .. } => Self::Message,
             Commands::Herdr { command } => match command {
@@ -149,9 +150,10 @@ fn parent(value: &Value) -> String {
 fn task(value: &Value, color: bool, assignment: bool) -> String {
     let heading = format!("#{}", field(value, "id"));
     let mut result = format!(
-        "{}\nStatus: {}\nParent: {}",
+        "{}\nStatus: {}\nPriority: {}\nParent: {}",
         styled(&heading, color.then_some("1")),
         styled(status(value), status_color(value, color)),
+        field(value, "priority"),
         parent(value)
     );
     if assignment {
@@ -228,7 +230,7 @@ fn link(value: &Value, color: bool) -> String {
     )
 }
 
-fn task_tree(tasks: &[Value], color: bool, columns: Option<usize>) -> String {
+fn task_tree(tasks: &[Value], color: bool, columns: Option<usize>, show_priority: bool) -> String {
     if tasks.is_empty() {
         return "No tasks yet.".to_owned();
     }
@@ -254,7 +256,11 @@ fn task_tree(tasks: &[Value], color: bool, columns: Option<usize>) -> String {
         .map(|index| (index, 0, true))
         .collect();
     let mut continuations = Vec::new();
-    let mut lines = vec![format!("{:<6} {:<12} TASK", "ID", "STATUS")];
+    let mut lines = vec![if show_priority {
+        format!("{:<6} {:<12} {:>4} TASK", "ID", "STATUS", "PRI")
+    } else {
+        format!("{:<6} {:<12} TASK", "ID", "STATUS")
+    }];
     while let Some((index, depth, last)) = stack.pop() {
         continuations.truncate(depth.saturating_sub(1));
         let mut prefix: String = continuations
@@ -266,7 +272,16 @@ fn task_tree(tasks: &[Value], color: bool, columns: Option<usize>) -> String {
             continuations.push(!last);
         }
         let task = &tasks[index];
-        let fields = format!("{:<6} {:<12} ", field(task, "id"), status(task));
+        let fields = if show_priority {
+            format!(
+                "{:<6} {:<12} {:>4} ",
+                field(task, "id"),
+                status(task),
+                field(task, "priority")
+            )
+        } else {
+            format!("{:<6} {:<12} ", field(task, "id"), status(task))
+        };
         let first_prefix = format!("{fields}{prefix}");
         let continuation_prefix = format!(
             "{}{}",
@@ -345,6 +360,13 @@ pub fn render(format: Format, value: &Value, color: bool, columns: Option<usize>
             value.as_array().expect("task list is an array"),
             color,
             columns,
+            false,
+        ),
+        Format::PriorityTasks => task_tree(
+            value.as_array().expect("task list is an array"),
+            color,
+            columns,
+            true,
         ),
         Format::Detail => detail::render(value, color),
         Format::Message => format!(

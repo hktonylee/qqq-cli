@@ -298,7 +298,10 @@ fn human_list_groups_nested_dependencies_with_correct_tree_branches() {
     let list = text(p, &["list"]);
     let rows: Vec<_> = list.lines().collect();
     assert_eq!(rows.len(), 10);
-    assert_eq!(rows[0], format!("{:<6} {:<12} TASK", "ID", "STATUS"));
+    assert_eq!(
+        rows[0],
+        format!("{:<6} {:<12} {:>4} TASK", "ID", "STATUS", "PRI")
+    );
     assert!(!list.contains("PARENT"));
     for (row, (id, title)) in rows[1..].iter().zip([
         (1, "Project A"),
@@ -312,7 +315,7 @@ fn human_list_groups_nested_dependencies_with_correct_tree_branches() {
         (8, "Cleanup"),
     ]) {
         assert_eq!(row.split_whitespace().next().unwrap(), id.to_string());
-        assert_eq!(&row[20..], title, "{list}");
+        assert_eq!(&row[25..], title, "{list}");
     }
     assert!(rows[1].contains("Completed"));
     assert!(rows[7].contains("In progress"));
@@ -357,7 +360,7 @@ fn human_list_renders_long_dependency_chains() {
     let rows: Vec<_> = list.lines().collect();
     assert_eq!(rows.len(), 513);
     assert_eq!(
-        &rows[512][20..],
+        &rows[512][25..],
         format!("{}└── Task 512", "    ".repeat(510))
     );
 }

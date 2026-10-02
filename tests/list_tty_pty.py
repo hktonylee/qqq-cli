@@ -95,24 +95,25 @@ with tempfile.TemporaryDirectory(prefix="qqq-list-tty-") as folder:
 
     for term in ("xterm-256color", "dumb"):
         rows = terminal_list(40, term).splitlines()
-        pad = " " * 20
-        assert len(rows) == 7, rows
+        pad = " " * 25
+        assert len(rows) == 8, rows
         assert rows[2] == pad + "more root", rows
-        assert rows[4] == pad + "│   more child", rows
-        assert rows[6] == pad + "    last detail", rows
+        assert rows[5] == pad + "│   more child", rows
+        assert rows[7] == pad + "    last detail", rows
         assert all(len(row) <= 40 for row in rows), rows
 
     watch = terminal_watch_snapshot(40)
     assert "\x1b[H\x1b[2J" in watch
-    assert " " * 20 + "│   more child" in watch
+    assert " " * 25 + "│   more child" in watch
 
     cli("add", "ABCDEFGHIJKLMN\n界界界界界界界")
     rows = terminal_list(32).splitlines()
-    assert " " * 20 + "MN" in rows, rows
-    assert " " * 20 + "界界界界界界" in rows, rows
-    assert " " * 20 + "界" in rows, rows
+    assert " " * 25 + "HIJKLMN" in rows, rows
+    assert " " * 25 + "界界界" in rows, rows
+    assert " " * 25 + "界" in rows, rows
 
     cli("add", "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789")
     rows = terminal_list(40, term="dumb", controlling_columns=80).splitlines()
-    assert "5      New          ABCDEFGHIJKLMNOPQRST" in rows, rows
-    assert " " * 20 + "UVWXYZ0123456789" in rows, rows
+    assert any(row.endswith("ABCDEFGHIJKLMNO") for row in rows), rows
+    assert " " * 25 + "PQRSTUVWXYZ0123" in rows, rows
+    assert " " * 25 + "456789" in rows, rows

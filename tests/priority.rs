@@ -31,6 +31,20 @@ fn ok(path: &Path, args: &[&str]) -> Value {
     serde_json::from_slice(&output.stdout).unwrap()
 }
 
+fn human(path: &Path, args: &[&str]) -> String {
+    let output = Command::new(env!("CARGO_BIN_EXE_qqq"))
+        .current_dir(path)
+        .args(args)
+        .output()
+        .unwrap();
+    assert!(
+        output.status.success(),
+        "{args:?}: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    String::from_utf8(output.stdout).unwrap()
+}
+
 fn v6_project() -> TempDir {
     let dir = TempDir::new().unwrap();
     std::fs::create_dir(dir.path().join(".qqq")).unwrap();
@@ -284,4 +298,33 @@ fn concurrent_sessions_claim_unique_highest_priority_tasks() {
         .collect();
     claimed.sort();
     assert_eq!(claimed, [2, 3, 4]);
+}
+
+#[test]
+fn human_list_show_and_task_summaries_display_priority() {
+    let dir = project();
+    let path = dir.path();
+    let added = human(path, &["add", "High", "--priority", "7"]);
+    assert!(added.contains("Priority: 7"), "{added}");
+    ok(path, &["add", "Low", "--priority", "-3"]);
+    let list = human(path, &["list"]);
+    assert!(list.lines().next().unwrap().contains("PRI"), "{list}");
+    assert!(
+        list.lines()
+            .any(|line| line.contains(" 7 ") && line.ends_with("High")),
+        "{list}"
+    );
+    assert!(
+        list.lines()
+            .any(|line| line.contains("-3 ") && line.ends_with("Low")),
+        "{list}"
+    );
+    let show = human(path, &["show", "1"]);
+    assert!(
+        show.lines()
+            .any(|line| line.trim().starts_with("Priority:") && line.ends_with('7')),
+        "{show}"
+    );
+    let edited = human(path, &["edit", "1", "--priority", "-2"]);
+    assert!(edited.contains("Priority: -2"), "{edited}");
 }
