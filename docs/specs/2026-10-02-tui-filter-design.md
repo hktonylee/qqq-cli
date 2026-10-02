@@ -1,0 +1,9 @@
+# TUI task filter
+
+`qqq tui` keeps a visible filter bar between task-list heading and rows. `/` focuses it from editor. Text input filters by case-insensitive substring of full task description, including lines beyond preview. Empty query shows all tasks. For each match, list also keeps ancestor chain so dependency context remains visible; unrelated siblings disappear. No matches shows `No matching tasks.` in list panel.
+
+Filter text and focus live only in TUI memory. Typing or clearing query does not change DB, selected task, or unsaved editor draft. Tab or Enter returns focus to editor. Esc clears nonempty query while keeping filter focus; another Esc with empty query returns to editor. Ctrl-C still exits. Shift-Up/Down navigates visible task IDs in creation order, including ancestor context, and keeps existing dirty-draft switch confirmation. New-task draft remains reachable after newest visible task. Filtering alone never changes selection, even when selected task is hidden.
+
+Task filtering uses lightweight `(id,parent_id,description)` views. A lookup map follows parent IDs and stops when ancestor already included. Existing tree renderer receives only included tasks, preserving its indentation and wrapped continuation rows. Dashboard adjusts list height and scroll for permanent filter row; focused cursor moves to end of filter text. Editor cursor and viewport resume on focus return. `NO_COLOR` and `TERM=dumb` keep filter bar plain.
+
+Model tests cover full-description matching, mixed-case query, empty query, ancestor retention, no matches, and navigation over visible IDs. Render tests cover filter row, focused cursor, empty message, selected task hidden, and small screen. PTY tests cover typing, clearing, Esc/Tab/Enter focus, dirty draft, filtered Shift navigation, no DB mutation, resize, and plain mode.
