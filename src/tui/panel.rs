@@ -8,7 +8,6 @@ pub struct FilterTask<'a> {
 
 pub struct FilteredTasks {
     pub included_ids: HashSet<i64>,
-    pub ordered_ids: Vec<i64>,
 }
 
 pub fn filter_tasks(tasks: &[FilterTask<'_>], query: &str) -> FilteredTasks {
@@ -34,31 +33,32 @@ pub fn filter_tasks(tasks: &[FilterTask<'_>], query: &str) -> FilteredTasks {
             current = tasks[index].parent_id;
         }
     }
-    let ordered_ids = tasks
-        .iter()
-        .filter(|task| included_ids.contains(&task.id))
-        .map(|task| task.id)
-        .collect();
-    FilteredTasks {
-        included_ids,
-        ordered_ids,
-    }
+    FilteredTasks { included_ids }
 }
 
 pub fn adjacent_visible_id(ids: &[i64], current: Option<i64>, older: bool) -> Option<i64> {
-    if older {
-        ids.iter()
-            .rev()
-            .copied()
-            .find(|id| current.is_none_or(|current| *id < current))
-    } else {
-        current.and_then(|current| ids.iter().copied().find(|id| *id > current))
+    match current.and_then(|current| ids.iter().position(|id| *id == current)) {
+        Some(index) if older => index.checked_sub(1).map(|index| ids[index]),
+        Some(index) => ids.get(index + 1).copied(),
+        None if older => ids.last().copied(),
+        None if current.is_some() => ids.first().copied(),
+        None => None,
     }
 }
 
 pub struct ListRow {
     pub text: String,
     pub task_id: Option<i64>,
+}
+
+pub fn visible_ids(rows: &[ListRow]) -> Vec<i64> {
+    let mut ids = Vec::new();
+    for id in rows.iter().filter_map(|row| row.task_id) {
+        if ids.last() != Some(&id) {
+            ids.push(id);
+        }
+    }
+    ids
 }
 
 pub fn rows(tree: &str) -> Vec<ListRow> {

@@ -131,6 +131,10 @@ with tempfile.TemporaryDirectory(prefix="qqq-dashboard-test-") as folder:
         image_path.write_bytes(base64.b64decode(
             "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aGD8AAAAASUVORK5CYII="
         ))
+    elif scenario == "tree_navigation":
+        cli("add", "Parent")
+        cli("add", "Other root")
+        cli("add", "Child\nWrapped child detail", "--parent", "1")
     elif scenario == "click":
         cli("add", "Parent\nParent detail")
         cli("add", "Child start\nChild detail " + "word " * 12, "--parent", "1")
@@ -258,7 +262,7 @@ with tempfile.TemporaryDirectory(prefix="qqq-dashboard-test-") as folder:
         elif scenario in ("no_color", "dumb", "pasteboard_no_color", "filter_no_color"):
             assert b"\x1b[38;" not in screen, screen[-2000:]
             assert b"\x1b[48;" not in screen, screen[-2000:]
-        if scenario not in ("scroll", "wheel", "click", "click_filter", "workflow", "workflow_empty", "workflow_status", "filter", "filter_no_color", "archive_hidden", "archive_included", "actions_basic", "actions_rejected", "actions_hidden"):
+        if scenario not in ("tree_navigation", "scroll", "wheel", "click", "click_filter", "workflow", "workflow_empty", "workflow_status", "filter", "filter_no_color", "archive_hidden", "archive_included", "actions_basic", "actions_rejected", "actions_hidden"):
             read_until(b"Second")
             assert "First" in visible.text() and "Second" in visible.text(), visible.text()
         assert not select.select([child.stdout], [], [], 0)[0], "TUI wrote stdout while open"
@@ -269,7 +273,33 @@ with tempfile.TemporaryDirectory(prefix="qqq-dashboard-test-") as folder:
                 assert "Hidden" not in visible.text(), visible.text()
             else:
                 assert "[archived] Hidden" in visible.text(), visible.text()
-        if scenario == "workflow":
+        if scenario == "tree_navigation":
+            expected = (2, 3, 1)
+            for task_id in expected:
+                clear_capture()
+                send(b"\x1b[1;2A")
+                wait_visible(lambda: f"task #{task_id} (" in visible.text().splitlines()[8])
+            clear_capture()
+            send(b"\x1b[1;2B")
+            wait_visible(lambda: "task #3 (" in visible.text().splitlines()[8])
+            send(b"\x1b[1;2B")
+            wait_visible(lambda: "task #2 (" in visible.text().splitlines()[8])
+            send(b"\x1b[1;2B")
+            wait_visible(lambda: "new task" in visible.text().splitlines()[8])
+        elif scenario == "save_selected":
+            send(b"Created\x13")
+            wait_visible(lambda: "task #3 (New)" in visible.text().splitlines()[8]
+                         and visible.text().splitlines()[9].startswith("Created"))
+            assert cli("show", "3")["task"]["description"] == "Created"
+            send(b"\x05 updated\x13")
+            wait_visible(lambda: visible.text().splitlines()[9].startswith("Created updated")
+                         and visible.text().splitlines()[-1].startswith("Saved #3")
+                         and (visible.x, visible.y) == (0, 9))
+            assert len(cli("list")) == 3
+            assert cli("show", "3")["task"]["description"] == "Created updated"
+            send(b"\x1b[1;2B")
+            wait_visible(lambda: "new task" in visible.text().splitlines()[8])
+        elif scenario == "workflow":
             initial_tasks = cli("list")
             clear_capture()
             send(CTRL_SLASH + b"target")
@@ -289,10 +319,11 @@ with tempfile.TemporaryDirectory(prefix="qqq-dashboard-test-") as folder:
             assert cli("list") == initial_tasks
             clear_capture()
             send(b"\x13")
-            read_until(b"Saved #14. New task")
+            read_until(b"Saved #14")
             assert cli("show", "14")["task"]["description"] == "Target 14 updated"
             assert child.poll() is None
             assert not select.select([child.stdout], [], [], 0)[0], "TUI wrote stdout after update"
+            send(b"\x1b[1;2B" * 7)
             wait_visible(lambda: "new task" in visible.text().splitlines()[8]
                          and visible.text().splitlines()[9].strip() == "")
             clear_capture()
@@ -307,7 +338,7 @@ with tempfile.TemporaryDirectory(prefix="qqq-dashboard-test-") as folder:
             read_until(b"[Image #1: workflow.png]")
             clear_capture()
             send(b"\x13")
-            read_until(b"Saved #21. New task")
+            read_until(b"Saved #21")
             saved = cli("show", "21")
             assert saved["task"]["description"] == "New target details![workflow.png](.qqq/images/21/1.png)"
             assert [image["name"] for image in saved["images"]] == ["workflow.png"]
@@ -559,7 +590,7 @@ with tempfile.TemporaryDirectory(prefix="qqq-dashboard-test-") as folder:
             assert cli("list") == initial_tasks
             clear_capture()
             send(b"\x13")
-            read_until(b"Saved #2. New task")
+            read_until(b"Saved #2")
             assert cli("show", "2")["task"]["description"] == (
                 "Child Xstart\nChild detail " + "word " * 12
             )
@@ -610,7 +641,7 @@ with tempfile.TemporaryDirectory(prefix="qqq-dashboard-test-") as folder:
             assert cli("list") == initial_tasks
             clear_capture()
             send(b"\x13")
-            read_until(b"Saved #14. New task")
+            read_until(b"Saved #14")
             assert cli("show", "14")["task"]["description"] == "!Needle 14"
         elif scenario == "click_editor_scroll":
             clear_capture()
@@ -626,7 +657,7 @@ with tempfile.TemporaryDirectory(prefix="qqq-dashboard-test-") as folder:
             wait_visible(lambda: visible.text().splitlines()[9].startswith("LineX04"))
             clear_capture()
             send(b"\x13")
-            read_until(b"Saved #3. New task")
+            read_until(b"Saved #3")
             expected = "\n".join("LineX04" if index == 4 else f"Line{index:02}"
                                  for index in range(1, 13))
             assert cli("show", "3")["task"]["description"] == expected
@@ -768,7 +799,7 @@ with tempfile.TemporaryDirectory(prefix="qqq-dashboard-test-") as folder:
                 wait_visible(lambda: visible.text().splitlines()[-1].startswith("Ctrl-S save")
                              and "Ctrl+/ filter" in visible.text().splitlines()[-1])
             send(b"\x13")
-            read_until(b"Saved #3. New task")
+            read_until(b"Saved #3")
             assert cli("show", "3")["task"]["description"] == "Draft/path"
         elif scenario == "slash_edit":
             send(b"/")
@@ -777,7 +808,7 @@ with tempfile.TemporaryDirectory(prefix="qqq-dashboard-test-") as folder:
             send(b"\x1b/")
             wait_visible(lambda: visible.text().splitlines()[9].startswith("//"))
             send(b"path\x13")
-            read_until(b"Saved #3. New task")
+            read_until(b"Saved #3")
             assert cli("show", "3")["task"]["description"] == "//path"
         elif scenario in ("filter", "filter_no_color"):
             initial_tasks = cli("list")
@@ -826,7 +857,7 @@ with tempfile.TemporaryDirectory(prefix="qqq-dashboard-test-") as folder:
             read_until(b"Filter: needle")
             clear_capture()
             send(b"\x13")
-            read_until(b"Saved #4. New task")
+            read_until(b"Saved #4")
             assert cli("show", "4")["task"]["description"] == "Unsaved!"
             clear_capture()
             send(b"\x1b[1;2A")
@@ -869,11 +900,13 @@ with tempfile.TemporaryDirectory(prefix="qqq-dashboard-test-") as folder:
             assert "> 2" in visible.text(), visible.text()
             clear_capture()
             send(b"\x05 edited\x13")
-            read_until(b"Saved #2. New task")
+            read_until(b"Saved #2")
             assert cli("show", "2")["task"]["description"] == "Second edited"
+            send(b"\x1b[1;2B")
+            wait_visible(lambda: "new task" in visible.text().splitlines()[8])
             clear_capture()
             send(b"Third\x13")
-            read_until(b"Saved #3. New task")
+            read_until(b"Saved #3")
             assert "3      New" in visible.text(), visible.text()
             assert cli("show", "3")["task"]["description"] == "Third"
         elif scenario == "scroll":
@@ -898,14 +931,16 @@ with tempfile.TemporaryDirectory(prefix="qqq-dashboard-test-") as folder:
                 assert b"\x1b[38;" not in screen, screen[-2000:]
             clear_capture()
             send(b"\x13")
-            read_until(b"Saved #3. New task")
+            read_until(b"Saved #3")
             assert cli("show", "3")["task"]["description"] == (
                 "Prefix \n```pasteboard\n" + payload + "\n```"
             )
             clear_capture()
+            send(b"\x1b[1;2B")
+            wait_visible(lambda: "new task" in visible.text().splitlines()[8])
+            clear_capture()
             send(b"\x1b[1;2A")
             read_until(b"task #3")
-            read_until(b"[Pasted Content 1001 chars]")
             wait_visible(lambda: "task #3" in visible.text().splitlines()[8] and
                          "[Pasted Content 1001 chars]" in visible.text() and
                          visible.text().splitlines()[-1].startswith("Ctrl-S save"))
@@ -915,7 +950,7 @@ with tempfile.TemporaryDirectory(prefix="qqq-dashboard-test-") as folder:
                 assert b"\x1b[38;" not in screen, screen[-2000:]
             clear_capture()
             send(b"\x1b[C" * (len("Prefix \n") + 1) + b"\x17\x13")
-            read_until(b"Saved #3. New task")
+            read_until(b"Saved #3")
             assert cli("show", "3")["task"]["description"] == "Prefix \n"
         elif scenario == "dirty":
             send(b"Draft")
@@ -930,7 +965,7 @@ with tempfile.TemporaryDirectory(prefix="qqq-dashboard-test-") as folder:
             assert "Discard changes" not in visible.text(), visible.text()
             clear_capture()
             send(b"\x13")
-            read_until(b"Saved #3. New task")
+            read_until(b"Saved #3")
             assert cli("show", "3")["task"]["description"] == "Draft"
         elif scenario == "save_error":
             clear_capture()
@@ -947,7 +982,7 @@ with tempfile.TemporaryDirectory(prefix="qqq-dashboard-test-") as folder:
                 db.execute("INSERT INTO tasks(id, description) VALUES (2, 'Second')")
             clear_capture()
             send(b"\x13")
-            read_until(b"Saved #2. New task")
+            read_until(b"Saved #2")
             assert cli("show", "2")["task"]["description"] == "Second edited"
         elif scenario == "resize":
             send(b"Draft")
@@ -968,10 +1003,10 @@ with tempfile.TemporaryDirectory(prefix="qqq-dashboard-test-") as folder:
             clear_capture()
             assert not (termios.tcgetattr(slave)[0] & termios.IXON), termios.tcgetattr(slave)
             send(b"\x13")
-            read_until(b"Saved #3. New task")
+            read_until(b"Saved #3")
             assert cli("show", "3")["task"]["description"] == "Draft"
         if scenario != "wheel_error":
-            send(b"\x03" if scenario in ("scroll", "color", "wheel", "click_error", "workflow_status", "actions_basic", "actions_rejected", "actions_narrow", "actions_hidden") else b"\x1b")
+            send(b"\x1b" if scenario in ("empty", "empty_json", "workflow_empty") else b"\x03")
         deadline = time.monotonic() + 5
         while child.poll() is None:
             assert time.monotonic() < deadline, f"TUI failed to exit: {screen[-1000:]!r}\n{visible.text()}"

@@ -58,6 +58,16 @@ fn tui_dashboard_edits_and_adds_without_leaving_screen() {
 }
 
 #[test]
+fn tui_dashboard_navigation_follows_displayed_tree_order() {
+    dashboard_scenario("tree_navigation");
+}
+
+#[test]
+fn tui_dashboard_save_keeps_new_task_open() {
+    dashboard_scenario("save_selected");
+}
+
+#[test]
 fn tui_dashboard_hides_archived_unless_explicitly_included() {
     dashboard_scenario("archive_hidden");
     dashboard_scenario("archive_included");

@@ -3,6 +3,7 @@
 mod panel;
 
 use panel::FilterTask;
+use std::collections::HashSet;
 
 fn tasks() -> Vec<FilterTask<'static>> {
     vec![
@@ -37,7 +38,7 @@ fn tasks() -> Vec<FilterTask<'static>> {
 #[test]
 fn filter_matches_full_description_case_insensitively_and_keeps_ancestors() {
     let filtered = panel::filter_tasks(&tasks(), "cAsE MaTcH");
-    assert_eq!(filtered.ordered_ids, vec![1, 2]);
+    assert_eq!(filtered.included_ids, HashSet::from([1, 2]));
     assert!(filtered.included_ids.contains(&1));
     assert!(!filtered.included_ids.contains(&3));
     assert!(!filtered.included_ids.contains(&4));
@@ -46,24 +47,49 @@ fn filter_matches_full_description_case_insensitively_and_keeps_ancestors() {
 #[test]
 fn filter_empty_query_restores_all_and_no_match_is_empty() {
     assert_eq!(
-        panel::filter_tasks(&tasks(), "").ordered_ids,
-        vec![1, 2, 3, 4, 5]
+        panel::filter_tasks(&tasks(), "").included_ids,
+        HashSet::from([1, 2, 3, 4, 5])
     );
     assert!(
         panel::filter_tasks(&tasks(), "absent")
-            .ordered_ids
+            .included_ids
             .is_empty()
     );
 }
 
 #[test]
 fn filtered_navigation_skips_hidden_ids_and_reaches_new_draft() {
-    let ids = panel::filter_tasks(&tasks(), "match").ordered_ids;
+    let filtered = panel::filter_tasks(&tasks(), "match");
+    let ids: Vec<_> = tasks()
+        .iter()
+        .filter(|task| filtered.included_ids.contains(&task.id))
+        .map(|task| task.id)
+        .collect();
     assert_eq!(ids, vec![1, 2, 4, 5]);
     assert_eq!(panel::adjacent_visible_id(&ids, None, true), Some(5));
     assert_eq!(panel::adjacent_visible_id(&ids, Some(5), true), Some(4));
-    assert_eq!(panel::adjacent_visible_id(&ids, Some(3), true), Some(2));
+    assert_eq!(panel::adjacent_visible_id(&ids, Some(3), true), Some(5));
+    assert_eq!(panel::adjacent_visible_id(&ids, Some(3), false), Some(1));
     assert_eq!(panel::adjacent_visible_id(&ids, Some(2), false), Some(4));
     assert_eq!(panel::adjacent_visible_id(&ids, Some(5), false), None);
     assert_eq!(panel::adjacent_visible_id(&ids, None, false), None);
+}
+
+#[test]
+fn navigation_follows_tree_order_instead_of_numeric_ids() {
+    let ids = [1, 4, 2, 3];
+    assert_eq!(panel::adjacent_visible_id(&ids, None, true), Some(3));
+    assert_eq!(panel::adjacent_visible_id(&ids, Some(3), true), Some(2));
+    assert_eq!(panel::adjacent_visible_id(&ids, Some(2), true), Some(4));
+    assert_eq!(panel::adjacent_visible_id(&ids, Some(4), false), Some(2));
+    assert_eq!(panel::adjacent_visible_id(&ids, Some(1), true), None);
+    assert_eq!(panel::adjacent_visible_id(&ids, Some(3), false), None);
+}
+
+#[test]
+fn visible_navigation_uses_displayed_rows_once_per_task() {
+    let rows = panel::rows(
+        "ID STATUS TASK\n1 New Parent\n4 New Child\n  Wrapped detail\n2 New Other\n3 New Last",
+    );
+    assert_eq!(panel::visible_ids(&rows), vec![1, 4, 2, 3]);
 }

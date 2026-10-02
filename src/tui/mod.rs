@@ -565,7 +565,7 @@ fn compose_inner(
                 panel::rows(&tree)
             };
             list_row_count = rows.len();
-            visible_ids = Some(filtered.ordered_ids);
+            visible_ids = Some(panel::visible_ids(&rows));
             let modal_lines = action_ui
                 .as_ref()
                 .map(|ui| action_lines(ui, usize::from(size.0), usize::from(size.1)))
@@ -1098,11 +1098,20 @@ fn compose_inner(
                                 };
                                 match &mut mode {
                                     Mode::Single(_) => return Ok(Some(outcome)),
-                                    Mode::Continuous { db, save, .. } => match save(db, outcome) {
-                                        Ok(id) => {
+                                    Mode::Continuous { db, save, .. } => match save(db, outcome)
+                                        .and_then(|id| {
+                                            let target = if dashboard {
+                                                let task = db.task(id)?;
+                                                task_target(db, id, task.description, task.status)?
+                                            } else {
+                                                Target::New
+                                            };
+                                            Ok((id, target))
+                                        }) {
+                                        Ok((id, target)) => {
                                             saved_any = true;
                                             load_target(
-                                                Target::New,
+                                                target,
                                                 &mut draft,
                                                 &mut target_id,
                                                 &mut target_status,
@@ -1110,7 +1119,12 @@ fn compose_inner(
                                                 &mut top,
                                             );
                                             list_follow_selected = true;
-                                            message = format!("Saved #{id}. New task");
+                                            editor_follow_cursor = true;
+                                            message = if dashboard {
+                                                format!("Saved #{id}")
+                                            } else {
+                                                format!("Saved #{id}. New task")
+                                            };
                                             message_is_error = false;
                                         }
                                         Err(error) => {
