@@ -101,7 +101,10 @@ with tempfile.TemporaryDirectory(prefix="qqq-dashboard-test-") as folder:
         cli("add", "Parent\nParent detail")
         cli("add", "Child start\nChild detail " + "word " * 12, "--parent", "1")
     elif scenario == "click_filter":
-        for index in range(1, 21):
+        cli("add", "Workspace")
+        cli("add", "Needle child", "--parent", "1")
+        cli("add", "Other")
+        for index in range(4, 21):
             cli("add", f"Needle {index}")
     elif scenario in ("filter", "filter_no_color"):
         cli("add", "Parent")
@@ -117,6 +120,8 @@ with tempfile.TemporaryDirectory(prefix="qqq-dashboard-test-") as folder:
             description = ("\n".join(f"Line{line:02}" for line in range(1, 16))
                            if scenario == "wheel" and index == 20 else f"Task {index}")
             cli("add", description)
+    if scenario == "click_editor_scroll":
+        cli("add", "\n".join(f"Line{index:02}" for index in range(1, 13)))
 
     master, slave = pty.openpty()
     os.set_blocking(master, False)
@@ -254,7 +259,12 @@ with tempfile.TemporaryDirectory(prefix="qqq-dashboard-test-") as folder:
             send(b"Unsaved/needle")
             read_until(b"Filter: needle")
             clear_capture()
-            send(b"\x1b[<64;6;4M")
+            send(b"\x1b[<64;6;4M" * 10)
+            wait_visible(lambda: "Workspace" in visible.text().splitlines()[3]
+                         and "Needle child" in visible.text().splitlines()[4]
+                         and "Other" not in visible.text())
+            clear_capture()
+            send(b"\x1b[<65;6;4M" * 4)
             wait_visible(lambda: "Needle 13" in visible.text().splitlines()[2])
             settle()
             clear_capture()
@@ -292,6 +302,24 @@ with tempfile.TemporaryDirectory(prefix="qqq-dashboard-test-") as folder:
             send(b"\x13")
             read_until(b"Saved #14. New task")
             assert cli("show", "14")["task"]["description"] == "!Needle 14"
+        elif scenario == "click_editor_scroll":
+            clear_capture()
+            click(5, task_row("Line01"))
+            read_until(b"task #3")
+            wait_visible(lambda: visible.text().splitlines()[9].startswith("Line01"))
+            clear_capture()
+            send(b"\x1b[<65;6;11M")
+            wait_visible(lambda: visible.text().splitlines()[9].startswith("Line04"))
+            clear_capture()
+            click(5, 10)
+            send(b"X")
+            wait_visible(lambda: visible.text().splitlines()[9].startswith("LineX04"))
+            clear_capture()
+            send(b"\x13")
+            read_until(b"Saved #3. New task")
+            expected = "\n".join("LineX04" if index == 4 else f"Line{index:02}"
+                                 for index in range(1, 13))
+            assert cli("show", "3")["task"]["description"] == expected
         elif scenario == "click_error":
             settle()
             clear_capture()

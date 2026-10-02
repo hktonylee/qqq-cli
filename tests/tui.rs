@@ -78,6 +78,7 @@ fn tui_dashboard_mouse_wheel_scrolls_both_panes() {
 fn tui_dashboard_click_selects_rows_and_places_caret() {
     dashboard_scenario("click");
     dashboard_scenario("click_filter");
+    dashboard_scenario("click_editor_scroll");
     dashboard_scenario("click_error");
 }
 
