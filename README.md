@@ -209,11 +209,17 @@ further edits or task actions. Set `tui.after_save_new` to `open_new` to clear
 editor after creating task; existing-task edits stay open. Shift-Down past last
 displayed task opens blank draft. Esc/Ctrl-C in
 selected task returns to blank draft; Esc asks before discarding unsaved edits.
-Press again in blank draft to exit. Esc/Ctrl-C in dirty new draft asks before
+Press Esc/Ctrl-C again in blank draft to exit. Esc/Ctrl-C in dirty new draft asks before
 discard; `y` exits without saving, `n` keeps draft for editing or Ctrl-S save.
 Repeated Ctrl-C keeps confirmation open. Ctrl-V or terminal paste inserts text; pasting
 image file path attaches image. Saves commit immediately. TUI needs terminal
 and writes no stdout, including with `--json`.
+
+Shift+Enter opens blank child draft under selected task; header shows parent ID.
+Changed drafts ask before switching. Ctrl-S creates child with dependency;
+normal Enter inserts newline. Navigating away clears draft's parent context.
+Shift+Enter requires terminal to report modified Enter; TUI requests enhanced
+keyboard reporting on Unix, restores previous mode on exit.
 
 Task list refreshes after external DB commits without keyboard input. Refresh
 keeps current editor draft, filter query, and manual scroll positions. Selected

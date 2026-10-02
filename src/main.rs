@@ -366,8 +366,11 @@ fn execute(cli: Cli, display_limit: Option<i64>) -> Result<Value> {
                 include_archived,
                 settings.tui.after_save_new,
                 &mut |db, outcome| {
-                    let task =
-                        db.save_composition(outcome.target_id, None, &outcome.composition)?;
+                    let task = db.save_composition(
+                        outcome.target_id,
+                        outcome.parent_id,
+                        &outcome.composition,
+                    )?;
                     Ok(task.id)
                 },
                 &mut |db, action| match action {

@@ -6,6 +6,10 @@ mod render;
 
 use crate::config::AfterSaveNew;
 use anyhow::{Result, bail, ensure};
+#[cfg(unix)]
+use crossterm::event::{
+    KeyboardEnhancementFlags, PopKeyboardEnhancementFlags, PushKeyboardEnhancementFlags,
+};
 use crossterm::{
     cursor::Show,
     event::{
@@ -27,10 +31,13 @@ use unicode_width::UnicodeWidthStr;
 pub struct Outcome {
     pub composition: Composition,
     pub target_id: Option<i64>,
+    pub parent_id: Option<i64>,
 }
 
 enum Target {
-    New,
+    New {
+        parent_id: Option<i64>,
+    },
     Task {
         id: i64,
         description: String,
@@ -247,7 +254,7 @@ fn adjacent_target(
     };
     Ok(match found {
         Some((id, description, status)) => Some(task_target(db, id, description, status)?),
-        None if !older => Some(Target::New),
+        None if !older => Some(Target::New { parent_id: None }),
         None => None,
     })
 }
@@ -257,13 +264,15 @@ fn load_target(
     draft: &mut Draft,
     target_id: &mut Option<i64>,
     target_status: &mut Option<String>,
+    draft_parent_id: &mut Option<i64>,
     baseline: &mut String,
     top: &mut usize,
 ) {
     match target {
-        Target::New => {
+        Target::New { parent_id } => {
             *target_id = None;
             *target_status = None;
+            *draft_parent_id = parent_id;
             baseline.clear();
             *draft = Draft::new("");
         }
@@ -275,6 +284,7 @@ fn load_target(
         } => {
             *target_id = Some(id);
             *target_status = Some(status);
+            *draft_parent_id = None;
             *baseline = description;
             *draft = loaded;
         }
@@ -306,6 +316,11 @@ impl TerminalGuard {
         )?;
         if mouse {
             execute!(io::stderr(), EnableMouseCapture)?;
+            #[cfg(unix)]
+            execute!(
+                io::stderr(),
+                PushKeyboardEnhancementFlags(KeyboardEnhancementFlags::DISAMBIGUATE_ESCAPE_CODES)
+            )?;
         }
         Ok(guard)
     }
@@ -313,6 +328,8 @@ impl TerminalGuard {
 impl Drop for TerminalGuard {
     fn drop(&mut self) {
         if self.mouse {
+            #[cfg(unix)]
+            let _ = execute!(io::stderr(), PopKeyboardEnhancementFlags);
             let _ = execute!(io::stderr(), DisableMouseCapture);
         }
         if self.color {
@@ -370,7 +387,7 @@ fn run_action(
     };
     let task = handler(db, action)?;
     if task.archived && !include_archived {
-        return Ok(Target::New);
+        return Ok(Target::New { parent_id: None });
     }
     task_target(db, task.id, task.description, task.status)
 }
@@ -466,6 +483,7 @@ fn compose_inner(
     let mut baseline = description.to_owned();
     let mut target_id = None;
     let mut target_status = None;
+    let mut draft_parent_id = None;
     let mut top = 0;
     let mut list_top = 0;
     let mut list_follow_selected = true;
@@ -528,7 +546,13 @@ fn compose_inner(
                 );
                 (format!("{prefix}({label})"), Some(prefix.len()))
             }
-            (true, None) => ("qqq task editor - new task".to_owned(), None),
+            (true, None) => (
+                match draft_parent_id {
+                    Some(parent) => format!("qqq task editor - new task (parent #{parent})"),
+                    None => "qqq task editor - new task".to_owned(),
+                },
+                None,
+            ),
             (false, _) => ("qqq task editor".to_owned(), None),
         };
         let chrome = render::Chrome {
@@ -768,6 +792,7 @@ fn compose_inner(
                                     &mut draft,
                                     &mut target_id,
                                     &mut target_status,
+                                    &mut draft_parent_id,
                                     &mut baseline,
                                     &mut top,
                                 );
@@ -806,15 +831,16 @@ fn compose_inner(
                 if dashboard && target_id.is_some() && (cancel_key || editor_escape) {
                     if !cancel_key && draft.is_dirty_against(&baseline) {
                         confirmation = Some(Confirmation::Switch {
-                            target: Target::New,
+                            target: Target::New { parent_id: None },
                             focus_editor: true,
                         });
                     } else {
                         load_target(
-                            Target::New,
+                            Target::New { parent_id: None },
                             &mut draft,
                             &mut target_id,
                             &mut target_status,
+                            &mut draft_parent_id,
                             &mut baseline,
                             &mut top,
                         );
@@ -848,6 +874,7 @@ fn compose_inner(
                                         &mut draft,
                                         &mut target_id,
                                         &mut target_status,
+                                        &mut draft_parent_id,
                                         &mut baseline,
                                         &mut top,
                                     );
@@ -867,6 +894,7 @@ fn compose_inner(
                                                 &mut draft,
                                                 &mut target_id,
                                                 &mut target_status,
+                                                &mut draft_parent_id,
                                                 &mut baseline,
                                                 &mut top,
                                             );
@@ -992,6 +1020,7 @@ fn compose_inner(
                                             &mut draft,
                                             &mut target_id,
                                             &mut target_status,
+                                            &mut draft_parent_id,
                                             &mut baseline,
                                             &mut top,
                                         );
@@ -1040,6 +1069,44 @@ fn compose_inner(
                             }
                             _ => action_ui = Some(ActionUi::Error { text, top }),
                         },
+                    }
+                    continue;
+                }
+                if dashboard
+                    && key.code == KeyCode::Enter
+                    && key.modifiers.contains(KeyModifiers::SHIFT)
+                    && !key
+                        .modifiers
+                        .intersects(KeyModifiers::CONTROL | KeyModifiers::ALT | KeyModifiers::SUPER)
+                {
+                    if let Some(parent) = target_id {
+                        let target = Target::New {
+                            parent_id: Some(parent),
+                        };
+                        if draft.is_dirty_against(&baseline) {
+                            confirmation = Some(Confirmation::Switch {
+                                target,
+                                focus_editor: true,
+                            });
+                        } else {
+                            load_target(
+                                target,
+                                &mut draft,
+                                &mut target_id,
+                                &mut target_status,
+                                &mut draft_parent_id,
+                                &mut baseline,
+                                &mut top,
+                            );
+                            filter_focused = false;
+                            list_follow_selected = true;
+                            editor_follow_cursor = true;
+                            message.clear();
+                            message_is_error = false;
+                        }
+                    } else {
+                        message = "Select parent task first".to_owned();
+                        message_is_error = true;
                     }
                     continue;
                 }
@@ -1093,6 +1160,7 @@ fn compose_inner(
                                     &mut draft,
                                     &mut target_id,
                                     &mut target_status,
+                                    &mut draft_parent_id,
                                     &mut baseline,
                                     &mut top,
                                 );
@@ -1180,6 +1248,7 @@ fn compose_inner(
                                 let outcome = Outcome {
                                     composition,
                                     target_id,
+                                    parent_id: draft_parent_id,
                                 };
                                 match &mut mode {
                                     Mode::Single(_) => return Ok(Some(outcome)),
@@ -1189,7 +1258,7 @@ fn compose_inner(
                                                 let task = db.task(id)?;
                                                 task_target(db, id, task.description, task.status)?
                                             } else {
-                                                Target::New
+                                                Target::New { parent_id: None }
                                             };
                                             Ok((id, target))
                                         }) {
@@ -1200,6 +1269,7 @@ fn compose_inner(
                                                 &mut draft,
                                                 &mut target_id,
                                                 &mut target_status,
+                                                &mut draft_parent_id,
                                                 &mut baseline,
                                                 &mut top,
                                             );

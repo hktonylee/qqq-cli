@@ -85,6 +85,7 @@ class TerminalScreen:
 binary, scenario = sys.argv[1:]
 # Legacy terminals send this byte for Ctrl+/; Crossterm reads it as Ctrl+7.
 CTRL_SLASH = b"\x1f"
+SHIFT_ENTER = b"\x1b[13;2u"
 with tempfile.TemporaryDirectory(prefix="qqq-dashboard-test-") as folder:
     env = dict(os.environ, HOME=folder, TERM="xterm-256color")
     env.pop("NO_COLOR", None)
@@ -102,6 +103,8 @@ with tempfile.TemporaryDirectory(prefix="qqq-dashboard-test-") as folder:
         return json.loads(result.stdout)
 
     cli("init")
+    if scenario == "child_open_new":
+        cli("config", "tui.after_save_new", "open_new")
     if scenario.startswith("after_save_"):
         cli("config", "tui.after_save_new", "open_saved" if scenario == "after_save_open_saved" else "open_new")
         if scenario == "after_save_default_restored":
@@ -468,6 +471,64 @@ with tempfile.TemporaryDirectory(prefix="qqq-dashboard-test-") as folder:
             assert cli("show", "3")["task"]["description"] == "Created updated"
             send(b"\x1b[1;2B")
             wait_visible(lambda: "new task" in visible.text().splitlines()[8])
+        elif scenario.startswith("child"):
+            if scenario == "child_no_selection":
+                send(SHIFT_ENTER)
+                wait_visible(lambda: "Select parent task" in visible.text().splitlines()[-1])
+                assert len(cli("list")) == 2
+                assert visible.text().splitlines()[9].strip() == ""
+            send(b"\x1b[1;2A")
+            wait_visible(lambda: "task #2 (New)" in visible.text().splitlines()[8])
+            if scenario == "child_dirty":
+                send(b"Draft ")
+                wait_visible(lambda: visible.text().splitlines()[9].startswith("Draft Second"))
+                send(SHIFT_ENTER)
+                wait_visible(lambda: "Discard changes and switch?" in visible.text().splitlines()[-1])
+                send(b"n")
+                wait_visible(lambda: visible.text().splitlines()[9].startswith("Draft Second")
+                             and visible.text().splitlines()[-1].startswith("Ctrl-S save"))
+                assert cli("show", "2")["task"]["description"] == "Second"
+                send(SHIFT_ENTER + b"y")
+            else:
+                send(SHIFT_ENTER)
+            wait_visible(lambda: "new task (parent #2)" in visible.text().splitlines()[8]
+                         and visible.text().splitlines()[9].strip() == ""
+                         and (visible.x, visible.y) == (0, 9))
+            assert len(cli("list")) == 2
+            if scenario == "child_no_selection":
+                send(b"\x1b[1;2A")
+                wait_visible(lambda: "task #2 (New)" in visible.text().splitlines()[8])
+                send(b"\x1b[1;2B")
+                wait_visible(lambda: "new task" in visible.text().splitlines()[8]
+                             and "parent" not in visible.text().splitlines()[8])
+            if scenario == "child_error":
+                cli("archive", "2")
+            send(b"Child\x13")
+            if scenario == "child_error":
+                wait_visible(lambda: "archived unfinished parent" in visible.text().splitlines()[-1])
+                assert visible.text().splitlines()[9].startswith("Child")
+                assert "parent #2" in visible.text().splitlines()[8]
+                assert len(cli("list", "--include-archived")) == 2
+                cli("unarchive", "2")
+                send(b"\x13")
+            if scenario == "child_open_new":
+                wait_visible(lambda: "new task" in visible.text().splitlines()[8]
+                             and "parent" not in visible.text().splitlines()[8]
+                             and visible.text().splitlines()[9].strip() == ""
+                             and visible.text().splitlines()[-1].startswith("Saved #3. New task"))
+            else:
+                wait_visible(lambda: "task #3 (New)" in visible.text().splitlines()[8]
+                             and visible.text().splitlines()[-1].startswith("Saved #3"))
+            task = cli("show", "3")["task"]
+            assert task["description"] == "Child"
+            assert task["parent_id"] == (None if scenario == "child_no_selection" else 2)
+            assert cli("show", "2")["task"]["description"] == "Second"
+            if scenario != "child_open_new":
+                send(b"\x1b[1;2B")
+                wait_visible(lambda: "new task" in visible.text().splitlines()[8])
+            send(b"Root\x13")
+            wait_visible(lambda: visible.text().splitlines()[-1].startswith("Saved #4"))
+            assert cli("show", "4")["task"]["parent_id"] is None
         elif scenario in ("after_save_open_new", "after_save_open_new_error"):
             if scenario == "after_save_open_new_error":
                 with sqlite3.connect(os.path.join(folder, ".qqq", "qqq.db")) as db:
@@ -1232,6 +1293,9 @@ with tempfile.TemporaryDirectory(prefix="qqq-dashboard-test-") as folder:
         if scenario != "wheel_error":
             assert child.returncode == 0, screen[-2000:]
         assert stdout == b"", stdout
+        if scenario.startswith("child"):
+            assert b"\x1b[>1u" in screen, "Modified-key reporting not requested"
+            assert b"\x1b[<1u" in screen, "Keyboard reporting mode not restored"
         assert before[3] == termios.tcgetattr(slave)[3], "Terminal flags not restored"
         assert b"\x1b[?1049l" in screen, "Alternate screen not restored"
         assert b"\x1b[?1000l" in screen and b"\x1b[?1006l" in screen, "Mouse capture not restored"

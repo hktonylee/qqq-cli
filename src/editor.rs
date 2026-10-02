@@ -41,6 +41,7 @@ fn compose_external_outcome(description: &str) -> Result<crate::tui::Outcome> {
             image_spans: Vec::new(),
         },
         target_id: None,
+        parent_id: None,
     })
 }
 fn compose_external(description: &str) -> Result<String> {
