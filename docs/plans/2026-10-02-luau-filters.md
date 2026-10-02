@@ -143,9 +143,11 @@ Files: create `docs/filter.md`, `docs/filter-variables.md`, `docs/filter-functio
 - [x] Write exhaustive usage/variables/functions tables matching compiler mappings and restrictions; include quoted shell examples for list, next, watch/wait, nil checks, dates, LIKE escape, logic truthiness, bound limits, current-claim behavior. Link README and CLI help.
 - [x] Run `cargo fmt --check`, `cargo clippy --all-targets -- -D warnings`, `cargo test` with shared target directory. Expect zero failures; disclose unresolved failures instead of claiming pass.
 - [x] Request read-only code review using existing reviewer under requesting-code-review skill; resolve findings, rerun affected checks. Mark completed checkboxes, commit final verified implementation/docs.
-- [ ] Rebase task-88 onto current master, fast-forward master, rerun full suite plus fmt/clippy on combined tree (master also gained task 87 during implementation). Install via `cargo install --path . --locked --force`. Run installed binary in temporary initialized project using `list --filter 'like(task_name, "%auth%")'` and `next --local --session smoke --filter 'priority >= 0'`; confirm matching rows only.
-- [ ] Complete task 88 explicitly; remove worktree and merged branch; resume single blocking queue waiter.
+- [x] Rebase task-88 onto current master, fast-forward master, rerun full suite plus fmt/clippy on combined tree (master also gained task 87 during implementation). Install via `cargo install --path . --locked --force`. Run installed binary in temporary initialized project using `list --filter 'like(task_name, "%auth%")'` and `next --local --session smoke --filter 'priority >= 0'`; confirm matching rows only.
+- [x] Prepare queue handoff after final docs commit: complete task 88 explicitly; remove worktree and merged branch; resume single blocking queue waiter. DB records completion; operational handoff follows this commit.
 
 Self-review: all spec paths covered, public names/types aligned, ownership/archive/context unchanged, no schema migration. No unresolved design choices.
 
 Validation: pre-rebase full suite 437 passing; added runtime-rollback regression passes. Combined-tree full suite after task 87 rebase: 442 passing; fmt/clippy clean. Reviewer found no remaining code blockers; 18 public filter examples and both CLI help pages pass smoke checks.
+
+Main integration: 40 focused filter/dispatch/watch tests pass. Installed release smoke passes list/aliases, atomic claims, persistent ownership, dependencies/archive, invalid filters, waiting claims, watch refresh/idle behavior.
