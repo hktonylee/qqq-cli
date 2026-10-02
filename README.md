@@ -516,12 +516,12 @@ binary, uploads `qqq-<OS>-<ARCH>` archives (14-day retention).
 1. Sign in to crates.io, verify email, create token allowed to publish `qqq-cli`.
 2. Add GitHub Actions repo secret `CARGO_REGISTRY_TOKEN`.
 3. Choose unused version, update `Cargo.toml` and `Cargo.lock`, commit changes.
-4. Push commit and matching tag. Example after bumping to unused version `0.1.2`:
+4. Push commit and matching tag. Example for version `0.2.0`:
 
 ```sh
 git push origin master
-git tag v0.1.2
-git push origin v0.1.2
+git tag v0.2.0
+git push origin v0.2.0
 ```
 
 For manual validation, run **Publish to crates.io** with existing `tag` and
