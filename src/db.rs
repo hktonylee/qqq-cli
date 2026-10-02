@@ -234,7 +234,8 @@ impl Db {
         if version < 7 {
             // Rebuild CHECK constraints without changing references to tasks.
             // SQLite requires foreign_keys to change outside a transaction.
-            if version < 6 {
+            let disable_foreign_keys = version < 6;
+            if disable_foreign_keys {
                 conn.pragma_update(None, "foreign_keys", "OFF")?;
             }
             let tx = conn.transaction_with_behavior(TransactionBehavior::Immediate)?;
@@ -294,7 +295,7 @@ impl Db {
                 tx.execute_batch(include_str!("migrate_v7.sql"))?;
             }
             commit_with_files(tx, &mut pending)?;
-            if version < 6 {
+            if disable_foreign_keys {
                 conn.pragma_update(None, "foreign_keys", "ON")?;
             }
             if had_images {

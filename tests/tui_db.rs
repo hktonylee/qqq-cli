@@ -20,6 +20,7 @@ mod tui {
 use db::Db;
 use draft::{Composition, Draft};
 use images::{ImageInput, ImageStore};
+use std::process::{Command, Stdio};
 
 fn database() -> (Db, tempfile::TempDir) {
     let dir = tempfile::TempDir::new().unwrap();
@@ -54,6 +55,65 @@ fn composition() -> Composition {
             data: b"\x89PNG\r\n\x1a\n".to_vec(),
         }],
         image_spans: Vec::new(),
+    }
+}
+
+#[test]
+fn legacy_open_keeps_foreign_keys_enabled() {
+    if std::env::var_os("QQQ_TEST_LEGACY_FK_CHILD").is_none() {
+        return;
+    }
+    let (db, _) = Db::open(false).unwrap();
+    let enabled: i64 = db
+        .conn
+        .pragma_query_value(None, "foreign_keys", |row| row.get(0))
+        .unwrap();
+    assert_eq!(enabled, 1);
+}
+
+#[test]
+fn concurrent_legacy_opens_keep_foreign_keys_enabled() {
+    let dir = tempfile::TempDir::new().unwrap();
+    std::fs::create_dir(dir.path().join(".qqq")).unwrap();
+    let conn = rusqlite::Connection::open(dir.path().join(".qqq/qqq.db")).unwrap();
+    for migration in [
+        include_str!("../src/schema.sql"),
+        include_str!("../src/migrate_v2.sql"),
+        include_str!("../src/migrate_v3.sql"),
+        include_str!("../src/migrate_v4.sql"),
+        include_str!("../src/migrate_v5.sql"),
+    ] {
+        conn.execute_batch(migration).unwrap();
+    }
+    conn.execute("INSERT INTO tasks(description) VALUES ('Legacy')", [])
+        .unwrap();
+    conn.execute(
+        "INSERT INTO images(task_id,name,media_type,data) VALUES (1,'legacy.png','image/png',?1)",
+        [vec![1_u8; 4 * 1024 * 1024]],
+    )
+    .unwrap();
+    drop(conn);
+
+    let children: Vec<_> = (0..6)
+        .map(|_| {
+            Command::new(std::env::current_exe().unwrap())
+                .args(["--exact", "legacy_open_keeps_foreign_keys_enabled"])
+                .env("QQQ_TEST_LEGACY_FK_CHILD", "1")
+                .current_dir(dir.path())
+                .stdout(Stdio::piped())
+                .stderr(Stdio::piped())
+                .spawn()
+                .unwrap()
+        })
+        .collect();
+    for child in children {
+        let output = child.wait_with_output().unwrap();
+        assert!(
+            output.status.success(),
+            "{}{}",
+            String::from_utf8_lossy(&output.stdout),
+            String::from_utf8_lossy(&output.stderr)
+        );
     }
 }
 #[test]

@@ -158,7 +158,7 @@ enum Commands {
         #[arg(long = "image", value_name = "PATH")]
         images: Vec<PathBuf>,
     },
-    /// Return owned task or atomically claim oldest ready task.
+    /// Return owned task or atomically claim highest-priority ready task (oldest ID on ties).
     Next {
         /// Wait until a task is available; concurrent sessions claim each task once.
         #[arg(long)]
