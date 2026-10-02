@@ -44,4 +44,5 @@
 
 - [x] Run `cargo fmt --all -- --check`, `cargo clippy --locked --all-targets -- -D warnings`, `cargo test --locked`, and `git diff --check`; require exit 0.
 - [ ] Request read-only code review; fix confirmed issues, rerun affected checks.
+- [x] Review follow-up: cover built-in `qqq edit` load/save, reserve IDs already named by Markdown before legacy matching, escape Markdown alt punctuation, and verify two pasted images plus flagged image in one save.
 - [ ] Rebase branch onto current local master, fast-forward local master, run integrated full suite, remove owned worktree and merged branch. Complete task 57 with `qqq --json complete 57`, verify `qqq --json show 57`, then resume one blocking `qqq --json next --wait --local` call.

@@ -22,9 +22,7 @@ impl ImageReference {
             .name
             .chars()
             .map(|ch| match ch {
-                '\\' => "\\\\".to_owned(),
-                '[' => "\\[".to_owned(),
-                ']' => "\\]".to_owned(),
+                '\\' | '[' | ']' | '*' | '_' | '`' | '&' | '~' => format!("\\{ch}"),
                 '\r' | '\n' | '\t' => " ".to_owned(),
                 _ => ch.to_string(),
             })

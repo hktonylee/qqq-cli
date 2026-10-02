@@ -356,6 +356,16 @@ fn markdown_image_reference_escapes_filename_without_changing_metadata() {
         "![a\\]b\\\\c.png](.qqq/images/3/7.png)"
     );
     assert_eq!(image.name, "a]b\\c.png");
+
+    let emphasis = ImageReference {
+        id: 8,
+        name: "a*b*_`code`&copy;.png".into(),
+        media_type: "image/png".into(),
+    };
+    assert_eq!(
+        emphasis.markdown(3).unwrap(),
+        "![a\\*b\\*\\_\\`code\\`\\&copy;.png](.qqq/images/3/8.png)"
+    );
 }
 
 #[test]

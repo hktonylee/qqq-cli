@@ -64,19 +64,28 @@ fn pasted_images_get_stored_markdown_paths_after_image_ids_are_allocated() {
             data: b"\x89PNG\r\n\x1a\n".to_vec(),
         })
         .unwrap();
+    draft
+        .image(ImageInput {
+            name: "second.png".into(),
+            data: b"\x89PNG\r\n\x1a\n".to_vec(),
+        })
+        .unwrap();
     let mut composition = draft.finish().unwrap();
     composition.images.push(ImageInput {
         name: "flag.png".into(),
         data: b"\x89PNG\r\n\x1a\n".to_vec(),
     });
     let task = db.save_composition(None, None, &composition).unwrap();
-    assert_eq!(task.description, "See ![a\\]b.png](.qqq/images/1/1.png)");
+    assert_eq!(
+        task.description,
+        "See ![a\\]b.png](.qqq/images/1/1.png)![second.png](.qqq/images/1/2.png)"
+    );
     assert_eq!(
         db.show(task.id).unwrap()["images"]
             .as_array()
             .unwrap()
             .len(),
-        2
+        3
     );
     let references = db.image_references(task.id).unwrap();
     assert_eq!(
@@ -85,14 +94,19 @@ fn pasted_images_get_stored_markdown_paths_after_image_ids_are_allocated() {
     );
     assert_eq!(
         (references[1].id, references[1].name.as_str()),
-        (2, "flag.png")
+        (2, "second.png")
+    );
+    assert_eq!(
+        (references[2].id, references[2].name.as_str()),
+        (3, "flag.png")
     );
     assert!(dir.path().join("images/1/1.png").exists());
     assert!(dir.path().join("images/1/2.png").exists());
+    assert!(dir.path().join("images/1/3.png").exists());
 
     let mut edit = Draft::new(&task.description);
     edit.image(ImageInput {
-        name: "second.png".into(),
+        name: "third.png".into(),
         data: b"\x89PNG\r\n\x1a\n".to_vec(),
     })
     .unwrap();
@@ -101,7 +115,7 @@ fn pasted_images_get_stored_markdown_paths_after_image_ids_are_allocated() {
         .unwrap();
     assert_eq!(
         updated.description,
-        "See ![a\\]b.png](.qqq/images/1/1.png)![second.png](.qqq/images/1/3.png)"
+        "See ![a\\]b.png](.qqq/images/1/1.png)![second.png](.qqq/images/1/2.png)![third.png](.qqq/images/1/4.png)"
     );
 }
 #[test]

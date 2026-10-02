@@ -12,7 +12,7 @@ CLI `--image` attachments stay metadata-only unless the user placed an image in 
 
 `Db::save_composition` uses the existing immediate add/edit transaction. After inserting image rows and writing files, it has task and image IDs. It replaces only the marked spans with Markdown references, then updates the task description before commit. Any failure rolls back task text, image rows, and newly written files together. Direct `Db::add`/`Db::edit` paths without editor spans retain their current behavior, including flagged attachments.
 
-On task navigation, `Db` supplies that task's image IDs, names, and media types. `Draft` recognizes only exact references derived from those records, plus exact legacy labels matched in attachment order. Stored refs occupy one atom for cursor motion, deletion, and visual image styling. Dirty checks compare original loaded text, so navigation across an untouched legacy task does not prompt to discard. `finish` emits normalized Markdown for legacy refs.
+On task navigation and built-in `qqq edit <id>`, `Db` supplies that task's image IDs, names, and media types. `Draft` recognizes only exact references derived from those records, plus exact legacy labels matched in attachment order. Exact Markdown links reserve their image IDs before legacy labels match, so mixed descriptions do not duplicate a reference. Stored refs occupy one atom for cursor motion, deletion, and visual image styling. Dirty checks compare original loaded text, so navigation across an untouched legacy task does not prompt to discard. `finish` emits normalized Markdown for legacy refs. Built-in edit saves through the same composition path while retaining parent changes.
 
 ## Verification
 
