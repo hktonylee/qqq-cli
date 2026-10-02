@@ -70,11 +70,11 @@ impl ImageStore {
     ) -> Result<()> {
         let path = self.path(task_id, image_id, media_type)?;
         let directory = path.parent().context("Missing image directory")?;
-        fs::create_dir_all(directory)
-            .with_context(|| format!("Cannot create {}", directory.display()))?;
-        if let Some(parent) = self.root.parent() {
-            sync_directory(parent)?;
-        }
+        let parent = self.root.parent().context("Missing image storage parent")?;
+        verify_directory(parent)?;
+        create_real_directory(&self.root)?;
+        create_real_directory(directory)?;
+        sync_directory(parent)?;
         sync_directory(&self.root)?;
         let mut temporary = NamedTempFile::new_in(directory)?;
         temporary.write_all(data)?;
@@ -93,6 +93,8 @@ impl ImageStore {
                     existing == data,
                     "Stored image path conflicts with existing bytes"
                 );
+                fs::File::open(&path)?.sync_all()?;
+                sync_directory(directory)?;
                 Ok(())
             }
             Err(error) => {
@@ -109,6 +111,9 @@ impl ImageStore {
         expected_bytes: i64,
     ) -> Result<Vec<u8>> {
         let path = self.path(task_id, image_id, media_type)?;
+        verify_directory(self.root.parent().context("Missing image storage parent")?)?;
+        verify_directory(&self.root)?;
+        verify_directory(path.parent().context("Missing image directory")?)?;
         let metadata = fs::symlink_metadata(&path)
             .with_context(|| format!("Cannot read stored image {}", path.display()))?;
         ensure!(
@@ -123,6 +128,32 @@ impl ImageStore {
         );
         Ok(data)
     }
+}
+
+fn verify_directory(path: &Path) -> Result<()> {
+    let metadata = fs::symlink_metadata(path)
+        .with_context(|| format!("Cannot inspect image directory {}", path.display()))?;
+    ensure!(
+        !metadata.file_type().is_symlink(),
+        "Stored image directory is a symlink: {}",
+        path.display()
+    );
+    ensure!(
+        metadata.is_dir(),
+        "Stored image directory is not a directory"
+    );
+    Ok(())
+}
+
+fn create_real_directory(path: &Path) -> Result<()> {
+    match fs::create_dir(path) {
+        Ok(()) => (),
+        Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => (),
+        Err(error) => {
+            return Err(error).with_context(|| format!("Cannot create {}", path.display()));
+        }
+    }
+    verify_directory(path)
 }
 
 #[cfg(unix)]

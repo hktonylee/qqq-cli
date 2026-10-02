@@ -1,6 +1,8 @@
 use crate::images::{ImageInput, ImageStore, PendingFiles};
 use anyhow::{Context, Result, ensure};
-use rusqlite::{Connection, OpenFlags, OptionalExtension, TransactionBehavior, params};
+use rusqlite::{
+    Connection, OpenFlags, OptionalExtension, Transaction, TransactionBehavior, params,
+};
 use serde::Serialize;
 use serde_json::{Value, json};
 use std::{
@@ -92,6 +94,23 @@ fn ensure_description_schema(conn: &Connection) -> Result<()> {
         "Database contains legacy title column; update SQLite manually before using qqq"
     );
     Ok(())
+}
+
+fn commit_with_files(tx: Transaction<'_>, pending: &mut PendingFiles) -> Result<()> {
+    match tx.execute_batch("COMMIT") {
+        Ok(()) => {
+            pending.keep();
+            Ok(())
+        }
+        Err(error) => {
+            // A failed COMMIT can leave the transaction open (for example,
+            // SQLITE_BUSY). Remove files only after a confirmed rollback.
+            if tx.is_autocommit() || tx.rollback().is_err() {
+                pending.keep();
+            }
+            Err(error.into())
+        }
+    }
 }
 impl Db {
     pub fn open(init: bool) -> Result<(Self, PathBuf)> {
@@ -191,9 +210,7 @@ impl Db {
                     "Database migration found invalid foreign key references"
                 );
             }
-            // An uncertain SQLite commit can leave orphan files; keep bytes safe.
-            pending.keep();
-            tx.commit()?;
+            commit_with_files(tx, &mut pending)?;
             conn.pragma_update(None, "foreign_keys", "ON")?;
             if had_images {
                 if let Err(error) = conn.execute_batch("VACUUM") {
@@ -235,8 +252,7 @@ impl Db {
         let id = tx.last_insert_rowid();
         Self::save_images(&tx, &self.image_store, &mut pending, id, images)?;
         let task = tx.query_row("SELECT id,description,status,claim_key,created_at,updated_at,parent_id,harness_name,harness_session,orchestrator_name,orchestrator_session FROM tasks WHERE id=?", [id], task_row)?;
-        pending.keep();
-        tx.commit()?;
+        commit_with_files(tx, &mut pending)?;
         Ok(task)
     }
     pub fn save_composition(
@@ -388,8 +404,7 @@ impl Db {
             "SELECT id,description,status,claim_key,created_at,updated_at,parent_id,harness_name,harness_session,orchestrator_name,orchestrator_session FROM tasks WHERE id=?",
             [id], task_row,
         )?;
-        pending.keep();
-        tx.commit()?;
+        commit_with_files(tx, &mut pending)?;
         Ok(task)
     }
     pub fn resolve_task_id(&self, reference: i64) -> Result<i64> {

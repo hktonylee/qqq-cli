@@ -464,6 +464,51 @@ fn rejected_image_insert_rolls_back_new_task_and_released_edit() {
 }
 
 #[test]
+fn busy_commit_removes_new_image_file_so_retry_can_use_same_id() {
+    let dir = project();
+    let p = dir.path();
+    let reader = Connection::open(p.join(".qqq/qqq.db")).unwrap();
+    reader
+        .execute_batch("BEGIN; SELECT count(*) FROM tasks;")
+        .unwrap();
+    error(
+        p,
+        &["add", "First", "--image", "a.png"],
+        1,
+        "database is locked",
+    );
+    assert!(!p.join(".qqq/images/1/1.png").exists());
+    reader.execute_batch("ROLLBACK").unwrap();
+    fs::write(p.join("a.png"), b"\x89PNG\r\n\x1a\nchanged").unwrap();
+    ok(p, &["add", "Retried", "--image", "a.png"]);
+    assert_eq!(
+        fs::read(p.join(".qqq/images/1/1.png")).unwrap(),
+        b"\x89PNG\r\n\x1a\nchanged"
+    );
+}
+
+#[cfg(unix)]
+#[test]
+fn symlinked_image_directories_cannot_escape_project_backup() {
+    use std::os::unix::fs::symlink;
+
+    let dir = project();
+    let p = dir.path();
+    let outside = TempDir::new().unwrap();
+    symlink(outside.path(), p.join(".qqq/images")).unwrap();
+    error(p, &["add", "Task", "--image", "a.png"], 1, "symlink");
+    assert_eq!(ok(p, &["list"]), serde_json::json!([]));
+    assert_eq!(fs::read_dir(outside.path()).unwrap().count(), 0);
+
+    fs::remove_file(p.join(".qqq/images")).unwrap();
+    fs::create_dir(p.join(".qqq/images")).unwrap();
+    symlink(outside.path(), p.join(".qqq/images/1")).unwrap();
+    error(p, &["add", "Task", "--image", "a.png"], 1, "symlink");
+    assert_eq!(ok(p, &["list"]), serde_json::json!([]));
+    assert_eq!(fs::read_dir(outside.path()).unwrap().count(), 0);
+}
+
+#[test]
 fn missing_nonregular_and_oversized_images_fail_without_creating_tasks() {
     let dir = project();
     let p = dir.path();

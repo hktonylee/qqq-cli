@@ -316,7 +316,8 @@ Check task data before removing old DB. New CLI does not discover root-level
 Compatible DBs at schema versions 1–5 migrate to version 6. Existing image
 blobs copy to `.qqq/images/` before SQLite drops its `data` column. Migration
 tries `VACUUM` to reclaim old blob pages; if compaction reports a warning, stop
-writers and run `sqlite3 .qqq/qqq.db 'VACUUM;'` later. Legacy `title` or
+writers and run `sqlite3 .qqq/qqq.db 'VACUUM;'` later. Upgrade other qqq workers
+before migration; older binaries cannot open version 6. Legacy `title` or
 `pending` schemas need manual conversion; newer unknown schemas fail. Back up
 before conversion.
 
