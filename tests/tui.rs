@@ -69,6 +69,13 @@ fn tui_dashboard_scrolls_to_selected_task() {
 }
 
 #[test]
+fn tui_dashboard_status_colors_respect_no_color() {
+    dashboard_scenario("color");
+    dashboard_scenario("no_color");
+    dashboard_scenario("dumb");
+}
+
+#[test]
 fn tui_dashboard_keeps_dirty_draft_and_survives_resize() {
     dashboard_scenario("dirty");
     dashboard_scenario("resize");

@@ -1,4 +1,3 @@
-use super::panel;
 use crossterm::{
     cursor::MoveTo,
     queue,
@@ -233,62 +232,6 @@ pub fn draw(
         top,
         (width, 0, height),
         chrome,
-        color,
-    )?;
-    output.flush()
-}
-
-pub fn draw_dashboard(
-    output: &mut impl Write,
-    rows: &[panel::ListRow],
-    selected: Option<i64>,
-    list_top: &mut usize,
-    editor: DashboardEditor<'_>,
-    size: (u16, u16),
-    color: bool,
-) -> io::Result<()> {
-    let (width, height) = size;
-    if color {
-        queue!(output, ResetColor)?;
-    }
-    queue!(output, MoveTo(0, 0), Clear(ClearType::All))?;
-    if width < 12 || height < 8 {
-        queue!(
-            output,
-            Print(clipped("Resize terminal (min 12x8)", width as usize)),
-            MoveTo(0, 0)
-        )?;
-        return output.flush();
-    }
-    let panel_height = height / 2;
-    let list_height = panel_height as usize - 2;
-    *list_top = panel::scroll_to(rows, selected, *list_top, list_height);
-    queue!(output, Print(clipped("qqq tasks", width as usize)))?;
-    for (index, row) in rows.iter().skip(*list_top).take(list_height).enumerate() {
-        let marker = if selected.is_some() && row.task_id == selected {
-            "> "
-        } else {
-            "  "
-        };
-        queue!(
-            output,
-            MoveTo(0, index as u16 + 1),
-            Print(marker),
-            Print(clipped(&row.text, width as usize - 2))
-        )?;
-    }
-    queue!(
-        output,
-        MoveTo(0, panel_height - 1),
-        Print("-".repeat(width as usize))
-    )?;
-    paint_editor(
-        output,
-        editor.layout,
-        editor.cursor,
-        editor.top,
-        (width, panel_height, height - panel_height),
-        editor.chrome,
         color,
     )?;
     output.flush()

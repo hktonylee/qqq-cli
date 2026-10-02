@@ -25,15 +25,15 @@
 
 - [x] Implement `dashboard::draw(frame, rows, statuses, selected, list_top, editor, color)`. Use `ratatui::layout::Layout::vertical([Constraint::Percentage(50), Constraint::Percentage(50)])` for top/bottom. For min-size failure render `Paragraph::new("Resize terminal (min 12x8)")` clipped to frame. Top reserves first row for `qqq tasks`, last row for separator; `panel::scroll_to(rows, selected, list_top, top.height.saturating_sub(2))` chooses visible rows. Render each task line with `> ` marker, clipping through Ratatui area width.
 - [x] Paint editor heading and footer as `Paragraph`s; body area is bottom rectangle excluding those rows. Update `editor.top` until `render::Layout::positions[editor.cursor]` is visible. Build `Line`s from each visible `layout.rows` entry and `image_spans`, with accent `Span` only for image bytes. Fill body rectangle with neutral style, render text, set frame cursor to `body.x + column`, `body.y + row - editor.top`.
-- [ ] Add color tests using `TestBackend::buffer().get(x,y).style()`: selected row highlight, in-progress cyan, completed muted, error red, editor dark body/light text, image accent, message footer. Use task ID -> status lookup from `Vec<Task>` in `compose_inner`; continuation rows inherit task ID. Assert no-color cells retain default style. Run focused render tests; commit as `[Feat] Render Split Dashboard With Ratatui`.
+- [x] Add color tests using `TestBackend::buffer().get(x,y).style()`: selected row highlight, in-progress cyan, completed muted, error red, editor dark body/light text, image accent, message footer. Use task ID -> status lookup from `Vec<Task>` in `compose_inner`; continuation rows inherit task ID. Assert no-color cells retain default style. Run focused render tests; commit as `[Feat] Render Split Dashboard With Ratatui`.
 
 ### Task 3: Persistent terminal and PTY regression
 
 **Files:** Modify `src/tui/mod.rs`, `tests/tui_dashboard_pty.py`, `tests/tui.rs`.
 
-- [ ] Create `Terminal<CrosstermBackend<Stderr>>` once after `TerminalGuard::enter()` for dashboard mode; call `terminal.draw(|frame| dashboard::draw(...))?` each loop. Keep `event::read`, save, navigation, confirmation, and `TerminalGuard` restoration as they are. Continue to send all TUI bytes to stderr.
-- [ ] Update dashboard PTY assertions that rely on old byte-by-byte Crossterm repaint sequence to inspect rendered semantic content. Add color-on and `NO_COLOR`/`TERM=dumb` scenarios asserting status/selection accents only when enabled, while stdout remains clean.
-- [ ] Run `cargo test --locked --test tui_dashboard_render --test tui --test tui_render`; fix any resize/cursor/selection regressions. Commit as `[Feat] Use Persistent Ratatui Dashboard Terminal`.
+- [x] Create `Terminal<CrosstermBackend<Stderr>>` once after `TerminalGuard::enter()` for dashboard mode; call `terminal.draw(|frame| dashboard::draw(...))?` each loop. Keep `event::read`, save, navigation, confirmation, and `TerminalGuard` restoration as they are. Continue to send all TUI bytes to stderr.
+- [x] Update dashboard PTY assertions that rely on old byte-by-byte Crossterm repaint sequence to inspect rendered semantic content. Add color-on, `NO_COLOR`, and `TERM=dumb` scenarios asserting status/selection accents only when enabled, while stdout remains clean.
+- [x] Run `cargo test --locked --test tui_dashboard_render --test tui --test tui_render`; fix any resize/cursor/selection regressions. Commit as `[Feat] Use Persistent Ratatui Dashboard Terminal`.
 
 ### Task 4: Verification, review, integration
 

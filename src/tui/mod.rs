@@ -1,4 +1,5 @@
 mod clipboard;
+mod dashboard;
 pub mod draft;
 mod panel;
 mod render;
@@ -15,6 +16,8 @@ use crossterm::{
     terminal::{self, EnterAlternateScreen, LeaveAlternateScreen},
 };
 use draft::{Composition, Draft};
+use ratatui::{Terminal, backend::CrosstermBackend};
+use std::collections::HashMap;
 use std::io::{self, IsTerminal};
 
 pub struct Outcome {
@@ -185,6 +188,18 @@ pub fn compose_dashboard(
 }
 fn compose_inner(description: &str, mut mode: Mode<'_, '_>) -> Result<Option<Outcome>> {
     let terminal = TerminalGuard::enter()?;
+    let dashboard = matches!(
+        mode,
+        Mode::Continuous {
+            dashboard: true,
+            ..
+        }
+    );
+    let mut dashboard_terminal = if dashboard {
+        Some(Terminal::new(CrosstermBackend::new(io::stderr()))?)
+    } else {
+        None
+    };
     let mut draft = Draft::new(description);
     let mut baseline = description.to_owned();
     let mut target_id = None;
@@ -195,13 +210,6 @@ fn compose_inner(description: &str, mut mode: Mode<'_, '_>) -> Result<Option<Out
     let mut confirmation: Option<Confirmation> = None;
     let mut saved_any = false;
     loop {
-        let dashboard = matches!(
-            mode,
-            Mode::Continuous {
-                dashboard: true,
-                ..
-            }
-        );
         let size = terminal::size()?;
         let layout = render::Layout::new(&draft.fragments(), &draft.image_mask(), size.0 as usize);
         let footer = match &confirmation {
@@ -238,6 +246,10 @@ fn compose_inner(description: &str, mut mode: Mode<'_, '_>) -> Result<Option<Out
         };
         if dashboard {
             let tasks = mode.db().expect("dashboard has database").list(None)?;
+            let statuses: HashMap<_, _> = tasks
+                .iter()
+                .map(|task| (task.id, task.status.as_str()))
+                .collect();
             let tree = crate::output::render(
                 crate::output::Format::Tasks,
                 &serde_json::json!(tasks),
@@ -245,20 +257,25 @@ fn compose_inner(description: &str, mut mode: Mode<'_, '_>) -> Result<Option<Out
                 Some(usize::from(size.0).saturating_sub(2)),
             );
             let rows = panel::rows(&tree);
-            render::draw_dashboard(
-                &mut io::stderr(),
-                &rows,
-                target_id,
-                &mut list_top,
-                render::DashboardEditor {
-                    layout: &layout,
-                    cursor: draft.cursor(),
-                    top: &mut top,
-                    chrome: &chrome,
-                },
-                size,
-                terminal.color,
-            )?;
+            dashboard_terminal
+                .as_mut()
+                .expect("dashboard has Ratatui terminal")
+                .draw(|frame| {
+                    dashboard::draw(
+                        frame,
+                        &rows,
+                        &statuses,
+                        target_id,
+                        &mut list_top,
+                        render::DashboardEditor {
+                            layout: &layout,
+                            cursor: draft.cursor(),
+                            top: &mut top,
+                            chrome: &chrome,
+                        },
+                        terminal.color,
+                    );
+                })?;
         } else {
             render::draw(
                 &mut io::stderr(),

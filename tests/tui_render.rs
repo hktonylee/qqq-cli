@@ -36,55 +36,6 @@ fn dashboard_new_draft_follows_newest_child_not_last_tree_row() {
 }
 
 #[test]
-fn dashboard_places_list_above_editor_and_keeps_cursor_in_lower_panel() {
-    let rows = panel::rows("ID     STATUS       TASK\n1      New          First");
-    let layout = render::Layout::new(&["Draft".into()], &[], 72);
-    let mut output = Vec::new();
-    render::draw_dashboard(
-        &mut output,
-        &rows,
-        Some(1),
-        &mut 0,
-        render::DashboardEditor {
-            layout: &layout,
-            cursor: 0,
-            top: &mut 0,
-            chrome: &chrome(""),
-        },
-        (72, 16),
-        false,
-    )
-    .unwrap();
-    let drawn = String::from_utf8(output).unwrap();
-    assert!(drawn.contains("qqq tasks"));
-    assert!(drawn.contains("> 1      New"), "{drawn:?}");
-    assert!(drawn.contains("\x1b[9;1Hqqq task editor"), "{drawn:?}");
-    assert!(drawn.contains("\x1b[10;1HDraft"), "{drawn:?}");
-    assert!(drawn.contains("\x1b[16;1HCtrl-S"), "{drawn:?}");
-    assert!(drawn.ends_with("\x1b[10;1H"), "{drawn:?}");
-
-    let mut output = Vec::new();
-    render::draw_dashboard(
-        &mut output,
-        &rows,
-        None,
-        &mut 0,
-        render::DashboardEditor {
-            layout: &layout,
-            cursor: 0,
-            top: &mut 0,
-            chrome: &chrome(""),
-        },
-        (10, 7),
-        true,
-    )
-    .unwrap();
-    let small = String::from_utf8(output).unwrap();
-    assert!(small.contains("Resize ter"));
-    assert!(!small.contains("\x1b[48;"));
-}
-
-#[test]
 fn editor_paints_only_body_rows_and_resets_colors_for_header_and_footer() {
     crossterm::style::force_color_output(true);
     let layout = render::Layout::new(&["Body".into()], &[], 40);

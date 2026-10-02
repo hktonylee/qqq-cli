@@ -1,5 +1,6 @@
 """Exercise two-panel qqq tui through a real terminal."""
 
+import codecs
 import fcntl
 import json
 import os
@@ -15,9 +16,74 @@ import termios
 import time
 
 
+class TerminalScreen:
+    """Track visible cells across Ratatui's partial-frame terminal updates."""
+
+    def __init__(self, width, height):
+        self.decoder = codecs.getincrementaldecoder("utf-8")("replace")
+        self.pending = ""
+        self.resize(width, height)
+
+    def resize(self, width, height):
+        self.width, self.height = width, height
+        self.cells = [[" "] * width for _ in range(height)]
+        self.x = self.y = 0
+
+    def feed(self, data):
+        text = self.pending + self.decoder.decode(data)
+        self.pending = ""
+        index = 0
+        while index < len(text):
+            char = text[index]
+            if char == "\x1b":
+                if index + 1 >= len(text):
+                    break
+                if text[index + 1] != "[":
+                    index += 2
+                    continue
+                end = index + 2
+                while end < len(text) and not ("@" <= text[end] <= "~"):
+                    end += 1
+                if end == len(text):
+                    break
+                self.csi(text[index + 2:end], text[end])
+                index = end + 1
+                continue
+            if char == "\r":
+                self.x = 0
+            elif char == "\n":
+                self.y = min(self.height - 1, self.y + 1)
+            elif char >= " ":
+                if self.x >= self.width:
+                    self.x = 0
+                    self.y = min(self.height - 1, self.y + 1)
+                self.cells[self.y][self.x] = char
+                self.x += 1
+            index += 1
+        self.pending = text[index:]
+
+    def csi(self, parameters, command):
+        values = [int(part) if part.isdigit() else 0 for part in parameters.split(";")]
+        if command in ("H", "f"):
+            self.y = max(0, min(self.height - 1, (values[0] or 1) - 1))
+            self.x = max(0, min(self.width - 1, (values[1] if len(values) > 1 else 1) - 1))
+        elif command == "J" and values[0] == 2:
+            self.cells = [[" "] * self.width for _ in range(self.height)]
+        elif command == "K":
+            self.cells[self.y][self.x:] = [" "] * (self.width - self.x)
+
+    def text(self):
+        return "\n".join("".join(row) for row in self.cells)
+
+
 binary, scenario = sys.argv[1:]
 with tempfile.TemporaryDirectory(prefix="qqq-dashboard-test-") as folder:
     env = dict(os.environ, HOME=folder, TERM="xterm-256color")
+    env.pop("NO_COLOR", None)
+    if scenario == "no_color":
+        env["NO_COLOR"] = "1"
+    elif scenario == "dumb":
+        env["TERM"] = "dumb"
     for name in ("EDITOR", "QQQ_SESSION", "HERDR_ENV", "HERDR_PANE_ID", "CODEX_THREAD_ID", "CODEX_SESSION_ID"):
         env.pop(name, None)
 
@@ -30,6 +96,8 @@ with tempfile.TemporaryDirectory(prefix="qqq-dashboard-test-") as folder:
     cli("init")
     cli("add", "First")
     cli("add", "Second")
+    if scenario in ("color", "no_color", "dumb"):
+        cli("next", "--local", "--session", "worker")
     if scenario == "scroll":
         for index in range(3, 21):
             cli("add", f"Task {index}")
@@ -45,14 +113,26 @@ with tempfile.TemporaryDirectory(prefix="qqq-dashboard-test-") as folder:
     child = subprocess.Popen(args, cwd=folder, env=env, stdin=slave,
                              stderr=slave, stdout=subprocess.PIPE)
     screen = bytearray()
+    visible = TerminalScreen(72, 16)
+
+    def capture(data):
+        screen.extend(data)
+        visible.feed(data)
 
     def read_until(needle):
         deadline = time.monotonic() + 5
-        while needle not in screen:
-            assert time.monotonic() < deadline, f"Missing {needle!r}: {screen[-2000:]!r}"
+        def found():
+            return needle in screen or (
+                bool(screen) and b"\x1b" not in needle and
+                needle.decode("utf-8", "replace") in visible.text()
+            )
+        while not found():
+            assert time.monotonic() < deadline, (
+                f"Missing {needle!r}: {screen[-2000:]!r}\nVisible:\n{visible.text()}\nTasks: {cli('list')}"
+            )
             if select.select([master], [], [], 0.05)[0]:
                 try:
-                    screen.extend(os.read(master, 65536))
+                    capture(os.read(master, 65536))
                 except OSError as error:
                     raise AssertionError(f"Editor exited before {needle!r}") from error
             assert child.poll() is None, f"Editor exited before {needle!r}: {screen[-2000:]!r}"
@@ -64,15 +144,23 @@ with tempfile.TemporaryDirectory(prefix="qqq-dashboard-test-") as folder:
             assert time.monotonic() < deadline, "Terminal input timed out"
             readable, writable, _ = select.select([master], [master], [], 0.05)
             if readable:
-                screen.extend(os.read(master, 65536))
+                capture(os.read(master, 65536))
             if writable:
                 remaining = remaining[os.write(master, remaining):]
 
     try:
         read_until(b"qqq task editor - new task")
-        assert b"qqq tasks" in screen, screen[-2000:]
+        assert "qqq tasks" in visible.text(), visible.text()
+        if scenario == "color":
+            read_until(b"38;5;81")
+            screen.clear()
+            send(b"\x1b[1;2A")
+            read_until(b"48;5;81")
+        elif scenario in ("no_color", "dumb"):
+            assert b"\x1b[38;" not in screen, screen[-2000:]
+            assert b"\x1b[48;" not in screen, screen[-2000:]
         if scenario != "scroll":
-            assert b"First" in screen and b"Second" in screen, screen[-2000:]
+            assert "First" in visible.text() and "Second" in visible.text(), visible.text()
         assert not select.select([child.stdout], [], [], 0)[0], "TUI wrote stdout while open"
         if scenario in ("save", "save_json"):
             screen.clear()
@@ -89,19 +177,19 @@ with tempfile.TemporaryDirectory(prefix="qqq-dashboard-test-") as folder:
             screen.clear()
             send(b"\x1b[C")
             read_until(b"Third")
-            assert b"3      New" in screen, screen[-2000:]
+            assert "3      New" in visible.text(), visible.text()
             assert cli("show", "3")["task"]["description"] == "Third"
         elif scenario == "scroll":
-            assert b"Task 20" in screen, screen[-2000:]
+            assert "Task 20" in visible.text(), visible.text()
             for task_id in range(20, 0, -1):
                 screen.clear()
                 send(b"\x1b[1;2A")
                 read_until(f"qqq task editor - task #{task_id}".encode())
-            assert b"> 1" in screen and b"First" in screen, screen[-2000:]
+            assert "> 1" in visible.text() and "First" in visible.text(), visible.text()
             screen.clear()
             send(b"\x1b[1;2B")
             read_until(b"qqq task editor - task #2")
-            assert b"> 2" in screen, screen[-2000:]
+            assert "> 2" in visible.text(), visible.text()
         elif scenario == "dirty":
             send(b"Draft")
             screen.clear()
@@ -135,25 +223,28 @@ with tempfile.TemporaryDirectory(prefix="qqq-dashboard-test-") as folder:
             send(b"Draft")
             screen.clear()
             fcntl.ioctl(slave, termios.TIOCSWINSZ, struct.pack("HHHH", 7, 10, 0, 0))
+            visible.resize(10, 7)
             os.kill(child.pid, signal.SIGWINCH)
             read_until(b"Resize ter")
             screen.clear()
             fcntl.ioctl(slave, termios.TIOCSWINSZ, struct.pack("HHHH", 16, 72, 0, 0))
+            visible.resize(72, 16)
             os.kill(child.pid, signal.SIGWINCH)
             read_until(b"qqq task editor - new task")
             read_until(b"Draft")
             read_until(b"\x1b[10;6H")
             screen.clear()
+            assert not (termios.tcgetattr(slave)[0] & termios.IXON), termios.tcgetattr(slave)
             send(b"\x13")
             read_until(b"Saved #3. New task")
             assert cli("show", "3")["task"]["description"] == "Draft"
-        send(b"\x03" if scenario == "scroll" else b"\x1b")
+        send(b"\x03" if scenario in ("scroll", "color") else b"\x1b")
         deadline = time.monotonic() + 5
         while child.poll() is None:
             assert time.monotonic() < deadline, "TUI failed to exit"
             if select.select([master], [], [], 0.05)[0]:
                 try:
-                    screen.extend(os.read(master, 65536))
+                    capture(os.read(master, 65536))
                 except OSError:
                     pass
         stdout, _ = child.communicate(timeout=5)
