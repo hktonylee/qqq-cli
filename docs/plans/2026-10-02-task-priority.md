@@ -14,8 +14,8 @@
 
 **Files:** `src/migrate_v7.sql`, `src/db.rs`, `tests/priority.rs`, `tests/dependencies.rs`
 
-- [ ] Add failing migration test. Build version-6 fixture by applying `schema.sql` then `migrate_v2.sql` through `migrate_v6.sql`, seed two new tasks, record timestamps and IDs. Run new CLI `list`; assert numeric priority 0, schema version 7, unchanged IDs/timestamps, first `next` claims oldest ID. Also open same version-6 DB through two CLI processes to verify lock/recheck. Run `cargo test --locked --test priority -- --nocapture`; expect failure from missing priority/version 7.
-- [ ] Add migration SQL:
+- [x] Add failing migration test. Build version-6 fixture by applying `schema.sql` then `migrate_v2.sql` through `migrate_v6.sql`, seed two new tasks, record timestamps and IDs. Run new CLI `list`; assert numeric priority 0, schema version 7, unchanged IDs/timestamps, first `next` claims oldest ID. Also open same version-6 DB through two CLI processes to verify lock/recheck. Run `cargo test --locked --test priority -- --nocapture`; expect failure from missing priority/version 7.
+- [x] Add migration SQL:
 
 ```sql
 ALTER TABLE tasks ADD COLUMN priority INTEGER NOT NULL DEFAULT 0
@@ -25,7 +25,7 @@ CREATE INDEX new_queue_priority ON tasks(priority DESC,id) WHERE status='new';
 PRAGMA user_version=7;
 ```
 
-- [ ] Extend `Db::open` version guards and immediate migration path to version 7. Turn `foreign_keys` OFF only when starting below version 6; rerun version check inside write transaction. Add `priority: i64` to `Task` and every SQL projection feeding `task_row`; preserve all existing field offsets, read priority at final index. Update unsupported-version test to reject version 8. Run focused migration and existing DB tests; commit.
+- [x] Extend `Db::open` version guards and immediate migration path to version 7. Turn `foreign_keys` OFF only when starting below version 6; rerun version check inside write transaction. Add `priority: i64` to `Task` and every SQL projection feeding `task_row`; preserve all existing field offsets, read priority at final index. Update unsupported-version test to reject version 8. Run focused migration and existing DB tests; commit.
 
 ### Task 2: CLI add/edit priority, bounds, ownership
 
