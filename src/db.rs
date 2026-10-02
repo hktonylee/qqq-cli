@@ -64,6 +64,11 @@ pub struct Task {
     pub created_at: String,
     pub updated_at: String,
     pub parent_id: Option<i64>,
+    #[serde(skip_serializing_if = "is_false")]
+    pub context_only: bool,
+}
+fn is_false(value: &bool) -> bool {
+    !*value
 }
 fn task_row(r: &rusqlite::Row<'_>) -> rusqlite::Result<Task> {
     Ok(Task {
@@ -73,6 +78,7 @@ fn task_row(r: &rusqlite::Row<'_>) -> rusqlite::Result<Task> {
         created_at: r.get(4)?,
         updated_at: r.get(5)?,
         parent_id: r.get(6)?,
+        context_only: false,
         identity: crate::identity::Identity {
             harness_name: r.get(7)?,
             harness_session: r.get(8)?,

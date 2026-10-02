@@ -41,6 +41,86 @@ fn ids(tasks: &Value) -> Vec<i64> {
 }
 
 #[test]
+fn query_searches_full_unicode_description_and_treats_sql_text_literally() {
+    let dir = project();
+    let p = dir.path();
+    ok(p, &["add", "First line\nCafé needle"]);
+    ok(p, &["add", "Unrelated"]);
+    ok(p, &["add", "Literal %' OR 1=1 -- text"]);
+
+    assert_eq!(ids(&ok(p, &["list", "--query", "CAFÉ NEEDLE"])), [1]);
+    assert_eq!(ids(&ok(p, &["list", "--query", "needle"])), [1]);
+    assert_eq!(ids(&ok(p, &["list", "--query", "%' OR 1=1 --"])), [3]);
+    assert_eq!(ok(p, &["list", "--query", "absent"]), serde_json::json!([]));
+}
+
+#[test]
+fn repeated_statuses_are_or_filters_and_combine_with_query() {
+    let dir = project();
+    let p = dir.path();
+    for description in [
+        "Done needle",
+        "Working needle",
+        "Failed needle",
+        "New needle",
+    ] {
+        ok(p, &["add", description]);
+    }
+    assert_eq!(ok(p, &["next", "--session", "a"])["id"], 1);
+    ok(p, &["complete", "1", "--session", "a"]);
+    assert_eq!(ok(p, &["next", "--session", "a"])["id"], 2);
+    assert_eq!(ok(p, &["next", "--session", "b"])["id"], 3);
+    ok(
+        p,
+        &[
+            "edit",
+            "3",
+            "--set-status",
+            "error",
+            "--reason",
+            "Failed",
+            "--session",
+            "b",
+        ],
+    );
+
+    assert_eq!(
+        ids(&ok(
+            p,
+            &[
+                "list", "--query", "needle", "--status", "new", "--status", "error"
+            ]
+        )),
+        [3, 4]
+    );
+    assert_eq!(ids(&ok(p, &["list", "--status", "in_progress"])), [2]);
+    assert_eq!(
+        ok(p, &["list", "--query", "Working", "--status", "new"]),
+        serde_json::json!([])
+    );
+}
+
+#[test]
+fn matching_child_includes_visible_ancestors_only_as_context() {
+    let dir = project();
+    let p = dir.path();
+    ok(p, &["add", "Parent"]);
+    ok(p, &["add", "Needle child", "--parent", "1"]);
+    ok(p, &["add", "Other root"]);
+    let tasks = ok(p, &["list", "--query", "child", "--status", "new"]);
+    assert_eq!(ids(&tasks), [1, 2]);
+    assert_eq!(tasks[0]["context_only"], true);
+    assert!(tasks[1].get("context_only").is_none());
+    assert_eq!(tasks[1]["parent_id"], 1);
+
+    ok(p, &["next", "--session", "a"]);
+    ok(p, &["complete", "1", "--session", "a"]);
+    let limited = ok(p, &["list", "--query", "child", "--max-completed", "0"]);
+    assert_eq!(ids(&limited), [2]);
+    assert!(limited[0].get("context_only").is_none());
+}
+
+#[test]
 fn completed_limit_keeps_recent_completions_and_all_unfinished_tasks() {
     let dir = project();
     let p = dir.path();

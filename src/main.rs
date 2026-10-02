@@ -7,6 +7,7 @@ mod editor;
 mod herdr;
 mod identity;
 mod images;
+mod list_filter;
 mod output;
 mod session;
 mod tui;
@@ -94,6 +95,12 @@ enum Commands {
     Tui,
     /// List first description lines as a dependency tree; JSON preserves whole text.
     List {
+        /// Match text anywhere in the full description, ignoring Unicode case.
+        #[arg(long, value_name = "TEXT")]
+        query: Option<String>,
+        /// Include a status; repeat to match any supplied status.
+        #[arg(long = "status", value_enum, value_name = "STATUS")]
+        statuses: Vec<list_filter::ListStatus>,
         /// Maximum completed tasks to show; overrides human display default. 0 hides completed tasks.
         #[arg(long, value_parser = clap::value_parser!(i64).range(0..))]
         max_completed: Option<i64>,
@@ -285,7 +292,16 @@ fn execute(cli: Cli, display_limit: Option<i64>) -> Result<Value> {
             })?;
             Value::Null
         }
-        Commands::List { max_completed, .. } => json!(db.list(max_completed.or(display_limit))?),
+        Commands::List {
+            max_completed,
+            query,
+            statuses,
+            ..
+        } => json!(list_filter::filter_tasks(
+            db.list(max_completed.or(display_limit))?,
+            query.as_deref(),
+            &statuses
+        )),
         Commands::Show {
             id,
             export_image,
