@@ -27,6 +27,12 @@ pub enum WheelArea {
     Editor(usize),
 }
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum ClickTarget {
+    Task(i64),
+    Editor(usize),
+}
+
 fn panes(area: Rect) -> (Rect, Rect) {
     let parts =
         Layout::vertical([Constraint::Percentage(50), Constraint::Percentage(50)]).split(area);
@@ -47,6 +53,34 @@ pub fn wheel_area(size: (u16, u16), column: u16, row: u16) -> Option<WheelArea> 
     } else {
         None
     }
+}
+
+pub fn click_target(
+    size: (u16, u16),
+    column: u16,
+    row: u16,
+    rows: &[panel::ListRow],
+    list_top: usize,
+    editor_top: usize,
+    layout: &render::Layout,
+) -> Option<ClickTarget> {
+    if size.0 < 12 || size.1 < 8 || column >= size.0 || row >= size.1 {
+        return None;
+    }
+    let (list, editor) = panes(Rect::new(0, 0, size.0, size.1));
+    if row >= list.y + 2 && row < list.y + list.height - 1 {
+        let index = list_top + usize::from(row - list.y - 2);
+        return rows.get(index)?.task_id.map(ClickTarget::Task);
+    }
+    if row > editor.y && row < editor.y + editor.height - 1 {
+        let layout_row = editor_top + usize::from(row - editor.y - 1);
+        if layout_row < layout.rows.len() {
+            return Some(ClickTarget::Editor(
+                layout.nearest(layout_row, usize::from(column)),
+            ));
+        }
+    }
+    None
 }
 
 fn filter_text(query: &str, width: usize) -> (String, u16) {

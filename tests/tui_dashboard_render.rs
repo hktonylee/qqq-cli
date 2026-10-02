@@ -37,6 +37,56 @@ fn wheel_hit_test_uses_list_editor_and_excludes_edges() {
 }
 
 #[test]
+fn click_target_maps_rendered_task_rows_and_editor_caret() {
+    let rows = panel::rows(
+        "ID     STATUS       TASK\n1      New          Parent\n                    detail\n2      New          └── Child",
+    );
+    let layout = render::Layout::new(
+        &["a", "b", "c", "\n", "d", "e", "f"].map(str::to_owned),
+        &[],
+        72,
+    );
+    let hit = |column, row, list_top, editor_top| {
+        dashboard::click_target((72, 16), column, row, &rows, list_top, editor_top, &layout)
+    };
+    assert_eq!(hit(5, 3, 0, 0), Some(dashboard::ClickTarget::Task(1)));
+    assert_eq!(hit(5, 4, 0, 0), Some(dashboard::ClickTarget::Task(1)));
+    assert_eq!(hit(70, 5, 0, 0), Some(dashboard::ClickTarget::Task(2)));
+    assert_eq!(hit(5, 2, 2, 0), Some(dashboard::ClickTarget::Task(1)));
+    assert_eq!(hit(5, 3, 2, 0), Some(dashboard::ClickTarget::Task(2)));
+    assert_eq!(hit(2, 9, 0, 0), Some(dashboard::ClickTarget::Editor(2)));
+    assert_eq!(hit(10, 9, 0, 0), Some(dashboard::ClickTarget::Editor(3)));
+    assert_eq!(hit(1, 9, 0, 1), Some(dashboard::ClickTarget::Editor(5)));
+}
+
+#[test]
+fn click_target_ignores_non_content_and_out_of_bounds() {
+    let rows = panel::rows("ID     STATUS       TASK\n1      New          First");
+    let layout = render::Layout::new(&["abc".into()], &[], 72);
+    for (column, row) in [
+        (5, 0),
+        (5, 1),
+        (5, 2),
+        (5, 4),
+        (5, 7),
+        (5, 8),
+        (5, 10),
+        (5, 15),
+        (72, 3),
+    ] {
+        assert_eq!(
+            dashboard::click_target((72, 16), column, row, &rows, 0, 0, &layout),
+            None,
+            "{column},{row}"
+        );
+    }
+    assert_eq!(
+        dashboard::click_target((10, 7), 5, 3, &rows, 0, 0, &layout),
+        None
+    );
+}
+
+#[test]
 fn manual_list_scroll_does_not_snap_to_selected_task() {
     let tree = format!(
         "ID     STATUS       TASK\n{}",
