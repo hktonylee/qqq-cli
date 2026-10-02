@@ -40,6 +40,7 @@ fn split_dashboard_keeps_list_above_editor() {
                     cursor: 0,
                     top: &mut editor_top,
                     chrome: &chrome,
+                    message_is_error: false,
                 },
                 false,
             );
@@ -77,6 +78,7 @@ fn narrow_dashboard_shows_plain_resize_hint() {
                     cursor: 0,
                     top: &mut 0,
                     chrome: &chrome,
+                    message_is_error: false,
                 },
                 true,
             );
@@ -111,6 +113,7 @@ fn no_color_dashboard_keeps_default_cell_styles() {
                     cursor: 0,
                     top: &mut 0,
                     chrome: &chrome,
+                    message_is_error: false,
                 },
                 false,
             );
@@ -159,6 +162,7 @@ fn status_selection_and_editor_images_use_distinct_colors() {
                     cursor: 0,
                     top: &mut 0,
                     chrome: &chrome,
+                    message_is_error: false,
                 },
                 true,
             );
@@ -174,4 +178,35 @@ fn status_selection_and_editor_images_use_distinct_colors() {
     assert_eq!(buffer[(1, 9)].fg, Color::Indexed(81));
     assert_eq!(buffer[(0, 10)].bg, Color::Indexed(236));
     assert_eq!(buffer[(0, 15)].fg, Color::Yellow);
+}
+
+#[test]
+fn failed_save_footer_uses_error_color() {
+    let layout = render::Layout::new(&["Draft".into()], &[], 72);
+    let chrome = render::Chrome {
+        title: "qqq task editor",
+        keys: render::KEYS,
+        message: "Task description cannot be empty",
+    };
+    let mut terminal = Terminal::new(TestBackend::new(72, 16)).unwrap();
+    terminal
+        .draw(|frame| {
+            dashboard::draw(
+                frame,
+                &[],
+                &HashMap::new(),
+                None,
+                &mut 0,
+                render::DashboardEditor {
+                    layout: &layout,
+                    cursor: 0,
+                    top: &mut 0,
+                    chrome: &chrome,
+                    message_is_error: true,
+                },
+                true,
+            );
+        })
+        .unwrap();
+    assert_eq!(terminal.backend().buffer()[(0, 15)].fg, Color::Red);
 }

@@ -26,6 +26,7 @@ pub struct DashboardEditor<'a> {
     pub cursor: usize,
     pub top: &'a mut usize,
     pub chrome: &'a Chrome<'a>,
+    pub message_is_error: bool,
 }
 
 pub struct Layout {

@@ -54,6 +54,9 @@ class TerminalScreen:
             elif char == "\n":
                 self.y = min(self.height - 1, self.y + 1)
             elif char >= " ":
+                # Dashboard PTY fixtures use ASCII. Fail fast if that changes:
+                # cell width for Unicode graphemes needs a fuller emulator.
+                assert char.isascii(), f"Unsupported screen character {char!r}"
                 if self.x >= self.width:
                     self.x = 0
                     self.y = min(self.height - 1, self.y + 1)
@@ -114,6 +117,11 @@ with tempfile.TemporaryDirectory(prefix="qqq-dashboard-test-") as folder:
                              stderr=slave, stdout=subprocess.PIPE)
     screen = bytearray()
     visible = TerminalScreen(72, 16)
+    visible_at_clear = [visible.text()]
+
+    def clear_capture():
+        screen[:] = b""
+        visible_at_clear[0] = visible.text()
 
     def capture(data):
         screen.extend(data)
@@ -124,6 +132,7 @@ with tempfile.TemporaryDirectory(prefix="qqq-dashboard-test-") as folder:
         def found():
             return needle in screen or (
                 bool(screen) and b"\x1b" not in needle and
+                needle.decode("utf-8", "replace") not in visible_at_clear[0] and
                 needle.decode("utf-8", "replace") in visible.text()
             )
         while not found():
@@ -153,87 +162,90 @@ with tempfile.TemporaryDirectory(prefix="qqq-dashboard-test-") as folder:
         assert "qqq tasks" in visible.text(), visible.text()
         if scenario == "color":
             read_until(b"38;5;81")
-            screen.clear()
+            clear_capture()
             send(b"\x1b[1;2A")
             read_until(b"48;5;81")
         elif scenario in ("no_color", "dumb"):
             assert b"\x1b[38;" not in screen, screen[-2000:]
             assert b"\x1b[48;" not in screen, screen[-2000:]
         if scenario != "scroll":
+            read_until(b"Second")
             assert "First" in visible.text() and "Second" in visible.text(), visible.text()
         assert not select.select([child.stdout], [], [], 0)[0], "TUI wrote stdout while open"
         if scenario in ("save", "save_json"):
-            screen.clear()
+            clear_capture()
             send(b"\x1b[1;2A")
             read_until(b"task #2")
-            assert b"> 2" in screen, screen[-2000:]
-            screen.clear()
+            assert "> 2" in visible.text(), visible.text()
+            clear_capture()
             send(b"\x05 edited\x13")
             read_until(b"Saved #2. New task")
             assert cli("show", "2")["task"]["description"] == "Second edited"
-            screen.clear()
+            clear_capture()
             send(b"Third\x13")
             read_until(b"Saved #3. New task")
-            screen.clear()
-            send(b"\x1b[C")
-            read_until(b"Third")
             assert "3      New" in visible.text(), visible.text()
             assert cli("show", "3")["task"]["description"] == "Third"
         elif scenario == "scroll":
             assert "Task 20" in visible.text(), visible.text()
             for task_id in range(20, 0, -1):
-                screen.clear()
+                clear_capture()
                 send(b"\x1b[1;2A")
                 read_until(f"qqq task editor - task #{task_id}".encode())
             assert "> 1" in visible.text() and "First" in visible.text(), visible.text()
-            screen.clear()
+            clear_capture()
             send(b"\x1b[1;2B")
             read_until(b"qqq task editor - task #2")
             assert "> 2" in visible.text(), visible.text()
         elif scenario == "dirty":
             send(b"Draft")
-            screen.clear()
+            clear_capture()
             send(b"\x1b[1;2A")
             read_until(b"Discard changes and switch? (y/N)")
-            screen.clear()
+            clear_capture()
             send(b"n")
-            read_until(b"qqq task editor - new task")
-            read_until(b"Draft")
-            screen.clear()
+            read_until(b"Ctrl-S save")
+            assert "qqq task editor - new task" in visible.text(), visible.text()
+            assert "Draft" in visible.text(), visible.text()
+            assert "Discard changes" not in visible.text(), visible.text()
+            clear_capture()
             send(b"\x13")
             read_until(b"Saved #3. New task")
             assert cli("show", "3")["task"]["description"] == "Draft"
         elif scenario == "save_error":
-            screen.clear()
+            clear_capture()
             send(b"\x1b[1;2A")
             read_until(b"qqq task editor - task #2")
             with sqlite3.connect(os.path.join(folder, ".qqq", "qqq.db")) as db:
                 db.execute("DELETE FROM tasks WHERE id=2")
-            screen.clear()
+            clear_capture()
             send(b"\x05 edited\x13")
             read_until(b"Task 2 not found")
+            assert b"38;5;1" in screen, screen[-2000:]
             assert child.poll() is None
             with sqlite3.connect(os.path.join(folder, ".qqq", "qqq.db")) as db:
                 db.execute("INSERT INTO tasks(id, description) VALUES (2, 'Second')")
-            screen.clear()
+            clear_capture()
             send(b"\x13")
             read_until(b"Saved #2. New task")
             assert cli("show", "2")["task"]["description"] == "Second edited"
         elif scenario == "resize":
             send(b"Draft")
-            screen.clear()
+            clear_capture()
             fcntl.ioctl(slave, termios.TIOCSWINSZ, struct.pack("HHHH", 7, 10, 0, 0))
             visible.resize(10, 7)
+            clear_capture()
             os.kill(child.pid, signal.SIGWINCH)
             read_until(b"Resize ter")
-            screen.clear()
+            clear_capture()
             fcntl.ioctl(slave, termios.TIOCSWINSZ, struct.pack("HHHH", 16, 72, 0, 0))
             visible.resize(72, 16)
+            clear_capture()
             os.kill(child.pid, signal.SIGWINCH)
             read_until(b"qqq task editor - new task")
             read_until(b"Draft")
             read_until(b"\x1b[10;6H")
-            screen.clear()
+            clear_capture()
             assert not (termios.tcgetattr(slave)[0] & termios.IXON), termios.tcgetattr(slave)
             send(b"\x13")
             read_until(b"Saved #3. New task")

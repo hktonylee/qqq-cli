@@ -207,6 +207,7 @@ fn compose_inner(description: &str, mut mode: Mode<'_, '_>) -> Result<Option<Out
     let mut top = 0;
     let mut list_top = 0;
     let mut message = String::new();
+    let mut message_is_error = false;
     let mut confirmation: Option<Confirmation> = None;
     let mut saved_any = false;
     loop {
@@ -272,6 +273,7 @@ fn compose_inner(description: &str, mut mode: Mode<'_, '_>) -> Result<Option<Out
                             cursor: draft.cursor(),
                             top: &mut top,
                             chrome: &chrome,
+                            message_is_error: confirmation.is_none() && message_is_error,
                         },
                         terminal.color,
                     );
@@ -289,7 +291,9 @@ fn compose_inner(description: &str, mut mode: Mode<'_, '_>) -> Result<Option<Out
         }
         match event::read()? {
             Event::Paste(text) if confirmation.is_none() => {
-                message = paste(&mut draft, &text)
+                let result = paste(&mut draft, &text);
+                message_is_error = result.is_err();
+                message = result
                     .err()
                     .map_or_else(String::new, |error| format!("{error:#}"));
             }
@@ -316,10 +320,12 @@ fn compose_inner(description: &str, mut mode: Mode<'_, '_>) -> Result<Option<Out
                                         &mut top,
                                     );
                                     message.clear();
+                                    message_is_error = false;
                                 }
                             },
                             KeyCode::Char('n' | 'N') | KeyCode::Enter | KeyCode::Esc => {
                                 message.clear();
+                                message_is_error = false;
                             }
                             _ => confirmation = Some(pending),
                         }
@@ -350,15 +356,20 @@ fn compose_inner(description: &str, mut mode: Mode<'_, '_>) -> Result<Option<Out
                                     &mut top,
                                 );
                                 message.clear();
+                                message_is_error = false;
                             }
                             Ok(None) => {
+                                message_is_error = false;
                                 message = if older {
                                     "No older task".to_owned()
                                 } else {
                                     "Already at new task".to_owned()
                                 };
                             }
-                            Err(error) => message = format!("{error:#}"),
+                            Err(error) => {
+                                message_is_error = true;
+                                message = format!("{error:#}");
+                            }
                         }
                         continue;
                     }
@@ -385,12 +396,19 @@ fn compose_inner(description: &str, mut mode: Mode<'_, '_>) -> Result<Option<Out
                                                 &mut top,
                                             );
                                             message = format!("Saved #{id}. New task");
+                                            message_is_error = false;
                                         }
-                                        Err(error) => message = format!("{error:#}"),
+                                        Err(error) => {
+                                            message = format!("{error:#}");
+                                            message_is_error = true;
+                                        }
                                     },
                                 }
                             }
-                            Err(error) => message = error.to_string(),
+                            Err(error) => {
+                                message = error.to_string();
+                                message_is_error = true;
+                            }
                         },
                         KeyCode::Char('c') => return cancel(saved_any, dashboard),
                         KeyCode::Char('v') => {
@@ -398,6 +416,7 @@ fn compose_inner(description: &str, mut mode: Mode<'_, '_>) -> Result<Option<Out
                                 clipboard::Paste::Text(text) => paste(&mut draft, &text),
                                 clipboard::Paste::Image(image) => draft.image(image),
                             });
+                            message_is_error = result.is_err();
                             message = result
                                 .err()
                                 .map_or_else(String::new, |error| format!("{error:#}"));
@@ -410,6 +429,7 @@ fn compose_inner(description: &str, mut mode: Mode<'_, '_>) -> Result<Option<Out
                     continue;
                 }
                 message.clear();
+                message_is_error = false;
                 match key.code {
                     KeyCode::Esc if draft.is_empty() => return cancel(saved_any, dashboard),
                     KeyCode::Esc => confirmation = Some(Confirmation::Exit),

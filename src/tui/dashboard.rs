@@ -90,6 +90,8 @@ fn editor(frame: &mut Frame<'_>, area: Rect, editor: render::DashboardEditor<'_>
         Style::default()
     } else if editor.chrome.message.is_empty() {
         Style::default().fg(Color::Gray)
+    } else if editor.message_is_error {
+        Style::default().fg(Color::Red)
     } else {
         Style::default().fg(Color::Yellow)
     };
