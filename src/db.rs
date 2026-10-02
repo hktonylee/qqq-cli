@@ -65,6 +65,7 @@ pub struct Task {
     pub description: String,
     pub status: String,
     pub priority: i64,
+    pub archived: bool,
     #[serde(flatten)]
     pub identity: crate::identity::Identity,
     pub created_at: String,
@@ -82,6 +83,7 @@ fn task_row(r: &rusqlite::Row<'_>) -> rusqlite::Result<Task> {
         description: r.get(1)?,
         status: r.get(2)?,
         priority: r.get(11)?,
+        archived: r.get(12)?,
         created_at: r.get(4)?,
         updated_at: r.get(5)?,
         parent_id: r.get(6)?,
@@ -227,11 +229,11 @@ impl Db {
         conn.pragma_update(None, "foreign_keys", "ON")?;
         let version: i64 = conn.pragma_query_value(None, "user_version", |r| r.get(0))?;
         ensure!(
-            (1..=7).contains(&version) || (init && version == 0),
+            (1..=8).contains(&version) || (init && version == 0),
             "Unsupported database schema version {version}"
         );
         ensure_description_schema(&conn)?;
-        if version < 7 {
+        if version < 8 {
             // Rebuild CHECK constraints without changing references to tasks.
             // SQLite requires foreign_keys to change outside a transaction.
             let disable_foreign_keys = version < 6;
@@ -244,7 +246,7 @@ impl Db {
             // Another CLI may have migrated while we waited for the write lock.
             let version: i64 = tx.pragma_query_value(None, "user_version", |r| r.get(0))?;
             ensure!(
-                (1..=7).contains(&version) || (init && version == 0),
+                (1..=8).contains(&version) || (init && version == 0),
                 "Unsupported database schema version {version}"
             );
             ensure_description_schema(&tx)?;
@@ -294,6 +296,9 @@ impl Db {
             if version < 7 {
                 tx.execute_batch(include_str!("migrate_v7.sql"))?;
             }
+            if version < 8 {
+                tx.execute_batch(include_str!("migrate_v8.sql"))?;
+            }
             commit_with_files(tx, &mut pending)?;
             if disable_foreign_keys {
                 conn.pragma_update(None, "foreign_keys", "ON")?;
@@ -306,13 +311,13 @@ impl Db {
         }
         let version: i64 = conn.pragma_query_value(None, "user_version", |r| r.get(0))?;
         ensure!(
-            version == 7,
+            version == 8,
             "Unsupported database schema version {version}"
         );
         Ok((Self { conn, image_store }, path))
     }
     pub fn task(&self, id: i64) -> Result<Task> {
-        self.conn.query_row("SELECT id,description,status,claim_key,created_at,updated_at,parent_id,harness_name,harness_session,orchestrator_name,orchestrator_session,priority FROM tasks WHERE id=?",[id],task_row).optional()?.with_context(||format!("Task {id} not found"))
+        self.conn.query_row("SELECT id,description,status,claim_key,created_at,updated_at,parent_id,harness_name,harness_session,orchestrator_name,orchestrator_session,priority,archived FROM tasks WHERE id=?",[id],task_row).optional()?.with_context(||format!("Task {id} not found"))
     }
     pub fn add(
         &mut self,
@@ -368,7 +373,7 @@ impl Db {
                 params![description, id],
             )?;
         }
-        let task = tx.query_row("SELECT id,description,status,claim_key,created_at,updated_at,parent_id,harness_name,harness_session,orchestrator_name,orchestrator_session,priority FROM tasks WHERE id=?", [id], task_row)?;
+        let task = tx.query_row("SELECT id,description,status,claim_key,created_at,updated_at,parent_id,harness_name,harness_session,orchestrator_name,orchestrator_session,priority,archived FROM tasks WHERE id=?", [id], task_row)?;
         commit_with_files(tx, &mut pending)?;
         Ok(task)
     }
@@ -440,7 +445,7 @@ impl Db {
     }
     pub fn list(&self, max_completed: Option<i64>) -> Result<Vec<Task>> {
         Ok(self.conn.prepare(
-            "SELECT id,description,status,claim_key,created_at,updated_at,parent_id,harness_name,harness_session,orchestrator_name,orchestrator_session,priority FROM tasks
+            "SELECT id,description,status,claim_key,created_at,updated_at,parent_id,harness_name,harness_session,orchestrator_name,orchestrator_session,priority,archived FROM tasks
              WHERE ?1 IS NULL OR status!='completed' OR id IN (
                  SELECT id FROM tasks WHERE status='completed'
                  ORDER BY (SELECT MAX(id) FROM events WHERE task_id=tasks.id AND action='complete') DESC,
@@ -620,7 +625,7 @@ impl Db {
             )?;
         }
         let task = tx.query_row(
-            "SELECT id,description,status,claim_key,created_at,updated_at,parent_id,harness_name,harness_session,orchestrator_name,orchestrator_session,priority FROM tasks WHERE id=?",
+            "SELECT id,description,status,claim_key,created_at,updated_at,parent_id,harness_name,harness_session,orchestrator_name,orchestrator_session,priority,archived FROM tasks WHERE id=?",
             [id], task_row,
         )?;
         commit_with_files(tx, &mut pending)?;
@@ -761,7 +766,7 @@ impl Db {
     ) -> Result<Option<Task>> {
         let session = self.resolve_owner(session, harness_name)?;
         Ok(self.conn.query_row(
-            "SELECT id,description,status,claim_key,created_at,updated_at,parent_id,harness_name,harness_session,orchestrator_name,orchestrator_session,priority FROM tasks WHERE status='in_progress' AND claim_key=?",
+            "SELECT id,description,status,claim_key,created_at,updated_at,parent_id,harness_name,harness_session,orchestrator_name,orchestrator_session,priority,archived FROM tasks WHERE status='in_progress' AND claim_key=?",
             [session], task_row,
         ).optional()?)
     }
@@ -847,7 +852,7 @@ impl Db {
                 Self::save_link(&tx, id, link)?;
             }
             let mut identity = if owned.is_some() {
-                tx.query_row("SELECT id,description,status,claim_key,created_at,updated_at,parent_id,harness_name,harness_session,orchestrator_name,orchestrator_session,priority FROM tasks WHERE id=?", [id], task_row)?.identity
+                tx.query_row("SELECT id,description,status,claim_key,created_at,updated_at,parent_id,harness_name,harness_session,orchestrator_name,orchestrator_session,priority,archived FROM tasks WHERE id=?", [id], task_row)?.identity
             } else {
                 metadata
                     .cloned()
@@ -857,7 +862,7 @@ impl Db {
             Self::save_identity(&tx, id, &identity)?;
         }
         let task = id.map(|id| tx.query_row(
-            "SELECT id,description,status,claim_key,created_at,updated_at,parent_id,harness_name,harness_session,orchestrator_name,orchestrator_session,priority FROM tasks WHERE id=?",
+            "SELECT id,description,status,claim_key,created_at,updated_at,parent_id,harness_name,harness_session,orchestrator_name,orchestrator_session,priority,archived FROM tasks WHERE id=?",
             [id], task_row,
         )).transpose()?;
         tx.commit()?;
@@ -875,7 +880,7 @@ impl Db {
             params![id, session],
         )?;
         let task = tx.query_row(
-            "SELECT id,description,status,claim_key,created_at,updated_at,parent_id,harness_name,harness_session,orchestrator_name,orchestrator_session,priority FROM tasks WHERE id=?",
+            "SELECT id,description,status,claim_key,created_at,updated_at,parent_id,harness_name,harness_session,orchestrator_name,orchestrator_session,priority,archived FROM tasks WHERE id=?",
             [id], task_row,
         )?;
         tx.commit()?;

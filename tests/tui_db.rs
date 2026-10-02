@@ -39,6 +39,8 @@ fn database() -> (Db, tempfile::TempDir) {
         .unwrap();
     conn.execute_batch(include_str!("../src/migrate_v7.sql"))
         .unwrap();
+    conn.execute_batch(include_str!("../src/migrate_v8.sql"))
+        .unwrap();
     (
         Db {
             conn,

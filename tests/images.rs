@@ -110,7 +110,7 @@ fn v5_migration_copies_images_to_files_and_preserves_ids_and_sequence() {
     assert_eq!(
         conn.pragma_query_value(None, "user_version", |r| r.get::<_, i64>(0))
             .unwrap(),
-        7
+        8
     );
     let has_data: bool = conn
         .query_row(

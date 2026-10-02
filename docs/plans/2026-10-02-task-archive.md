@@ -14,9 +14,9 @@
 
 **Files:** `src/migrate_v8.sql`, `src/db.rs`, `tests/archive.rs`, `tests/tui_db.rs`, existing migration tests.
 
-- [ ] Add failing v7 fixture test in `tests/archive.rs`: apply `schema.sql` and migrations 2–7, insert task/event/image metadata, run CLI `list`; expect `archived:false`, schema version 8, unchanged IDs/timestamps/events, and preserved next autoincrement IDs. Run `cargo test --locked --test archive`; expect failure.
-- [ ] Add `src/migrate_v8.sql` with `ALTER TABLE tasks ADD COLUMN archived INTEGER NOT NULL DEFAULT 0 CHECK(archived IN (0,1));`. Replace `new_queue_priority` with `ON tasks(priority DESC,id) WHERE status='new' AND archived=0`. Rebuild `events` with action CHECK containing prior four actions plus `archive` and `unarchive`; copy rows, preserve `sqlite_sequence`, rename, recreate `events_task`, set `user_version=8`.
-- [ ] In `src/db.rs`, accept versions 1–8, run migration 8 after migration 7 under existing immediate transaction, require final version 8. Add `Task.archived: bool`; append `archived` to every `task_row` SELECT and decode final column. Apply `migrate_v8.sql` to direct DB fixture in `tests/tui_db.rs`; update old tests expecting schema 7 or rejecting version 8 to expect 8/reject 9. Run focused migration/DB tests; commit.
+- [x] Add failing v7 fixture test in `tests/archive.rs`: apply `schema.sql` and migrations 2–7, insert task/event/image metadata, run CLI `list`; expect `archived:false`, schema version 8, unchanged IDs/timestamps/events, and preserved next autoincrement IDs. Run `cargo test --locked --test archive`; expect failure.
+- [x] Add `src/migrate_v8.sql` with `ALTER TABLE tasks ADD COLUMN archived INTEGER NOT NULL DEFAULT 0 CHECK(archived IN (0,1));`. Replace `new_queue_priority` with `ON tasks(priority DESC,id) WHERE status='new' AND archived=0`. Rebuild `events` with action CHECK containing prior four actions plus `archive` and `unarchive`; copy rows, preserve `sqlite_sequence`, rename, recreate `events_task`, set `user_version=8`.
+- [x] In `src/db.rs`, accept versions 1–8, run migration 8 after migration 7 under existing immediate transaction, require final version 8. Add `Task.archived: bool`; append `archived` to every `task_row` SELECT and decode final column. Apply `migrate_v8.sql` to direct DB fixture in `tests/tui_db.rs`; update old tests expecting schema 7 or rejecting version 8 to expect 8/reject 9. Run focused migration/DB tests; commit.
 
 ### Task 2: Archive state transitions and dependency invariant
 
