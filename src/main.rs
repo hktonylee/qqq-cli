@@ -95,9 +95,16 @@ enum Commands {
         images: Vec<PathBuf>,
     },
     /// Browse tasks above a continuous interactive editor.
-    Tui,
+    Tui {
+        /// Include archived tasks in dashboard browsing.
+        #[arg(long)]
+        include_archived: bool,
+    },
     /// List first description lines as a dependency tree; JSON preserves whole text.
     List {
+        /// Include archived tasks; default list hides them.
+        #[arg(long)]
+        include_archived: bool,
         /// Match text anywhere in the full description, ignoring Unicode case.
         #[arg(long, value_name = "TEXT", allow_hyphen_values = true)]
         query: Option<String>,
@@ -315,8 +322,8 @@ fn execute(cli: Cli, display_limit: Option<i64>) -> Result<Value> {
                 }
             }
         }
-        Commands::Tui => {
-            tui::compose_dashboard(&mut db, &mut |db, outcome| {
+        Commands::Tui { include_archived } => {
+            tui::compose_dashboard(&mut db, include_archived, &mut |db, outcome| {
                 let task = db.save_composition(outcome.target_id, None, &outcome.composition)?;
                 Ok(task.id)
             })?;
@@ -326,9 +333,10 @@ fn execute(cli: Cli, display_limit: Option<i64>) -> Result<Value> {
             max_completed,
             query,
             statuses,
+            include_archived,
             ..
         } => json!(list_filter::filter_tasks(
-            db.list(max_completed.or(display_limit))?,
+            db.list_with_archived(max_completed.or(display_limit), include_archived)?,
             query.as_deref(),
             &statuses
         )),
@@ -500,7 +508,7 @@ fn execute(cli: Cli, display_limit: Option<i64>) -> Result<Value> {
 }
 fn run() -> Result<Option<String>> {
     let cli = Cli::parse_from(aliases::expand(std::env::args_os().collect())?);
-    let is_tui = matches!(&cli.command, Commands::Tui);
+    let is_tui = matches!(&cli.command, Commands::Tui { .. });
     let filtered_list = match &cli.command {
         Commands::List {
             query, statuses, ..
@@ -522,6 +530,7 @@ fn run() -> Result<Option<String>> {
     if let Commands::List {
         watch: true,
         max_completed,
+        include_archived,
         query,
         statuses,
         ..
@@ -530,6 +539,7 @@ fn run() -> Result<Option<String>> {
         watch::run(
             cli.json,
             max_completed.or(display_limit),
+            *include_archived,
             display_limit.is_some(),
             query.as_deref(),
             statuses,

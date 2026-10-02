@@ -118,6 +118,23 @@ fn watch_streams_initial_list_and_committed_changes_without_idle_repeats() {
 }
 
 #[test]
+fn watch_respects_archive_visibility_on_every_snapshot() {
+    let dir = project();
+    let path = dir.path();
+    ok(path, &["add", "Keep"]);
+    let default = Watcher::start(path, &["list", "--watch", "--json"]);
+    let included = Watcher::start(path, &["list", "--watch", "--json", "--include-archived"]);
+    assert_eq!(default.snapshot()[0]["description"], "Keep");
+    assert_eq!(included.snapshot()[0]["description"], "Keep");
+    ok(path, &["archive", "1"]);
+    assert_eq!(default.snapshot(), serde_json::json!([]));
+    assert_eq!(included.snapshot()[0]["archived"], true);
+    ok(path, &["unarchive", "1"]);
+    assert_eq!(default.snapshot()[0]["archived"], false);
+    assert_eq!(included.snapshot()[0]["archived"], false);
+}
+
+#[test]
 fn watch_applies_query_and_status_to_each_json_snapshot() {
     let dir = project();
     let p = dir.path();

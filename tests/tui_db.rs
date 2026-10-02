@@ -61,6 +61,25 @@ fn composition() -> Composition {
 }
 
 #[test]
+fn task_navigation_skips_archived_unless_included() {
+    let (mut db, _dir) = database();
+    db.add("First", None, &[]).unwrap();
+    db.add("Hidden", None, &[]).unwrap();
+    db.add("Third", None, &[]).unwrap();
+    db.set_archived(2, true, "cli").unwrap();
+    assert_eq!(db.adjacent_task(None, true, false).unwrap().unwrap().0, 3);
+    assert_eq!(
+        db.adjacent_task(Some(3), true, false).unwrap().unwrap().0,
+        1
+    );
+    assert_eq!(
+        db.adjacent_task(Some(1), false, false).unwrap().unwrap().0,
+        3
+    );
+    assert_eq!(db.adjacent_task(Some(3), true, true).unwrap().unwrap().0, 2);
+}
+
+#[test]
 fn legacy_open_keeps_foreign_keys_enabled() {
     if std::env::var_os("QQQ_TEST_LEGACY_FK_CHILD").is_none() {
         return;

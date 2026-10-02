@@ -38,7 +38,7 @@ impl From<&Commands> for Format {
                 HerdrCommand::Find { .. } => Self::Pane,
             },
             Commands::Add { .. } => Self::AddedTask,
-            Commands::Tui => Self::Task,
+            Commands::Tui { .. } => Self::Task,
             Commands::Edit { .. }
             | Commands::Archive { .. }
             | Commands::Unarchive { .. }

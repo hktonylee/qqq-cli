@@ -238,3 +238,73 @@ fn archived_unfinished_parent_rejects_new_and_reparented_visible_children() {
     );
     assert_eq!(ok(path, &["show", "2"])["task"]["parent_id"], Value::Null);
 }
+
+#[test]
+fn default_list_hides_archived_and_explicit_list_restores_visibility() {
+    let dir = project();
+    let path = dir.path();
+    ok(path, &["add", "Visible"]);
+    ok(path, &["add", "Hidden"]);
+    ok(path, &["archive", "2"]);
+    let visible = ok(path, &["list"]);
+    assert_eq!(visible.as_array().unwrap().len(), 1);
+    assert_eq!(visible[0]["description"], "Visible");
+    let all = ok(path, &["list", "--include-archived"]);
+    assert_eq!(all.as_array().unwrap().len(), 2);
+    assert_eq!(all[1]["archived"], true);
+    assert_eq!(all[1]["description"], "Hidden");
+}
+
+#[test]
+fn hidden_completed_task_does_not_consume_visible_completion_limit() {
+    let dir = project();
+    let path = dir.path();
+    for id in 1..=3 {
+        ok(path, &["add", &format!("Task {id}")]);
+        ok(path, &["next", "--session", "worker"]);
+        ok(path, &["complete", &id.to_string(), "--session", "worker"]);
+    }
+    ok(path, &["archive", "3"]);
+    let visible = ok(path, &["list", "--max-completed", "1"]);
+    assert_eq!(visible.as_array().unwrap().len(), 1);
+    assert_eq!(visible[0]["id"], 2);
+    let included = ok(
+        path,
+        &["list", "--max-completed", "1", "--include-archived"],
+    );
+    assert_eq!(included.as_array().unwrap().len(), 1);
+    assert_eq!(included[0]["id"], 3);
+    assert_eq!(ok(path, &["list", "-a"]).as_array().unwrap().len(), 2);
+}
+
+#[test]
+fn archived_ready_task_is_skipped_by_concurrent_claims() {
+    let dir = project();
+    let path = dir.path();
+    ok(path, &["add", "High", "--priority", "100"]);
+    ok(path, &["add", "First", "--priority", "5"]);
+    ok(path, &["add", "Second", "--priority", "5"]);
+    ok(path, &["archive", "1"]);
+    let first = command(path)
+        .args(["next", "--session", "one"])
+        .spawn()
+        .unwrap();
+    let second = command(path)
+        .args(["next", "--session", "two"])
+        .spawn()
+        .unwrap();
+    let mut ids: Vec<i64> = [first, second]
+        .into_iter()
+        .map(|child| {
+            let output = child.wait_with_output().unwrap();
+            assert!(output.status.success());
+            let task: Value = serde_json::from_slice(&output.stdout).unwrap();
+            task["id"].as_i64().unwrap()
+        })
+        .collect();
+    ids.sort();
+    assert_eq!(ids, [2, 3]);
+    assert!(ok(path, &["next", "--session", "three"]).is_null());
+    ok(path, &["unarchive", "1"]);
+    assert_eq!(ok(path, &["next", "--session", "three"])["id"], 1);
+}

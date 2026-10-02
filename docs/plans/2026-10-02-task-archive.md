@@ -30,9 +30,9 @@
 
 **Files:** `src/db.rs`, `src/main.rs`, `src/watch.rs`, `src/tui/mod.rs`, `tests/archive.rs`, TUI PTY tests.
 
-- [ ] Add failing tests: default list hides archived rows; explicit include flag shows them; hidden archived completions do not consume completed display limit; `next` skips archived high-priority work; archived completed parent still releases child; simultaneous sessions claim distinct visible ready tasks. Run focused tests; expect failure.
-- [ ] Add `Db::list_with_archived(max_completed, include_archived)` and keep `list` wrapper for existing callers. Filter archived rows in outer list and completed subquery. Add `archived=0` to `has_ready` and new-task claim query. Keep completed-parent predicate based on status alone. Run focused tests; commit.
-- [ ] Add Clap `--include-archived` to `list` and `tui`; pass flag through watch and dashboard. Default continuous editor navigation excludes archived tasks; dashboard uses visibility-aware list and existing visible-ID navigation. Add focused PTY visibility test using preseeded archived row, plus direct navigation tests where practical. Run focused TUI/watch tests; commit.
+- [x] Add failing tests: default list hides archived rows; explicit include flag shows them; hidden archived completions do not consume completed display limit; `next` skips archived high-priority work; archived completed parent still releases child; simultaneous sessions claim distinct visible ready tasks. Run focused tests; expect failure.
+- [x] Add `Db::list_with_archived(max_completed, include_archived)` and keep `list` wrapper for existing callers. Filter archived rows in outer list and completed subquery. Add `archived=0` to `has_ready` and new-task claim query. Keep completed-parent predicate based on status alone. Run focused tests; commit.
+- [x] Add Clap `--include-archived` to `list` and `tui`; pass flag through watch and dashboard. Default continuous editor navigation excludes archived tasks; dashboard uses visibility-aware list and existing visible-ID navigation. Add focused PTY visibility test using preseeded archived row, plus direct navigation tests where practical. Run focused TUI/watch tests; commit.
 
 ### Task 4: CLI commands, output, docs
 

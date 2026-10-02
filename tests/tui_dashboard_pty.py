@@ -130,6 +130,10 @@ with tempfile.TemporaryDirectory(prefix="qqq-dashboard-test-") as folder:
         cli("add", "Parent")
         cli("add", "Child\nNeEdLe on second line", "--parent", "1")
         cli("add", "Other")
+    elif scenario in ("archive_hidden", "archive_included"):
+        cli("add", "Visible")
+        cli("add", "Hidden")
+        cli("archive", "2")
     else:
         cli("add", "First")
         cli("add", "Second")
@@ -151,6 +155,8 @@ with tempfile.TemporaryDirectory(prefix="qqq-dashboard-test-") as folder:
     fcntl.ioctl(slave, termios.TIOCSCTTY, 0)
     signal.signal(signal.SIGHUP, signal.SIG_IGN)
     args = [binary, "--json", "tui"] if scenario in ("empty_json", "save_json") else [binary, "tui"]
+    if scenario == "archive_included":
+        args.append("--include-archived")
     child = subprocess.Popen(args, cwd=folder, env=env, stdin=slave,
                              stderr=slave, stdout=subprocess.PIPE)
     screen = bytearray()
@@ -231,10 +237,17 @@ with tempfile.TemporaryDirectory(prefix="qqq-dashboard-test-") as folder:
         elif scenario in ("no_color", "dumb", "pasteboard_no_color", "filter_no_color"):
             assert b"\x1b[38;" not in screen, screen[-2000:]
             assert b"\x1b[48;" not in screen, screen[-2000:]
-        if scenario not in ("scroll", "wheel", "click", "click_filter", "workflow", "workflow_empty", "workflow_status", "filter", "filter_no_color"):
+        if scenario not in ("scroll", "wheel", "click", "click_filter", "workflow", "workflow_empty", "workflow_status", "filter", "filter_no_color", "archive_hidden", "archive_included"):
             read_until(b"Second")
             assert "First" in visible.text() and "Second" in visible.text(), visible.text()
         assert not select.select([child.stdout], [], [], 0)[0], "TUI wrote stdout while open"
+        if scenario in ("archive_hidden", "archive_included"):
+            wait_visible(lambda: "Visible" in visible.text())
+            settle()
+            if scenario == "archive_hidden":
+                assert "Hidden" not in visible.text(), visible.text()
+            else:
+                assert "Hidden" in visible.text(), visible.text()
         if scenario == "workflow":
             initial_tasks = cli("list")
             clear_capture()

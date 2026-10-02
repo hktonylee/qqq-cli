@@ -14,6 +14,7 @@ use std::{
 pub fn run(
     json_output: bool,
     max_completed: Option<i64>,
+    include_archived: bool,
     display_limited: bool,
     query: Option<&str>,
     statuses: &[ListStatus],
@@ -29,7 +30,7 @@ pub fn run(
     let mut version = db.data_version()?;
     loop {
         let tasks = json!(list_filter::filter_tasks(
-            db.list(max_completed)?,
+            db.list_with_archived(max_completed, include_archived)?,
             query,
             statuses
         ));

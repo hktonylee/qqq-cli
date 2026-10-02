@@ -517,16 +517,23 @@ impl Db {
             .collect::<rusqlite::Result<Vec<_>>>()?)
     }
     pub fn list(&self, max_completed: Option<i64>) -> Result<Vec<Task>> {
+        self.list_with_archived(max_completed, false)
+    }
+    pub fn list_with_archived(
+        &self,
+        max_completed: Option<i64>,
+        include_archived: bool,
+    ) -> Result<Vec<Task>> {
         Ok(self.conn.prepare(
             "SELECT id,description,status,claim_key,created_at,updated_at,parent_id,harness_name,harness_session,orchestrator_name,orchestrator_session,priority,archived FROM tasks
-             WHERE ?1 IS NULL OR status!='completed' OR id IN (
-                 SELECT id FROM tasks WHERE status='completed'
+             WHERE (?2 OR archived=0) AND (?1 IS NULL OR status!='completed' OR id IN (
+                 SELECT id FROM tasks WHERE status='completed' AND (?2 OR archived=0)
                  ORDER BY (SELECT MAX(id) FROM events WHERE task_id=tasks.id AND action='complete') DESC,
                           updated_at DESC, id DESC
                  LIMIT COALESCE(?1,-1)
-             )
+             ))
              ORDER BY id"
-        )?.query_map([max_completed],task_row)?.collect::<rusqlite::Result<_>>()?)
+        )?.query_map(params![max_completed, include_archived],task_row)?.collect::<rusqlite::Result<_>>()?)
     }
     pub fn data_version(&self) -> Result<i64> {
         Ok(self
@@ -729,21 +736,22 @@ impl Db {
         &self,
         current: Option<i64>,
         older: bool,
+        include_archived: bool,
     ) -> Result<Option<(i64, String, String)>> {
         let found = match (older, current) {
             (true, None) => self.conn.query_row(
-                "SELECT id,description,status FROM tasks ORDER BY id DESC LIMIT 1",
-                [],
+                "SELECT id,description,status FROM tasks WHERE (?1 OR archived=0) ORDER BY id DESC LIMIT 1",
+                [include_archived],
                 |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
             ),
             (true, Some(id)) => self.conn.query_row(
-                "SELECT id,description,status FROM tasks WHERE id < ?1 ORDER BY id DESC LIMIT 1",
-                [id],
+                "SELECT id,description,status FROM tasks WHERE id < ?1 AND (?2 OR archived=0) ORDER BY id DESC LIMIT 1",
+                params![id, include_archived],
                 |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
             ),
             (false, Some(id)) => self.conn.query_row(
-                "SELECT id,description,status FROM tasks WHERE id > ?1 ORDER BY id ASC LIMIT 1",
-                [id],
+                "SELECT id,description,status FROM tasks WHERE id > ?1 AND (?2 OR archived=0) ORDER BY id ASC LIMIT 1",
+                params![id, include_archived],
                 |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
             ),
             (false, None) => return Ok(None),
@@ -846,7 +854,7 @@ impl Db {
     }
     pub fn has_ready(&self) -> Result<bool> {
         Ok(self.conn.query_row(
-            "SELECT EXISTS(SELECT 1 FROM tasks WHERE status='new' AND
+            "SELECT EXISTS(SELECT 1 FROM tasks WHERE status='new' AND archived=0 AND
                 (parent_id IS NULL OR EXISTS(SELECT 1 FROM tasks parent WHERE parent.id=tasks.parent_id AND parent.status='completed')))",
             [], |row| row.get(0),
         )?)
@@ -903,7 +911,7 @@ impl Db {
             Some(id) => Some(id),
             None if allow_new => tx
                 .query_row(
-                    "SELECT id FROM tasks WHERE status='new'
+                    "SELECT id FROM tasks WHERE status='new' AND archived=0
                      AND (parent_id IS NULL OR EXISTS
                          (SELECT 1 FROM tasks parent WHERE parent.id=tasks.parent_id AND parent.status='completed'))
                      ORDER BY priority DESC,id ASC LIMIT 1",

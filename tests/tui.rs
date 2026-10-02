@@ -58,6 +58,12 @@ fn tui_dashboard_edits_and_adds_without_leaving_screen() {
 }
 
 #[test]
+fn tui_dashboard_hides_archived_unless_explicitly_included() {
+    dashboard_scenario("archive_hidden");
+    dashboard_scenario("archive_included");
+}
+
+#[test]
 fn tui_dashboard_empty_exit_succeeds() {
     dashboard_scenario("empty");
     dashboard_scenario("empty_json");

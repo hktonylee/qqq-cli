@@ -55,6 +55,7 @@ fn adjacent_target(
     db: &crate::db::Db,
     current: Option<i64>,
     older: bool,
+    include_archived: bool,
     visible_ids: Option<&[i64]>,
 ) -> Result<Option<Target>> {
     if !older && current.is_none() {
@@ -68,7 +69,7 @@ fn adjacent_target(
             })
             .transpose()?
     } else {
-        db.adjacent_task(current, older)?
+        db.adjacent_task(current, older, include_archived)?
     };
     Ok(match found {
         Some((id, description, status)) => Some(task_target(db, id, description, status)?),
@@ -166,6 +167,7 @@ enum Mode<'a, 'b> {
         db: &'a mut crate::db::Db,
         save: &'b mut dyn FnMut(&mut crate::db::Db, Outcome) -> Result<i64>,
         dashboard: bool,
+        include_archived: bool,
     },
 }
 impl Mode<'_, '_> {
@@ -206,6 +208,7 @@ pub fn compose_continuously(
             db,
             save,
             dashboard: false,
+            include_archived: false,
         },
         None,
     )
@@ -213,6 +216,7 @@ pub fn compose_continuously(
 }
 pub fn compose_dashboard(
     db: &mut crate::db::Db,
+    include_archived: bool,
     save: &mut dyn FnMut(&mut crate::db::Db, Outcome) -> Result<i64>,
 ) -> Result<()> {
     compose_inner(
@@ -221,6 +225,7 @@ pub fn compose_dashboard(
             db,
             save,
             dashboard: true,
+            include_archived,
         },
         None,
     )
@@ -235,6 +240,13 @@ fn compose_inner(
         mode,
         Mode::Continuous {
             dashboard: true,
+            ..
+        }
+    );
+    let include_archived = matches!(
+        mode,
+        Mode::Continuous {
+            include_archived: true,
             ..
         }
     );
@@ -310,7 +322,12 @@ fn compose_inner(
         let mut list_row_count = 0;
         let mut rows = Vec::new();
         if dashboard {
-            let tasks = mode.db().expect("dashboard has database").list(None)?;
+            let db = mode.db().expect("dashboard has database");
+            let tasks = if include_archived {
+                db.list_with_archived(None, true)?
+            } else {
+                db.list(None)?
+            };
             let filter_views: Vec<_> = tasks
                 .iter()
                 .map(|task| panel::FilterTask {
@@ -554,7 +571,13 @@ fn compose_inner(
                 {
                     if let Some(db) = mode.db() {
                         let older = key.code == KeyCode::Up;
-                        match adjacent_target(db, target_id, older, visible_ids.as_deref()) {
+                        match adjacent_target(
+                            db,
+                            target_id,
+                            older,
+                            include_archived,
+                            visible_ids.as_deref(),
+                        ) {
                             Ok(Some(target)) if draft.is_dirty_against(&baseline) => {
                                 confirmation = Some(Confirmation::Switch {
                                     target,
