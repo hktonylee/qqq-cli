@@ -17,6 +17,26 @@ fn line(buffer: &Buffer, y: u16) -> String {
 }
 
 #[test]
+fn wheel_hit_test_uses_list_editor_and_excludes_edges() {
+    assert_eq!(
+        dashboard::wheel_area((72, 16), 5, 3),
+        Some(dashboard::WheelArea::List(5))
+    );
+    assert_eq!(
+        dashboard::wheel_area((72, 16), 5, 1),
+        Some(dashboard::WheelArea::List(5))
+    );
+    assert_eq!(dashboard::wheel_area((72, 16), 5, 7), None);
+    assert_eq!(
+        dashboard::wheel_area((72, 16), 5, 10),
+        Some(dashboard::WheelArea::Editor(6))
+    );
+    assert_eq!(dashboard::wheel_area((72, 16), 5, 15), None);
+    assert_eq!(dashboard::wheel_area((72, 16), 72, 3), None);
+    assert_eq!(dashboard::wheel_area((10, 7), 5, 3), None);
+}
+
+#[test]
 fn filter_bar_shows_empty_result_and_takes_cursor_only_while_focused() {
     let layout = render::Layout::new(&["Unsaved".into()], &[], 72);
     let chrome = render::Chrome {

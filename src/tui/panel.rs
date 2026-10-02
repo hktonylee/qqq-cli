@@ -93,3 +93,12 @@ pub fn scroll_to(rows: &[ListRow], selected: Option<i64>, top: usize, height: us
     };
     next.min(last)
 }
+
+pub fn wheel_top(top: usize, rows: usize, height: usize, down: bool) -> usize {
+    let last = rows.saturating_sub(height);
+    if down {
+        top.saturating_add(3).min(last)
+    } else {
+        top.saturating_sub(3).min(last)
+    }
+}

@@ -20,6 +20,34 @@ pub struct ListView<'a> {
     pub top: &'a mut usize,
 }
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum WheelArea {
+    List(usize),
+    Editor(usize),
+}
+
+fn panes(area: Rect) -> (Rect, Rect) {
+    let parts =
+        Layout::vertical([Constraint::Percentage(50), Constraint::Percentage(50)]).split(area);
+    (parts[0], parts[1])
+}
+
+pub fn wheel_area(size: (u16, u16), column: u16, row: u16) -> Option<WheelArea> {
+    if size.0 < 12 || size.1 < 8 || column >= size.0 || row >= size.1 {
+        return None;
+    }
+    let (list, editor) = panes(Rect::new(0, 0, size.0, size.1));
+    if row < list.y + list.height - 1 {
+        Some(WheelArea::List(usize::from(list.height.saturating_sub(3))))
+    } else if row >= editor.y && row < editor.y + editor.height - 1 {
+        Some(WheelArea::Editor(usize::from(
+            editor.height.saturating_sub(2),
+        )))
+    } else {
+        None
+    }
+}
+
 fn filter_text(query: &str, width: usize) -> (String, u16) {
     const LABEL: &str = "Filter: ";
     let available = width.saturating_sub(LABEL.len());
@@ -157,9 +185,7 @@ pub fn draw(
         frame.set_cursor_position((area.x, area.y));
         return;
     }
-    let parts =
-        Layout::vertical([Constraint::Percentage(50), Constraint::Percentage(50)]).split(area);
-    let list = parts[0];
+    let (list, editor_area) = panes(area);
     let list_height = usize::from(list.height.saturating_sub(3));
     *list_view.top = panel::scroll_to(rows, selected, *list_view.top, list_height);
     let heading_style = if color {
@@ -216,7 +242,7 @@ pub fn draw(
         Paragraph::new("-".repeat(list.width.into())).style(separator_style),
         Rect::new(list.x, list.y + list.height - 1, list.width, 1),
     );
-    editor(frame, parts[1], editor_state, color);
+    editor(frame, editor_area, editor_state, color);
     if list_view.focused {
         frame.set_cursor_position((list.x + filter_cursor, list.y + 1));
     }

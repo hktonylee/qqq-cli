@@ -36,6 +36,16 @@ fn dashboard_new_draft_follows_newest_child_not_last_tree_row() {
 }
 
 #[test]
+fn mouse_wheel_top_moves_three_rows_and_stops_at_bounds() {
+    assert_eq!(panel::wheel_top(0, 20, 5, true), 3);
+    assert_eq!(panel::wheel_top(14, 20, 5, true), 15);
+    assert_eq!(panel::wheel_top(15, 20, 5, true), 15);
+    assert_eq!(panel::wheel_top(1, 20, 5, false), 0);
+    assert_eq!(panel::wheel_top(0, 20, 5, false), 0);
+    assert_eq!(panel::wheel_top(3, 2, 5, true), 0);
+}
+
+#[test]
 fn editor_paints_only_body_rows_and_resets_colors_for_header_and_footer() {
     crossterm::style::force_color_output(true);
     let layout = render::Layout::new(&["Body".into()], &[], 40);
