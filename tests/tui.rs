@@ -52,7 +52,7 @@ fn dashboard_scenario(name: &str) {
 }
 
 #[test]
-fn tui_dashboard_selected_details_and_expanded_new_editor() {
+fn tui_dashboard_keeps_details_and_editor_layout_stable() {
     dashboard_scenario("details");
     dashboard_scenario("details_no_color");
     dashboard_scenario("layout_new");

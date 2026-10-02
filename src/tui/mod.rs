@@ -703,20 +703,13 @@ fn compose_inner(
                     && action_ui.is_none()
                     && match mouse.kind {
                         MouseEventKind::ScrollUp | MouseEventKind::ScrollDown => {
-                            dashboard::wheel_area(
-                                size,
-                                target_id.is_some(),
-                                mouse.column,
-                                mouse.row,
-                            )
-                            .is_some()
+                            dashboard::wheel_area(size, mouse.column, mouse.row).is_some()
                         }
                         MouseEventKind::Down(MouseButton::Left) => dashboard::click_target(
                             size,
                             mouse.column,
                             mouse.row,
                             dashboard::HitState {
-                                selected: target_id.is_some(),
                                 rows: &rows,
                                 list_top,
                                 editor_top: top,
@@ -767,7 +760,7 @@ fn compose_inner(
                     MouseEventKind::ScrollUp => false,
                     _ => continue,
                 };
-                match dashboard::wheel_area(size, target_id.is_some(), mouse.column, mouse.row) {
+                match dashboard::wheel_area(size, mouse.column, mouse.row) {
                     Some(dashboard::WheelArea::List(height)) => {
                         list_follow_selected = false;
                         list_top = panel::wheel_top(list_top, list_row_count, height, down);
@@ -791,7 +784,6 @@ fn compose_inner(
                     mouse.column,
                     mouse.row,
                     dashboard::HitState {
-                        selected: target_id.is_some(),
                         rows: &rows,
                         list_top,
                         editor_top: top,
@@ -1277,9 +1269,7 @@ fn compose_inner(
                     && matches!(key.code, KeyCode::PageUp | KeyCode::PageDown)
                 {
                     let area =
-                        dashboard::panes(ratatui::layout::Rect::new(0, 0, size.0, size.1), true)
-                            .details
-                            .expect("selected task has details pane");
+                        dashboard::panes(ratatui::layout::Rect::new(0, 0, size.0, size.1)).details;
                     let page = dashboard::details_height(area).max(1);
                     details_top = if key.code == KeyCode::PageDown {
                         details_top

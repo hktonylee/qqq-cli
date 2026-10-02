@@ -209,9 +209,11 @@ attachments.
 qqq tui
 ```
 
-Top third lists unarchived tasks by default. New drafts use remaining two thirds
-for editor. Selecting task splits screen into three equal parts: list, task
-details/messages, editor. Small terminals retain usable list and editor rows.
+Task list, details/messages and editor stay visible at 35%, 20% and 45% of
+terminal height, rounded to rows. Task list shows unarchived tasks by default.
+Blank drafts show `Select task to view details.` in details pane; selecting or
+saving task keeps pane positions fixed. Small terminals retain usable list and
+editor rows.
 Details show status, priority, parent, timestamps, archive state and ownership;
 latest messages appear first with author and timestamp. Empty message history
 shows `No messages yet.`.

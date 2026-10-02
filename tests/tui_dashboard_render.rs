@@ -36,13 +36,60 @@ fn click(
         column,
         row,
         dashboard::HitState {
-            selected: false,
             rows,
             list_top,
             editor_top,
             layout,
         },
     )
+}
+
+#[test]
+fn blank_draft_keeps_details_pane_and_editor_position() {
+    let layout = render::Layout::new(&["Draft".into()], &[], 72);
+    let chrome = render::Chrome {
+        title: "Editor",
+        title_status_color: None,
+        keys: render::KEYS,
+        message: "",
+    };
+    let mut terminal = Terminal::new(TestBackend::new(72, 24)).unwrap();
+    terminal
+        .draw(|frame| {
+            dashboard::draw(
+                frame,
+                &[],
+                &HashMap::new(),
+                None,
+                dashboard::View {
+                    query: "",
+                    focused: false,
+                    top: &mut 0,
+                    follow_selected: true,
+                    modal_lines: None,
+                    details: None,
+                },
+                render::DashboardEditor {
+                    layout: &layout,
+                    cursor: 0,
+                    top: &mut 0,
+                    chrome: &chrome,
+                    message_is_error: false,
+                    follow_cursor: true,
+                },
+                false,
+            )
+        })
+        .unwrap();
+    let buffer = terminal.backend().buffer();
+    assert!(line(buffer, 8).starts_with("Select task to view details."));
+    assert!(line(buffer, 12).starts_with("---"));
+    assert!(line(buffer, 13).starts_with("Editor"));
+    assert!(line(buffer, 14).starts_with("Draft"));
+    assert_eq!(
+        terminal.get_cursor_position().unwrap(),
+        Position::new(0, 14)
+    );
 }
 
 #[test]
@@ -63,7 +110,7 @@ fn selected_task_renders_details_between_list_and_editor() {
         keys: render::KEYS,
         message: "",
     };
-    let mut terminal = Terminal::new(TestBackend::new(72, 18)).unwrap();
+    let mut terminal = Terminal::new(TestBackend::new(72, 24)).unwrap();
     terminal
         .draw(|frame| {
             dashboard::draw(
@@ -96,14 +143,14 @@ fn selected_task_renders_details_between_list_and_editor() {
         .unwrap();
     let buffer = terminal.backend().buffer();
     assert!(line(buffer, 3).contains("Selected"));
-    assert!(line(buffer, 6).starts_with("Task #1"));
-    assert!(line(buffer, 9).starts_with("Latest message"));
-    assert!(line(buffer, 11).starts_with("---"));
-    assert!(line(buffer, 12).starts_with("Editor"));
-    assert!(line(buffer, 13).starts_with("Dirty draft"));
+    assert!(line(buffer, 8).starts_with("Task #1"));
+    assert!(line(buffer, 11).starts_with("Latest message"));
+    assert!(line(buffer, 12).starts_with("---"));
+    assert!(line(buffer, 13).starts_with("Editor"));
+    assert!(line(buffer, 14).starts_with("Dirty draft"));
     assert_eq!(
         terminal.get_cursor_position().unwrap(),
-        Position::new(0, 13)
+        Position::new(0, 14)
     );
 }
 
@@ -150,18 +197,18 @@ fn details_scroll_clamps_without_moving_editor() {
             )
         })
         .unwrap();
-    assert_eq!(details_top, 5);
+    assert_eq!(details_top, 7);
     assert_eq!(editor_top, 0);
-    assert!(line(terminal.backend().buffer(), 6).starts_with("Detail 5"));
-    assert!(line(terminal.backend().buffer(), 13).starts_with("Draft"));
+    assert!(line(terminal.backend().buffer(), 6).starts_with("Detail 7"));
+    assert!(line(terminal.backend().buffer(), 11).starts_with("Draft"));
 }
 
 #[test]
 fn selected_task_geometry_and_details_hit_test_share_rectangles() {
     use ratatui::layout::Rect;
-    for height in [8, 12, 18, 24] {
-        let panes = dashboard::panes(Rect::new(0, 0, 72, height), true);
-        let details = panes.details.unwrap();
+    for height in 8..=100 {
+        let panes = dashboard::panes(Rect::new(0, 0, 72, height));
+        let details = panes.details;
         assert!(panes.list.height >= 4);
         assert!(details.height >= 1);
         assert!(panes.editor.height >= 3);
@@ -169,12 +216,16 @@ fn selected_task_geometry_and_details_hit_test_share_rectangles() {
             panes.list.height + details.height + panes.editor.height,
             height
         );
-        if height >= 12 {
-            assert_eq!(panes.list.height, height / 3);
-            assert_eq!(details.height, height / 3);
+        for (screen, list_height, details_height) in
+            [(8, 4, 1), (18, 6, 4), (24, 8, 5), (100, 35, 20)]
+        {
+            if height == screen {
+                assert_eq!(panes.list.height, list_height);
+                assert_eq!(details.height, details_height);
+            }
         }
         assert_eq!(
-            dashboard::wheel_area((72, height), true, 5, details.y),
+            dashboard::wheel_area((72, height), 5, details.y),
             Some(dashboard::WheelArea::Details(dashboard::details_height(
                 details
             )))
@@ -187,7 +238,6 @@ fn selected_task_geometry_and_details_hit_test_share_rectangles() {
                 5,
                 details.y,
                 dashboard::HitState {
-                    selected: true,
                     rows: &[],
                     list_top: 0,
                     editor_top: 0,
@@ -202,7 +252,6 @@ fn selected_task_geometry_and_details_hit_test_share_rectangles() {
                 2,
                 panes.editor.y + 1,
                 dashboard::HitState {
-                    selected: true,
                     rows: &[],
                     list_top: 0,
                     editor_top: 0,
@@ -215,35 +264,44 @@ fn selected_task_geometry_and_details_hit_test_share_rectangles() {
 }
 
 #[test]
-fn new_draft_uses_one_third_for_task_list() {
+fn new_draft_hit_test_keeps_three_panes() {
     assert_eq!(
-        dashboard::wheel_area((72, 18), false, 5, 3),
+        dashboard::wheel_area((72, 18), 5, 3),
         Some(dashboard::WheelArea::List(3))
     );
     assert_eq!(
-        dashboard::wheel_area((72, 18), false, 5, 7),
-        Some(dashboard::WheelArea::Editor(10))
+        dashboard::wheel_area((72, 18), 5, 7),
+        Some(dashboard::WheelArea::Details(3))
+    );
+    assert_eq!(
+        dashboard::wheel_area((72, 18), 5, 11),
+        Some(dashboard::WheelArea::Editor(6))
     );
 }
 
 #[test]
 fn wheel_hit_test_uses_list_editor_and_excludes_edges() {
     assert_eq!(
-        dashboard::wheel_area((72, 24), false, 5, 3),
+        dashboard::wheel_area((72, 24), 5, 3),
         Some(dashboard::WheelArea::List(5))
     );
     assert_eq!(
-        dashboard::wheel_area((72, 24), false, 5, 1),
+        dashboard::wheel_area((72, 24), 5, 1),
         Some(dashboard::WheelArea::List(5))
     );
-    assert_eq!(dashboard::wheel_area((72, 24), false, 5, 7), None);
+    assert_eq!(dashboard::wheel_area((72, 24), 5, 7), None);
     assert_eq!(
-        dashboard::wheel_area((72, 24), false, 5, 10),
-        Some(dashboard::WheelArea::Editor(14))
+        dashboard::wheel_area((72, 24), 5, 10),
+        Some(dashboard::WheelArea::Details(4))
     );
-    assert_eq!(dashboard::wheel_area((72, 24), false, 5, 23), None);
-    assert_eq!(dashboard::wheel_area((72, 24), false, 72, 3), None);
-    assert_eq!(dashboard::wheel_area((10, 7), false, 5, 3), None);
+    assert_eq!(dashboard::wheel_area((72, 24), 5, 12), None);
+    assert_eq!(
+        dashboard::wheel_area((72, 24), 5, 14),
+        Some(dashboard::WheelArea::Editor(9))
+    );
+    assert_eq!(dashboard::wheel_area((72, 24), 5, 23), None);
+    assert_eq!(dashboard::wheel_area((72, 24), 72, 3), None);
+    assert_eq!(dashboard::wheel_area((10, 7), 5, 3), None);
 }
 
 #[test]
@@ -265,9 +323,9 @@ fn click_target_maps_rendered_task_rows_and_editor_caret() {
     assert_eq!(hit(70, 5, 0, 0), Some(dashboard::ClickTarget::Task(2)));
     assert_eq!(hit(5, 2, 2, 0), Some(dashboard::ClickTarget::Task(1)));
     assert_eq!(hit(5, 3, 2, 0), Some(dashboard::ClickTarget::Task(2)));
-    assert_eq!(hit(2, 9, 0, 0), Some(dashboard::ClickTarget::Editor(2)));
-    assert_eq!(hit(10, 9, 0, 0), Some(dashboard::ClickTarget::Editor(3)));
-    assert_eq!(hit(1, 9, 0, 1), Some(dashboard::ClickTarget::Editor(5)));
+    assert_eq!(hit(2, 14, 0, 0), Some(dashboard::ClickTarget::Editor(2)));
+    assert_eq!(hit(10, 14, 0, 0), Some(dashboard::ClickTarget::Editor(3)));
+    assert_eq!(hit(1, 14, 0, 1), Some(dashboard::ClickTarget::Editor(5)));
 }
 
 #[test]
@@ -413,7 +471,7 @@ fn manual_editor_scroll_keeps_viewport_then_keyboard_reveals_caret() {
         })
         .unwrap();
     assert_eq!(top, 0);
-    assert!(line(terminal.backend().buffer(), 6).starts_with("A"));
+    assert!(line(terminal.backend().buffer(), 10).starts_with("A"));
     assert_eq!(terminal.get_cursor_position().unwrap(), Position::new(0, 0));
     terminal
         .draw(|frame| {
@@ -442,8 +500,8 @@ fn manual_editor_scroll_keeps_viewport_then_keyboard_reveals_caret() {
             )
         })
         .unwrap();
-    assert_eq!(top, 1);
-    assert!(line(terminal.backend().buffer(), 6).starts_with("B"));
+    assert_eq!(top, 5);
+    assert!(line(terminal.backend().buffer(), 10).starts_with("F"));
     assert_eq!(
         terminal.get_cursor_position().unwrap(),
         Position::new(1, 14)
@@ -499,10 +557,10 @@ fn manual_offsets_clamp_after_resize() {
             )
         })
         .unwrap();
-    assert_eq!(list_top, 2);
+    assert_eq!(list_top, 1);
     assert_eq!(editor_top, 0);
-    assert!(line(terminal.backend().buffer(), 2).contains("Task 2"));
-    assert!(line(terminal.backend().buffer(), 25).starts_with("A"));
+    assert!(line(terminal.backend().buffer(), 2).contains("Task 1"));
+    assert!(line(terminal.backend().buffer(), 21).starts_with("A"));
 }
 
 #[test]
@@ -545,7 +603,7 @@ fn filter_bar_shows_empty_result_and_takes_cursor_only_while_focused() {
     let buffer = terminal.backend().buffer();
     assert!(line(buffer, 1).starts_with("Filter: absent"));
     assert!(line(buffer, 2).starts_with("No matching tasks."));
-    assert!(line(buffer, 16).starts_with("qqq task editor"));
+    assert!(line(buffer, 13).starts_with("qqq task editor"));
     assert_eq!(
         terminal.get_cursor_position().unwrap(),
         Position::new(14, 1)
@@ -686,12 +744,12 @@ fn split_dashboard_keeps_list_above_editor() {
     assert!(line(buffer, 1).starts_with("Filter: "));
     assert!(line(buffer, 2).starts_with("  ID     STATUS"));
     assert!(line(buffer, 3).starts_with("> 1      New"));
-    assert!(line(buffer, 16).starts_with("qqq task editor"));
-    assert!(line(buffer, 17).starts_with("Draft"));
+    assert!(line(buffer, 13).starts_with("qqq task editor"));
+    assert!(line(buffer, 14).starts_with("Draft"));
     assert!(line(buffer, 23).starts_with("Ctrl-S"));
     assert_eq!(
         terminal.get_cursor_position().unwrap(),
-        Position::new(0, 17)
+        Position::new(0, 14)
     );
 }
 
@@ -871,7 +929,7 @@ fn status_selection_and_editor_images_use_distinct_colors() {
         for y in [0, 1, 2, 9] {
             assert_eq!(buffer[(71, y)].bg, Color::Reset);
         }
-        let body_y = if selected.is_some() { 21 } else { 11 };
+        let body_y = 18;
         assert_eq!(buffer[(0, body_y)].fg, Color::Indexed(252));
         assert_eq!(buffer[(0, body_y)].bg, Color::Indexed(236));
         assert_eq!(buffer[(1, body_y)].fg, Color::Indexed(81));
@@ -927,9 +985,9 @@ fn dashboard_paste_label_uses_gold_while_body_stays_neutral() {
         })
         .unwrap();
     let buffer = terminal.backend().buffer();
-    assert_eq!(buffer[(0, 9)].fg, Color::Indexed(252));
-    assert_eq!(buffer[(1, 9)].fg, Color::Indexed(222));
-    assert_eq!(buffer[(28, 9)].fg, Color::Indexed(252));
+    assert_eq!(buffer[(0, 14)].fg, Color::Indexed(252));
+    assert_eq!(buffer[(1, 14)].fg, Color::Indexed(222));
+    assert_eq!(buffer[(28, 14)].fg, Color::Indexed(252));
 }
 
 #[test]
