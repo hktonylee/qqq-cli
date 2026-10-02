@@ -612,7 +612,7 @@ fn compose_inner(
                     false,
                     Some(usize::from(size.0).saturating_sub(2)),
                 );
-                panel::rows(&tree)
+                panel::rows(&tree, usize::from(size.0).saturating_sub(2))
             };
             list_row_count = rows.len();
             visible_ids = Some(panel::visible_ids(&rows));
@@ -1391,6 +1391,34 @@ fn compose_inner(
                 }
             }
             _ => (),
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::output::{Format, render};
+    use serde_json::json;
+
+    #[test]
+    fn tui_preview_cap_handles_wrapped_text_and_narrow_tree_prefixes() {
+        let tasks = json!([
+            {"id":1,"description":"ABCDEFGHIJKLMN","status":"new","parent_id":null},
+            {"id":2,"description":"Child first\nChild second\nChild third\nHidden","status":"new","parent_id":1}
+        ]);
+        for width in [24, 20, 10] {
+            let tree = render(Format::Tasks, &tasks, false, Some(width));
+            let rows = super::panel::rows(&tree, width);
+            for id in [1, 2] {
+                let preview: Vec<_> = rows.iter().filter(|row| row.task_id == Some(id)).collect();
+                assert_eq!(preview.len(), 3, "task {id}, width {width}");
+                assert!(
+                    preview[2].text.ends_with("..."),
+                    "task {id}, width {width}: {}",
+                    preview[2].text
+                );
+                assert!(unicode_width::UnicodeWidthStr::width(preview[2].text.as_str()) <= width);
+            }
         }
     }
 }

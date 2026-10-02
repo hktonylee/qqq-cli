@@ -90,6 +90,7 @@ fn navigation_follows_tree_order_instead_of_numeric_ids() {
 fn visible_navigation_uses_displayed_rows_once_per_task() {
     let rows = panel::rows(
         "ID STATUS TASK\n1 New Parent\n4 New Child\n  Wrapped detail\n2 New Other\n3 New Last",
+        80,
     );
     assert_eq!(panel::visible_ids(&rows), vec![1, 4, 2, 3]);
 }

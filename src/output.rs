@@ -268,6 +268,7 @@ fn task_tree(
     columns: Option<usize>,
     show_priority: bool,
     oneline: bool,
+    wrap_narrow: bool,
 ) -> String {
     if tasks.is_empty() {
         return "No tasks yet.".to_owned();
@@ -343,7 +344,9 @@ fn task_tree(
         };
         let available = columns
             .and_then(|width| width.checked_sub(first_prefix.width()))
-            .filter(|&width| width > 0);
+            .filter(|&width| width > 0)
+            // TUI preview cap needs hidden rows even when metadata fills pane.
+            .or_else(|| (wrap_narrow && columns.is_some()).then_some(1));
         let row_color = status_color(task, color);
         if let Some(width) = available {
             let mut first = true;
@@ -473,12 +476,14 @@ pub fn render(format: Format, value: &Value, color: bool, columns: Option<usize>
             columns,
             false,
             false,
+            true,
         ),
         Format::PriorityTasks => task_tree(
             value.as_array().expect("task list is an array"),
             color,
             columns,
             true,
+            false,
             false,
         ),
         Format::OnelinePriorityTasks => task_tree(
@@ -487,6 +492,7 @@ pub fn render(format: Format, value: &Value, color: bool, columns: Option<usize>
             columns,
             true,
             true,
+            false,
         ),
         Format::Detail => detail::render(value, color),
         Format::Message => format!(
@@ -559,7 +565,7 @@ mod tests {
         assert!(!piped.contains("more root"));
         assert!(!piped.contains("more child"));
 
-        let narrow = render(Format::Tasks, &tasks, false, Some(20));
+        let narrow = render(Format::PriorityTasks, &tasks, false, Some(20));
         assert_eq!(narrow.lines().count(), 4);
         assert!(!narrow.contains("more root"));
     }

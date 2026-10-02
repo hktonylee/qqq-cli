@@ -18,6 +18,7 @@ fn chrome(message: &str) -> render::Chrome<'_> {
 fn dashboard_rows_keep_task_identity_across_continuations() {
     let rows = panel::rows(
         "ID     STATUS       TASK\n1      New          One\n                    detail\n2      New          Two",
+        80,
     );
     assert_eq!(rows[0].task_id, None);
     assert_eq!(rows[1].task_id, Some(1));
@@ -29,9 +30,57 @@ fn dashboard_rows_keep_task_identity_across_continuations() {
 }
 
 #[test]
+fn dashboard_task_preview_caps_each_task_at_three_rows() {
+    let rows = panel::rows(
+        "ID STATUS TASK\n1 New Parent\n  second\n  third\n  hidden\n4 New Child\n  child second\n  child third\n  child hidden\n2 New Other",
+        80,
+    );
+    assert_eq!(rows.len(), 8);
+    assert_eq!(rows[3].text, "  third...");
+    assert_eq!(rows[6].text, "  child third...");
+    assert!(!rows.iter().any(|row| row.text.contains("hidden")));
+    assert_eq!(panel::visible_ids(&rows), vec![1, 4, 2]);
+    assert_eq!(rows[3].task_id, Some(1));
+    assert_eq!(rows[6].task_id, Some(4));
+    assert_eq!(panel::scroll_to(&rows, Some(2), 0, 3), 5);
+}
+
+#[test]
+fn dashboard_task_preview_keeps_exactly_three_rows_without_ellipsis() {
+    let tree = "ID STATUS TASK\n1 New First\n  second\n  third\n2 New Last";
+    let rows = panel::rows(tree, 80);
+    assert_eq!(
+        rows.iter().map(|row| row.text.as_str()).collect::<Vec<_>>(),
+        tree.lines().collect::<Vec<_>>()
+    );
+}
+
+#[test]
+fn dashboard_task_preview_ellipsis_fits_without_splitting_graphemes() {
+    for (third, expected) in [
+        ("  界界界界界界", "  界界界界..."),
+        ("  👩‍💻👩‍💻👩‍💻👩‍💻👩‍💻👩‍💻", "  👩‍💻👩‍💻👩‍💻👩‍💻..."),
+        (
+            "  e\u{301}e\u{301}e\u{301}e\u{301}e\u{301}e\u{301}e\u{301}e\u{301}e\u{301}e\u{301}",
+            "  e\u{301}e\u{301}e\u{301}e\u{301}e\u{301}e\u{301}e\u{301}e\u{301}e\u{301}...",
+        ),
+    ] {
+        let tree = format!("ID STATUS TASK\n1 New First\n  second\n{third}\n  hidden");
+        let rows = panel::rows(&tree, 14);
+        assert_eq!(rows[3].text, expected);
+        assert!(unicode_width::UnicodeWidthStr::width(rows[3].text.as_str()) <= 14);
+    }
+    for width in 0..=3 {
+        let rows = panel::rows("1 New First\n  second\n  third\n  hidden", width);
+        assert_eq!(rows[2].text, ".".repeat(width));
+    }
+}
+
+#[test]
 fn dashboard_new_draft_follows_newest_child_not_last_tree_row() {
     let rows = panel::rows(
         "ID     STATUS       TASK\n1      New          Parent\n21     New          New child\n2      New          Older root\n20     New          Last root",
+        80,
     );
     assert_eq!(panel::scroll_to(&rows, None, 0, 2), 1);
 }

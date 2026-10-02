@@ -1,4 +1,6 @@
 use std::collections::{HashMap, HashSet};
+use unicode_segmentation::UnicodeSegmentation;
+use unicode_width::UnicodeWidthStr;
 
 pub struct FilterTask<'a> {
     pub id: i64,
@@ -61,22 +63,43 @@ pub fn visible_ids(rows: &[ListRow]) -> Vec<i64> {
     ids
 }
 
-pub fn rows(tree: &str) -> Vec<ListRow> {
+pub fn rows(tree: &str, width: usize) -> Vec<ListRow> {
     let mut task_id = None;
-    tree.lines()
-        .map(|line| {
-            if line.as_bytes().first().is_some_and(u8::is_ascii_digit) {
-                task_id = line
-                    .split_whitespace()
-                    .next()
-                    .and_then(|value| value.parse().ok());
+    let mut task_rows = 0;
+    let mut rows: Vec<ListRow> = Vec::new();
+    for line in tree.lines() {
+        if line.as_bytes().first().is_some_and(u8::is_ascii_digit) {
+            task_id = line
+                .split_whitespace()
+                .next()
+                .and_then(|value| value.parse().ok());
+            task_rows = 0;
+        }
+        if task_id.is_some() {
+            task_rows += 1;
+            if task_rows > 3 {
+                if task_rows == 4 {
+                    let last = rows.last_mut().expect("task has three preview rows");
+                    let mut cells = 0;
+                    last.text = last
+                        .text
+                        .graphemes(true)
+                        .take_while(|grapheme| {
+                            cells += grapheme.width();
+                            cells <= width.saturating_sub(3)
+                        })
+                        .collect();
+                    last.text.push_str(&".".repeat(width.min(3)));
+                }
+                continue;
             }
-            ListRow {
-                text: line.to_owned(),
-                task_id,
-            }
-        })
-        .collect()
+        }
+        rows.push(ListRow {
+            text: line.to_owned(),
+            task_id,
+        });
+    }
+    rows
 }
 
 pub fn scroll_to(rows: &[ListRow], selected: Option<i64>, top: usize, height: usize) -> usize {

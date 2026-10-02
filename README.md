@@ -202,6 +202,8 @@ qqq tui
 ```
 
 Upper panel lists unarchived tasks by default; lower panel edits current task.
+Each task preview shows at most three wrapped lines; clipped previews end with
+`...`. Editor loads full description, including hidden lines.
 Selection underlines task text; plain mode uses `>` marker.
 Shift-Up/Down selects tasks in displayed tree order, then blank draft. Ctrl-S
 updates selected task or creates new task. By default, saved task stays open for

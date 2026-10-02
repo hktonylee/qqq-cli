@@ -1005,13 +1005,14 @@ with tempfile.TemporaryDirectory(prefix="qqq-dashboard-test-") as folder:
             assert visible.text().splitlines()[9].startswith("Line10"), visible.text()
             clear_capture()
             send(b"\x1b[<65;6;4M" * 10)
-            wait_visible(lambda: "Line11" in visible.text().splitlines()[2])
+            wait_visible(lambda: "Task 18" in visible.text().splitlines()[2]
+                         and "Line03..." in visible.text().splitlines()[6])
 
             fcntl.ioctl(slave, termios.TIOCSWINSZ, struct.pack("HHHH", 24, 72, 0, 0))
             visible.resize(72, 24)
             clear_capture()
             os.kill(child.pid, signal.SIGWINCH)
-            wait_visible(lambda: "Line07" in visible.text().splitlines()[2]
+            wait_visible(lambda: "Task 14" in visible.text().splitlines()[2]
                          and visible.text().splitlines()[13].startswith("Line06"))
             time.sleep(0.1)
             clear_capture()
@@ -1024,14 +1025,15 @@ with tempfile.TemporaryDirectory(prefix="qqq-dashboard-test-") as folder:
             clear_capture()
             send(b"y")
             read_until(b"task #19")
-            wait_visible(lambda: "Task 19" in visible.text().splitlines()[2])
+            wait_visible(lambda: "Task 14" in visible.text().splitlines()[2]
+                         and visible.text().splitlines()[13].startswith("Task 19"))
             assert cli("list") == initial_tasks
             clear_capture()
             send(b"\x1b[1;2A" * 18)
             wait_visible(lambda: "task #1 (" in visible.text().splitlines()[12])
             clear_capture()
             send(b"\x1b[<65;6;4M" * 10)
-            wait_visible(lambda: "Line07" in visible.text().splitlines()[2])
+            wait_visible(lambda: "Task 14" in visible.text().splitlines()[2])
             clear_capture()
             send(b"\x1b[1;2A")
             read_until(b"No older task")

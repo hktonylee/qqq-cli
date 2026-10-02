@@ -46,6 +46,7 @@ fn wheel_hit_test_uses_list_editor_and_excludes_edges() {
 fn click_target_maps_rendered_task_rows_and_editor_caret() {
     let rows = panel::rows(
         "ID     STATUS       TASK\n1      New          Parent\n                    detail\n2      New          └── Child",
+        70,
     );
     let layout = render::Layout::new(
         &["a", "b", "c", "\n", "d", "e", "f"].map(str::to_owned),
@@ -67,7 +68,7 @@ fn click_target_maps_rendered_task_rows_and_editor_caret() {
 
 #[test]
 fn click_target_ignores_non_content_and_out_of_bounds() {
-    let rows = panel::rows("ID     STATUS       TASK\n1      New          First");
+    let rows = panel::rows("ID     STATUS       TASK\n1      New          First", 70);
     let layout = render::Layout::new(&["abc".into()], &[], 72);
     for (column, row) in [
         (5, 0),
@@ -101,7 +102,7 @@ fn manual_list_scroll_does_not_snap_to_selected_task() {
             .collect::<Vec<_>>()
             .join("\n")
     );
-    let rows = panel::rows(&tree);
+    let rows = panel::rows(&tree, 70);
     let layout = render::Layout::new(&["Draft".into()], &[], 72);
     let chrome = render::Chrome {
         title: "Editor",
@@ -246,13 +247,16 @@ fn manual_editor_scroll_keeps_viewport_then_keyboard_reveals_caret() {
 
 #[test]
 fn manual_offsets_clamp_after_resize() {
-    let rows = panel::rows(&format!(
-        "ID     STATUS       TASK\n{}",
-        (1..=10)
-            .map(|id| format!("{id}      New          Task {id}"))
-            .collect::<Vec<_>>()
-            .join("\n")
-    ));
+    let rows = panel::rows(
+        &format!(
+            "ID     STATUS       TASK\n{}",
+            (1..=10)
+                .map(|id| format!("{id}      New          Task {id}"))
+                .collect::<Vec<_>>()
+                .join("\n")
+        ),
+        70,
+    );
     let layout = render::Layout::new(&["A\nB\nC\nD\nE\nF\nG\nH\nI\nJ".into()], &[], 72);
     let chrome = render::Chrome {
         title: "Editor",
@@ -390,7 +394,7 @@ fn small_dashboard_keeps_filter_row_and_plain_style() {
 
 #[test]
 fn minimum_dashboard_height_still_shows_selected_task() {
-    let rows = panel::rows("ID     STATUS       TASK\n1      New          First");
+    let rows = panel::rows("ID     STATUS       TASK\n1      New          First", 70);
     let layout = render::Layout::new(&["Draft".into()], &[], 12);
     let chrome = render::Chrome {
         title: "Editor",
@@ -430,7 +434,7 @@ fn minimum_dashboard_height_still_shows_selected_task() {
 
 #[test]
 fn split_dashboard_keeps_list_above_editor() {
-    let rows = panel::rows("ID     STATUS       TASK\n1      New          First");
+    let rows = panel::rows("ID     STATUS       TASK\n1      New          First", 70);
     let layout = render::Layout::new(&["Draft".into()], &[], 72);
     let chrome = render::Chrome {
         title: "qqq task editor - task #1 (New)",
@@ -522,7 +526,7 @@ fn narrow_dashboard_shows_plain_resize_hint() {
 
 #[test]
 fn no_color_dashboard_keeps_default_cell_styles() {
-    let rows = panel::rows("ID     STATUS       TASK\n1      Error        Failed");
+    let rows = panel::rows("ID     STATUS       TASK\n1      Error        Failed", 70);
     let layout = render::Layout::new(&["Draft".into()], &[], 72);
     let chrome = render::Chrome {
         title: "qqq task editor",
@@ -571,6 +575,7 @@ fn no_color_dashboard_keeps_default_cell_styles() {
 fn status_selection_and_editor_images_use_distinct_colors() {
     let rows = panel::rows(
         "ID     STATUS       TASK\n1      New          First\n2      In progress  Working\n3      Completed    Done\n4      Error        Failed",
+        70,
     );
     let layout = render::Layout::new(
         &["A".into(), "[Image #1: sample.png]".into(), " tail".into()],
