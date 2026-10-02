@@ -16,6 +16,6 @@ human summaries. CLI recovers staged image dirs after DB open, before commands.
 - [x] Document backup guidance and permanent deletion behavior.
 - [x] Run full tests, fmt, Clippy, diff check; request read-only review and fix
   findings.
-- [ ] Fast-forward local master, rerun integrated checks, install CLI, complete
+- [x] Fast-forward local master, rerun integrated checks, install CLI, complete
   queue task #69, remove owned worktree/branch, then call `qqq next --wait`
   once.
