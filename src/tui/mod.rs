@@ -527,7 +527,7 @@ fn compose_inner(
             let details_rows = match target_id {
                 Some(id) => match tasks.iter().find(|task| task.id == id) {
                     Some(task) => details::rows(task, &db.task_messages(id)?, usize::from(size.0)),
-                    None => vec![format!("Task #{id} unavailable.")],
+                    None => details::unavailable(id, usize::from(size.0)),
                 },
                 None => Vec::new(),
             };

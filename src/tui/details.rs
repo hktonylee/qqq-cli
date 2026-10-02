@@ -1,5 +1,9 @@
 use crate::db::{Task, TaskMessage};
 
+pub fn unavailable(id: i64, width: usize) -> Vec<String> {
+    super::render::Layout::new(&[format!("Task #{id} unavailable.")], &[], width).rows
+}
+
 pub fn rows(task: &Task, messages: &[TaskMessage], width: usize) -> Vec<String> {
     let parent = task
         .parent_id
@@ -47,7 +51,7 @@ pub fn rows(task: &Task, messages: &[TaskMessage], width: usize) -> Vec<String> 
 
 #[cfg(test)]
 mod tests {
-    use super::rows;
+    use super::{rows, unavailable};
     use crate::db::{Task, TaskMessage};
 
     fn task() -> Task {
@@ -68,6 +72,14 @@ mod tests {
                 orchestrator_session: Some("default".into()),
             },
         }
+    }
+
+    #[test]
+    fn unavailable_task_notice_wraps_at_minimum_width() {
+        let lines = unavailable(12345, 12);
+        assert!(lines.len() > 1);
+        assert!(lines.iter().all(|row| row.len() <= 12));
+        assert_eq!(lines.concat(), "Task #12345 unavailable.");
     }
 
     #[test]

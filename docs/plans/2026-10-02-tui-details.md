@@ -56,7 +56,7 @@ let details_height = if selected {
 - [x] Add failing PTY scenarios before connecting missing behaviors: selected details/messages, new-draft expanded editor, independent details scroll, live message/status refresh with dirty draft, selection reset/no stale details, deleted selected task and no messages. Verify Unicode/control safety through focused formatter tests where screen emulator supports ASCII only.
 - [x] Run `cargo test --locked --test tui`; investigate failures, preserving assertions rather than bypassing scenarios.
 - [x] Update README task-TUI section with thirds, new-draft expansion, details content and PgUp/PgDn/wheel scrolling.
-- [ ] Run `cargo fmt --check`, Clippy and full `cargo test --locked`; review diff through requesting-code-review skill. Report any intermittent PTY failures separately from fresh passing evidence.
+- [x] Run `cargo fmt --check`, Clippy and full `cargo test --locked`; review diff through requesting-code-review skill. Report any intermittent PTY failures separately from fresh passing evidence.
 - [ ] Commit completed work; use finishing-a-development-branch workflow to rebase onto current `master`, resolve conflicts in worktree, fast-forward local master and verify integrated result. Refresh installed CLI, smoke test, complete qqq task #89, clean owned worktree/branch, resume blocking `qqq next --wait --local --json`.
 
 ## Verification Record
@@ -65,4 +65,7 @@ Geometry/data checkpoint committed as `ff8a361`. Focused formatter, DB, render
 and geometry checks: 55 passed. Full TUI suite: 63 passed. Clippy all targets
 with warnings denied and formatting check passed. Initial new PTY assertions
 observed partial redraws; predicates now wait for stale details to clear. Full
-suite: 435 passed across 35 test binaries. Independent review pending.
+suite: 435 passed across 35 test binaries. Review found narrow-screen clipping
+in deleted-task notice; shared wrapping and minimum-width regression check fix
+it. Focused notice/refresh tests passed; re-review found no remaining issues.
+Combined verification after rebasing onto task #88 remains pending.
