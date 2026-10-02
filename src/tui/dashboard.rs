@@ -7,10 +7,36 @@ use ratatui::{
     widgets::Paragraph,
 };
 use std::collections::HashMap;
+use unicode_segmentation::UnicodeSegmentation;
+use unicode_width::UnicodeWidthStr;
 
 const ACCENT: Color = Color::Indexed(81);
 const BODY_FG: Color = Color::Indexed(252);
 const BODY_BG: Color = Color::Indexed(236);
+
+pub struct FilterView<'a> {
+    pub query: &'a str,
+    pub focused: bool,
+}
+
+fn filter_text(query: &str, width: usize) -> (String, u16) {
+    const LABEL: &str = "Filter: ";
+    let available = width.saturating_sub(LABEL.len());
+    let mut suffix = Vec::new();
+    let mut used = 0;
+    for grapheme in query.graphemes(true).rev() {
+        let cells = grapheme.width();
+        if used + cells > available {
+            break;
+        }
+        suffix.push(grapheme);
+        used += cells;
+    }
+    suffix.reverse();
+    let text = format!("{LABEL}{}", suffix.concat());
+    let cursor = (LABEL.len() + used).min(width.saturating_sub(1)) as u16;
+    (text, cursor)
+}
 
 fn row_style(status: Option<&str>, selected: bool, color: bool) -> Style {
     if !color {
@@ -115,6 +141,7 @@ pub fn draw(
     statuses: &HashMap<i64, &str>,
     selected: Option<i64>,
     list_top: &mut usize,
+    filter: FilterView<'_>,
     editor_state: render::DashboardEditor<'_>,
     color: bool,
 ) {
@@ -133,7 +160,7 @@ pub fn draw(
     let parts =
         Layout::vertical([Constraint::Percentage(50), Constraint::Percentage(50)]).split(area);
     let list = parts[0];
-    let list_height = usize::from(list.height.saturating_sub(2));
+    let list_height = usize::from(list.height.saturating_sub(3));
     *list_top = panel::scroll_to(rows, selected, *list_top, list_height);
     let heading_style = if color {
         Style::default().fg(ACCENT).add_modifier(Modifier::BOLD)
@@ -144,6 +171,24 @@ pub fn draw(
         Paragraph::new("qqq tasks").style(heading_style),
         Rect::new(list.x, list.y, list.width, 1),
     );
+    let (filter_label, filter_cursor) = filter_text(filter.query, usize::from(list.width));
+    let filter_style = if color && filter.focused {
+        Style::default().fg(ACCENT).add_modifier(Modifier::BOLD)
+    } else if color {
+        Style::default().fg(Color::Gray)
+    } else {
+        Style::default()
+    };
+    frame.render_widget(
+        Paragraph::new(filter_label).style(filter_style),
+        Rect::new(list.x, list.y + 1, list.width, 1),
+    );
+    if rows.is_empty() {
+        frame.render_widget(
+            Paragraph::new("No matching tasks."),
+            Rect::new(list.x, list.y + 2, list.width, 1),
+        );
+    }
     for (offset, row) in rows.iter().skip(*list_top).take(list_height).enumerate() {
         let is_selected = selected.is_some() && row.task_id == selected;
         let marker = if is_selected { "> " } else { "  " };
@@ -154,7 +199,7 @@ pub fn draw(
         );
         frame.render_widget(
             Paragraph::new(format!("{marker}{}", row.text)).style(style),
-            Rect::new(list.x, list.y + 1 + offset as u16, list.width, 1),
+            Rect::new(list.x, list.y + 2 + offset as u16, list.width, 1),
         );
     }
     let separator_style = if color {
@@ -167,4 +212,7 @@ pub fn draw(
         Rect::new(list.x, list.y + list.height - 1, list.width, 1),
     );
     editor(frame, parts[1], editor_state, color);
+    if filter.focused {
+        frame.set_cursor_position((list.x + filter_cursor, list.y + 1));
+    }
 }

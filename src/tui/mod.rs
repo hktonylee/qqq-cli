@@ -297,6 +297,10 @@ fn compose_inner(
                         &statuses,
                         target_id,
                         &mut list_top,
+                        dashboard::FilterView {
+                            query: "",
+                            focused: false,
+                        },
                         render::DashboardEditor {
                             layout: &layout,
                             cursor: draft.cursor(),

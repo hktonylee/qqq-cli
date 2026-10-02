@@ -13,8 +13,8 @@
 
 ### Task 2: Dashboard layout
 
-- [ ] Add failing Ratatui render tests for visible filter bar, focus cursor, empty state, hidden selection, resize, and no-color cells.
-- [ ] Draw filter bar under heading; reserve row in list scrolling; show empty message. Run focused tests and commit.
+- [x] Add failing Ratatui render tests for visible filter bar, focus cursor, empty state, hidden selection, resize, and no-color cells.
+- [x] Draw filter bar under heading; reserve row in list scrolling; show empty message. Run focused tests and commit.
 
 ### Task 3: Keyboard flow and PTY
 
