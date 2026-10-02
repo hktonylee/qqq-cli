@@ -54,13 +54,14 @@ qqq list --status new --status error
 qqq list --query "parser" --status in_progress --all
 qqq list --watch
 qqq list --watch --json
+qqq list --include-archived
 ```
 
-`list` shows status, priority, and dependency tree in stable ID order. In a terminal with a known width, it
-shows full descriptions with wrapped, aligned continuation lines; piped output
-keeps first-line previews. `show` adds messages, images, ownership history and
-Herdr link. Negative indexes work with `show` and `edit`; `-1` selects newest
-task.
+`list` shows status, priority, and dependency tree in stable ID order. In a
+terminal with a known width, it shows full descriptions with wrapped, aligned
+continuation lines; piped output keeps first-line previews. `show` adds
+messages, images, ownership history and Herdr link. Negative indexes work with
+`show`, `edit`, `archive`, and `unarchive`; `-1` selects newest task.
 
 `--max-completed N` keeps N most recent completions plus unfinished tasks;
 `0` hides completed tasks. Hidden parents display children as roots. `--all`
@@ -77,6 +78,13 @@ results return `[]` in JSON or `No matching tasks.` in human output.
 
 `--watch` prints initial list, then refreshes after DB commits. Terminal output
 redraws; pipes, `TERM=dumb` and JSON append snapshots. Ctrl-C stops watching.
+
+Default list, watch, TUI, and claim queue hide archived tasks. Use
+`list --include-archived`, `list --watch --include-archived`, or
+`tui --include-archived` to browse them. Human lists label archived rows
+`[archived]`; JSON includes `archived: true` without changing description.
+`--all` changes completed-task limit only; hidden archived completions do not
+consume that limit.
 
 Global `--json` works before or after commands. JSON lists stay flat, preserve
 full descriptions and `parent_id`; watch prints one array per line. Empty lists
@@ -100,6 +108,24 @@ Higher priority claims first among ready new tasks; equal priority uses oldest
 ID. `list` stays in ID/dependency order. Editing priority on active, completed,
 or error tasks keeps status and ownership metadata; an already-owned task still
 returns to its owner before new claims.
+
+## Archive and restore
+
+```sh
+qqq archive 12
+qqq list --include-archived
+qqq show 12
+qqq unarchive 12
+```
+
+Archive keeps task status, description, priority, messages, images, ownership
+history, and dependencies. `show`, `edit`, messages, and image export still work
+by ID. Archive/unarchive add history events; repeated commands change nothing.
+Events record supplied `--session` or `cli` when absent. In-progress tasks
+cannot be archived. An unfinished parent cannot be archived while a visible
+unfinished child depends on it; adding, reparenting, or unarchiving a visible
+unfinished child under an archived unfinished parent also fails. Archived
+completed parents still release dependent tasks.
 
 On a terminal, `add` without text or `edit` without update flags opens built-in
 editor. Ctrl-S saves, Esc exits blank draft or confirms discard of nonempty

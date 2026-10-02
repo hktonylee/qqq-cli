@@ -247,7 +247,7 @@ with tempfile.TemporaryDirectory(prefix="qqq-dashboard-test-") as folder:
             if scenario == "archive_hidden":
                 assert "Hidden" not in visible.text(), visible.text()
             else:
-                assert "Hidden" in visible.text(), visible.text()
+                assert "[archived] Hidden" in visible.text(), visible.text()
         if scenario == "workflow":
             initial_tasks = cli("list")
             clear_capture()

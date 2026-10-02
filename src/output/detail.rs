@@ -1,4 +1,4 @@
-use super::{block, field, link, parent, status, status_color, styled};
+use super::{archived_label, block, field, link, parent, status, status_color, styled};
 use serde_json::Value;
 
 fn heading(label: &str, color: bool) -> String {
@@ -106,10 +106,11 @@ pub(super) fn render(value: &Value, color: bool) -> String {
         ));
     }
     sections.push(format!(
-        "{}\n{}\n{}\n{}\n{}",
+        "{}\n{}\n{}\n{}\n{}\n{}",
         heading("Details", color),
         row("Parent:", &parent(task), color),
         row("Priority:", &field(task, "priority"), color),
+        row("Archived:", archived_label(task), color),
         row(
             "Created:",
             &styled(&field(task, "created_at"), color.then_some("2")),

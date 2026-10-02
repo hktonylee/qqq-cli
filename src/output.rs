@@ -119,6 +119,14 @@ fn status(value: &Value) -> &str {
     status_label(value["status"].as_str().unwrap_or(""))
 }
 
+fn archived_label(value: &Value) -> &'static str {
+    if value["archived"].as_bool() == Some(true) {
+        "yes"
+    } else {
+        "no"
+    }
+}
+
 pub fn status_label(status: &str) -> &'static str {
     match status {
         "new" => "New",
@@ -154,9 +162,10 @@ fn parent(value: &Value) -> String {
 fn task(value: &Value, color: bool, assignment: bool) -> String {
     let heading = format!("#{}", field(value, "id"));
     let mut result = format!(
-        "{}\nStatus: {}\nPriority: {}\nParent: {}",
+        "{}\nStatus: {}\nArchived: {}\nPriority: {}\nParent: {}",
         styled(&heading, color.then_some("1")),
         styled(status(value), status_color(value, color)),
+        archived_label(value),
         field(value, "priority"),
         parent(value)
     );
@@ -295,12 +304,13 @@ fn task_tree(tasks: &[Value], color: bool, columns: Option<usize>, show_priority
                 .map(|&continues| if continues { "│   " } else { "    " })
                 .collect::<String>()
         );
-        let description = task["description"].as_str().unwrap_or("");
-        let context_description = task["context_only"]
-            .as_bool()
-            .unwrap_or(false)
-            .then(|| format!("[context] {description}"));
-        let description = context_description.as_deref().unwrap_or(description);
+        let mut description = task["description"].as_str().unwrap_or("").to_owned();
+        if task["context_only"].as_bool() == Some(true) {
+            description = format!("[context] {description}");
+        }
+        if task["archived"].as_bool() == Some(true) {
+            description = format!("[archived] {description}");
+        }
         let available = columns
             .and_then(|width| width.checked_sub(first_prefix.width()))
             .filter(|&width| width > 0);

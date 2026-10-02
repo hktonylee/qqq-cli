@@ -52,6 +52,20 @@ fn project() -> TempDir {
     dir
 }
 
+fn human(path: &Path, args: &[&str]) -> String {
+    let output = Command::new(env!("CARGO_BIN_EXE_qqq"))
+        .current_dir(path)
+        .args(args)
+        .output()
+        .unwrap();
+    assert!(
+        output.status.success(),
+        "{args:?}: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    String::from_utf8(output.stdout).unwrap()
+}
+
 fn v7_project() -> TempDir {
     let dir = TempDir::new().unwrap();
     std::fs::create_dir(dir.path().join(".qqq")).unwrap();
@@ -307,4 +321,23 @@ fn archived_ready_task_is_skipped_by_concurrent_claims() {
     assert!(ok(path, &["next", "--session", "three"]).is_null());
     ok(path, &["unarchive", "1"]);
     assert_eq!(ok(path, &["next", "--session", "three"])["id"], 1);
+}
+
+#[test]
+fn human_and_json_views_identify_archived_tasks_without_changing_description() {
+    let dir = project();
+    let path = dir.path();
+    ok(path, &["add", "Keep title"]);
+    let archive = human(path, &["archive", "-1"]);
+    assert!(archive.contains("Archived: yes"), "{archive}");
+    let show = human(path, &["show", "1"]);
+    assert!(show.contains("Archived:") && show.contains("yes"), "{show}");
+    let list = human(path, &["list", "--include-archived"]);
+    assert!(list.contains("[archived] Keep title"), "{list}");
+    let json = ok(path, &["list", "--include-archived"]);
+    assert_eq!(json[0]["description"], "Keep title");
+    assert_eq!(json[0]["archived"], true);
+    let restored = human(path, &["unarchive", "-1"]);
+    assert!(restored.contains("Archived: no"), "{restored}");
+    assert!(!human(path, &["list"]).contains("[archived]"));
 }

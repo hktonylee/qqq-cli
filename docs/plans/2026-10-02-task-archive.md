@@ -38,9 +38,9 @@
 
 **Files:** `src/main.rs`, `src/output.rs`, `src/output/detail.rs`, `README.md`, `tests/archive.rs`, `tests/output.rs`.
 
-- [ ] Add failing CLI tests for `archive ID`, `unarchive ID`, negative index, JSON `archived`, event history, human summary/show label, `[archived]` list marker, and repeat operations. Run `cargo test --locked --test archive`; expect unrecognized commands.
-- [ ] Add `Archive { id: i64 }` and `Unarchive { id: i64 }` Clap variants. Resolve negative IDs via `resolve_task_id`, call DB transition with `session_input.unwrap_or("cli")`, return task JSON. Map both variants to task summary format. Add `Archived: yes/no` in human task/show and `[archived]` prefix only in list/TUI description rendering. Run focused CLI/output tests; commit.
-- [ ] Document commands, default/explicit visibility, dependency guard, event history, and preserved state in `README.md`; add examples for `list --include-archived`, `tui --include-archived`, archive/unarchive. Run docs-linked help/output checks; commit.
+- [x] Add failing CLI tests for `archive ID`, `unarchive ID`, negative index, JSON `archived`, event history, human summary/show label, `[archived]` list marker, and repeat operations. Run `cargo test --locked --test archive`; expect unrecognized commands.
+- [x] Add `Archive { id: i64 }` and `Unarchive { id: i64 }` Clap variants. Resolve negative IDs via `resolve_task_id`, call DB transition with `session_input.unwrap_or("cli")`, return task JSON. Map both variants to task summary format. Add `Archived: yes/no` in human task/show and `[archived]` prefix only in list/TUI description rendering. Run focused CLI/output tests; commit.
+- [x] Document commands, default/explicit visibility, dependency guard, event history, and preserved state in `README.md`; add examples for `list --include-archived`, `tui --include-archived`, archive/unarchive. Run docs-linked help/output checks; commit.
 
 ### Task 5: Review and integration
 
