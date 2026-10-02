@@ -14,7 +14,7 @@
 
 **Files:** `src/tui/draft.rs`, `tests/tui_model.rs`, `tests/tui_db.rs`
 
-- [ ] Write failing model tests: `Draft::paste` of 1001 characters yields label `[Pasted Content 1001 chars]` and description containing ` ```pasteboard` fence; `Draft::new` of same text remains raw and clean; `Draft::from_saved` restores complete fence as one paste item. Assert inline before/after text, trailing LF and CRLF payload, embedded triple backticks requiring four-backtick fence, multiple blocks, malformed/wrong-tag fences, atomic delete, and image-span byte offsets after a fence. In DB test, save composition and assert stored description fence and unchanged payload.
+- [x] Write failing model tests: `Draft::paste` of 1001 characters yields label `[Pasted Content 1001 chars]` and description containing ` ```pasteboard` fence; `Draft::new` of same text remains raw and clean; `Draft::from_saved` restores complete fence as one paste item. Assert inline before/after text, trailing LF and CRLF payload, embedded triple backticks requiring four-backtick fence, multiple blocks, malformed/wrong-tag fences, atomic delete, and image-span byte offsets after a fence. In DB test, save composition and assert stored description fence and unchanged payload.
 
 ```rust
 let mut draft = Draft::new("Before ");
@@ -24,8 +24,8 @@ assert_eq!(draft.fragments()[7], "[Pasted Content 1001 chars]");
 assert_eq!(draft.finish().unwrap().description,
     format!("Before \n```pasteboard\n{}\n```\n after", "x".repeat(1001)));
 ```
-- [ ] Run `cargo test --locked --test tui_model --test tui_db`; require expected missing-behavior failures.
-- [ ] Replace `Atom::Paste` storage with `New`, `SeededPlain`, and `StoredFence(String)` sources. `Draft::new` seeds plain text; `Draft::paste` creates new atom only above existing 1000-character threshold. Generate fence with `max(3, longest_backtick_run + 1)`; insert boundary LF only when neighboring text lacks one. Parse complete, line-start `pasteboard` fences in `Draft::from_saved` before image refs inside their payload. Preserve original fence bytes on re-save. Keep image placeholder spans valid after inserted fence text.
+- [x] Run `cargo test --locked --test tui_model --test tui_db`; require expected missing-behavior failures.
+- [x] Replace `Atom::Paste` storage with `New`, `SeededPlain`, and `StoredFence(String)` sources. `Draft::new` seeds plain text; `Draft::paste` creates new atom only above existing 1000-character threshold. Generate fence with `max(3, longest_backtick_run + 1)`; insert boundary LF only when neighboring text lacks one. Parse complete, line-start `pasteboard` fences in `Draft::from_saved` before image refs inside their payload. Preserve original fence bytes on re-save. Keep image placeholder spans valid after inserted fence text.
 
 ```rust
 enum PasteSource { New, SeededPlain, StoredFence(String) }
@@ -37,7 +37,7 @@ fn fenced(text: &str) -> String {
     format!("{ticks}pasteboard\n{text}\n{ticks}")
 }
 ```
-- [ ] Run `cargo test --locked --test tui_model --test tui_db`; require pass. Commit `[Feat] Store Large Pastes As Pasteboard Blocks`.
+- [x] Run `cargo test --locked --test tui_model --test tui_db`; require pass. Commit `[Feat] Store Large Pastes As Pasteboard Blocks`.
 
 ### Task 2: Color paste atoms in both editors
 

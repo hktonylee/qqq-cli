@@ -8,6 +8,10 @@ mod images;
 use draft::Draft;
 use images::{ImageInput, ImageReference};
 
+fn pasteboard(text: &str) -> String {
+    format!("```pasteboard\n{text}\n```")
+}
+
 #[test]
 fn dirty_check_ignores_cursor_motion_and_reverted_edits() {
     let mut draft = Draft::new("Saved");
@@ -44,8 +48,116 @@ fn whole_body_seed_and_paste_preserve_short_and_large_line_endings() {
         assert_eq!(seeded.finish().unwrap().description, text);
         let mut pasted = Draft::new("");
         pasted.paste(&text);
-        assert_eq!(pasted.finish().unwrap().description, text);
+        let expected = if text.chars().count() > 1000 {
+            pasteboard(&text)
+        } else {
+            text
+        };
+        assert_eq!(pasted.finish().unwrap().description, expected);
     }
+}
+
+#[test]
+fn new_large_paste_uses_fence_while_seeded_long_text_stays_raw() {
+    let payload = "x".repeat(1001);
+    let seeded = Draft::new(&payload);
+    assert!(!seeded.is_dirty_against(&payload));
+    assert_eq!(seeded.finish().unwrap().description, payload);
+    assert!(
+        seeded
+            .fragments()
+            .concat()
+            .contains("[Pasted Content 1001 chars]")
+    );
+
+    let mut draft = Draft::new("Before ");
+    draft.paste(&payload);
+    draft.insert(" after");
+    assert_eq!(draft.fragments()[7], "[Pasted Content 1001 chars]");
+    let saved = draft.finish().unwrap().description;
+    assert_eq!(
+        saved,
+        format!("Before \n```pasteboard\n{payload}\n```\n after")
+    );
+    let reloaded = Draft::from_saved(&saved, 1, &[]).unwrap();
+    assert_eq!(reloaded.fragments()[8], "[Pasted Content 1001 chars]");
+    assert_eq!(reloaded.finish().unwrap().description, saved);
+    assert!(!reloaded.is_dirty_against(&saved));
+}
+
+#[test]
+fn pasteboard_fence_round_trips_crlf_trailing_newline_and_nested_ticks() {
+    let payload = format!("A\r\n```\n{}\n", "z".repeat(1001));
+    let mut draft = Draft::new("");
+    draft.paste(&payload);
+    let saved = draft.finish().unwrap().description;
+    assert_eq!(saved, format!("````pasteboard\n{payload}\n````"));
+    let mut reloaded = Draft::from_saved(&saved, 1, &[]).unwrap();
+    assert_eq!(
+        reloaded.fragments(),
+        vec![format!(
+            "[Pasted Content {} chars]",
+            payload.chars().count()
+        )]
+    );
+    assert_eq!(reloaded.finish().unwrap().description, saved);
+    reloaded.backspace();
+    assert!(reloaded.finish().is_err());
+}
+
+#[test]
+fn incomplete_or_wrong_language_fence_stays_literal_text() {
+    for text in [
+        "```pasteboard\nshort",
+        "```text\nshort\n```",
+        "prefix ```pasteboard\nshort\n```",
+    ] {
+        let draft = Draft::from_saved(text, 1, &[]).unwrap();
+        assert_eq!(draft.fragments().concat(), text);
+        assert_eq!(draft.finish().unwrap().description, text);
+    }
+}
+
+#[test]
+fn multiple_pasteboard_blocks_keep_image_syntax_inside_payload() {
+    let image = ImageReference {
+        id: 1,
+        name: "same.png".into(),
+        media_type: "image/png".into(),
+    };
+    let original = "```pasteboard\n![same.png](.qqq/images/1/1.png)\n```\n[Image: same.png]\n```pasteboard\nsecond\n```";
+    let draft = Draft::from_saved(original, 1, &[image]).unwrap();
+    assert_eq!(
+        draft
+            .fragments()
+            .iter()
+            .filter(|part| part.starts_with("[Pasted Content "))
+            .count(),
+        2
+    );
+    assert_eq!(draft.image_mask().iter().filter(|image| **image).count(), 1);
+    let saved = draft.finish().unwrap().description;
+    assert!(saved.starts_with("```pasteboard\n![same.png](.qqq/images/1/1.png)\n```"));
+    assert!(saved.contains("\n![same.png](.qqq/images/1/1.png)\n```pasteboard"));
+}
+
+#[test]
+fn image_span_after_pasteboard_block_tracks_provisional_marker() {
+    let mut draft = Draft::new("Lead ");
+    draft.paste(&"x".repeat(1001));
+    draft
+        .image(ImageInput {
+            name: "after.png".into(),
+            data: b"\x89PNG\r\n\x1a\n".to_vec(),
+        })
+        .unwrap();
+    let composition = draft.finish().unwrap();
+    assert_eq!(composition.image_spans.len(), 1);
+    assert_eq!(
+        &composition.description[composition.image_spans[0].clone()],
+        "[Image: after.png]"
+    );
+    assert!(composition.description.contains("```pasteboard"));
 }
 
 #[test]
@@ -66,7 +178,7 @@ fn home_and_end_respect_preserved_crlf_line_boundary() {
 fn existing_large_description_starts_collapsed_and_saves_unchanged() {
     let text = "Large existing body\n".repeat(100);
     let draft = Draft::new(&text);
-    assert!(draft.fragments().concat().contains("[Pasted text #1:"));
+    assert!(draft.fragments().concat().contains("[Pasted Content "));
     assert_eq!(draft.finish().unwrap().description, text);
 }
 
@@ -77,7 +189,7 @@ fn large_pastes_expand_losslessly_and_delete_atomically() {
     draft.paste(&text);
     assert!(draft.fragments().concat().contains("1001 chars"));
     assert!(!draft.fragments().concat().contains('🦀'));
-    assert_eq!(draft.finish().unwrap().description, text);
+    assert_eq!(draft.finish().unwrap().description, pasteboard(&text));
     draft.backspace();
     assert!(draft.finish().is_err());
 }
@@ -93,8 +205,8 @@ fn repeated_pastes_and_literal_labels_keep_distinct_payloads() {
         draft.finish().unwrap().description,
         format!(
             "[Pasted text #1: 1001 chars]\n{}\n{}",
-            "a".repeat(1001),
-            "b".repeat(1001)
+            pasteboard(&"a".repeat(1001)),
+            pasteboard(&"b".repeat(1001))
         )
     );
     draft.left();
@@ -104,7 +216,7 @@ fn repeated_pastes_and_literal_labels_keep_distinct_payloads() {
             .finish()
             .unwrap()
             .description
-            .ends_with(&format!("{}\n", "a".repeat(1001)))
+            .ends_with(&format!("{}\n", pasteboard(&"a".repeat(1001))))
     );
 }
 
@@ -214,7 +326,10 @@ fn ctrl_w_deletes_paste_and_image_placeholders_atomically() {
         .unwrap();
     draft.delete_previous_word();
     let after_image = draft.finish().unwrap();
-    assert_eq!(after_image.description, format!("Keep {pasted}"));
+    assert_eq!(
+        after_image.description,
+        format!("Keep \n{}", pasteboard(&pasted))
+    );
     assert!(after_image.images.is_empty());
     draft.delete_previous_word();
     assert_eq!(draft.finish().unwrap().description, "Keep ");
@@ -242,7 +357,7 @@ fn ctrl_w_preserves_placeholder_before_typed_word() {
     draft.delete_previous_word();
     assert_eq!(
         draft.finish().unwrap().description,
-        format!("Keep {pasted}")
+        format!("Keep \n{}", pasteboard(&pasted))
     );
 }
 

@@ -11,9 +11,9 @@ pub struct Composition {
 enum Atom {
     Text(String),
     Paste {
-        id: usize,
         text: String,
         chars: usize,
+        source: PasteSource,
     },
     Image {
         id: usize,
@@ -26,6 +26,71 @@ enum Atom {
         markdown: String,
     },
 }
+enum PasteSource {
+    New,
+    SeededPlain,
+    StoredFence(String),
+}
+
+struct PasteboardBlock<'a> {
+    start: usize,
+    end: usize,
+    payload: &'a str,
+}
+
+fn fenced(text: &str) -> String {
+    let longest = text.split(|ch| ch != '`').map(str::len).max().unwrap_or(0);
+    let ticks = "`".repeat(3.max(longest + 1));
+    format!("{ticks}pasteboard\n{text}\n{ticks}")
+}
+
+fn find_pasteboard(description: &str, from: usize) -> Option<PasteboardBlock<'_>> {
+    let mut search = from;
+    while search < description.len() {
+        let start = search + description[search..].find('`')?;
+        search = start + 1;
+        if start > 0 && description.as_bytes()[start - 1] != b'\n' {
+            continue;
+        }
+        let ticks = description[start..]
+            .bytes()
+            .take_while(|byte| *byte == b'`')
+            .count();
+        if ticks < 3 || !description[start + ticks..].starts_with("pasteboard\n") {
+            continue;
+        }
+        let payload_start = start + ticks + "pasteboard\n".len();
+        let mut line_start = payload_start;
+        loop {
+            let line_end = description[line_start..]
+                .find('\n')
+                .map_or(description.len(), |offset| line_start + offset);
+            let line = &description[line_start..line_end];
+            let closing_ticks = line.bytes().take_while(|byte| *byte == b'`').count();
+            if closing_ticks >= ticks
+                && line[closing_ticks..]
+                    .chars()
+                    .all(|ch| matches!(ch, ' ' | '\t' | '\r'))
+            {
+                let payload_end = if line_start == payload_start {
+                    line_start
+                } else {
+                    line_start - 1
+                };
+                return Some(PasteboardBlock {
+                    start,
+                    end: line_end,
+                    payload: &description[payload_start..payload_end],
+                });
+            }
+            if line_end == description.len() {
+                break;
+            }
+            line_start = line_end + 1;
+        }
+    }
+    None
+}
 impl Atom {
     fn is_whitespace(&self) -> bool {
         matches!(self, Self::Text(text) if text.chars().all(char::is_whitespace))
@@ -35,10 +100,27 @@ impl Atom {
         matches!(self, Self::Text(text) if !text.chars().all(char::is_whitespace))
     }
 
+    fn starts_with_line_break(&self) -> bool {
+        let text = match self {
+            Self::Text(text)
+            | Self::Paste {
+                text,
+                source: PasteSource::SeededPlain,
+                ..
+            } => text,
+            Self::Paste {
+                source: PasteSource::StoredFence(original),
+                ..
+            } => original,
+            _ => return false,
+        };
+        text.starts_with('\n') || text.starts_with("\r\n")
+    }
+
     fn label(&self) -> String {
         match self {
             Self::Text(text) => text.clone(),
-            Self::Paste { id, chars, .. } => format!("[Pasted text #{id}: {chars} chars]"),
+            Self::Paste { chars, .. } => format!("[Pasted Content {chars} chars]"),
             Self::Image { id, input } => format!("[Image #{id}: {}]", input.name),
             Self::StoredImage { id, name, .. } => format!("[Image #{id}: {name}]"),
         }
@@ -47,7 +129,6 @@ impl Atom {
 pub struct Draft {
     atoms: Vec<Atom>,
     cursor: usize,
-    next_paste: usize,
     next_image: usize,
 }
 impl Draft {
@@ -55,10 +136,9 @@ impl Draft {
         let mut draft = Self {
             atoms: Vec::new(),
             cursor: 0,
-            next_paste: 1,
             next_image: 1,
         };
-        draft.paste(description);
+        draft.seed(description);
         draft
     }
 
@@ -68,6 +148,12 @@ impl Draft {
         references: &[ImageReference],
     ) -> Result<Self> {
         let mut draft = Self::new("");
+        let mut fences = Vec::new();
+        let mut scan = 0;
+        while let Some(block) = find_pasteboard(description, scan) {
+            scan = block.end;
+            fences.push(block);
+        }
         let markdown = references
             .iter()
             .map(|image| image.markdown(task_id))
@@ -78,28 +164,52 @@ impl Draft {
             .collect::<Vec<_>>();
         let mut used_legacy = markdown
             .iter()
-            .map(|reference| description.contains(reference))
+            .map(|reference| {
+                description.match_indices(reference).any(|(position, _)| {
+                    !fences
+                        .iter()
+                        .any(|block| position >= block.start && position < block.end)
+                })
+            })
             .collect::<Vec<_>>();
-        let mut remaining = description;
-        while !remaining.is_empty() {
-            let mut found: Option<(usize, usize, bool)> = None;
+        let mut cursor = 0;
+        while cursor < description.len() {
+            let remaining = &description[cursor..];
+            let mut found_image: Option<(usize, usize, bool)> = None;
             for index in 0..references.len() {
                 for (token, is_legacy) in [(&markdown[index], false), (&legacy[index], true)] {
                     if is_legacy && used_legacy[index] {
                         continue;
                     }
                     if let Some(position) = remaining.find(token) {
-                        if found.is_none_or(|(best, _, _)| position < best) {
-                            found = Some((position, index, is_legacy));
+                        let position = cursor + position;
+                        if found_image.is_none_or(|(best, _, _)| position < best) {
+                            found_image = Some((position, index, is_legacy));
                         }
                     }
                 }
             }
-            let Some((position, index, is_legacy)) = found else {
-                draft.paste(remaining);
+            let next_block = fences.iter().find(|block| block.start >= cursor);
+            if let Some(block) = next_block
+                .filter(|block| found_image.is_none_or(|(position, _, _)| block.start <= position))
+            {
+                draft.seed(&description[cursor..block.start]);
+                draft.atoms.push(Atom::Paste {
+                    text: block.payload.to_owned(),
+                    chars: block.payload.chars().count(),
+                    source: PasteSource::StoredFence(
+                        description[block.start..block.end].to_owned(),
+                    ),
+                });
+                draft.cursor += 1;
+                cursor = block.end;
+                continue;
+            }
+            let Some((position, index, is_legacy)) = found_image else {
+                draft.seed(remaining);
                 break;
             };
-            draft.paste(&remaining[..position]);
+            draft.seed(&description[cursor..position]);
             let original = if is_legacy {
                 used_legacy[index] = true;
                 &legacy[index]
@@ -114,7 +224,7 @@ impl Draft {
             });
             draft.next_image += 1;
             draft.cursor += 1;
-            remaining = &remaining[position + original.len()..];
+            cursor = position + original.len();
         }
         Ok(draft)
     }
@@ -137,17 +247,22 @@ impl Draft {
         }
     }
     pub fn paste(&mut self, text: &str) {
+        self.append_text(text, PasteSource::New);
+    }
+    fn seed(&mut self, text: &str) {
+        self.append_text(text, PasteSource::SeededPlain);
+    }
+    fn append_text(&mut self, text: &str, source: PasteSource) {
         let chars = text.chars().count();
         if chars > 1000 {
             self.atoms.insert(
                 self.cursor,
                 Atom::Paste {
-                    id: self.next_paste,
                     text: text.to_owned(),
                     chars,
+                    source,
                 },
             );
-            self.next_paste += 1;
             self.cursor += 1;
         } else {
             self.insert(text);
@@ -272,9 +387,30 @@ impl Draft {
         let mut text = String::new();
         let mut images = Vec::new();
         let mut image_spans = Vec::new();
-        for atom in &self.atoms {
+        for (index, atom) in self.atoms.iter().enumerate() {
             match atom {
-                Atom::Text(value) | Atom::Paste { text: value, .. } => text.push_str(value),
+                Atom::Text(value) => text.push_str(value),
+                Atom::Paste {
+                    text: value,
+                    source,
+                    ..
+                } => match source {
+                    PasteSource::New => {
+                        if !text.is_empty() && !text.ends_with('\n') {
+                            text.push('\n');
+                        }
+                        text.push_str(&fenced(value));
+                        if self
+                            .atoms
+                            .get(index + 1)
+                            .is_some_and(|next| !next.starts_with_line_break())
+                        {
+                            text.push('\n');
+                        }
+                    }
+                    PasteSource::SeededPlain => text.push_str(value),
+                    PasteSource::StoredFence(original) => text.push_str(original),
+                },
                 Atom::Image { input, .. } => {
                     let start = text.len();
                     text.push_str(&format!("[Image: {}]", input.name));

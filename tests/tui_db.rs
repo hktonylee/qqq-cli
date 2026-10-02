@@ -150,6 +150,45 @@ fn composition_saves_task_and_image_bytes_together() {
     assert_eq!(bytes, b"\x89PNG\r\n\x1a\n");
 }
 #[test]
+fn composition_saves_pasteboard_block_and_image_link_together() {
+    let (mut db, _dir) = database();
+    let payload = format!("```\n{}", "x".repeat(1001));
+    let mut draft = Draft::new("Before ");
+    draft.paste(&payload);
+    draft
+        .image(ImageInput {
+            name: "after.png".into(),
+            data: b"\x89PNG\r\n\x1a\n".to_vec(),
+        })
+        .unwrap();
+    let task = db
+        .save_composition(None, None, &draft.finish().unwrap())
+        .unwrap();
+    assert_eq!(
+        task.description,
+        format!("Before \n````pasteboard\n{payload}\n````\n![after.png](.qqq/images/1/1.png)")
+    );
+    let loaded = Draft::from_saved(
+        &task.description,
+        task.id,
+        &db.image_references(task.id).unwrap(),
+    )
+    .unwrap();
+    assert!(
+        loaded
+            .fragments()
+            .iter()
+            .any(|part| part.starts_with("[Pasted Content "))
+    );
+    assert!(
+        loaded
+            .fragments()
+            .iter()
+            .any(|part| part == "[Image #1: after.png]")
+    );
+    assert_eq!(loaded.finish().unwrap().description, task.description);
+}
+#[test]
 fn failed_image_insert_rolls_back_new_and_edited_drafts() {
     let (mut db, _dir) = database();
     db.conn.execute_batch("CREATE TRIGGER reject_image BEFORE INSERT ON images WHEN NEW.name='fail.png' BEGIN SELECT RAISE(ABORT,'image rejected'); END;").unwrap();
