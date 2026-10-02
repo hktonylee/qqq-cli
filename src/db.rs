@@ -107,11 +107,7 @@ pub fn validate_priority(priority: i64) -> Result<()> {
     );
     Ok(())
 }
-fn ensure_parent_available(
-    conn: &Connection,
-    parent_id: i64,
-    visible_unfinished: bool,
-) -> Result<()> {
+fn ensure_parent_available(conn: &Connection, parent_id: i64, unfinished: bool) -> Result<()> {
     let (status, archived): (String, bool) = conn
         .query_row(
             "SELECT status,archived FROM tasks WHERE id=?",
@@ -121,7 +117,7 @@ fn ensure_parent_available(
         .optional()?
         .with_context(|| format!("Task {parent_id} not found"))?;
     ensure!(
-        !visible_unfinished || !archived || status == "completed",
+        !unfinished || !archived || status == "completed",
         "Task {parent_id} is archived unfinished parent"
     );
     Ok(())
@@ -602,15 +598,15 @@ impl Db {
                 ParentChange::Clear => None,
                 ParentChange::Set(parent_id) => {
                     ensure!(parent_id != id, "Task {id} cannot depend on itself");
-                    let visible_unfinished: bool = tx
+                    let unfinished: bool = tx
                         .query_row(
-                            "SELECT status!='completed' AND archived=0 FROM tasks WHERE id=?",
+                            "SELECT status!='completed' FROM tasks WHERE id=?",
                             [id],
                             |row| row.get(0),
                         )
                         .optional()?
                         .with_context(|| format!("Task {id} not found"))?;
-                    ensure_parent_available(&tx, parent_id, visible_unfinished)?;
+                    ensure_parent_available(&tx, parent_id, unfinished)?;
                     let cycle: bool = tx.query_row(
                         "WITH RECURSIVE ancestors(id,parent_id) AS (
                             SELECT id,parent_id FROM tasks WHERE id=?1

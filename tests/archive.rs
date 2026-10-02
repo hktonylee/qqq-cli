@@ -85,7 +85,11 @@ fn v7_project() -> TempDir {
         "INSERT INTO tasks(id,description,created_at,updated_at,priority) VALUES
          (5,'Legacy','2026-01-01T00:00:00Z','2026-01-02T00:00:00Z',4);
          INSERT INTO events(id,task_id,session,action) VALUES (8,5,'old-owner','release');
-         INSERT INTO images(id,task_id,name,media_type,bytes) VALUES (7,5,'a.png','image/png',3);",
+         INSERT INTO images(id,task_id,name,media_type,bytes) VALUES (7,5,'a.png','image/png',3);
+         INSERT INTO tasks(id,description) VALUES (12,'Deleted task');
+         DELETE FROM tasks WHERE id=12;
+         INSERT INTO events(id,task_id,session,action) VALUES (20,5,'old-owner','claim');
+         DELETE FROM events WHERE id=20;",
     )
     .unwrap();
     dir
@@ -121,8 +125,8 @@ fn migration_from_seven_preserves_data_and_defaults_to_unarchived() {
         [],
     )
     .unwrap();
-    assert_eq!(conn.last_insert_rowid(), 9);
-    assert_eq!(ok(path, &["add", "After migration"])["id"], 6);
+    assert_eq!(conn.last_insert_rowid(), 21);
+    assert_eq!(ok(path, &["add", "After migration"])["id"], 13);
 }
 
 #[test]
@@ -212,6 +216,38 @@ fn active_tasks_cannot_be_archived() {
 }
 
 #[test]
+fn errored_task_keeps_status_and_history_across_archive() {
+    let dir = project();
+    let path = dir.path();
+    ok(path, &["add", "Failed"]);
+    ok(path, &["next", "--session", "worker"]);
+    ok(
+        path,
+        &[
+            "edit",
+            "1",
+            "--set-status",
+            "error",
+            "--reason",
+            "Failure",
+            "--session",
+            "worker",
+        ],
+    );
+    let before = ok(path, &["show", "1"]);
+    let archived = ok(path, &["archive", "1", "--session", "reviewer"]);
+    assert_eq!(archived["status"], "error");
+    assert_eq!(archived["archived"], true);
+    let after = ok(path, &["show", "1"]);
+    assert_eq!(after["messages"], before["messages"]);
+    assert_eq!(after["events"][0], before["events"][0]);
+    assert_eq!(after["events"][1], before["events"][1]);
+    assert_eq!(after["events"][2]["session"], "reviewer");
+    assert_eq!(after["events"][2]["action"], "archive");
+    assert_eq!(ok(path, &["unarchive", "1"])["status"], "error");
+}
+
+#[test]
 fn archive_rejects_blocked_children_and_completed_parent_still_releases_child() {
     let dir = project();
     let path = dir.path();
@@ -234,11 +270,13 @@ fn archive_rejects_blocked_children_and_completed_parent_still_releases_child() 
 }
 
 #[test]
-fn archived_unfinished_parent_rejects_new_and_reparented_visible_children() {
+fn archived_unfinished_parent_rejects_new_and_reparented_unfinished_children() {
     let dir = project();
     let path = dir.path();
     ok(path, &["add", "Parent"]);
     ok(path, &["add", "Existing"]);
+    ok(path, &["add", "Archived child"]);
+    ok(path, &["archive", "3"]);
     ok(path, &["archive", "1"]);
     fail(
         path,
@@ -248,6 +286,11 @@ fn archived_unfinished_parent_rejects_new_and_reparented_visible_children() {
     fail(
         path,
         &["edit", "2", "--set-parent", "1"],
+        "archived unfinished parent",
+    );
+    fail(
+        path,
+        &["edit", "3", "--set-parent", "1"],
         "archived unfinished parent",
     );
     assert_eq!(ok(path, &["show", "2"])["task"]["parent_id"], Value::Null);

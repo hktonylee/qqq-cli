@@ -123,8 +123,8 @@ history, and dependencies. `show`, `edit`, messages, and image export still work
 by ID. Archive/unarchive add history events; repeated commands change nothing.
 Events record supplied `--session` or `cli` when absent. In-progress tasks
 cannot be archived. An unfinished parent cannot be archived while a visible
-unfinished child depends on it; adding, reparenting, or unarchiving a visible
-unfinished child under an archived unfinished parent also fails. Archived
+unfinished child depends on it; adding or reparenting an unfinished child, or
+unarchiving one, under an archived unfinished parent also fails. Archived
 completed parents still release dependent tasks.
 
 On a terminal, `add` without text or `edit` without update flags opens built-in
