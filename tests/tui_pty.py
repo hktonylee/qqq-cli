@@ -277,7 +277,7 @@ with tempfile.TemporaryDirectory(prefix="qqq-tui-test-") as folder:
                 task = task[0]
             if scenario in ("save", "escape_keep"):
                 assert "title" not in task
-                assert task["description"] == "Title\n\n" + "\u754c" * 1001 + "\n[Image: test image.png]"
+                assert task["description"] == "Title\n\n" + "\u754c" * 1001 + "\n![test image.png](.qqq/images/1/1.png)"
                 attachments = cli("show", "1")["images"]
                 assert [item["name"] for item in attachments] == ["test image.png", "flag image.png"]
                 exported = Path(folder) / "export.png"

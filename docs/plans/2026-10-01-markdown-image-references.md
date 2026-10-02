@@ -33,10 +33,10 @@
 
 **Files:** `src/tui/mod.rs`, `tests/tui_pty.py`, `tests/tui_history_pty.py`
 
-- [ ] Update PTY save assertion from `[Image: test image.png]` to `![test image.png](.qqq/images/1/1.png)`. Add history scenario: save pasted PNG, navigate back, observe image atom label, remove it with Backspace, save, verify link gone while attachment metadata remains; navigate legacy description with matching metadata and verify atom plus Markdown conversion on save.
-- [ ] Run `cargo test --locked --test tui`; confirm changed save assertion fails before TUI/DB wiring or new history scenario catches reload failure.
-- [ ] Extend `Target::Task` to carry preloaded `Draft`. `adjacent_target` obtains `Db::image_references(id)` and constructs `Draft::from_saved`. `load_target` installs that draft. Preserve current confirmation/dirty behavior and cursor reset.
-- [ ] Run `cargo test --locked --test tui --test tui_model --test tui_db`; require pass. Commit `[Fix] Restore Image Atoms On Task Reload`.
+- [x] Update PTY save assertion from `[Image: test image.png]` to `![test image.png](.qqq/images/1/1.png)`. Add history scenario: save pasted PNG, navigate back, observe image atom label, remove it with Backspace, save, verify link gone while attachment metadata remains; navigate legacy description with matching metadata and verify atom plus Markdown conversion on save.
+- [x] Run `cargo test --locked --test tui`; confirm changed save assertion fails before TUI/DB wiring or new history scenario catches reload failure.
+- [x] Extend `Target::Task` to carry preloaded `Draft`. `adjacent_target` obtains `Db::image_references(id)` and constructs `Draft::from_saved`. `load_target` installs that draft. Preserve current confirmation/dirty behavior and cursor reset.
+- [x] Run `cargo test --locked --test tui --test tui_model --test tui_db`; require pass. Commit `[Fix] Restore Image Atoms On Task Reload`.
 
 ### Task 4: Verification, review, integration
 

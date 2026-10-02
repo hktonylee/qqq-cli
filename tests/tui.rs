@@ -112,6 +112,16 @@ fn tui_add_history_preserves_existing_and_adds_flagged_images() {
 }
 
 #[test]
+fn tui_pasted_image_reloads_as_editable_atom() {
+    history_scenario("markdown_image_reload");
+}
+
+#[test]
+fn tui_legacy_image_label_reloads_and_converts_on_save() {
+    history_scenario("legacy_image_reload");
+}
+
+#[test]
 fn tui_add_history_deleted_selection_does_not_create_task() {
     history_scenario("selected_deleted");
 }

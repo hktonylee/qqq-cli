@@ -61,7 +61,11 @@ with tempfile.TemporaryDirectory(prefix="qqq-history-test-") as folder:
         flagged = Path(folder) / "flagged.png"
         flagged.write_bytes(b"\x89PNG\r\n\x1a\nflagged")
         cli("add", "First", "--image", str(existing))
-    elif scenario != "empty_boundary":
+    elif scenario == "legacy_image_reload":
+        image = Path(folder) / "old.png"
+        image.write_bytes(b"\x89PNG\r\n\x1a\nbytes")
+        cli("add", "Prefix [Image: old.png]", "--image", str(image))
+    elif scenario not in ("empty_boundary", "markdown_image_reload"):
         cli("add", "First")
         if scenario == "dirty_loaded_keep":
             cli("add", "Second")
@@ -201,6 +205,28 @@ with tempfile.TemporaryDirectory(prefix="qqq-history-test-") as folder:
             saved = finish(1)[0]
             assert saved["id"] == 1 and saved["description"] == "First edited"
             assert [image["name"] for image in cli("show", "1")["images"]] == ["existing.png", "flagged.png"]
+        elif scenario == "markdown_image_reload":
+            image = Path(folder) / "pasted.png"
+            image.write_bytes(b"\x89PNG\r\n\x1a\nbytes")
+            send(b"Prefix ")
+            send(b"\x1b[200~" + str(image).encode() + b"\x1b[201~")
+            read_until(b"[Image #1: pasted.png]")
+            press(b"\x13", b"Saved #1. New task")
+            assert cli("show", "1")["task"]["description"] == "Prefix ![pasted.png](.qqq/images/1/1.png)"
+            press(UP, b"task #1")
+            read_until(b"[Image #1: pasted.png]")
+            send(b"\x05\x7f")
+            saved = finish(1)[-1]
+            assert saved["description"] == "Prefix "
+            assert [item["name"] for item in cli("show", "1")["images"]] == ["pasted.png"]
+        elif scenario == "legacy_image_reload":
+            press(UP, b"task #1")
+            read_until(b"[Image #1: old.png]")
+            press(DOWN, b"new task")
+            assert b"Discard changes and switch?" not in screen
+            press(UP, b"task #1")
+            saved = finish(1)[0]
+            assert saved["description"] == "Prefix ![old.png](.qqq/images/1/1.png)"
         elif scenario == "selected_deleted":
             press(UP, b"task #1")
             with sqlite3.connect(Path(folder) / ".qqq/qqq.db") as db:

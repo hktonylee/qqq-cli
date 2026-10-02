@@ -31,6 +31,7 @@ enum Target {
         id: i64,
         description: String,
         status: String,
+        draft: Draft,
     },
 }
 
@@ -48,11 +49,15 @@ fn adjacent_target(
         return Ok(None);
     }
     Ok(match db.adjacent_task(current, older)? {
-        Some((id, description, status)) => Some(Target::Task {
-            id,
-            description,
-            status,
-        }),
+        Some((id, description, status)) => {
+            let draft = Draft::from_saved(&description, id, &db.image_references(id)?)?;
+            Some(Target::Task {
+                id,
+                description,
+                status,
+                draft,
+            })
+        }
         None if !older => Some(Target::New),
         None => None,
     })
@@ -71,18 +76,20 @@ fn load_target(
             *target_id = None;
             *target_status = None;
             baseline.clear();
+            *draft = Draft::new("");
         }
         Target::Task {
             id,
             description,
             status,
+            draft: loaded,
         } => {
             *target_id = Some(id);
             *target_status = Some(status);
             *baseline = description;
+            *draft = loaded;
         }
     }
-    *draft = Draft::new(baseline);
     draft.set_cursor(0);
     *top = 0;
 }
