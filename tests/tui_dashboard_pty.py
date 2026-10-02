@@ -275,9 +275,11 @@ with tempfile.TemporaryDirectory(prefix="qqq-dashboard-test-") as folder:
             send(b"\x13")
             read_until(b"Saved #21. New task")
             saved = cli("show", "21")
-            assert saved["task"]["description"].startswith("New target details")
-            assert "![workflow.png](.qqq/images/21/1.png)" in saved["task"]["description"]
+            assert saved["task"]["description"] == "New target details![workflow.png](.qqq/images/21/1.png)"
             assert [image["name"] for image in saved["images"]] == ["workflow.png"]
+            exported = Path(folder) / "exported-workflow.png"
+            cli("show", "21", "--export-image", "1", "--output", str(exported))
+            assert exported.read_bytes() == image_path.read_bytes()
             assert child.poll() is None
             assert not select.select([child.stdout], [], [], 0)[0], "TUI wrote stdout after new task"
         elif scenario == "workflow_empty":
@@ -718,6 +720,15 @@ with tempfile.TemporaryDirectory(prefix="qqq-dashboard-test-") as folder:
                 except OSError:
                     pass
         stdout, _ = child.communicate(timeout=5)
+        # Child exit can precede final PTY read; collect terminal cleanup bytes.
+        while select.select([master], [], [], 0)[0]:
+            try:
+                chunk = os.read(master, 65536)
+            except OSError:
+                break
+            if not chunk:
+                break
+            capture(chunk)
         if scenario != "wheel_error":
             assert child.returncode == 0, screen[-2000:]
         assert stdout == b"", stdout

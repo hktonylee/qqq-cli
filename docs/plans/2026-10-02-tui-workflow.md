@@ -30,5 +30,5 @@
 
 **Files:** all changed files
 
-- [ ] Run focused PTY/model checks, full `cargo test --locked`, `cargo fmt --all -- --check`, strict `cargo clippy --locked --all-targets -- -D warnings`, and `git diff --check`. Request read-only code review; fix Critical/Important findings and rerun affected checks.
+- [x] Run focused PTY/model checks, full `cargo test --locked`, `cargo fmt --all -- --check`, strict `cargo clippy --locked --all-targets -- -D warnings`, and `git diff --check`. Request read-only code review; fix Critical/Important findings and rerun affected checks.
 - [ ] Rebase onto local master, fast-forward, rerun integrated full suite, remove owned worktree/branch, install CLI, complete task 62, verify queue status, then call `qqq --json next --wait --local` once.
