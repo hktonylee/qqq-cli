@@ -321,6 +321,30 @@ fn legacy_labels_match_duplicate_attachments_in_order() {
 }
 
 #[test]
+fn legacy_label_skips_image_already_named_by_markdown_link() {
+    let images = [1, 2].map(|id| ImageReference {
+        id,
+        name: "dup.png".into(),
+        media_type: "image/png".into(),
+    });
+    for original in [
+        "![dup.png](.qqq/images/4/1.png) [Image: dup.png]",
+        "[Image: dup.png] ![dup.png](.qqq/images/4/1.png)",
+    ] {
+        let draft = Draft::from_saved(original, 4, &images).unwrap();
+        assert!(!draft.is_dirty_against(original));
+        assert_eq!(draft.image_mask().iter().filter(|image| **image).count(), 2);
+        assert!(
+            draft
+                .finish()
+                .unwrap()
+                .description
+                .contains("![dup.png](.qqq/images/4/2.png)")
+        );
+    }
+}
+
+#[test]
 fn markdown_image_reference_escapes_filename_without_changing_metadata() {
     let image = ImageReference {
         id: 7,

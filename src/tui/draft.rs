@@ -76,7 +76,10 @@ impl Draft {
             .iter()
             .map(|image| format!("[Image: {}]", image.name))
             .collect::<Vec<_>>();
-        let mut used_legacy = vec![false; references.len()];
+        let mut used_legacy = markdown
+            .iter()
+            .map(|reference| description.contains(reference))
+            .collect::<Vec<_>>();
         let mut remaining = description;
         while !remaining.is_empty() {
             let mut found: Option<(usize, usize, bool)> = None;
