@@ -57,7 +57,7 @@ let details_height = if selected {
 - [x] Run `cargo test --locked --test tui`; investigate failures, preserving assertions rather than bypassing scenarios.
 - [x] Update README task-TUI section with thirds, new-draft expansion, details content and PgUp/PgDn/wheel scrolling.
 - [x] Run `cargo fmt --check`, Clippy and full `cargo test --locked`; review diff through requesting-code-review skill. Report any intermittent PTY failures separately from fresh passing evidence.
-- [ ] Commit completed work; use finishing-a-development-branch workflow to rebase onto current `master`, resolve conflicts in worktree, fast-forward local master and verify integrated result. Refresh installed CLI, smoke test, complete qqq task #89, clean owned worktree/branch, resume blocking `qqq next --wait --local --json`.
+- [x] Commit completed work; rebase onto current `master`, fast-forward local master and verify combined result. Refresh installed CLI, smoke test, complete qqq task #89. Record queue handoff in task DB; clean owned worktree/branch, resume blocking `qqq next --wait --local --json` after delivery record commits.
 
 ## Verification Record
 
@@ -68,4 +68,8 @@ observed partial redraws; predicates now wait for stale details to clear. Full
 suite: 435 passed across 35 test binaries. Review found narrow-screen clipping
 in deleted-task notice; shared wrapping and minimum-width regression check fix
 it. Focused notice/refresh tests passed; re-review found no remaining issues.
-Combined verification after rebasing onto task #88 remains pending.
+Rebase onto task #88 succeeded without conflicts. Combined result passed 453
+tests across 37 binaries, formatting and Clippy; local master fast-forwarded to
+same verified source. Installed release CLI passed six real-PTY scenarios:
+details, plain-color details, expanded new draft, independent scrolling, dirty
+draft refresh and deleted task. Task #89 completed with verification in task DB.
