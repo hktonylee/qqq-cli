@@ -676,13 +676,22 @@ with tempfile.TemporaryDirectory(prefix="qqq-dashboard-test-") as folder:
             key = b"\x03" if scenario.startswith("ctrl_c") else b"\x1b"
             clear_capture()
             send(key)
-            if scenario == "escape_dirty_selected":
+            if "dirty_selected" in scenario:
                 read_until(b"Discard changes and switch? (y/N)")
+                assert cli("list") == initial_tasks
+                assert child.poll() is None
+                if scenario.startswith("ctrl_c"):
+                    clear_capture()
+                    send(key)
+                    wait_visible(lambda: bool(screen)
+                                 and visible.text().splitlines()[-1].startswith("Discard changes and switch? (y/N)"))
+                    assert child.poll() is None
                 send(b"n")
                 wait_visible(lambda: editor_line().startswith("Changed Second")
+                             and "task #2 (" in editor_title()
                              and visible.text().splitlines()[-1].startswith("Ctrl-S save"))
                 clear_capture()
-                send(b"\x1b")
+                send(key)
                 read_until(b"Discard changes and switch? (y/N)")
                 send(b"y")
             wait_visible(lambda: "new task" in editor_title()
@@ -1525,7 +1534,7 @@ with tempfile.TemporaryDirectory(prefix="qqq-dashboard-test-") as folder:
                 send(b"y")
                 assert cli("list") == initial_tasks
             else:
-                send(b"\x1b" if scenario in ("empty", "empty_json", "workflow_empty", "escape_selected", "escape_dirty_selected") else b"\x03\x03y")
+                send(b"\x1b" if scenario in ("empty", "empty_json", "workflow_empty", "escape_selected", "escape_dirty_selected") else b"\x03\x03y\x03")
         deadline = time.monotonic() + 5
         while child.poll() is None:
             assert time.monotonic() < deadline, f"TUI failed to exit: {screen[-1000:]!r}\n{visible.text()}"

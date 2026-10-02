@@ -859,11 +859,13 @@ fn compose_inner(
                     && action_ui.is_none()
                     && !filter_focused;
                 if dashboard && target_id.is_some() && (cancel_key || editor_escape) {
-                    if !cancel_key && draft.is_dirty_against(&baseline) {
+                    if draft.is_dirty_against(&baseline) {
                         confirmation = Some(Confirmation::Switch {
                             target: Target::New { parent_id: None },
                             focus_editor: true,
                         });
+                        action_ui = None;
+                        filter_focused = false;
                     } else {
                         load_target(
                             Target::New { parent_id: None },
