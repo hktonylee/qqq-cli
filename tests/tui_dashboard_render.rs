@@ -96,14 +96,48 @@ fn blank_draft_keeps_details_pane_and_editor_position() {
 #[test]
 fn selected_task_renders_details_between_list_and_editor() {
     let rows = panel::rows("ID STATUS TASK\n1 New Selected", 70);
-    let detail_rows = [
-        "Task #1 | New",
-        "Messages (1)",
-        "#1 reviewer",
-        "Latest message",
-        "Created: now",
-    ]
-    .map(str::to_owned);
+    let expected = [
+        (
+            "Task #1 | New",
+            render::DetailKind::Heading,
+            Color::Indexed(81),
+            Modifier::BOLD,
+        ),
+        (
+            "Messages (1)",
+            render::DetailKind::Heading,
+            Color::Indexed(81),
+            Modifier::BOLD,
+        ),
+        (
+            "#1 reviewer",
+            render::DetailKind::MessageHeader,
+            Color::Indexed(222),
+            Modifier::empty(),
+        ),
+        (
+            "Created: Latest message",
+            render::DetailKind::Body,
+            Color::Reset,
+            Modifier::empty(),
+        ),
+        (
+            "Created: now",
+            render::DetailKind::Muted,
+            Color::Gray,
+            Modifier::empty(),
+        ),
+        (
+            "Task #1 unavailable.",
+            render::DetailKind::Warning,
+            Color::Yellow,
+            Modifier::empty(),
+        ),
+    ];
+    let detail_rows: Vec<_> = expected
+        .iter()
+        .map(|(text, kind, _, _)| render::DetailRow::new(*text, *kind))
+        .collect();
     let layout = render::Layout::new(&["Dirty draft".into()], &[], 72);
     let chrome = render::Chrome {
         title: "Editor",
@@ -112,53 +146,78 @@ fn selected_task_renders_details_between_list_and_editor() {
         message: "",
     };
     let mut terminal = Terminal::new(TestBackend::new(72, 24)).unwrap();
-    terminal
-        .draw(|frame| {
-            dashboard::draw(
-                frame,
-                &rows,
-                &HashMap::from([(1, "new")]),
-                Some(1),
-                dashboard::View {
-                    query: "",
-                    focused: false,
-                    top: &mut 0,
-                    follow_selected: true,
-                    modal_lines: None,
-                    details: Some(dashboard::DetailsView {
-                        rows: &detail_rows,
-                        top: &mut 0,
-                    }),
-                },
-                render::DashboardEditor {
-                    layout: &layout,
-                    cursor: 0,
-                    top: &mut 0,
-                    chrome: &chrome,
-                    message_is_error: false,
-                    follow_cursor: true,
-                },
-                false,
-            )
-        })
-        .unwrap();
-    let buffer = terminal.backend().buffer();
-    assert!(line(buffer, 3).contains("Selected"));
-    assert!(line(buffer, 8).starts_with("Task #1"));
-    assert!(line(buffer, 11).starts_with("Latest message"));
-    assert_eq!(line(buffer, 7), "─".repeat(72));
-    assert_eq!(line(buffer, 12), "─".repeat(72));
-    assert!(line(buffer, 13).starts_with("Editor"));
-    assert!(line(buffer, 14).starts_with("Dirty draft"));
-    assert_eq!(
-        terminal.get_cursor_position().unwrap(),
-        Position::new(0, 14)
-    );
+    for color in [true, false] {
+        for requested_top in [0, 1, 2] {
+            let mut details_top = requested_top;
+            terminal
+                .draw(|frame| {
+                    dashboard::draw(
+                        frame,
+                        &rows,
+                        &HashMap::from([(1, "new")]),
+                        Some(1),
+                        dashboard::View {
+                            query: "",
+                            focused: false,
+                            top: &mut 0,
+                            follow_selected: true,
+                            modal_lines: None,
+                            details: Some(dashboard::DetailsView {
+                                rows: &detail_rows,
+                                top: &mut details_top,
+                            }),
+                        },
+                        render::DashboardEditor {
+                            layout: &layout,
+                            cursor: 0,
+                            top: &mut 0,
+                            chrome: &chrome,
+                            message_is_error: false,
+                            follow_cursor: true,
+                        },
+                        color,
+                    )
+                })
+                .unwrap();
+            assert_eq!(details_top, requested_top);
+            let buffer = terminal.backend().buffer();
+            assert!(line(buffer, 3).contains("Selected"));
+            for (offset, (text, _, foreground, modifier)) in
+                expected.iter().skip(details_top).take(4).enumerate()
+            {
+                let y = 8 + offset as u16;
+                assert!(line(buffer, y).starts_with(text));
+                for x in 0..72 {
+                    assert_eq!(
+                        buffer[(x, y)].fg,
+                        if color { *foreground } else { Color::Reset },
+                        "cell {x},{y}, top {details_top}"
+                    );
+                    assert_eq!(buffer[(x, y)].bg, Color::Reset);
+                    assert_eq!(
+                        buffer[(x, y)].modifier,
+                        if color { *modifier } else { Modifier::empty() },
+                        "cell {x},{y}, top {details_top}"
+                    );
+                }
+            }
+            assert_eq!(line(buffer, 7), "─".repeat(72));
+            assert_eq!(line(buffer, 12), "─".repeat(72));
+            assert!(line(buffer, 13).starts_with("Editor"));
+            assert!(line(buffer, 14).starts_with("Dirty draft"));
+            assert_eq!(
+                terminal.get_cursor_position().unwrap(),
+                Position::new(0, 14)
+            );
+        }
+    }
 }
 
 #[test]
 fn details_scroll_clamps_without_moving_editor() {
-    let detail_rows: Vec<_> = (0..10).map(|index| format!("Detail {index}")).collect();
+    let detail_rows: Vec<_> = (0..10)
+        .map(|index| render::DetailRow::new(format!("Detail {index}"), render::DetailKind::Body))
+        .collect();
     let layout = render::Layout::new(&["Draft".into()], &[], 72);
     let chrome = render::Chrome {
         title: "Editor",

@@ -16,7 +16,7 @@ const BODY_FG: Color = Color::Indexed(252);
 const BODY_BG: Color = Color::Indexed(236);
 
 pub struct DetailsView<'a> {
-    pub rows: &'a [String],
+    pub rows: &'a [render::DetailRow],
     pub top: &'a mut usize,
 }
 
@@ -280,13 +280,21 @@ fn details(frame: &mut Frame<'_>, area: Rect, view: DetailsView<'_>, color: bool
     let height = details_height(area);
     *view.top = (*view.top).min(view.rows.len().saturating_sub(height));
     for (offset, row) in view.rows.iter().skip(*view.top).take(height).enumerate() {
-        let style = if color && *view.top == 0 && offset == 0 {
-            Style::default().fg(ACCENT).add_modifier(Modifier::BOLD)
+        let style = if color {
+            match row.kind {
+                render::DetailKind::Heading => {
+                    Style::default().fg(ACCENT).add_modifier(Modifier::BOLD)
+                }
+                render::DetailKind::MessageHeader => Style::default().fg(Color::Indexed(222)),
+                render::DetailKind::Muted => Style::default().fg(Color::Gray),
+                render::DetailKind::Warning => Style::default().fg(Color::Yellow),
+                render::DetailKind::Body => Style::default(),
+            }
         } else {
             Style::default()
         };
         frame.render_widget(
-            Paragraph::new(row.clone()).style(style),
+            Paragraph::new(row.text.clone()).style(style),
             Rect::new(area.x, area.y + offset as u16, area.width, 1),
         );
     }
@@ -389,7 +397,10 @@ pub fn draw(
         Paragraph::new("─".repeat(list.width.into())).style(separator_style),
         Rect::new(list.x, list.y + list.height - 1, list.width, 1),
     );
-    let empty_details = ["Select task to view details.".to_owned()];
+    let empty_details = [render::DetailRow::new(
+        "Select task to view details.",
+        render::DetailKind::Muted,
+    )];
     let mut empty_top = 0;
     let details_view = list_view.details.unwrap_or(DetailsView {
         rows: &empty_details,

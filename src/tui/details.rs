@@ -1,58 +1,145 @@
+use super::render::{DetailKind, DetailRow, Layout};
 use crate::db::{Task, TaskMessage};
 
-pub fn unavailable(id: i64, width: usize) -> Vec<String> {
-    super::render::Layout::new(&[format!("Task #{id} unavailable.")], &[], width).rows
+fn wrap(content: Vec<DetailRow>, width: usize) -> Vec<DetailRow> {
+    let last = content.len().saturating_sub(1);
+    let fragments: Vec<_> = content
+        .iter()
+        .enumerate()
+        .map(|(index, row)| {
+            if index == last {
+                row.text.clone()
+            } else {
+                format!("{}\n", row.text)
+            }
+        })
+        .collect();
+    let layout = Layout::new(&fragments, &[], width);
+    let mut kinds = vec![DetailKind::Body; layout.rows.len()];
+    for (index, row) in content.iter().enumerate() {
+        let start = layout.positions[index].0;
+        let end = if index == last {
+            kinds.len()
+        } else {
+            layout.positions[index + 1].0
+        };
+        kinds[start..end].fill(row.kind);
+    }
+    layout
+        .rows
+        .into_iter()
+        .zip(kinds)
+        .map(|(text, kind)| DetailRow::new(text, kind))
+        .collect()
 }
 
-pub fn rows(task: &Task, messages: &[TaskMessage], width: usize) -> Vec<String> {
+pub fn unavailable(id: i64, width: usize) -> Vec<DetailRow> {
+    wrap(
+        vec![DetailRow::new(
+            format!("Task #{id} unavailable."),
+            DetailKind::Warning,
+        )],
+        width,
+    )
+}
+
+pub fn rows(task: &Task, messages: &[TaskMessage], width: usize) -> Vec<DetailRow> {
     let parent = task
         .parent_id
         .map_or_else(|| "none".to_owned(), |id| format!("#{id}"));
     let mut content = vec![
-        format!(
-            "Task #{} | {} | Priority {} | Parent {parent}",
-            task.id,
-            crate::output::status_label(&task.status),
-            task.priority
+        DetailRow::new(
+            format!(
+                "Task #{} | {} | Priority {} | Parent {parent}",
+                task.id,
+                crate::output::status_label(&task.status),
+                task.priority
+            ),
+            DetailKind::Heading,
         ),
-        format!("Messages ({}) | PgUp/PgDn scroll", messages.len()),
+        DetailRow::new(
+            format!("Messages ({}) | PgUp/PgDn scroll", messages.len()),
+            DetailKind::Heading,
+        ),
     ];
     if messages.is_empty() {
-        content.push("No messages yet.".to_owned());
+        content.push(DetailRow::new("No messages yet.", DetailKind::Muted));
     } else {
         for message in messages.iter().rev() {
-            content.push(format!(
-                "#{} {} | {}",
-                message.id,
-                message.session.as_deref().unwrap_or("cli"),
-                message.created_at
+            content.push(DetailRow::new(
+                format!(
+                    "#{} {} | {}",
+                    message.id,
+                    message.session.as_deref().unwrap_or("cli"),
+                    message.created_at
+                ),
+                DetailKind::MessageHeader,
             ));
-            content.push(message.body.clone());
+            content.push(DetailRow::new(message.body.clone(), DetailKind::Body));
         }
     }
     content.extend([
-        String::new(),
-        format!("Created: {}", task.created_at),
-        format!("Updated: {}", task.updated_at),
-        format!("Archived: {}", if task.archived { "yes" } else { "no" }),
-        format!(
-            "Harness: {} / {}",
-            task.identity.harness_name.as_deref().unwrap_or("-"),
-            task.identity.harness_session.as_deref().unwrap_or("-")
+        DetailRow::new("", DetailKind::Body),
+        DetailRow::new(format!("Created: {}", task.created_at), DetailKind::Muted),
+        DetailRow::new(format!("Updated: {}", task.updated_at), DetailKind::Muted),
+        DetailRow::new(
+            format!("Archived: {}", if task.archived { "yes" } else { "no" }),
+            DetailKind::Muted,
         ),
-        format!(
-            "Orchestrator: {} / {}",
-            task.identity.orchestrator_name.as_deref().unwrap_or("-"),
-            task.identity.orchestrator_session.as_deref().unwrap_or("-")
+        DetailRow::new(
+            format!(
+                "Harness: {} / {}",
+                task.identity.harness_name.as_deref().unwrap_or("-"),
+                task.identity.harness_session.as_deref().unwrap_or("-")
+            ),
+            DetailKind::Muted,
+        ),
+        DetailRow::new(
+            format!(
+                "Orchestrator: {} / {}",
+                task.identity.orchestrator_name.as_deref().unwrap_or("-"),
+                task.identity.orchestrator_session.as_deref().unwrap_or("-")
+            ),
+            DetailKind::Muted,
         ),
     ]);
-    super::render::Layout::new(&[content.join("\n")], &[], width).rows
+    wrap(content, width)
 }
 
 #[cfg(test)]
 mod tests {
-    use super::{rows, unavailable};
+    use super::{rows, unavailable, wrap};
     use crate::db::{Task, TaskMessage};
+    use crate::tui::render::{DetailKind, DetailRow};
+
+    fn text(rows: &[DetailRow], separator: &str) -> String {
+        rows.iter()
+            .map(|row| row.text.as_str())
+            .collect::<Vec<_>>()
+            .join(separator)
+    }
+
+    #[test]
+    fn wrapping_preserves_roles_at_full_width_and_newlines() {
+        let content = vec![
+            DetailRow::new("AAAAAA", DetailKind::Heading),
+            DetailRow::new("B\nBB", DetailKind::Body),
+            DetailRow::new("CCC", DetailKind::MessageHeader),
+            DetailRow::new("D", DetailKind::Muted),
+        ];
+        let wrapped = wrap(content, 3);
+        assert_eq!(
+            wrapped,
+            vec![
+                DetailRow::new("AAA", DetailKind::Heading),
+                DetailRow::new("AAA", DetailKind::Heading),
+                DetailRow::new("B", DetailKind::Body),
+                DetailRow::new("BB", DetailKind::Body),
+                DetailRow::new("CCC", DetailKind::MessageHeader),
+                DetailRow::new("D", DetailKind::Muted),
+            ]
+        );
+    }
 
     fn task() -> Task {
         Task {
@@ -78,8 +165,9 @@ mod tests {
     fn unavailable_task_notice_wraps_at_minimum_width() {
         let lines = unavailable(12345, 12);
         assert!(lines.len() > 1);
-        assert!(lines.iter().all(|row| row.len() <= 12));
-        assert_eq!(lines.concat(), "Task #12345 unavailable.");
+        assert!(lines.iter().all(|row| row.text.len() <= 12));
+        assert_eq!(text(&lines, ""), "Task #12345 unavailable.");
+        assert!(lines.iter().all(|row| row.kind == DetailKind::Warning));
     }
 
     #[test]
@@ -98,7 +186,8 @@ mod tests {
                 created_at: "2026-10-02T14:00:00.000Z".into(),
             },
         ];
-        let rendered = rows(&task(), &messages, 120).join("\n");
+        let detail_rows = rows(&task(), &messages, 120);
+        let rendered = text(&detail_rows, "\n");
         for value in [
             "Task #4",
             "In progress",
@@ -120,15 +209,22 @@ mod tests {
         );
         assert!(rendered.find("Earlier message").unwrap() < rendered.find("Created:").unwrap());
         assert!(!rendered.contains("Full editable description"));
+        assert_eq!(detail_rows[0].kind, DetailKind::Heading);
+        assert_eq!(detail_rows[1].kind, DetailKind::Heading);
+        assert_eq!(detail_rows[2].kind, DetailKind::MessageHeader);
+        assert_eq!(detail_rows[3].kind, DetailKind::Body);
+        assert_eq!(detail_rows[4].kind, DetailKind::Body);
+        assert!(
+            detail_rows
+                .iter()
+                .filter(|row| row.text.starts_with("Created:") || row.text.starts_with("Harness:"))
+                .all(|row| row.kind == DetailKind::Muted)
+        );
     }
 
     #[test]
     fn empty_messages_and_unicode_controls_are_readable() {
-        assert!(
-            rows(&task(), &[], 80)
-                .join("\n")
-                .contains("No messages yet.")
-        );
+        assert!(text(&rows(&task(), &[], 80), "\n").contains("No messages yet."));
         let messages = [TaskMessage {
             id: 1,
             body: "界界界界界界界界\n\x1b[31m unsafe".into(),
@@ -139,10 +235,10 @@ mod tests {
         assert!(
             lines
                 .iter()
-                .all(|row| unicode_width::UnicodeWidthStr::width(row.as_str()) <= 12)
+                .all(|row| unicode_width::UnicodeWidthStr::width(row.text.as_str()) <= 12)
         );
-        assert!(!lines.join("\n").contains('\x1b'));
-        assert!(lines.join("").contains("\\u{1b}"));
-        assert!(lines.join("").contains("界界界界界界界界"));
+        assert!(!text(&lines, "\n").contains('\x1b'));
+        assert!(text(&lines, "").contains("\\u{1b}"));
+        assert!(text(&lines, "").contains("界界界界界界界界"));
     }
 }

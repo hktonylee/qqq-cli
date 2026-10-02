@@ -40,6 +40,30 @@ pub struct DashboardEditor<'a> {
     pub follow_cursor: bool,
 }
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum DetailKind {
+    Heading,
+    MessageHeader,
+    Body,
+    Muted,
+    Warning,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct DetailRow {
+    pub text: String,
+    pub kind: DetailKind,
+}
+
+impl DetailRow {
+    pub fn new(text: impl Into<String>, kind: DetailKind) -> Self {
+        Self {
+            text: text.into(),
+            kind,
+        }
+    }
+}
+
 pub struct Layout {
     pub rows: Vec<String>,
     pub positions: Vec<(usize, usize)>,
