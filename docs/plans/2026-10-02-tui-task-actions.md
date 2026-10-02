@@ -13,7 +13,7 @@ callback that reuses DB transitions and session discovery.
 - [x] Add menu/input/confirmation state, modal rendering, success refresh,
   failure preservation. Run focused PTY and model/render tests.
 - [x] Update README key help and verify help/footer copy.
-- [ ] Run full suite, fmt, Clippy, diff check; request read-only review and fix
+- [x] Run full suite, fmt, Clippy, diff check; request read-only review and fix
   findings.
 - [ ] Fast-forward local master, rerun integrated checks, install CLI, complete
   queue task #70, remove owned worktree/branch, call `qqq next --wait` once.
