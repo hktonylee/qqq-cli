@@ -331,15 +331,9 @@ fn execute(cli: Cli, display_limit: Option<i64>) -> Result<Value> {
                     && images.is_empty())
             {
                 let description = description.as_deref().unwrap_or(&task.description);
-                let mut outcome = editor::compose(description, edit, None)?;
+                let mut outcome = editor::compose_existing(description, edit, id, &db)?;
                 outcome.composition.images.extend(images);
-                json!(db.edit(
-                    id,
-                    Some(&outcome.composition.description),
-                    None,
-                    &outcome.composition.images,
-                    set_parent
-                )?)
+                json!(db.edit_composition(id, &outcome.composition, set_parent)?)
             } else {
                 ensure!(
                     reason.is_none() || matches!(set_status, Some(EditStatus::Error)),

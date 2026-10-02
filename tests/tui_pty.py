@@ -42,6 +42,9 @@ with tempfile.TemporaryDirectory(prefix="qqq-tui-test-") as folder:
         args = ["edit", "-1"]
     image = Path(folder) / "test image.png"
     image.write_bytes(base64.b64decode("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aGD8AAAAASUVORK5CYII="))
+    if scenario == "edit_image":
+        cli("add", "Before ![test image.png](.qqq/images/1/1.png)", "--image", str(image))
+        args = ["edit", "-1"]
     if scenario == "continuous_flags":
         cli("add", "Parent")
         args.extend(["--parent", "1", "--image", str(image)])
@@ -125,6 +128,10 @@ with tempfile.TemporaryDirectory(prefix="qqq-tui-test-") as folder:
                 read_until(b"Ctrl-S")
                 assert b"task #2" not in screen and b"new task" not in screen
             paste(" amended")
+        elif scenario == "edit_image":
+            read_until(b"[Image #1: test image.png]")
+            paste("'" + str(image) + "'")
+            read_until(b"[Image #2: test image.png]")
         elif scenario == "escape_empty":
             pass
         elif scenario == "escape_deleted":
@@ -293,6 +300,12 @@ with tempfile.TemporaryDirectory(prefix="qqq-tui-test-") as folder:
                 assert task["description"] == "alpha "
             elif scenario == "alt_words":
                 assert task["description"] == "alpha XbetaY"
+            elif scenario == "edit_image":
+                assert task["description"] == (
+                    "Before ![test image.png](.qqq/images/1/1.png)"
+                    "![test image.png](.qqq/images/1/2.png)"
+                )
+                assert [item["id"] for item in cli("show", "1")["images"]] == [1, 2]
             elif scenario not in ("continuous", "continuous_flags", "continuous_discard"):
                 assert task["id"] == 1
                 assert task["description"] == "Original\n\nDetails amended"

@@ -122,6 +122,11 @@ fn tui_legacy_image_label_reloads_and_converts_on_save() {
 }
 
 #[test]
+fn tui_edit_command_reloads_and_saves_image_atoms() {
+    scenario("edit_image");
+}
+
+#[test]
 fn tui_add_history_deleted_selection_does_not_create_task() {
     history_scenario("selected_deleted");
 }

@@ -17,6 +17,22 @@ pub fn compose(
     if uses_builtin(external) {
         return crate::tui::compose(description, navigation);
     }
+    compose_external_outcome(description)
+}
+
+pub fn compose_existing(
+    description: &str,
+    external: bool,
+    task_id: i64,
+    db: &crate::db::Db,
+) -> Result<crate::tui::Outcome> {
+    if uses_builtin(external) {
+        return crate::tui::compose_existing(description, task_id, &db.image_references(task_id)?);
+    }
+    compose_external_outcome(description)
+}
+
+fn compose_external_outcome(description: &str) -> Result<crate::tui::Outcome> {
     let description = compose_external(description)?;
     Ok(crate::tui::Outcome {
         composition: crate::tui::draft::Composition {

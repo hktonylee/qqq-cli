@@ -162,7 +162,16 @@ fn cancel(saved_any: bool, dashboard: bool) -> Result<Option<Outcome>> {
     }
 }
 pub fn compose(description: &str, navigation: Option<&crate::db::Db>) -> Result<Outcome> {
-    compose_inner(description, Mode::Single(navigation))
+    compose_inner(description, Mode::Single(navigation), None)
+        .map(|saved| saved.expect("single editor returns saved composition"))
+}
+pub fn compose_existing(
+    description: &str,
+    task_id: i64,
+    references: &[crate::images::ImageReference],
+) -> Result<Outcome> {
+    let draft = Draft::from_saved(description, task_id, references)?;
+    compose_inner(description, Mode::Single(None), Some(draft))
         .map(|saved| saved.expect("single editor returns saved composition"))
 }
 pub fn compose_continuously(
@@ -176,6 +185,7 @@ pub fn compose_continuously(
             save,
             dashboard: false,
         },
+        None,
     )
     .map(|_| ())
 }
@@ -190,10 +200,15 @@ pub fn compose_dashboard(
             save,
             dashboard: true,
         },
+        None,
     )
     .map(|_| ())
 }
-fn compose_inner(description: &str, mut mode: Mode<'_, '_>) -> Result<Option<Outcome>> {
+fn compose_inner(
+    description: &str,
+    mut mode: Mode<'_, '_>,
+    initial_draft: Option<Draft>,
+) -> Result<Option<Outcome>> {
     let terminal = TerminalGuard::enter()?;
     let dashboard = matches!(
         mode,
@@ -207,7 +222,7 @@ fn compose_inner(description: &str, mut mode: Mode<'_, '_>) -> Result<Option<Out
     } else {
         None
     };
-    let mut draft = Draft::new(description);
+    let mut draft = initial_draft.unwrap_or_else(|| Draft::new(description));
     let mut baseline = description.to_owned();
     let mut target_id = None;
     let mut target_status = None;

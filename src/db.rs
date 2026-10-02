@@ -336,14 +336,7 @@ impl Db {
         draft: &crate::tui::draft::Composition,
     ) -> Result<Task> {
         match id {
-            Some(id) => self.edit_with_spans(
-                id,
-                Some(&draft.description),
-                None,
-                &draft.images,
-                None,
-                &draft.image_spans,
-            ),
+            Some(id) => self.edit_composition(id, draft, None),
             None => self.add_with_spans(
                 &draft.description,
                 parent,
@@ -351,6 +344,21 @@ impl Db {
                 &draft.image_spans,
             ),
         }
+    }
+    pub fn edit_composition(
+        &mut self,
+        id: i64,
+        draft: &crate::tui::draft::Composition,
+        parent: Option<ParentChange>,
+    ) -> Result<Task> {
+        self.edit_with_spans(
+            id,
+            Some(&draft.description),
+            None,
+            &draft.images,
+            parent,
+            &draft.image_spans,
+        )
     }
     pub fn image_references(&self, task_id: i64) -> Result<Vec<ImageReference>> {
         Ok(self
