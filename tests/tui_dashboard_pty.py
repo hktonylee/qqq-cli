@@ -54,9 +54,9 @@ class TerminalScreen:
             elif char == "\n":
                 self.y = min(self.height - 1, self.y + 1)
             elif char >= " ":
-                # Dashboard PTY fixtures use ASCII. Fail fast if that changes:
-                # cell width for Unicode graphemes needs a fuller emulator.
-                assert char.isascii(), f"Unsupported screen character {char!r}"
+                # Task tree adds single-cell box drawing glyphs. Other wide
+                # Unicode needs a fuller screen emulator.
+                assert char.isascii() or char in "└├─│", f"Unsupported screen character {char!r}"
                 if self.x >= self.width:
                     self.x = 0
                     self.y = min(self.height - 1, self.y + 1)
@@ -83,7 +83,7 @@ binary, scenario = sys.argv[1:]
 with tempfile.TemporaryDirectory(prefix="qqq-dashboard-test-") as folder:
     env = dict(os.environ, HOME=folder, TERM="xterm-256color")
     env.pop("NO_COLOR", None)
-    if scenario in ("no_color", "pasteboard_no_color"):
+    if scenario in ("no_color", "pasteboard_no_color", "filter_no_color"):
         env["NO_COLOR"] = "1"
     elif scenario == "dumb":
         env["TERM"] = "dumb"
@@ -97,8 +97,13 @@ with tempfile.TemporaryDirectory(prefix="qqq-dashboard-test-") as folder:
         return json.loads(result.stdout)
 
     cli("init")
-    cli("add", "First")
-    cli("add", "Second")
+    if scenario in ("filter", "filter_no_color"):
+        cli("add", "Parent")
+        cli("add", "Child\nNeEdLe on second line", "--parent", "1")
+        cli("add", "Other")
+    else:
+        cli("add", "First")
+        cli("add", "Second")
     if scenario in ("color", "no_color", "dumb"):
         cli("next", "--local", "--session", "worker")
     if scenario == "scroll":
@@ -146,6 +151,14 @@ with tempfile.TemporaryDirectory(prefix="qqq-dashboard-test-") as folder:
                     raise AssertionError(f"Editor exited before {needle!r}") from error
             assert child.poll() is None, f"Editor exited before {needle!r}: {screen[-2000:]!r}"
 
+    def wait_visible(predicate):
+        deadline = time.monotonic() + 5
+        while not predicate():
+            assert time.monotonic() < deadline, f"Visible screen stalled, cursor={visible.x},{visible.y}, bytes={screen[-500:]!r}:\n{visible.text()}"
+            if select.select([master], [], [], 0.05)[0]:
+                capture(os.read(master, 65536))
+            assert child.poll() is None, "Editor exited before visible state"
+
     def send(data):
         remaining = memoryview(data)
         deadline = time.monotonic() + 5
@@ -165,14 +178,96 @@ with tempfile.TemporaryDirectory(prefix="qqq-dashboard-test-") as folder:
             clear_capture()
             send(b"\x1b[1;2A")
             read_until(b"48;5;81")
-        elif scenario in ("no_color", "dumb", "pasteboard_no_color"):
+        elif scenario in ("no_color", "dumb", "pasteboard_no_color", "filter_no_color"):
             assert b"\x1b[38;" not in screen, screen[-2000:]
             assert b"\x1b[48;" not in screen, screen[-2000:]
-        if scenario != "scroll":
+        if scenario not in ("scroll", "filter", "filter_no_color"):
             read_until(b"Second")
             assert "First" in visible.text() and "Second" in visible.text(), visible.text()
         assert not select.select([child.stdout], [], [], 0)[0], "TUI wrote stdout while open"
-        if scenario in ("save", "save_json"):
+        if scenario in ("filter", "filter_no_color"):
+            initial_tasks = cli("list")
+            send(b"Unsaved")
+            clear_capture()
+            send(b"/needle")
+            read_until(b"Filter: needle")
+            clear_capture()
+            send(b"\x7f")
+            wait_visible(lambda: visible.text().splitlines()[1].strip() == "Filter: needl")
+            clear_capture()
+            send(b"e")
+            wait_visible(lambda: visible.text().splitlines()[1].strip() == "Filter: needle")
+            assert "Parent" in visible.text(), visible.text()
+            assert "Child" in visible.text(), visible.text()
+            assert "Other" not in visible.text(), visible.text()
+            assert "Unsaved" in visible.text(), visible.text()
+            assert "new task" in visible.text(), visible.text()
+            assert cli("list") == initial_tasks
+            if scenario == "filter_no_color":
+                assert b"\x1b[38;" not in screen, screen[-2000:]
+
+            clear_capture()
+            send(b"\x1b[1;2A")
+            read_until(b"Discard changes and switch? (y/N)")
+            send(b"n")
+            wait_visible(lambda: visible.text().splitlines()[-1].startswith("Type to filter"))
+            assert "Unsaved" in visible.text(), visible.text()
+            clear_capture()
+            send(b"/zzzz")
+            read_until(b"No matching tasks.")
+            assert cli("list") == initial_tasks
+            clear_capture()
+            send(b"\x1b")
+            wait_visible(lambda: visible.text().splitlines()[1].strip() == "Filter:"
+                         and "Other" in visible.text())
+            clear_capture()
+            send(b"\x1b")
+            wait_visible(lambda: visible.y == 9)
+            send(b"!")
+            wait_visible(lambda: "Unsaved!" in visible.text())
+
+            clear_capture()
+            send(b"/needle\t")
+            read_until(b"Filter: needle")
+            clear_capture()
+            send(b"\x13")
+            read_until(b"Saved #4. New task")
+            assert cli("show", "4")["task"]["description"] == "Unsaved!"
+            clear_capture()
+            send(b"\x1b[1;2A")
+            read_until(b"task #2")
+            clear_capture()
+            send(b"\x1b[1;2A")
+            read_until(b"task #1")
+            clear_capture()
+            send(b"\x1b[1;2B")
+            read_until(b"task #2")
+            clear_capture()
+            send(b"\x1b[1;2B")
+            read_until(b"new task")
+            assert cli("list")[0:3] == initial_tasks
+
+            clear_capture()
+            send(b"/")
+            wait_visible(lambda: visible.y == 1 and visible.text().splitlines()[1].strip() == "Filter: needle")
+            fcntl.ioctl(slave, termios.TIOCSWINSZ, struct.pack("HHHH", 7, 10, 0, 0))
+            visible.resize(10, 7)
+            clear_capture()
+            os.kill(child.pid, signal.SIGWINCH)
+            read_until(b"Resize ter")
+            fcntl.ioctl(slave, termios.TIOCSWINSZ, struct.pack("HHHH", 16, 72, 0, 0))
+            visible.resize(72, 16)
+            clear_capture()
+            os.kill(child.pid, signal.SIGWINCH)
+            read_until(b"Filter: needle")
+            read_until(b"\x1b[2;15H")
+            time.sleep(0.1)
+            clear_capture()
+            send(b"\rx")
+            wait_visible(lambda: visible.text().splitlines()[9].startswith("x"))
+            send(b"\x7f")
+            wait_visible(lambda: visible.text().splitlines()[9].strip() == "")
+        elif scenario in ("save", "save_json"):
             clear_capture()
             send(b"\x1b[1;2A")
             read_until(b"task #2")
@@ -279,7 +374,7 @@ with tempfile.TemporaryDirectory(prefix="qqq-dashboard-test-") as folder:
         send(b"\x03" if scenario in ("scroll", "color") else b"\x1b")
         deadline = time.monotonic() + 5
         while child.poll() is None:
-            assert time.monotonic() < deadline, "TUI failed to exit"
+            assert time.monotonic() < deadline, f"TUI failed to exit: {screen[-1000:]!r}\n{visible.text()}"
             if select.select([master], [], [], 0.05)[0]:
                 try:
                     capture(os.read(master, 65536))

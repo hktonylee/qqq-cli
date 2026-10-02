@@ -18,8 +18,8 @@
 
 ### Task 3: Keyboard flow and PTY
 
-- [ ] Add failing PTY scenarios for `/`, typing, backspace/Esc clear, Tab/Enter blur, full-description match, parent context, filtered Shift navigation, dirty draft, DB immutability, resize, and plain mode.
-- [ ] Wire filter state through compose loop. Preserve editor draft and selected target while filtering; navigate visible IDs with existing confirmation behavior. Update README. Run focused PTY/model/render tests and commit.
+- [x] Add failing PTY scenarios for `/`, typing, backspace/Esc clear, Tab/Enter blur, full-description match, parent context, filtered Shift navigation, dirty draft, DB immutability, resize, and plain mode.
+- [x] Wire filter state through compose loop. Preserve editor draft and selected target while filtering; navigate visible IDs with existing confirmation behavior. Update README. Run focused PTY/model/render tests and commit.
 
 ### Task 4: Verify and integrate
 

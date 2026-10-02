@@ -32,10 +32,10 @@ fn filter_bar_shows_empty_result_and_takes_cursor_only_while_focused() {
                 &[],
                 &HashMap::new(),
                 Some(99),
-                &mut 0,
-                dashboard::FilterView {
+                dashboard::ListView {
                     query: "absent",
                     focused: true,
+                    top: &mut 0,
                 },
                 render::DashboardEditor {
                     layout: &layout,
@@ -74,10 +74,10 @@ fn small_dashboard_keeps_filter_row_and_plain_style() {
                 &[],
                 &HashMap::new(),
                 None,
-                &mut 0,
-                dashboard::FilterView {
+                dashboard::ListView {
                     query: "abcdefghijklmnop",
                     focused: true,
+                    top: &mut 0,
                 },
                 render::DashboardEditor {
                     layout: &layout,
@@ -120,10 +120,10 @@ fn split_dashboard_keeps_list_above_editor() {
                 &rows,
                 &HashMap::from([(1, "new")]),
                 Some(1),
-                &mut list_top,
-                dashboard::FilterView {
+                dashboard::ListView {
                     query: "",
                     focused: false,
+                    top: &mut list_top,
                 },
                 render::DashboardEditor {
                     layout: &layout,
@@ -163,10 +163,10 @@ fn narrow_dashboard_shows_plain_resize_hint() {
                 &[],
                 &HashMap::new(),
                 None,
-                &mut 0,
-                dashboard::FilterView {
+                dashboard::ListView {
                     query: "",
                     focused: false,
+                    top: &mut 0,
                 },
                 render::DashboardEditor {
                     layout: &layout,
@@ -202,10 +202,10 @@ fn no_color_dashboard_keeps_default_cell_styles() {
                 &rows,
                 &HashMap::from([(1, "error")]),
                 None,
-                &mut 0,
-                dashboard::FilterView {
+                dashboard::ListView {
                     query: "",
                     focused: false,
+                    top: &mut 0,
                 },
                 render::DashboardEditor {
                     layout: &layout,
@@ -255,10 +255,10 @@ fn status_selection_and_editor_images_use_distinct_colors() {
                     (4, "error"),
                 ]),
                 Some(1),
-                &mut 0,
-                dashboard::FilterView {
+                dashboard::ListView {
                     query: "",
                     focused: false,
+                    top: &mut 0,
                 },
                 render::DashboardEditor {
                     layout: &layout,
@@ -308,10 +308,10 @@ fn dashboard_paste_label_uses_gold_while_body_stays_neutral() {
                 &[],
                 &HashMap::new(),
                 None,
-                &mut 0,
-                dashboard::FilterView {
+                dashboard::ListView {
                     query: "",
                     focused: false,
+                    top: &mut 0,
                 },
                 render::DashboardEditor {
                     layout: &layout,
@@ -346,10 +346,10 @@ fn failed_save_footer_uses_error_color() {
                 &[],
                 &HashMap::new(),
                 None,
-                &mut 0,
-                dashboard::FilterView {
+                dashboard::ListView {
                     query: "",
                     focused: false,
+                    top: &mut 0,
                 },
                 render::DashboardEditor {
                     layout: &layout,

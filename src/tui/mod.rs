@@ -19,6 +19,7 @@ use draft::{Composition, Draft};
 use ratatui::{Terminal, backend::CrosstermBackend};
 use std::collections::HashMap;
 use std::io::{self, IsTerminal};
+use unicode_segmentation::UnicodeSegmentation;
 
 pub struct Outcome {
     pub composition: Composition,
@@ -44,11 +45,22 @@ fn adjacent_target(
     db: &crate::db::Db,
     current: Option<i64>,
     older: bool,
+    visible_ids: Option<&[i64]>,
 ) -> Result<Option<Target>> {
     if !older && current.is_none() {
         return Ok(None);
     }
-    Ok(match db.adjacent_task(current, older)? {
+    let found = if let Some(ids) = visible_ids {
+        panel::adjacent_visible_id(ids, current, older)
+            .map(|id| {
+                db.task(id)
+                    .map(|task| (task.id, task.description, task.status))
+            })
+            .transpose()?
+    } else {
+        db.adjacent_task(current, older)?
+    };
+    Ok(match found {
         Some((id, description, status)) => {
             let draft = Draft::from_saved(&description, id, &db.image_references(id)?)?;
             Some(Target::Task {
@@ -228,6 +240,8 @@ fn compose_inner(
     let mut target_status = None;
     let mut top = 0;
     let mut list_top = 0;
+    let mut filter_query = String::new();
+    let mut filter_focused = false;
     let mut message = String::new();
     let mut message_is_error = false;
     let mut confirmation: Option<Confirmation> = None;
@@ -267,26 +281,51 @@ fn compose_inner(
         };
         let chrome = render::Chrome {
             title: &title,
-            keys: match &mode {
-                Mode::Continuous { .. } => render::ADD_KEYS,
-                Mode::Single(Some(_)) => render::NAV_KEYS,
-                Mode::Single(None) => render::KEYS,
+            keys: if filter_focused {
+                render::FILTER_KEYS
+            } else if dashboard {
+                render::DASHBOARD_KEYS
+            } else {
+                match &mode {
+                    Mode::Continuous { .. } => render::ADD_KEYS,
+                    Mode::Single(Some(_)) => render::NAV_KEYS,
+                    Mode::Single(None) => render::KEYS,
+                }
             },
             message: footer,
         };
+        let mut visible_ids = None;
         if dashboard {
             let tasks = mode.db().expect("dashboard has database").list(None)?;
+            let filter_views: Vec<_> = tasks
+                .iter()
+                .map(|task| panel::FilterTask {
+                    id: task.id,
+                    parent_id: task.parent_id,
+                    description: &task.description,
+                })
+                .collect();
+            let filtered = panel::filter_tasks(&filter_views, &filter_query);
+            let displayed: Vec<_> = tasks
+                .iter()
+                .filter(|task| filtered.included_ids.contains(&task.id))
+                .collect();
             let statuses: HashMap<_, _> = tasks
                 .iter()
                 .map(|task| (task.id, task.status.as_str()))
                 .collect();
-            let tree = crate::output::render(
-                crate::output::Format::Tasks,
-                &serde_json::json!(tasks),
-                false,
-                Some(usize::from(size.0).saturating_sub(2)),
-            );
-            let rows = panel::rows(&tree);
+            let rows = if !filter_query.is_empty() && displayed.is_empty() {
+                Vec::new()
+            } else {
+                let tree = crate::output::render(
+                    crate::output::Format::Tasks,
+                    &serde_json::json!(displayed),
+                    false,
+                    Some(usize::from(size.0).saturating_sub(2)),
+                );
+                panel::rows(&tree)
+            };
+            visible_ids = Some(filtered.ordered_ids);
             dashboard_terminal
                 .as_mut()
                 .expect("dashboard has Ratatui terminal")
@@ -296,10 +335,10 @@ fn compose_inner(
                         &rows,
                         &statuses,
                         target_id,
-                        &mut list_top,
-                        dashboard::FilterView {
-                            query: "",
-                            focused: false,
+                        dashboard::ListView {
+                            query: &filter_query,
+                            focused: filter_focused,
+                            top: &mut list_top,
                         },
                         render::DashboardEditor {
                             layout: &layout,
@@ -324,11 +363,16 @@ fn compose_inner(
         }
         match event::read()? {
             Event::Paste(text) if confirmation.is_none() => {
-                let result = paste(&mut draft, &text);
-                message_is_error = result.is_err();
-                message = result
-                    .err()
-                    .map_or_else(String::new, |error| format!("{error:#}"));
+                if filter_focused {
+                    filter_query.extend(text.chars().filter(|ch| !ch.is_control()));
+                    list_top = 0;
+                } else {
+                    let result = paste(&mut draft, &text);
+                    message_is_error = result.is_err();
+                    message = result
+                        .err()
+                        .map_or_else(String::new, |error| format!("{error:#}"));
+                }
             }
             Event::Key(key) if key.kind != KeyEventKind::Release => {
                 let control = key.modifiers.contains(KeyModifiers::CONTROL);
@@ -375,7 +419,7 @@ fn compose_inner(
                 {
                     if let Some(db) = mode.db() {
                         let older = key.code == KeyCode::Up;
-                        match adjacent_target(db, target_id, older) {
+                        match adjacent_target(db, target_id, older, visible_ids.as_deref()) {
                             Ok(Some(target)) if draft.is_dirty_against(&baseline) => {
                                 confirmation = Some(Confirmation::Switch(target));
                             }
@@ -406,6 +450,45 @@ fn compose_inner(
                         }
                         continue;
                     }
+                }
+                if dashboard && !control && !filter_focused && key.code == KeyCode::Char('/') {
+                    filter_focused = true;
+                    continue;
+                }
+                if filter_focused {
+                    if control && key.code == KeyCode::Char('c') {
+                        return cancel(saved_any, dashboard);
+                    }
+                    if control && key.code == KeyCode::Char('u') {
+                        filter_query.clear();
+                        list_top = 0;
+                    } else if !key
+                        .modifiers
+                        .intersects(KeyModifiers::CONTROL | KeyModifiers::ALT | KeyModifiers::SUPER)
+                    {
+                        match key.code {
+                            KeyCode::Tab | KeyCode::Enter => filter_focused = false,
+                            KeyCode::Esc if filter_query.is_empty() => filter_focused = false,
+                            KeyCode::Esc => {
+                                filter_query.clear();
+                                list_top = 0;
+                            }
+                            KeyCode::Backspace => {
+                                if let Some((index, _)) =
+                                    filter_query.grapheme_indices(true).next_back()
+                                {
+                                    filter_query.truncate(index);
+                                    list_top = 0;
+                                }
+                            }
+                            KeyCode::Char(character) => {
+                                filter_query.push(character);
+                                list_top = 0;
+                            }
+                            _ => (),
+                        }
+                    }
+                    continue;
                 }
                 if control {
                     match key.code {

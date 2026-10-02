@@ -14,9 +14,10 @@ const ACCENT: Color = Color::Indexed(81);
 const BODY_FG: Color = Color::Indexed(252);
 const BODY_BG: Color = Color::Indexed(236);
 
-pub struct FilterView<'a> {
+pub struct ListView<'a> {
     pub query: &'a str,
     pub focused: bool,
+    pub top: &'a mut usize,
 }
 
 fn filter_text(query: &str, width: usize) -> (String, u16) {
@@ -140,8 +141,7 @@ pub fn draw(
     rows: &[panel::ListRow],
     statuses: &HashMap<i64, &str>,
     selected: Option<i64>,
-    list_top: &mut usize,
-    filter: FilterView<'_>,
+    list_view: ListView<'_>,
     editor_state: render::DashboardEditor<'_>,
     color: bool,
 ) {
@@ -161,7 +161,7 @@ pub fn draw(
         Layout::vertical([Constraint::Percentage(50), Constraint::Percentage(50)]).split(area);
     let list = parts[0];
     let list_height = usize::from(list.height.saturating_sub(3));
-    *list_top = panel::scroll_to(rows, selected, *list_top, list_height);
+    *list_view.top = panel::scroll_to(rows, selected, *list_view.top, list_height);
     let heading_style = if color {
         Style::default().fg(ACCENT).add_modifier(Modifier::BOLD)
     } else {
@@ -171,8 +171,8 @@ pub fn draw(
         Paragraph::new("qqq tasks").style(heading_style),
         Rect::new(list.x, list.y, list.width, 1),
     );
-    let (filter_label, filter_cursor) = filter_text(filter.query, usize::from(list.width));
-    let filter_style = if color && filter.focused {
+    let (filter_label, filter_cursor) = filter_text(list_view.query, usize::from(list.width));
+    let filter_style = if color && list_view.focused {
         Style::default().fg(ACCENT).add_modifier(Modifier::BOLD)
     } else if color {
         Style::default().fg(Color::Gray)
@@ -189,7 +189,12 @@ pub fn draw(
             Rect::new(list.x, list.y + 2, list.width, 1),
         );
     }
-    for (offset, row) in rows.iter().skip(*list_top).take(list_height).enumerate() {
+    for (offset, row) in rows
+        .iter()
+        .skip(*list_view.top)
+        .take(list_height)
+        .enumerate()
+    {
         let is_selected = selected.is_some() && row.task_id == selected;
         let marker = if is_selected { "> " } else { "  " };
         let style = row_style(
@@ -212,7 +217,7 @@ pub fn draw(
         Rect::new(list.x, list.y + list.height - 1, list.width, 1),
     );
     editor(frame, parts[1], editor_state, color);
-    if filter.focused {
+    if list_view.focused {
         frame.set_cursor_position((list.x + filter_cursor, list.y + 1));
     }
 }

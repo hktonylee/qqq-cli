@@ -87,6 +87,12 @@ fn tui_dashboard_keeps_draft_after_failed_save() {
 }
 
 #[test]
+fn tui_dashboard_filter_keeps_draft_and_navigates_visible_tasks() {
+    dashboard_scenario("filter");
+    dashboard_scenario("filter_no_color");
+}
+
+#[test]
 fn tui_dashboard_pasteboard_round_trip_and_plain_mode() {
     dashboard_scenario("pasteboard");
     dashboard_scenario("pasteboard_no_color");
