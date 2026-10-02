@@ -26,7 +26,7 @@ pub fn run(json_output: bool, max_completed: Option<i64>, display_limited: bool)
         } else if display_limited && tasks.as_array().is_some_and(Vec::is_empty) {
             "No tasks to display.".to_owned()
         } else {
-            output::render(Format::Tasks, &tasks, color)
+            output::render(Format::Tasks, &tasks, color, None)
         };
         let written = (|| -> io::Result<()> {
             if terminal && !json_output {

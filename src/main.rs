@@ -463,7 +463,7 @@ fn run() -> Result<Option<String>> {
         "No tasks to display.".to_owned()
     } else {
         let color = output::color_enabled(std::io::stdout().is_terminal());
-        output::render(format, &value, color)
+        output::render(format, &value, color, None)
     }))
 }
 fn main() {

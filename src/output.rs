@@ -3,6 +3,8 @@ mod detail;
 use crate::{Commands, HerdrCommand};
 use serde_json::Value;
 use std::collections::HashMap;
+use unicode_segmentation::UnicodeSegmentation;
+use unicode_width::UnicodeWidthStr;
 
 pub enum Format {
     ConfigList,
@@ -57,6 +59,23 @@ fn clean(text: &str) -> String {
         }
     }
     result
+}
+
+fn wrap_line(text: &str, width: usize) -> Vec<String> {
+    let mut rows = vec![String::new()];
+    let mut used = 0;
+    for grapheme in text.graphemes(true) {
+        let cells = grapheme.width();
+        if used > 0 && used + cells > width {
+            rows.push(String::new());
+            used = 0;
+        }
+        rows.last_mut()
+            .expect("wrapped line always has a row")
+            .push_str(grapheme);
+        used += cells;
+    }
+    rows
 }
 
 fn field(value: &Value, key: &str) -> String {
@@ -191,7 +210,7 @@ fn link(value: &Value, color: bool) -> String {
     )
 }
 
-fn task_tree(tasks: &[Value], color: bool) -> String {
+fn task_tree(tasks: &[Value], color: bool, columns: Option<usize>) -> String {
     if tasks.is_empty() {
         return "No tasks yet.".to_owned();
     }
@@ -229,20 +248,41 @@ fn task_tree(tasks: &[Value], color: bool) -> String {
             continuations.push(!last);
         }
         let task = &tasks[index];
-        let row = format!(
-            "{:<6} {:<12} {prefix}{}",
-            field(task, "id"),
-            status(task),
-            clean(
-                task["description"]
-                    .as_str()
-                    .unwrap_or("")
-                    .lines()
-                    .next()
-                    .unwrap_or("")
-            )
+        let fields = format!("{:<6} {:<12} ", field(task, "id"), status(task));
+        let first_prefix = format!("{fields}{prefix}");
+        let continuation_prefix = format!(
+            "{}{}",
+            " ".repeat(fields.width()),
+            continuations
+                .iter()
+                .map(|&continues| if continues { "│   " } else { "    " })
+                .collect::<String>()
         );
-        lines.push(styled(&row, status_color(task, color)));
+        let description = task["description"].as_str().unwrap_or("");
+        let available = columns
+            .and_then(|width| width.checked_sub(first_prefix.width()))
+            .filter(|&width| width > 0);
+        let row_color = status_color(task, color);
+        if let Some(width) = available {
+            let mut first = true;
+            for line in description.lines() {
+                for part in wrap_line(&clean(line), width) {
+                    let padding = if first {
+                        &first_prefix
+                    } else {
+                        &continuation_prefix
+                    };
+                    lines.push(styled(&format!("{padding}{part}"), row_color));
+                    first = false;
+                }
+            }
+            if first {
+                lines.push(styled(&first_prefix, row_color));
+            }
+        } else {
+            let first_line = clean(description.lines().next().unwrap_or(""));
+            lines.push(styled(&format!("{first_prefix}{first_line}"), row_color));
+        }
         for (position, &child) in children[index].iter().enumerate().rev() {
             stack.push((child, depth + 1, position + 1 == children[index].len()));
         }
@@ -250,7 +290,7 @@ fn task_tree(tasks: &[Value], color: bool) -> String {
     lines.join("\n")
 }
 
-pub fn render(format: Format, value: &Value, color: bool) -> String {
+pub fn render(format: Format, value: &Value, color: bool, columns: Option<usize>) -> String {
     match format {
         Format::ConfigList => {
             let values = value.as_object().expect("config list is an object");
@@ -278,7 +318,11 @@ pub fn render(format: Format, value: &Value, color: bool) -> String {
             None => task(value, false, false),
         },
         Format::Task => task(value, false, true),
-        Format::Tasks => task_tree(value.as_array().expect("task list is an array"), color),
+        Format::Tasks => task_tree(
+            value.as_array().expect("task list is an array"),
+            color,
+            columns,
+        ),
         Format::Detail => detail::render(value, color),
         Format::Message => format!(
             "Message #{}\nTask: #{}\nAuthor: {}\n{}",
@@ -307,10 +351,10 @@ mod tests {
     #[test]
     fn error_rows_use_red_only_when_color_enabled() {
         let tasks = json!([{"id":1,"description":"Failure","status":"error","parent_id":null}]);
-        let colored = render(Format::Tasks, &tasks, true);
+        let colored = render(Format::Tasks, &tasks, true, None);
         assert!(colored.contains("\x1b[31m1"));
         assert!(colored.contains("Error"));
-        let plain = render(Format::Tasks, &tasks, false);
+        let plain = render(Format::Tasks, &tasks, false, None);
         assert!(plain.contains("Error"));
         assert!(!plain.contains('\x1b'));
     }
@@ -321,10 +365,58 @@ mod tests {
             {"id":1,"description":"First","status":"new","parent_id":null},
             {"id":2,"description":"Second","status":"new","parent_id":null},
         ]);
-        let output = render(Format::AddedTask, &tasks, false);
+        let output = render(Format::AddedTask, &tasks, false, None);
         assert!(output.contains("#1\nStatus: New"));
         assert!(output.contains("\n\n#2\nStatus: New"));
         assert!(output.contains("  First"));
         assert!(output.contains("  Second"));
+    }
+
+    #[test]
+    fn tty_list_shows_multiline_descriptions_with_tree_padding() {
+        let tasks = json!([
+            {"id":1,"description":"Root line\nmore root","status":"new","parent_id":null},
+            {"id":2,"description":"First child line\nmore child","status":"new","parent_id":1},
+            {"id":3,"description":"Last child\nlast detail","status":"new","parent_id":1}
+        ]);
+        let rendered = render(Format::Tasks, &tasks, false, Some(40));
+        let rows: Vec<_> = rendered.lines().collect();
+        let pad = " ".repeat(20);
+        assert_eq!(rows.len(), 7, "{rendered}");
+        assert_eq!(rows[2], format!("{pad}more root"));
+        assert_eq!(rows[4], format!("{pad}│   more child"));
+        assert_eq!(rows[6], format!("{pad}    last detail"));
+        assert!(rows[3].ends_with("├── First child line"));
+        assert!(rows[5].ends_with("└── Last child"));
+
+        let piped = render(Format::Tasks, &tasks, false, None);
+        assert_eq!(piped.lines().count(), 4);
+        assert!(!piped.contains("more root"));
+        assert!(!piped.contains("more child"));
+    }
+
+    #[test]
+    fn tty_list_wraps_by_display_cells_and_escapes_controls() {
+        let tasks = json!([{
+            "id":1,
+            "description":"ABCDEFGHIJKLMN\n界界界界界界界\n\nC\t\u{1b}",
+            "status":"new",
+            "parent_id":null
+        }]);
+        let rendered = render(Format::Tasks, &tasks, false, Some(32));
+        let rows: Vec<_> = rendered.lines().collect();
+        let pad = " ".repeat(20);
+        assert_eq!(&rows[1][20..], "ABCDEFGHIJKL");
+        assert_eq!(rows[2], format!("{pad}MN"));
+        assert_eq!(rows[3], format!("{pad}界界界界界界"));
+        assert_eq!(rows[4], format!("{pad}界"));
+        assert_eq!(rows[5], pad);
+        assert!(rendered.contains("C\\t\\u{1b}"));
+        assert!(!rendered.contains('\u{1b}'));
+        assert!(
+            rows.iter()
+                .skip(1)
+                .all(|row| unicode_width::UnicodeWidthStr::width(*row) <= 32)
+        );
     }
 }
