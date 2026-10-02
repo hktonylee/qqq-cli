@@ -5,16 +5,16 @@ references; show read-only preview until explicit `--yes`.
 
 **Architecture:** `src/delete.rs` owns preview, transaction, image staging,
 rollback, and interrupted-operation recovery. CLI/output expose typed JSON and
-human summaries. Existing DB opener recovers staged image dirs before commands.
+human summaries. CLI recovers staged image dirs after DB open, before commands.
 
-- [ ] Write failing CLI tests for preview, guards, JSON/human output, attachment
+- [x] Write failing CLI tests for preview, guards, JSON/human output, attachment
   cleanup, and ID non-reuse.
-- [ ] Add delete preview/commit flow with under-lock validation and reversible
+- [x] Add delete preview/commit flow with under-lock validation and reversible
   attachment staging. Confirm focused tests.
-- [ ] Add rollback and interrupted-stage recovery tests; implement recovery and
+- [x] Add rollback and interrupted-stage recovery tests; implement recovery and
   doctor diagnostic. Confirm focused tests.
-- [ ] Document backup guidance and permanent deletion behavior.
-- [ ] Run full tests, fmt, Clippy, diff check; request read-only review and fix
+- [x] Document backup guidance and permanent deletion behavior.
+- [x] Run full tests, fmt, Clippy, diff check; request read-only review and fix
   findings.
 - [ ] Fast-forward local master, rerun integrated checks, install CLI, complete
   queue task #69, remove owned worktree/branch, then call `qqq next --wait`

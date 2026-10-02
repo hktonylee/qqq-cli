@@ -2,6 +2,7 @@ mod aliases;
 mod config;
 mod config_cli;
 mod db;
+mod delete;
 mod dispatch;
 mod doctor;
 mod editor;
@@ -179,6 +180,15 @@ enum Commands {
         #[arg(allow_negative_numbers = true)]
         id: i64,
     },
+    /// Preview or permanently delete an archived task without dependent children.
+    Delete {
+        /// Positive task ID; relative creation indexes are unsafe for permanent deletion.
+        #[arg(value_parser = clap::value_parser!(i64).range(1..))]
+        id: i64,
+        /// Confirm permanent deletion after reviewing preview and backup.
+        #[arg(long)]
+        yes: bool,
+    },
     /// Return owned task or atomically claim highest-priority ready task (oldest ID on ties).
     Next {
         /// Wait until a task is available; concurrent sessions claim each task once.
@@ -274,8 +284,12 @@ fn execute(cli: Cli, display_limit: Option<i64>) -> Result<Value> {
     if let Commands::Restore { source } = &cli.command {
         return snapshot::restore::run(source);
     }
+    if let Commands::Delete { id, yes: false } = &cli.command {
+        return Ok(json!(delete::preview_cli(*id)?));
+    }
     let session_input = cli.session.as_deref().or(cli.harness_session.as_deref());
     let (mut db, path) = db::Db::open(matches!(cli.command, Commands::Init))?;
+    delete::recover(&mut db.conn, &path)?;
     let project_dir = path
         .parent()
         .and_then(|directory| directory.parent())
@@ -475,6 +489,12 @@ fn execute(cli: Cli, display_limit: Option<i64>) -> Result<Value> {
         Commands::Unarchive { id } => {
             let id = db.resolve_task_id(id)?;
             json!(db.set_archived(id, false, session_input.unwrap_or("cli"))?)
+        }
+        Commands::Delete { id, yes: true } => {
+            json!(delete::run(&mut db, &path, id)?)
+        }
+        Commands::Delete { yes: false, .. } => {
+            unreachable!("delete preview handled before database open")
         }
         Commands::Next { wait, .. } => {
             loop {

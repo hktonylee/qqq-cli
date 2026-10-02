@@ -202,7 +202,33 @@ pub fn run() -> Result<Value> {
             &mut report,
         );
     }
+    check_delete_staging(db_path.parent().expect("database has parent"), &mut report);
     finish_report(report, &db_path)
+}
+
+fn check_delete_staging(project: &Path, report: &mut Report) {
+    let stage = project.join(".delete-staging");
+    match fs::symlink_metadata(&stage) {
+        Ok(metadata) if metadata.file_type().is_dir() => report.issue(
+            "DELETE_RECOVERY_PENDING",
+            &stage,
+            "Interrupted task deletion has staged images",
+            "Run qqq list to recover staged images, then rerun qqq doctor.",
+        ),
+        Ok(_) => report.issue(
+            "DELETE_RECOVERY_PENDING",
+            &stage,
+            "Deletion staging path is unsafe",
+            "Move unsafe path aside, then rerun qqq doctor.",
+        ),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => (),
+        Err(error) => report.issue(
+            "DELETE_RECOVERY_PENDING",
+            &stage,
+            format!("Cannot inspect deletion staging: {error}"),
+            "Fix path permissions, then rerun qqq doctor.",
+        ),
+    }
 }
 
 fn begin_snapshot(conn: &Connection) -> rusqlite::Result<()> {

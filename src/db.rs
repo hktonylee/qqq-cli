@@ -77,7 +77,7 @@ pub struct Task {
 fn is_false(value: &bool) -> bool {
     !*value
 }
-fn task_row(r: &rusqlite::Row<'_>) -> rusqlite::Result<Task> {
+pub(crate) fn task_row(r: &rusqlite::Row<'_>) -> rusqlite::Result<Task> {
     Ok(Task {
         id: r.get(0)?,
         description: r.get(1)?,

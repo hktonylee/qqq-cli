@@ -23,6 +23,7 @@ pub enum Format {
     Backup,
     Restore,
     Doctor,
+    Delete,
 }
 
 impl From<&Commands> for Format {
@@ -44,6 +45,7 @@ impl From<&Commands> for Format {
             Commands::Backup { .. } => Self::Backup,
             Commands::Restore { .. } => Self::Restore,
             Commands::Doctor => Self::Doctor,
+            Commands::Delete { .. } => Self::Delete,
             Commands::Tui { .. } => Self::Task,
             Commands::Edit { .. }
             | Commands::Archive { .. }
@@ -398,6 +400,39 @@ pub fn render(format: Format, value: &Value, color: bool, columns: Option<usize>
                     lines.push(format!("  Path: {}", field(issue, "path")));
                     lines.push(format!("  Action: {}", field(issue, "action")));
                 }
+            }
+            lines.join("\n")
+        }
+        Format::Delete => {
+            let action = if value["deleted"] == true {
+                "Deleted"
+            } else {
+                "Preview deletion of"
+            };
+            let mut lines = vec![format!(
+                "{action} task #{}: {} messages, {} events, {} Herdr links, {} images.",
+                field(&value["task"], "id"),
+                field(value, "messages"),
+                field(value, "events"),
+                field(value, "herdr_links"),
+                field(value, "images")
+            )];
+            if let Some(description) = value["task"]["description"].as_str() {
+                lines.push(format!(
+                    "Description: {}",
+                    clean(description.lines().next().unwrap_or(""))
+                ));
+            }
+            if let Some(paths) = value["image_paths"].as_array() {
+                for path in paths {
+                    if let Some(path) = path.as_str() {
+                        lines.push(format!("  Image: {}", clean(path)));
+                    }
+                }
+            }
+            if value["deleted"] != true {
+                lines.push("Run qqq backup before permanent deletion.".to_owned());
+                lines.push("Re-run with --yes to delete.".to_owned());
             }
             lines.join("\n")
         }

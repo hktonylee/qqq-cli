@@ -410,6 +410,27 @@ with empty `.qqq`; existing data and nested projects are rejected. Invalid
 archives leave project unchanged. Relative snapshot paths resolve from current
 directory.
 
+Preview permanent deletion before confirming it:
+
+```sh
+qqq backup ../before-delete.tar
+qqq delete 42
+qqq delete 42 --yes
+```
+
+Only archived tasks without children can be deleted. Use positive task ID;
+relative creation indexes can change before confirmation. Preview lists messages,
+events, Herdr link, stored images, and paths without changing project data;
+`--json` returns same counts with `deleted:false`. `--yes` removes task and
+dependent data permanently, including stored image files, then returns
+`deleted:true`. Release or complete an active task before archiving it; delete
+or reparent every child before deleting parent. IDs remain reserved after
+deletion. Preview refuses legacy DB versions and pending recovery without
+changing files; run `qqq list` to migrate or recover before previewing again.
+If deletion stops while images are staged, next DB-backed qqq command recovers
+them according to committed DB state. Keep backup until recovered project
+passes `qqq doctor`.
+
 Check project health without changing DB or attachments:
 
 ```sh
@@ -424,7 +445,8 @@ message, and action. Doctor never migrates DB. If SQLite journal/WAL sidecars
 exist, stop writers and recover or checkpoint SQLite before rerunning doctor.
 For damaged DB or images, restore verified snapshot into new directory first;
 inspect recovered data before replacing damaged project files. Keep damaged
-copy until recovery is verified.
+copy until recovery is verified. `DELETE_RECOVERY_PENDING` means staged deletion
+needs a normal qqq command to recover, followed by another doctor check.
 
 To move old root-level `qqq.db`, stop DB writers. Before `qqq init`, check that
 `.qqq/qqq.db` does not exist. From project root:

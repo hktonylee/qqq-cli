@@ -1,10 +1,12 @@
 # Guarded Permanent Task Deletion
 
-`qqq delete <id>` returns read-only preview: task identity, dependent data
+`qqq delete <id>` requires positive ID and returns read-only preview: task identity, dependent data
 counts, stored image paths, backup advice, and `deleted:false`. `--yes` repeats
 all guards under `BEGIN IMMEDIATE`, deletes data, returns same summary with
 `deleted:true`. Both JSON and human output distinguish preview from completed
-deletion. A task must be archived and not in progress; any child, including
+deletion. Preview opens existing schema-9 DB read-only, refusing migration,
+SQLite sidecars, or pending deletion recovery so it never changes project.
+A task must be archived and not in progress; any child, including
 archived/completed child, blocks deletion. Errors name required archive,
 release/complete, or child reparent/delete step.
 
@@ -17,7 +19,7 @@ renaming task image directory to `.qqq/.delete-staging/<id>`, deleting rows,
 and committing. If SQL or commit fails, rename directory back before rolling
 back, so DB references remain valid. Sync directory entries around rename.
 
-Staged directory allows interrupted operation recovery. On next DB open,
+Staged directory allows interrupted operation recovery. On next CLI DB open,
 recover staging under SQLite write lock: task row present -> rename images
 back; task row absent -> finish file cleanup. Reject unsafe/conflicting stage
 paths. `qqq doctor` reports pending staging and directs user to run qqq command
