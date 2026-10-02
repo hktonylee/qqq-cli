@@ -48,6 +48,9 @@ qqq show 1
 qqq show -1                         # newest task; -2 is second newest
 qqq list --max-completed 10
 qqq list --all                      # bypass configured completion limit
+qqq list --query "parser error"     # search full descriptions, ignoring case
+qqq list --status new --status error
+qqq list --query "parser" --status in_progress --all
 qqq list --watch
 qqq list --watch --json
 ```
@@ -61,6 +64,15 @@ task.
 `--max-completed N` keeps N most recent completions plus unfinished tasks;
 `0` hides completed tasks. Hidden parents display children as roots. `--all`
 bypasses configured limit; it conflicts with `--max-completed`.
+
+`--query TEXT` matches any part of a full description, including later lines,
+using Unicode lowercase comparison. Repeat `--status` to match any listed
+status: `new`, `in_progress`, `completed`, or `error`. Query and statuses combine
+with AND. Search runs after completed-display limit; use `--all` to search all
+completed tasks. Visible ancestors of matches appear as `[context]` rows even
+when they do not match filters. JSON stays flat and marks those ancestors with
+`context_only: true`; direct matches keep existing task fields. Empty filtered
+results return `[]` in JSON or `No matching tasks.` in human output.
 
 `--watch` prints initial list, then refreshes after DB commits. Terminal output
 redraws; pipes, `TERM=dumb` and JSON append snapshots. Ctrl-C stops watching.

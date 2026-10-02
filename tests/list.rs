@@ -121,6 +121,61 @@ fn matching_child_includes_visible_ancestors_only_as_context() {
 }
 
 #[test]
+fn filtered_human_tree_labels_context_and_empty_results() {
+    let dir = project();
+    let p = dir.path();
+    ok(p, &["add", "Parent"]);
+    ok(p, &["add", "Needle child", "--parent", "1"]);
+    let output = command(p)
+        .args(["list", "--query", "child"])
+        .output()
+        .unwrap();
+    assert!(output.status.success());
+    let text = String::from_utf8(output.stdout).unwrap();
+    assert!(text.contains("[context] Parent"), "{text}");
+    assert!(text.contains("└── Needle child"), "{text}");
+
+    let empty = command(p)
+        .args(["list", "--query", "absent"])
+        .output()
+        .unwrap();
+    assert!(empty.status.success());
+    assert_eq!(
+        String::from_utf8(empty.stdout).unwrap(),
+        "No matching tasks.\n"
+    );
+    assert_eq!(ok(p, &["list", "--query", "absent"]), serde_json::json!([]));
+}
+
+#[test]
+fn status_filter_respects_completed_limit_and_rejects_invalid_values() {
+    let dir = project();
+    let p = dir.path();
+    ok(p, &["add", "Finished"]);
+    ok(p, &["next", "--session", "a"]);
+    ok(p, &["complete", "1", "--session", "a"]);
+    assert_eq!(
+        ok(
+            p,
+            &["list", "--status", "completed", "--max-completed", "0"]
+        ),
+        serde_json::json!([])
+    );
+    assert_eq!(
+        ids(&ok(p, &["list", "--status", "completed", "--all"])),
+        [1]
+    );
+
+    let invalid = command(p)
+        .args(["list", "--status", "pending"])
+        .output()
+        .unwrap();
+    assert_eq!(invalid.status.code(), Some(2));
+    assert!(invalid.stdout.is_empty());
+    assert!(String::from_utf8_lossy(&invalid.stderr).contains("possible values"));
+}
+
+#[test]
 fn completed_limit_keeps_recent_completions_and_all_unfinished_tasks() {
     let dir = project();
     let p = dir.path();

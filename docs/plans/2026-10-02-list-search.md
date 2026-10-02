@@ -22,8 +22,8 @@
 
 **Files:** `src/output.rs`, `src/main.rs`, `tests/list.rs`, `README.md`
 
-- [ ] Add failing human CLI assertions: parent prints `[context]`, child stays in tree, filtered empty prints `No matching tasks.`, JSON filtered empty is `[]`, and `--status completed --max-completed 0` returns empty while `--all` can show completed matches. Test invalid status exits 2 with empty stdout and README-style examples.
-- [ ] Prefix context-only task descriptions in `task_tree` without changing unfiltered rows. In `run`, choose `No matching tasks.` for empty filtered human output before existing display-limit empty handling. Document `--query`, repeatable `--status`, query AND status, ancestor context, and completion-limit order in README. Run `cargo test --locked --test list -- --nocapture`; commit.
+- [x] Add failing human CLI assertions: parent prints `[context]`, child stays in tree, filtered empty prints `No matching tasks.`, JSON filtered empty is `[]`, and `--status completed --max-completed 0` returns empty while `--all` can show completed matches. Test invalid status exits 2 with empty stdout and README-style examples.
+- [x] Prefix context-only task descriptions in `task_tree` without changing unfiltered rows. In `run`, choose `No matching tasks.` for empty filtered human output before existing display-limit empty handling. Document `--query`, repeatable `--status`, query AND status, ancestor context, and completion-limit order in README. Run `cargo test --locked --test list -- --nocapture`; commit.
 
 ### Task 3: Watch integration and verification
 

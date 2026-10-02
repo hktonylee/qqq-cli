@@ -449,6 +449,12 @@ fn execute(cli: Cli, display_limit: Option<i64>) -> Result<Value> {
 fn run() -> Result<Option<String>> {
     let cli = Cli::parse_from(aliases::expand(std::env::args_os().collect())?);
     let is_tui = matches!(&cli.command, Commands::Tui);
+    let filtered_list = match &cli.command {
+        Commands::List {
+            query, statuses, ..
+        } => query.is_some() || !statuses.is_empty(),
+        _ => false,
+    };
     let display_limit = match &cli.command {
         Commands::List {
             all: false,
@@ -482,6 +488,8 @@ fn run() -> Result<Option<String>> {
     }
     Ok(Some(if json {
         serde_json::to_string_pretty(&value).expect("JSON value is serializable")
+    } else if filtered_list && value.as_array().is_some_and(Vec::is_empty) {
+        "No matching tasks.".to_owned()
     } else if display_limit.is_some() && value.as_array().is_some_and(Vec::is_empty) {
         "No tasks to display.".to_owned()
     } else {

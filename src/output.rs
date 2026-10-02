@@ -277,6 +277,11 @@ fn task_tree(tasks: &[Value], color: bool, columns: Option<usize>) -> String {
                 .collect::<String>()
         );
         let description = task["description"].as_str().unwrap_or("");
+        let context_description = task["context_only"]
+            .as_bool()
+            .unwrap_or(false)
+            .then(|| format!("[context] {description}"));
+        let description = context_description.as_deref().unwrap_or(description);
         let available = columns
             .and_then(|width| width.checked_sub(first_prefix.width()))
             .filter(|&width| width > 0);
