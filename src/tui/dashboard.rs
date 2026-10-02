@@ -1,0 +1,164 @@
+use super::{panel, render};
+use ratatui::{
+    Frame,
+    layout::{Constraint, Layout, Rect},
+    style::{Color, Modifier, Style},
+    text::{Line, Span},
+    widgets::Paragraph,
+};
+use std::collections::HashMap;
+
+const ACCENT: Color = Color::Indexed(81);
+const BODY_FG: Color = Color::Indexed(252);
+const BODY_BG: Color = Color::Indexed(236);
+
+fn row_style(status: Option<&str>, selected: bool, color: bool) -> Style {
+    if !color {
+        return Style::default();
+    }
+    if selected {
+        return Style::default()
+            .fg(Color::Black)
+            .bg(ACCENT)
+            .add_modifier(Modifier::BOLD);
+    }
+    match status {
+        Some("in_progress") => Style::default().fg(ACCENT),
+        Some("completed") => Style::default().fg(Color::DarkGray),
+        Some("error") => Style::default().fg(Color::Red),
+        _ => Style::default(),
+    }
+}
+
+fn editor_line(layout: &render::Layout, index: usize, color: bool) -> Line<'static> {
+    let line = &layout.rows[index];
+    if !color {
+        return Line::from(line.clone());
+    }
+    let mut spans = Vec::new();
+    let mut offset = 0;
+    for &(start, end) in &layout.image_spans[index] {
+        spans.push(Span::raw(line[offset..start].to_owned()));
+        spans.push(Span::styled(
+            line[start..end].to_owned(),
+            Style::default().fg(ACCENT),
+        ));
+        offset = end;
+    }
+    spans.push(Span::raw(line[offset..].to_owned()));
+    Line::from(spans)
+}
+
+fn editor(frame: &mut Frame<'_>, area: Rect, editor: render::DashboardEditor<'_>, color: bool) {
+    let body = Rect::new(area.x, area.y + 1, area.width, area.height - 2);
+    let (row, column) = editor.layout.positions[editor.cursor];
+    let body_height = usize::from(body.height);
+    if row < *editor.top {
+        *editor.top = row;
+    }
+    if row >= editor.top.saturating_add(body_height) {
+        *editor.top = row + 1 - body_height;
+    }
+    let heading_style = if color {
+        Style::default().fg(ACCENT).add_modifier(Modifier::BOLD)
+    } else {
+        Style::default()
+    };
+    frame.render_widget(
+        Paragraph::new(render::clipped(editor.chrome.title, area.width.into()))
+            .style(heading_style),
+        Rect::new(area.x, area.y, area.width, 1),
+    );
+    let body_style = if color {
+        Style::default().fg(BODY_FG).bg(BODY_BG)
+    } else {
+        Style::default()
+    };
+    let lines: Vec<_> = (0..body_height)
+        .filter_map(|offset| {
+            let index = editor.top.saturating_add(offset);
+            (index < editor.layout.rows.len()).then(|| editor_line(editor.layout, index, color))
+        })
+        .collect();
+    frame.render_widget(Paragraph::new(lines).style(body_style), body);
+    let footer = if editor.chrome.message.is_empty() {
+        editor.chrome.keys
+    } else {
+        editor.chrome.message
+    };
+    let footer_style = if !color {
+        Style::default()
+    } else if editor.chrome.message.is_empty() {
+        Style::default().fg(Color::Gray)
+    } else {
+        Style::default().fg(Color::Yellow)
+    };
+    frame.render_widget(
+        Paragraph::new(render::clipped(footer, area.width.into())).style(footer_style),
+        Rect::new(area.x, area.y + area.height - 1, area.width, 1),
+    );
+    frame.set_cursor_position((
+        body.x.saturating_add(column as u16),
+        body.y.saturating_add((row - *editor.top) as u16),
+    ));
+}
+
+pub fn draw(
+    frame: &mut Frame<'_>,
+    rows: &[panel::ListRow],
+    statuses: &HashMap<i64, &str>,
+    selected: Option<i64>,
+    list_top: &mut usize,
+    editor_state: render::DashboardEditor<'_>,
+    color: bool,
+) {
+    let area = frame.area();
+    if area.width < 12 || area.height < 8 {
+        frame.render_widget(
+            Paragraph::new(render::clipped(
+                "Resize terminal (min 12x8)",
+                area.width.into(),
+            )),
+            area,
+        );
+        frame.set_cursor_position((area.x, area.y));
+        return;
+    }
+    let parts =
+        Layout::vertical([Constraint::Percentage(50), Constraint::Percentage(50)]).split(area);
+    let list = parts[0];
+    let list_height = usize::from(list.height.saturating_sub(2));
+    *list_top = panel::scroll_to(rows, selected, *list_top, list_height);
+    let heading_style = if color {
+        Style::default().fg(ACCENT).add_modifier(Modifier::BOLD)
+    } else {
+        Style::default()
+    };
+    frame.render_widget(
+        Paragraph::new("qqq tasks").style(heading_style),
+        Rect::new(list.x, list.y, list.width, 1),
+    );
+    for (offset, row) in rows.iter().skip(*list_top).take(list_height).enumerate() {
+        let is_selected = selected.is_some() && row.task_id == selected;
+        let marker = if is_selected { "> " } else { "  " };
+        let style = row_style(
+            row.task_id.and_then(|id| statuses.get(&id).copied()),
+            is_selected,
+            color,
+        );
+        frame.render_widget(
+            Paragraph::new(format!("{marker}{}", row.text)).style(style),
+            Rect::new(list.x, list.y + 1 + offset as u16, list.width, 1),
+        );
+    }
+    let separator_style = if color {
+        Style::default().fg(Color::DarkGray)
+    } else {
+        Style::default()
+    };
+    frame.render_widget(
+        Paragraph::new("-".repeat(list.width.into())).style(separator_style),
+        Rect::new(list.x, list.y + list.height - 1, list.width, 1),
+    );
+    editor(frame, parts[1], editor_state, color);
+}

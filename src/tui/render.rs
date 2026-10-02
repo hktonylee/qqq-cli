@@ -32,7 +32,7 @@ pub struct DashboardEditor<'a> {
 pub struct Layout {
     pub rows: Vec<String>,
     pub positions: Vec<(usize, usize)>,
-    image_spans: Vec<Vec<(usize, usize)>>,
+    pub(super) image_spans: Vec<Vec<(usize, usize)>>,
 }
 impl Layout {
     pub fn new(fragments: &[String], image_mask: &[bool], width: usize) -> Self {
@@ -120,7 +120,7 @@ fn escape(text: &str) -> String {
         })
         .collect()
 }
-fn clipped(text: &str, width: usize) -> String {
+pub(super) fn clipped(text: &str, width: usize) -> String {
     let safe = escape(text).replace('\n', " ");
     let mut result = String::new();
     let mut cells = 0;
