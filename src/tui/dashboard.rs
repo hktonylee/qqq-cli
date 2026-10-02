@@ -4,7 +4,7 @@ use ratatui::{
     layout::{Constraint, Layout, Rect},
     style::{Color, Modifier, Style},
     text::{Line, Span},
-    widgets::Paragraph,
+    widgets::{Clear, Paragraph},
 };
 use std::collections::HashMap;
 use unicode_segmentation::UnicodeSegmentation;
@@ -19,6 +19,7 @@ pub struct ListView<'a> {
     pub focused: bool,
     pub top: &'a mut usize,
     pub follow_selected: bool,
+    pub modal_lines: Option<&'a [String]>,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -289,5 +290,26 @@ pub fn draw(
     editor(frame, editor_area, editor_state, color);
     if list_view.focused {
         frame.set_cursor_position((list.x + filter_cursor, list.y + 1));
+    }
+    if let Some(lines) = list_view.modal_lines {
+        frame.render_widget(Clear, area);
+        let heading_style = if color {
+            Style::default().fg(ACCENT).add_modifier(Modifier::BOLD)
+        } else {
+            Style::default()
+        };
+        for (index, line) in lines.iter().take(usize::from(area.height)).enumerate() {
+            frame.render_widget(
+                Paragraph::new(render::clipped(line, usize::from(area.width))).style(
+                    if index == 0 {
+                        heading_style
+                    } else {
+                        Style::default()
+                    },
+                ),
+                Rect::new(area.x, area.y + index as u16, area.width, 1),
+            );
+        }
+        frame.set_cursor_position((area.x, area.y));
     }
 }

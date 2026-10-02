@@ -12,7 +12,7 @@ pub const KEYS: &str = "Ctrl-S save  Esc cancel  Ctrl-V paste";
 pub const NAV_KEYS: &str = "Ctrl-S save  Shift-Up/Down tasks  Esc cancel";
 pub const ADD_KEYS: &str = "Ctrl-S save  Shift-Up/Down  Esc/Ctrl-C exit";
 pub const DASHBOARD_KEYS: &str =
-    "Ctrl-S save  Shift-Up/Down  / filter  Alt+/ slash  Esc/Ctrl-C exit";
+    "Ctrl-S save  Ctrl-G actions  Shift-Up/Down  / filter  Esc/Ctrl-C exit";
 pub const FILTER_KEYS: &str = "Type to filter  Backspace edit  Esc clear/close  Tab/Enter editor";
 const BACKGROUND: Color = Color::AnsiValue(236);
 const FOREGROUND: Color = Color::AnsiValue(252);

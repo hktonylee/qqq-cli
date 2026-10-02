@@ -109,6 +109,18 @@ with tempfile.TemporaryDirectory(prefix="qqq-dashboard-test-") as folder:
         cli("complete", "1", "--session", "worker")
         cli("next", "--local", "--session", "worker")
         cli("edit", "2", "--set-status", "error", "--reason", "Failed", "--session", "worker")
+    elif scenario in ("actions_basic", "actions_rejected"):
+        cli("add", "Owned item")
+        cli("add", "Failed item")
+        cli("add", "Finished item")
+        cli("add", "Fresh item")
+        cli("add", "Hidden item")
+        cli("next", "--local", "--session", "worker")
+        cli("next", "--local", "--session", "failed")
+        cli("edit", "2", "--set-status", "error", "--reason", "Failed", "--session", "failed")
+        cli("next", "--local", "--session", "finished")
+        cli("complete", "3", "--session", "finished")
+        cli("archive", "5")
     elif scenario == "workflow":
         cli("add", "Other")
         for index in range(2, 21):
@@ -134,6 +146,9 @@ with tempfile.TemporaryDirectory(prefix="qqq-dashboard-test-") as folder:
         cli("add", "Visible")
         cli("add", "Hidden")
         cli("archive", "2")
+    elif scenario == "actions_hidden":
+        cli("add", "Visible")
+        cli("add", "Filtered item")
     else:
         cli("add", "First")
         cli("add", "Second")
@@ -155,7 +170,9 @@ with tempfile.TemporaryDirectory(prefix="qqq-dashboard-test-") as folder:
     fcntl.ioctl(slave, termios.TIOCSCTTY, 0)
     signal.signal(signal.SIGHUP, signal.SIG_IGN)
     args = [binary, "--json", "tui"] if scenario in ("empty_json", "save_json") else [binary, "tui"]
-    if scenario == "archive_included":
+    if scenario in ("actions_basic", "actions_rejected"):
+        args.extend(["--session", "worker"])
+    if scenario in ("archive_included", "actions_basic", "actions_rejected"):
         args.append("--include-archived")
     child = subprocess.Popen(args, cwd=folder, env=env, stdin=slave,
                              stderr=slave, stdout=subprocess.PIPE)
@@ -237,7 +254,7 @@ with tempfile.TemporaryDirectory(prefix="qqq-dashboard-test-") as folder:
         elif scenario in ("no_color", "dumb", "pasteboard_no_color", "filter_no_color"):
             assert b"\x1b[38;" not in screen, screen[-2000:]
             assert b"\x1b[48;" not in screen, screen[-2000:]
-        if scenario not in ("scroll", "wheel", "click", "click_filter", "workflow", "workflow_empty", "workflow_status", "filter", "filter_no_color", "archive_hidden", "archive_included"):
+        if scenario not in ("scroll", "wheel", "click", "click_filter", "workflow", "workflow_empty", "workflow_status", "filter", "filter_no_color", "archive_hidden", "archive_included", "actions_basic", "actions_rejected", "actions_hidden"):
             read_until(b"Second")
             assert "First" in visible.text() and "Second" in visible.text(), visible.text()
         assert not select.select([child.stdout], [], [], 0)[0], "TUI wrote stdout while open"
@@ -310,6 +327,155 @@ with tempfile.TemporaryDirectory(prefix="qqq-dashboard-test-") as folder:
             clear_capture()
             send(b"\x1b[1;2A")
             wait_visible(lambda: "task #1 (Completed)" in visible.text().splitlines()[8])
+        elif scenario == "actions_basic":
+            wait_visible(lambda: "Owned item" in visible.text() and "Hidden item" in visible.text())
+            def select_action_task(label, task_id):
+                clear_capture()
+                click(5, task_row(label))
+                wait_visible(lambda: f"task #{task_id}" in visible.text().splitlines()[8])
+
+            def action(letter, prompt):
+                clear_capture()
+                send(b"\x07")
+                wait_visible(lambda: "Task actions" in visible.text() and "c Complete" in visible.text())
+                clear_capture()
+                send(letter.encode())
+                read_until(prompt.encode())
+
+            click(5, task_row("Owned item"))
+            read_until(b"task #1 (In progress)")
+            action("c", "Complete task #1?")
+            clear_capture()
+            send(b"y")
+            read_until(b"Completed #1")
+            assert cli("show", "1")["task"]["status"] == "completed"
+
+            select_action_task("Failed item", 2)
+            action("r", "Retry task #2?")
+            clear_capture()
+            send(b"y")
+            read_until(b"Retried #2")
+            assert cli("show", "2")["task"]["status"] == "new"
+
+            select_action_task("Finished item", 3)
+            action("o", "Reopen task #3?")
+            clear_capture()
+            send(b"y")
+            read_until(b"Reopened #3")
+            assert cli("show", "3")["task"]["status"] == "new"
+
+            select_action_task("Fresh item", 4)
+            send(b"X")
+            wait_visible(lambda: "XFresh item" in visible.text())
+            action("p", "Priority task #4")
+            send(b"7\r")
+            read_until(b"Set priority task #4?")
+            send(b"n")
+            wait_visible(lambda: "XFresh item" in visible.text())
+            assert cli("show", "4")["task"]["priority"] == 0
+            action("c", "Complete task #4?")
+            send(b"y")
+            wait_visible(lambda: "XFresh item" in visible.text() and
+                         "Task 4 is not claimed by session worker" in visible.text().splitlines()[-1])
+            assert cli("show", "4")["task"]["status"] == "new"
+            send(b"\x7f")
+            wait_visible(lambda: visible.text().splitlines()[9].startswith("Fresh item"))
+
+            action("p", "Priority task #4")
+            send(b"7\r")
+            read_until(b"Priority set for #4")
+            assert cli("show", "4")["task"]["priority"] == 7
+            action("d", "Parent task #4")
+            send(b"3\r")
+            read_until(b"Parent set for #4")
+            assert cli("show", "4")["task"]["parent_id"] == 3
+            action("a", "Archive task #4?")
+            send(b"y")
+            read_until(b"Archived #4")
+            assert cli("show", "4")["task"]["archived"] is True
+
+            select_action_task("Hidden item", 5)
+            action("a", "Unarchive task #5?")
+            send(b"y")
+            read_until(b"Unarchived #5")
+            assert cli("show", "5")["task"]["archived"] is False
+            assert child.poll() is None
+            assert not select.select([child.stdout], [], [], 0)[0], "TUI wrote stdout"
+        elif scenario == "actions_rejected":
+            def rejected_action(label, task_id, letter, prompt, error):
+                clear_capture()
+                click(5, task_row(label))
+                wait_visible(lambda: f"task #{task_id}" in visible.text().splitlines()[8])
+                clear_capture()
+                send(b"\x07")
+                wait_visible(lambda: "c Complete" in visible.text())
+                send(letter.encode())
+                read_until(prompt.encode())
+                clear_capture()
+                send(b"y")
+                read_until(error.encode())
+                assert f"task #{task_id}" in visible.text().splitlines()[8]
+
+            wait_visible(lambda: "Owned item" in visible.text() and "Hidden item" in visible.text())
+            rejected_action("Owned item", 1, "a", "Archive task #1?",
+                            "Task 1 is in progress and cannot be archived")
+            rejected_action("Owned item", 1, "o", "Reopen task #1?",
+                            "Task 1 must be completed to reopen")
+            rejected_action("Finished item", 3, "r", "Retry task #3?",
+                            "Task 3 is no longer in error")
+            assert cli("show", "1")["task"]["archived"] is False
+            assert cli("show", "3")["task"]["status"] == "completed"
+
+            clear_capture()
+            click(5, task_row("Fresh item"))
+            read_until(b"task #4")
+            send(b"\x07p101\r")
+            wait_visible(lambda: "Priority must be -100..100" in visible.text())
+            assert "101" in visible.text(), visible.text()
+            send(b"\x1b")
+            wait_visible(lambda: "task #4" in visible.text().splitlines()[8])
+            send(b"\x07d4\r")
+            read_until(b"Task 4 cannot depend on itself")
+            assert cli("show", "4")["task"]["parent_id"] is None
+            assert cli("show", "4")["task"]["priority"] == 0
+            assert not select.select([child.stdout], [], [], 0)[0], "TUI wrote stdout"
+        elif scenario == "actions_hidden":
+            clear_capture()
+            send(b"/Filtered")
+            wait_visible(lambda: "Filter: Filtered" in visible.text() and
+                         "Filtered item" in visible.text() and "Visible" not in visible.text())
+            send(b"\x1b[1;2A")
+            wait_visible(lambda: "task #2" in visible.text().splitlines()[8])
+            send(b"\x07a")
+            read_until(b"Archive task #2?")
+            send(b"y")
+            wait_visible(lambda: "No matching tasks." in visible.text() and
+                         "new task" in visible.text().splitlines()[8] and
+                         "Filter: Filtered" in visible.text())
+            assert cli("show", "2")["task"]["archived"] is True
+            assert not select.select([child.stdout], [], [], 0)[0], "TUI wrote stdout"
+        elif scenario == "actions_narrow":
+            click(5, task_row("First"))
+            read_until(b"task #1")
+            fcntl.ioctl(slave, termios.TIOCSWINSZ, struct.pack("HHHH", 8, 12, 0, 0))
+            visible.resize(12, 8)
+            clear_capture()
+            os.kill(child.pid, signal.SIGWINCH)
+            read_until(b"qqq tasks")
+            send(b"\x07")
+            wait_visible(lambda: "c Complete" in visible.text() and
+                         "d Parent" in visible.text() and "Esc cancel" in visible.text())
+            send(b"p")
+            wait_visible(lambda: "Enter -100" in visible.text())
+            send(b"5\r")
+            assert cli("show", "1")["task"]["priority"] == 5
+            fcntl.ioctl(slave, termios.TIOCSWINSZ, struct.pack("HHHH", 16, 72, 0, 0))
+            visible.resize(72, 16)
+            clear_capture()
+            os.kill(child.pid, signal.SIGWINCH)
+            read_until(b"qqq task editor - task #1")
+            wait_visible(lambda: "Priority set for #1" in visible.text())
+            settle()
         elif scenario == "click":
             initial_tasks = cli("list")
             wait_visible(lambda: "Parent detail" in visible.text() and "Child" in visible.text())
@@ -666,6 +832,7 @@ with tempfile.TemporaryDirectory(prefix="qqq-dashboard-test-") as folder:
                 assert b"38;5;222" in screen, "Reloaded paste accent missing"
             else:
                 assert b"\x1b[38;" not in screen, screen[-2000:]
+            clear_capture()
             send(b"\x1b[C" * (len("Prefix \n") + 1) + b"\x17\x13")
             read_until(b"Saved #3. New task")
             assert cli("show", "3")["task"]["description"] == "Prefix \n"
@@ -723,7 +890,7 @@ with tempfile.TemporaryDirectory(prefix="qqq-dashboard-test-") as folder:
             read_until(b"Saved #3. New task")
             assert cli("show", "3")["task"]["description"] == "Draft"
         if scenario != "wheel_error":
-            send(b"\x03" if scenario in ("scroll", "color", "wheel", "click_error", "workflow_status") else b"\x1b")
+            send(b"\x03" if scenario in ("scroll", "color", "wheel", "click_error", "workflow_status", "actions_basic", "actions_rejected", "actions_narrow", "actions_hidden") else b"\x1b")
         deadline = time.monotonic() + 5
         while child.poll() is None:
             assert time.monotonic() < deadline, f"TUI failed to exit: {screen[-1000:]!r}\n{visible.text()}"

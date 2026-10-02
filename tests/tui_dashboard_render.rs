@@ -116,6 +116,7 @@ fn manual_list_scroll_does_not_snap_to_selected_task() {
                     focused: false,
                     top: &mut top,
                     follow_selected: false,
+                    modal_lines: None,
                 },
                 render::DashboardEditor {
                     layout: &layout,
@@ -143,6 +144,7 @@ fn manual_list_scroll_does_not_snap_to_selected_task() {
                     focused: false,
                     top: &mut top,
                     follow_selected: true,
+                    modal_lines: None,
                 },
                 render::DashboardEditor {
                     layout: &layout,
@@ -183,6 +185,7 @@ fn manual_editor_scroll_keeps_viewport_then_keyboard_reveals_caret() {
                     focused: false,
                     top: &mut 0,
                     follow_selected: true,
+                    modal_lines: None,
                 },
                 render::DashboardEditor {
                     layout: &layout,
@@ -211,6 +214,7 @@ fn manual_editor_scroll_keeps_viewport_then_keyboard_reveals_caret() {
                     focused: false,
                     top: &mut 0,
                     follow_selected: true,
+                    modal_lines: None,
                 },
                 render::DashboardEditor {
                     layout: &layout,
@@ -262,6 +266,7 @@ fn manual_offsets_clamp_after_resize() {
                     focused: false,
                     top: &mut list_top,
                     follow_selected: false,
+                    modal_lines: None,
                 },
                 render::DashboardEditor {
                     layout: &layout,
@@ -302,6 +307,7 @@ fn filter_bar_shows_empty_result_and_takes_cursor_only_while_focused() {
                     focused: true,
                     top: &mut 0,
                     follow_selected: true,
+                    modal_lines: None,
                 },
                 render::DashboardEditor {
                     layout: &layout,
@@ -346,6 +352,7 @@ fn small_dashboard_keeps_filter_row_and_plain_style() {
                     focused: true,
                     top: &mut 0,
                     follow_selected: true,
+                    modal_lines: None,
                 },
                 render::DashboardEditor {
                     layout: &layout,
@@ -392,6 +399,7 @@ fn minimum_dashboard_height_still_shows_selected_task() {
                     focused: false,
                     top: &mut 0,
                     follow_selected: true,
+                    modal_lines: None,
                 },
                 render::DashboardEditor {
                     layout: &layout,
@@ -432,6 +440,7 @@ fn split_dashboard_keeps_list_above_editor() {
                     focused: false,
                     top: &mut list_top,
                     follow_selected: true,
+                    modal_lines: None,
                 },
                 render::DashboardEditor {
                     layout: &layout,
@@ -477,6 +486,7 @@ fn narrow_dashboard_shows_plain_resize_hint() {
                     focused: false,
                     top: &mut 0,
                     follow_selected: true,
+                    modal_lines: None,
                 },
                 render::DashboardEditor {
                     layout: &layout,
@@ -518,6 +528,7 @@ fn no_color_dashboard_keeps_default_cell_styles() {
                     focused: false,
                     top: &mut 0,
                     follow_selected: true,
+                    modal_lines: None,
                 },
                 render::DashboardEditor {
                     layout: &layout,
@@ -573,6 +584,7 @@ fn status_selection_and_editor_images_use_distinct_colors() {
                     focused: false,
                     top: &mut 0,
                     follow_selected: true,
+                    modal_lines: None,
                 },
                 render::DashboardEditor {
                     layout: &layout,
@@ -628,6 +640,7 @@ fn dashboard_paste_label_uses_gold_while_body_stays_neutral() {
                     focused: false,
                     top: &mut 0,
                     follow_selected: true,
+                    modal_lines: None,
                 },
                 render::DashboardEditor {
                     layout: &layout,
@@ -668,6 +681,7 @@ fn failed_save_footer_uses_error_color() {
                     focused: false,
                     top: &mut 0,
                     follow_selected: true,
+                    modal_lines: None,
                 },
                 render::DashboardEditor {
                     layout: &layout,

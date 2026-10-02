@@ -357,10 +357,41 @@ fn execute(cli: Cli, display_limit: Option<i64>) -> Result<Value> {
             }
         }
         Commands::Tui { include_archived } => {
-            tui::compose_dashboard(&mut db, include_archived, &mut |db, outcome| {
-                let task = db.save_composition(outcome.target_id, None, &outcome.composition)?;
-                Ok(task.id)
-            })?;
+            tui::compose_dashboard(
+                &mut db,
+                include_archived,
+                &mut |db, outcome| {
+                    let task =
+                        db.save_composition(outcome.target_id, None, &outcome.composition)?;
+                    Ok(task.id)
+                },
+                &mut |db, action| match action {
+                    tui::TaskAction::Complete(id) => {
+                        let owner = session::owner(session_input, project_dir, db)?;
+                        db.complete(id, &owner.key, overrides.harness_name.as_deref())
+                    }
+                    tui::TaskAction::Retry(id) => db.edit_with_priority(
+                        id,
+                        None,
+                        Some(db::EditTransition::RetryError(
+                            session_input.unwrap_or("manual"),
+                        )),
+                        &[],
+                        None,
+                        None,
+                    ),
+                    tui::TaskAction::Reopen(id) => db.reopen(id, session_input.unwrap_or("cli")),
+                    tui::TaskAction::SetArchived(id, archived) => {
+                        db.set_archived(id, archived, session_input.unwrap_or("cli"))
+                    }
+                    tui::TaskAction::Priority(id, priority) => {
+                        db.edit_with_priority(id, None, None, &[], None, Some(priority))
+                    }
+                    tui::TaskAction::Parent(id, parent) => {
+                        db.edit_with_priority(id, None, None, &[], Some(parent), None)
+                    }
+                },
+            )?;
             Value::Null
         }
         Commands::List {

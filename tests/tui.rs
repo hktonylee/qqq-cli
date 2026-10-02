@@ -95,6 +95,14 @@ fn tui_dashboard_workflow_states_and_cleanup() {
 }
 
 #[test]
+fn tui_dashboard_task_actions() {
+    dashboard_scenario("actions_basic");
+    dashboard_scenario("actions_rejected");
+    dashboard_scenario("actions_narrow");
+    dashboard_scenario("actions_hidden");
+}
+
+#[test]
 fn tui_dashboard_complete_workflow() {
     dashboard_scenario("workflow");
 }

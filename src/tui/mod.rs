@@ -39,6 +39,133 @@ enum Target {
 enum Confirmation {
     Exit,
     Switch { target: Target, focus_editor: bool },
+    Action { action: TaskAction, dirty: bool },
+}
+
+#[derive(Clone, Copy)]
+pub enum TaskAction {
+    Complete(i64),
+    Retry(i64),
+    Reopen(i64),
+    SetArchived(i64, bool),
+    Priority(i64, i64),
+    Parent(i64, crate::db::ParentChange),
+}
+
+impl TaskAction {
+    fn id(self) -> i64 {
+        match self {
+            Self::Complete(id)
+            | Self::Retry(id)
+            | Self::Reopen(id)
+            | Self::SetArchived(id, _)
+            | Self::Priority(id, _)
+            | Self::Parent(id, _) => id,
+        }
+    }
+
+    fn label(self) -> &'static str {
+        match self {
+            Self::Complete(_) => "Complete",
+            Self::Retry(_) => "Retry",
+            Self::Reopen(_) => "Reopen",
+            Self::SetArchived(_, true) => "Archive",
+            Self::SetArchived(_, false) => "Unarchive",
+            Self::Priority(_, _) => "Set priority",
+            Self::Parent(_, _) => "Set parent",
+        }
+    }
+
+    fn success(self) -> &'static str {
+        match self {
+            Self::Complete(_) => "Completed",
+            Self::Retry(_) => "Retried",
+            Self::Reopen(_) => "Reopened",
+            Self::SetArchived(_, true) => "Archived",
+            Self::SetArchived(_, false) => "Unarchived",
+            Self::Priority(_, _) => "Priority set for",
+            Self::Parent(_, _) => "Parent set for",
+        }
+    }
+}
+
+#[derive(Clone, Copy)]
+enum ActionInputKind {
+    Priority,
+    Parent,
+}
+
+enum ActionUi {
+    Menu {
+        id: i64,
+        archived: bool,
+    },
+    Input {
+        id: i64,
+        kind: ActionInputKind,
+        value: String,
+        error: String,
+    },
+}
+
+fn action_lines(ui: &ActionUi) -> Vec<String> {
+    match ui {
+        ActionUi::Menu { id, archived } => vec![
+            format!("Task actions #{id}"),
+            "c Complete".to_owned(),
+            "r Retry error".to_owned(),
+            "o Reopen".to_owned(),
+            format!("a {}", if *archived { "Unarchive" } else { "Archive" }),
+            "p Priority".to_owned(),
+            "d Parent".to_owned(),
+            "Esc cancel".to_owned(),
+        ],
+        ActionUi::Input {
+            id,
+            kind,
+            value,
+            error,
+        } => {
+            let mut lines = match kind {
+                ActionInputKind::Priority => {
+                    vec![format!("Priority task #{id}"), "Enter -100..100".to_owned()]
+                }
+                ActionInputKind::Parent => vec![
+                    format!("Parent task #{id}"),
+                    "Positive ID or none".to_owned(),
+                ],
+            };
+            lines.push(format!("> {value}"));
+            if !error.is_empty() {
+                lines.push(error.clone());
+            }
+            lines.push("Enter apply  Esc cancel".to_owned());
+            lines
+        }
+    }
+}
+
+fn parse_action_input(
+    id: i64,
+    kind: ActionInputKind,
+    value: &str,
+) -> std::result::Result<TaskAction, String> {
+    match kind {
+        ActionInputKind::Priority => {
+            let priority = value
+                .trim()
+                .parse::<i64>()
+                .map_err(|_| "Priority must be -100..100".to_owned())?;
+            if !(-100..=100).contains(&priority) {
+                return Err("Priority must be -100..100".to_owned());
+            }
+            Ok(TaskAction::Priority(id, priority))
+        }
+        ActionInputKind::Parent => value
+            .trim()
+            .parse()
+            .map(|parent| TaskAction::Parent(id, parent)),
+    }
 }
 
 fn task_target(db: &crate::db::Db, id: i64, description: String, status: String) -> Result<Target> {
@@ -166,10 +293,12 @@ enum Mode<'a, 'b> {
     Continuous {
         db: &'a mut crate::db::Db,
         save: &'b mut dyn FnMut(&mut crate::db::Db, Outcome) -> Result<i64>,
+        action: Option<&'b mut ActionHandler<'b>>,
         dashboard: bool,
         include_archived: bool,
     },
 }
+type ActionHandler<'a> = dyn FnMut(&mut crate::db::Db, TaskAction) -> Result<crate::db::Task> + 'a;
 impl Mode<'_, '_> {
     fn db(&self) -> Option<&crate::db::Db> {
         match self {
@@ -177,6 +306,25 @@ impl Mode<'_, '_> {
             Self::Continuous { db, .. } => Some(db),
         }
     }
+}
+fn run_action(
+    mode: &mut Mode<'_, '_>,
+    action: TaskAction,
+    include_archived: bool,
+) -> Result<Target> {
+    let Mode::Continuous {
+        db,
+        action: Some(handler),
+        ..
+    } = mode
+    else {
+        bail!("Task actions require dashboard");
+    };
+    let task = handler(db, action)?;
+    if task.archived && !include_archived {
+        return Ok(Target::New);
+    }
+    task_target(db, task.id, task.description, task.status)
 }
 fn cancel(saved_any: bool, dashboard: bool) -> Result<Option<Outcome>> {
     if saved_any || dashboard {
@@ -207,6 +355,7 @@ pub fn compose_continuously(
         Mode::Continuous {
             db,
             save,
+            action: None,
             dashboard: false,
             include_archived: false,
         },
@@ -218,12 +367,14 @@ pub fn compose_dashboard(
     db: &mut crate::db::Db,
     include_archived: bool,
     save: &mut dyn FnMut(&mut crate::db::Db, Outcome) -> Result<i64>,
+    action: &mut ActionHandler<'_>,
 ) -> Result<()> {
     compose_inner(
         "",
         Mode::Continuous {
             db,
             save,
+            action: Some(action),
             dashboard: true,
             include_archived,
         },
@@ -269,6 +420,7 @@ fn compose_inner(
     let mut message = String::new();
     let mut message_is_error = false;
     let mut confirmation: Option<Confirmation> = None;
+    let mut action_ui: Option<ActionUi> = None;
     let mut saved_any = false;
     loop {
         let size = terminal::size()?;
@@ -291,6 +443,7 @@ fn compose_inner(
                 "Switch? y/N"
             }
             Some(Confirmation::Switch { .. }) => "Discard changes and switch? (y/N)",
+            Some(Confirmation::Action { .. }) => "Confirm action? (y/N)",
             None => &message,
         };
         let title = match (mode.db().is_some(), target_id) {
@@ -358,6 +511,18 @@ fn compose_inner(
             };
             list_row_count = rows.len();
             visible_ids = Some(filtered.ordered_ids);
+            let modal_lines =
+                action_ui
+                    .as_ref()
+                    .map(action_lines)
+                    .or_else(|| match &confirmation {
+                        Some(Confirmation::Action { action, dirty }) => Some(vec![
+                            format!("{} task #{}?", action.label(), action.id()),
+                            if *dirty { "Success discards draft" } else { "" }.to_owned(),
+                            "y confirm  n/Esc cancel".to_owned(),
+                        ]),
+                        _ => None,
+                    });
             dashboard_terminal
                 .as_mut()
                 .expect("dashboard has Ratatui terminal")
@@ -372,6 +537,7 @@ fn compose_inner(
                             focused: filter_focused,
                             top: &mut list_top,
                             follow_selected: list_follow_selected,
+                            modal_lines: modal_lines.as_deref(),
                         },
                         render::DashboardEditor {
                             layout: &layout,
@@ -400,6 +566,7 @@ fn compose_inner(
             if let Event::Mouse(mouse) = &input {
                 let active = dashboard
                     && confirmation.is_none()
+                    && action_ui.is_none()
                     && match mouse.kind {
                         MouseEventKind::ScrollUp | MouseEventKind::ScrollDown => {
                             dashboard::wheel_area(size, mouse.column, mouse.row).is_some()
@@ -424,7 +591,12 @@ fn compose_inner(
         };
         match input {
             Event::Paste(text) if confirmation.is_none() => {
-                if filter_focused {
+                if let Some(ActionUi::Input { value, error, .. }) = action_ui.as_mut() {
+                    value.extend(text.chars().filter(|ch| !ch.is_control()));
+                    error.clear();
+                } else if action_ui.is_some() {
+                    // Menu never edits draft.
+                } else if filter_focused {
                     filter_query.extend(text.chars().filter(|ch| !ch.is_control()));
                     list_top = 0;
                     list_follow_selected = true;
@@ -551,6 +723,29 @@ fn compose_inner(
                                     message.clear();
                                     message_is_error = false;
                                 }
+                                Confirmation::Action { action, .. } => {
+                                    match run_action(&mut mode, action, include_archived) {
+                                        Ok(target) => {
+                                            load_target(
+                                                target,
+                                                &mut draft,
+                                                &mut target_id,
+                                                &mut target_status,
+                                                &mut baseline,
+                                                &mut top,
+                                            );
+                                            list_follow_selected = true;
+                                            editor_follow_cursor = true;
+                                            message =
+                                                format!("{} #{}", action.success(), action.id());
+                                            message_is_error = false;
+                                        }
+                                        Err(error) => {
+                                            message = format!("{error:#}");
+                                            message_is_error = true;
+                                        }
+                                    }
+                                }
                             },
                             KeyCode::Char('n' | 'N') | KeyCode::Enter | KeyCode::Esc => {
                                 message.clear();
@@ -560,6 +755,159 @@ fn compose_inner(
                         }
                     } else {
                         confirmation = Some(pending);
+                    }
+                    continue;
+                }
+                if let Some(ui) = action_ui.take() {
+                    if control && key.code == KeyCode::Char('c') {
+                        return cancel(saved_any, dashboard);
+                    }
+                    if key
+                        .modifiers
+                        .intersects(KeyModifiers::CONTROL | KeyModifiers::ALT | KeyModifiers::SUPER)
+                    {
+                        action_ui = Some(ui);
+                        continue;
+                    }
+                    match ui {
+                        ActionUi::Menu { id, archived } => {
+                            let chosen = match key.code {
+                                KeyCode::Char('c') => Some(TaskAction::Complete(id)),
+                                KeyCode::Char('r') => Some(TaskAction::Retry(id)),
+                                KeyCode::Char('o') => Some(TaskAction::Reopen(id)),
+                                KeyCode::Char('a') => Some(TaskAction::SetArchived(id, !archived)),
+                                KeyCode::Char('p') => {
+                                    action_ui = Some(ActionUi::Input {
+                                        id,
+                                        kind: ActionInputKind::Priority,
+                                        value: String::new(),
+                                        error: String::new(),
+                                    });
+                                    None
+                                }
+                                KeyCode::Char('d') => {
+                                    action_ui = Some(ActionUi::Input {
+                                        id,
+                                        kind: ActionInputKind::Parent,
+                                        value: String::new(),
+                                        error: String::new(),
+                                    });
+                                    None
+                                }
+                                KeyCode::Esc => None,
+                                _ => {
+                                    action_ui = Some(ActionUi::Menu { id, archived });
+                                    None
+                                }
+                            };
+                            if let Some(action) = chosen {
+                                confirmation = Some(Confirmation::Action {
+                                    action,
+                                    dirty: draft.is_dirty_against(&baseline),
+                                });
+                            }
+                        }
+                        ActionUi::Input {
+                            id,
+                            kind,
+                            mut value,
+                            mut error,
+                        } => match key.code {
+                            KeyCode::Esc => (),
+                            KeyCode::Backspace => {
+                                if let Some((index, _)) = value.grapheme_indices(true).next_back() {
+                                    value.truncate(index);
+                                }
+                                error.clear();
+                                action_ui = Some(ActionUi::Input {
+                                    id,
+                                    kind,
+                                    value,
+                                    error,
+                                });
+                            }
+                            KeyCode::Char(ch) => {
+                                if !ch.is_control() {
+                                    value.push(ch);
+                                    error.clear();
+                                }
+                                action_ui = Some(ActionUi::Input {
+                                    id,
+                                    kind,
+                                    value,
+                                    error,
+                                });
+                            }
+                            KeyCode::Enter => match parse_action_input(id, kind, &value) {
+                                Ok(action) if draft.is_dirty_against(&baseline) => {
+                                    confirmation = Some(Confirmation::Action {
+                                        action,
+                                        dirty: true,
+                                    });
+                                }
+                                Ok(action) => match run_action(&mut mode, action, include_archived)
+                                {
+                                    Ok(target) => {
+                                        load_target(
+                                            target,
+                                            &mut draft,
+                                            &mut target_id,
+                                            &mut target_status,
+                                            &mut baseline,
+                                            &mut top,
+                                        );
+                                        list_follow_selected = true;
+                                        editor_follow_cursor = true;
+                                        message = format!("{} #{}", action.success(), action.id());
+                                        message_is_error = false;
+                                    }
+                                    Err(failure) => {
+                                        message = format!("{failure:#}");
+                                        message_is_error = true;
+                                    }
+                                },
+                                Err(problem) => {
+                                    error = problem;
+                                    action_ui = Some(ActionUi::Input {
+                                        id,
+                                        kind,
+                                        value,
+                                        error,
+                                    });
+                                }
+                            },
+                            _ => {
+                                action_ui = Some(ActionUi::Input {
+                                    id,
+                                    kind,
+                                    value,
+                                    error,
+                                })
+                            }
+                        },
+                    }
+                    continue;
+                }
+                if dashboard && control && key.code == KeyCode::Char('g') {
+                    match target_id {
+                        Some(id) => match mode.db().expect("dashboard has database").task(id) {
+                            Ok(task) => {
+                                action_ui = Some(ActionUi::Menu {
+                                    id,
+                                    archived: task.archived,
+                                });
+                                message.clear();
+                                message_is_error = false;
+                            }
+                            Err(error) => {
+                                message = format!("{error:#}");
+                                message_is_error = true;
+                            }
+                        },
+                        None => {
+                            message = "Select task for actions".to_owned();
+                            message_is_error = true;
+                        }
                     }
                     continue;
                 }

@@ -216,6 +216,13 @@ editor. Alt+/ inserts literal `/` into editor. Shift-Up/Down navigates visible
 tasks while filter is active. Query changes do not change selected task, unsaved
 draft, or DB.
 
+Ctrl-G opens actions for selected task. Press `c` to complete owned task,
+`r` to retry error task, `o` to reopen completed task, `a` to archive or
+unarchive, `p` to set priority (-100..100), or `d` to set parent by positive
+task ID or `none`. Esc closes menu or prompt. State changes ask for `y` before
+running; priority and parent changes ask when draft has unsaved edits. Successful
+action refreshes task and list; rejected action keeps draft and shows DB error.
+
 ## Dependencies and images
 
 Each task has at most one parent. Child becomes ready when parent completes.
