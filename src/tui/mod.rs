@@ -523,10 +523,17 @@ fn compose_inner(
             if let Some(task) = tasks.iter().find(|task| Some(task.id) == target_id) {
                 target_status = Some(task.status.clone());
             }
+            let details_width = usize::from(
+                dashboard::details_content(
+                    dashboard::panes(ratatui::layout::Rect::new(0, 0, size.0, size.1)).details,
+                )
+                .width,
+            )
+            .max(1);
             let details_rows = match target_id {
                 Some(id) => match tasks.iter().find(|task| task.id == id) {
-                    Some(task) => details::rows(task, &db.task_messages(id)?, usize::from(size.0)),
-                    None => details::unavailable(id, usize::from(size.0)),
+                    Some(task) => details::rows(task, &db.task_messages(id)?, details_width),
+                    None => details::unavailable(id, details_width),
                 },
                 None => Vec::new(),
             };

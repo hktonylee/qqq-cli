@@ -214,6 +214,8 @@ terminal height, rounded to rows. Task list shows unarchived tasks by default.
 Blank drafts show `Select task to view details.` in details pane; selecting or
 saving task keeps pane positions fixed. Small terminals retain usable list and
 editor rows.
+Details use a double-line box with two spaces inside each side; short panes
+retain padding without borders. Text wraps to the inner width.
 Details show status, priority, parent, timestamps, archive state and ownership;
 latest messages appear first with author and timestamp. Empty message history
 shows `No messages yet.`.

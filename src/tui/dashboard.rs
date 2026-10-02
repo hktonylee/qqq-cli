@@ -1,10 +1,10 @@
 use super::{panel, render};
 use ratatui::{
     Frame,
-    layout::{Margin, Rect},
+    layout::{Margin, Position, Rect},
     style::{Color, Modifier, Style},
     text::{Line, Span},
-    widgets::{Block, Borders, Clear, Paragraph},
+    widgets::{Block, BorderType, Borders, Clear, Padding, Paragraph},
 };
 use std::collections::HashMap;
 use unicode_segmentation::UnicodeSegmentation;
@@ -154,12 +154,21 @@ pub fn panes(area: Rect) -> Panes {
     }
 }
 
-pub fn details_height(area: Rect) -> usize {
-    usize::from(if area.height >= 3 {
-        area.height - 1
+fn details_block(area: Rect) -> Block<'static> {
+    let block = Block::default().padding(Padding::horizontal(2));
+    if area.height >= 3 && area.width >= 8 {
+        block.borders(Borders::ALL).border_type(BorderType::Double)
     } else {
-        area.height
-    })
+        block
+    }
+}
+
+pub fn details_content(area: Rect) -> Rect {
+    details_block(area).inner(area)
+}
+
+pub fn details_height(area: Rect) -> usize {
+    usize::from(details_content(area).height)
 }
 
 pub fn wheel_area(size: (u16, u16), column: u16, row: u16) -> Option<WheelArea> {
@@ -173,7 +182,7 @@ pub fn wheel_area(size: (u16, u16), column: u16, row: u16) -> Option<WheelArea> 
     } = panes(Rect::new(0, 0, size.0, size.1));
     if row < list.y + list.height - 1 {
         Some(WheelArea::List(usize::from(list.height.saturating_sub(3))))
-    } else if row >= details.y && usize::from(row - details.y) < details_height(details) {
+    } else if details_content(details).contains(Position::new(column, row)) {
         Some(WheelArea::Details(details_height(details)))
     } else if row >= editor.y && row < editor.y + editor.height - 1 {
         Some(WheelArea::Editor(usize::from(
@@ -367,7 +376,14 @@ fn editor(frame: &mut Frame<'_>, area: Rect, editor: render::DashboardEditor<'_>
 }
 
 fn details(frame: &mut Frame<'_>, area: Rect, view: DetailsView<'_>, color: bool) {
-    let height = details_height(area);
+    let block = details_block(area).border_style(if color {
+        Style::default().fg(Color::DarkGray)
+    } else {
+        Style::default()
+    });
+    let content = block.inner(area);
+    frame.render_widget(block, area);
+    let height = usize::from(content.height);
     *view.top = (*view.top).min(view.rows.len().saturating_sub(height));
     for (offset, row) in view.rows.iter().skip(*view.top).take(height).enumerate() {
         let style = if color {
@@ -385,18 +401,7 @@ fn details(frame: &mut Frame<'_>, area: Rect, view: DetailsView<'_>, color: bool
         };
         frame.render_widget(
             Paragraph::new(row.text.clone()).style(style),
-            Rect::new(area.x, area.y + offset as u16, area.width, 1),
-        );
-    }
-    if height < usize::from(area.height) {
-        let style = if color {
-            Style::default().fg(Color::DarkGray)
-        } else {
-            Style::default()
-        };
-        frame.render_widget(
-            Paragraph::new("─".repeat(area.width.into())).style(style),
-            Rect::new(area.x, area.y + area.height - 1, area.width, 1),
+            Rect::new(content.x, content.y + offset as u16, content.width, 1),
         );
     }
 }

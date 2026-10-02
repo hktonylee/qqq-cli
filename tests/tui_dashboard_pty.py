@@ -59,7 +59,7 @@ class TerminalScreen:
             elif char >= " ":
                 # Task tree adds single-cell box drawing glyphs. Other wide
                 # Unicode needs a fuller screen emulator.
-                assert char.isascii() or char in "┌┐└┘├─│", f"Unsupported screen character {char!r}"
+                assert char.isascii() or char in "┌┐└┘├─│╔╗╚╝═║", f"Unsupported screen character {char!r}"
                 if self.x >= self.width:
                     self.x = 0
                     self.y = min(self.height - 1, self.y + 1)
@@ -186,7 +186,10 @@ with tempfile.TemporaryDirectory(prefix="qqq-dashboard-test-") as folder:
             cli("message", "2", "\n".join(f"Message line {index:02}" for index in range(1, 31)), "--session", "reviewer")
         else:
             cli("message", "2", "Earlier message", "--session", "worker")
-            cli("message", "2", "Latest message\nMessage continuation", "--session", "reviewer")
+            message = "Latest message\nMessage continuation"
+            if scenario in ("details", "details_no_color"):
+                message += "\n" + "W" * 66 + "TAIL"
+            cli("message", "2", message, "--session", "reviewer")
 
     master, slave = pty.openpty()
     os.set_blocking(master, False)
@@ -275,7 +278,11 @@ with tempfile.TemporaryDirectory(prefix="qqq-dashboard-test-") as folder:
 
     def details_text():
         row = editor_row()
-        return "\n".join(visible.text().splitlines()[list_bottom() + 1:row]) if row is not None else ""
+        if row is None:
+            return ""
+        lines = visible.text().splitlines()[list_bottom() + 1:row]
+        return "\n".join(line[3:-3].rstrip() if line.startswith("║") else line[2:].rstrip()
+                         for line in lines if not line.startswith(("╔", "╚")))
 
     def click_editor(column, offset=0):
         row = editor_row()
@@ -369,15 +376,18 @@ with tempfile.TemporaryDirectory(prefix="qqq-dashboard-test-") as folder:
             assert "Select task to view details." in details_text(), visible.text()
             send(b"\x1b[1;2A")
             wait_visible(lambda: "task #2 (New)" in editor_title()
-                         and "Latest message" in details_text()
+                         and "reviewer" in details_text()
                          and editor_line().startswith("Second"))
             assert editor_row() == 13, visible.text()
             assert "Task #2 | New | Priority 0" in details_text(), visible.text()
             assert "reviewer" in details_text(), visible.text()
             send(b"\x1b[6~")
-            wait_visible(lambda: "Message continuation" in details_text())
+            wait_visible(lambda: "Latest message" in details_text() and "Message continuation" in details_text())
             assert editor_row() == 13 and editor_line().startswith("Second"), visible.text()
-            send(b"\x1b[5~")
+            assert details_text().splitlines()[2] == "W" * 66, visible.text()
+            send(b"\x1b[6~")
+            wait_visible(lambda: details_text().splitlines()[0] == "TAIL")
+            send(b"\x1b[5~" * 2)
             wait_visible(lambda: details_text().startswith("Task #2"))
             assert editor_line().startswith("Second"), visible.text()
             clear_capture()
@@ -415,26 +425,28 @@ with tempfile.TemporaryDirectory(prefix="qqq-dashboard-test-") as folder:
             assert cli("show", "3")["task"]["description"] == payload
         elif scenario == "details_scroll":
             send(b"\x1b[1;2A")
-            wait_visible(lambda: "Message line 01" in details_text()
+            wait_visible(lambda: "Messages (1)" in details_text()
                          and "task #2 (New)" in editor_title()
                          and editor_line().startswith("Second"))
             initial_tasks = cli("list")
             initial_list = visible.text().splitlines()[:list_bottom() + 1]
             send(b"\x1b[6~")
-            wait_visible(lambda: details_text().splitlines()[0].startswith("Message line 02"))
+            wait_visible(lambda: details_text().splitlines()[0].startswith("Message line 01"))
+            send(b"\x1b[6~")
+            wait_visible(lambda: details_text().splitlines()[0].startswith("Message line 04"))
             assert editor_line().startswith("Second"), visible.text()
             assert visible.text().splitlines()[:list_bottom() + 1] == initial_list
-            send(f"\x1b[<65;6;{list_bottom() + 2}M".encode())
-            wait_visible(lambda: details_text().splitlines()[0].startswith("Message line 05"))
+            send(f"\x1b[<65;6;{list_bottom() + 3}M".encode())
+            wait_visible(lambda: details_text().splitlines()[0].startswith("Message line 07"))
             settle()
             clear_capture()
-            click(5, list_bottom() + 2)
+            click(5, list_bottom() + 3)
             settle()
             assert not screen, f"Read-only details click redrew screen: {screen[-500:]!r}"
             send(b"\x1b[5~" * 3)
             wait_visible(lambda: details_text().startswith("Task #2"))
             assert cli("list") == initial_tasks
-            send(b"\x1b[6~" * 10)
+            send(b"\x1b[6~" * 20)
             wait_visible(lambda: "Orchestrator:" in details_text())
             send(b"\x1b[1;2A")
             wait_visible(lambda: "task #1 (New)" in editor_title()
@@ -442,10 +454,12 @@ with tempfile.TemporaryDirectory(prefix="qqq-dashboard-test-") as folder:
                          and "No messages yet." in details_text())
             assert "No messages yet." in details_text(), visible.text()
             send(b"\x1b[1;2B")
-            wait_visible(lambda: "task #2" in editor_title() and "Message line 01" in details_text())
+            wait_visible(lambda: "task #2" in editor_title() and "Messages (1)" in details_text())
             assert cli("list") == initial_tasks
         elif scenario == "details_refresh":
             send(b"\x1b[1;2A")
+            wait_visible(lambda: "reviewer" in details_text())
+            send(b"\x1b[6~")
             wait_visible(lambda: "Latest message" in details_text())
             send(b"\x01Unsaved ")
             wait_visible(lambda: editor_line().startswith("Unsaved Second"))
@@ -455,7 +469,11 @@ with tempfile.TemporaryDirectory(prefix="qqq-dashboard-test-") as folder:
             cli("edit", "2", "--priority", "7")
             cli("next", "--local", "--session", "worker")
             cli("edit", "2", "--set-status", "error", "--reason", "Live failure", "--session", "worker")
-            wait_visible(lambda: "Task #2 | Error | Priority 7" in details_text() and "Live failure" in details_text())
+            wait_visible(lambda: "task #2 (Error)" in editor_title())
+            send(b"\x1b[5~")
+            wait_visible(lambda: "Task #2 | Error | Priority 7" in details_text())
+            send(b"\x1b[6~")
+            wait_visible(lambda: "Live failure" in details_text())
             assert editor_line().startswith("Unsaved Second"), visible.text()
             assert cli("show", "2")["task"]["description"] == "Second"
         elif scenario == "details_deleted":

@@ -175,9 +175,17 @@ fn blank_draft_keeps_details_pane_and_editor_position() {
         })
         .unwrap();
     let buffer = terminal.backend().buffer();
-    assert!(line(buffer, 8).starts_with("Select task to view details."));
+    assert!(line(buffer, 9).starts_with("║  Select task to view details."));
     assert_eq!(line(buffer, 7), "─".repeat(72));
-    assert_eq!(line(buffer, 12), "─".repeat(72));
+    assert_eq!(line(buffer, 8), format!("╔{}╗", "═".repeat(70)));
+    assert_eq!(line(buffer, 12), format!("╚{}╝", "═".repeat(70)));
+    for y in 9..12 {
+        assert_eq!(buffer[(0, y)].symbol(), "║");
+        assert_eq!(buffer[(71, y)].symbol(), "║");
+        for x in [1, 2, 69, 70] {
+            assert_eq!(buffer[(x, y)].symbol(), " ");
+        }
+    }
     assert!(line(buffer, 13).starts_with("Editor"));
     assert!(line(buffer, 14).starts_with("Draft"));
     assert_eq!(
@@ -240,7 +248,7 @@ fn selected_task_renders_details_between_list_and_editor() {
     };
     let mut terminal = Terminal::new(TestBackend::new(72, 24)).unwrap();
     for color in [true, false] {
-        for requested_top in [0, 1, 2] {
+        for requested_top in [0, 1, 2, 3] {
             let mut details_top = requested_top;
             terminal
                 .draw(|frame| {
@@ -276,11 +284,11 @@ fn selected_task_renders_details_between_list_and_editor() {
             let buffer = terminal.backend().buffer();
             assert!(line(buffer, 3).contains("Selected"));
             for (offset, (text, _, foreground, modifier)) in
-                expected.iter().skip(details_top).take(4).enumerate()
+                expected.iter().skip(details_top).take(3).enumerate()
             {
-                let y = 8 + offset as u16;
-                assert!(line(buffer, y).starts_with(text));
-                for x in 0..72 {
+                let y = 9 + offset as u16;
+                assert!(line(buffer, y).starts_with(&format!("║  {text}")));
+                for x in 3..69 {
                     assert_eq!(
                         buffer[(x, y)].fg,
                         if color { *foreground } else { Color::Reset },
@@ -295,7 +303,23 @@ fn selected_task_renders_details_between_list_and_editor() {
                 }
             }
             assert_eq!(line(buffer, 7), "─".repeat(72));
-            assert_eq!(line(buffer, 12), "─".repeat(72));
+            assert_eq!(line(buffer, 8), format!("╔{}╗", "═".repeat(70)));
+            assert_eq!(line(buffer, 12), format!("╚{}╝", "═".repeat(70)));
+            for y in 9..12 {
+                for x in [0, 71] {
+                    assert_eq!(buffer[(x, y)].symbol(), "║");
+                    assert_eq!(
+                        buffer[(x, y)].fg,
+                        if color { Color::DarkGray } else { Color::Reset }
+                    );
+                    assert_eq!(buffer[(x, y)].modifier, Modifier::empty());
+                }
+                for x in [1, 2, 69, 70] {
+                    assert_eq!(buffer[(x, y)].symbol(), " ");
+                    assert_eq!(buffer[(x, y)].fg, Color::Reset);
+                    assert_eq!(buffer[(x, y)].modifier, Modifier::empty());
+                }
+            }
             assert!(line(buffer, 13).starts_with("Editor"));
             assert!(line(buffer, 14).starts_with("Dirty draft"));
             assert_eq!(
@@ -351,9 +375,9 @@ fn details_scroll_clamps_without_moving_editor() {
             )
         })
         .unwrap();
-    assert_eq!(details_top, 7);
+    assert_eq!(details_top, 8);
     assert_eq!(editor_top, 0);
-    assert!(line(terminal.backend().buffer(), 6).starts_with("Detail 7"));
+    assert!(line(terminal.backend().buffer(), 7).starts_with("║  Detail 8"));
     assert!(line(terminal.backend().buffer(), 11).starts_with("Draft"));
 }
 
@@ -363,6 +387,7 @@ fn selected_task_geometry_and_details_hit_test_share_rectangles() {
     for height in 8..=100 {
         let panes = dashboard::panes(Rect::new(0, 0, 72, height));
         let details = panes.details;
+        let content = dashboard::details_content(details);
         assert!(panes.list.height >= 4);
         assert!(details.height >= 1);
         assert!(panes.editor.height >= 3);
@@ -379,11 +404,17 @@ fn selected_task_geometry_and_details_hit_test_share_rectangles() {
             }
         }
         assert_eq!(
-            dashboard::wheel_area((72, height), 5, details.y),
+            dashboard::wheel_area((72, height), 5, content.y),
             Some(dashboard::WheelArea::Details(dashboard::details_height(
                 details
             )))
         );
+        assert!(content.height >= 1);
+        assert_eq!(content.width, if details.height >= 3 { 66 } else { 68 });
+        assert_eq!(dashboard::wheel_area((72, height), 1, content.y), None);
+        if details.height >= 3 {
+            assert_eq!(dashboard::wheel_area((72, height), 5, details.y), None);
+        }
         let fragments: Vec<_> = "Editable".chars().map(|ch| ch.to_string()).collect();
         let layout = render::Layout::new(&fragments, &[], 72);
         assert_eq!(
@@ -425,7 +456,7 @@ fn new_draft_hit_test_keeps_three_panes() {
     );
     assert_eq!(
         dashboard::wheel_area((72, 18), 5, 7),
-        Some(dashboard::WheelArea::Details(3))
+        Some(dashboard::WheelArea::Details(2))
     );
     assert_eq!(
         dashboard::wheel_area((72, 18), 5, 11),
@@ -446,8 +477,12 @@ fn wheel_hit_test_uses_list_editor_and_excludes_edges() {
     assert_eq!(dashboard::wheel_area((72, 24), 5, 7), None);
     assert_eq!(
         dashboard::wheel_area((72, 24), 5, 10),
-        Some(dashboard::WheelArea::Details(4))
+        Some(dashboard::WheelArea::Details(3))
     );
+    assert_eq!(dashboard::wheel_area((72, 24), 5, 8), None);
+    assert_eq!(dashboard::wheel_area((72, 24), 0, 10), None);
+    assert_eq!(dashboard::wheel_area((72, 24), 2, 10), None);
+    assert_eq!(dashboard::wheel_area((72, 24), 69, 10), None);
     assert_eq!(dashboard::wheel_area((72, 24), 5, 12), None);
     assert_eq!(
         dashboard::wheel_area((72, 24), 5, 14),
