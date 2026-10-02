@@ -339,6 +339,7 @@ fn compose_inner(
                             query: &filter_query,
                             focused: filter_focused,
                             top: &mut list_top,
+                            follow_selected: true,
                         },
                         render::DashboardEditor {
                             layout: &layout,
@@ -346,6 +347,7 @@ fn compose_inner(
                             top: &mut top,
                             chrome: &chrome,
                             message_is_error: confirmation.is_none() && message_is_error,
+                            follow_cursor: true,
                         },
                         terminal.color,
                     );

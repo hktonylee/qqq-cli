@@ -18,6 +18,7 @@ pub struct ListView<'a> {
     pub query: &'a str,
     pub focused: bool,
     pub top: &'a mut usize,
+    pub follow_selected: bool,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -112,11 +113,14 @@ fn editor(frame: &mut Frame<'_>, area: Rect, editor: render::DashboardEditor<'_>
     let body = Rect::new(area.x, area.y + 1, area.width, area.height - 2);
     let (row, column) = editor.layout.positions[editor.cursor];
     let body_height = usize::from(body.height);
-    if row < *editor.top {
-        *editor.top = row;
-    }
-    if row >= editor.top.saturating_add(body_height) {
-        *editor.top = row + 1 - body_height;
+    *editor.top = (*editor.top).min(editor.layout.rows.len().saturating_sub(body_height));
+    if editor.follow_cursor {
+        if row < *editor.top {
+            *editor.top = row;
+        }
+        if row >= editor.top.saturating_add(body_height) {
+            *editor.top = row + 1 - body_height;
+        }
     }
     let heading_style = if color {
         Style::default().fg(ACCENT).add_modifier(Modifier::BOLD)
@@ -158,10 +162,12 @@ fn editor(frame: &mut Frame<'_>, area: Rect, editor: render::DashboardEditor<'_>
         Paragraph::new(render::clipped(footer, area.width.into())).style(footer_style),
         Rect::new(area.x, area.y + area.height - 1, area.width, 1),
     );
-    frame.set_cursor_position((
-        body.x.saturating_add(column as u16),
-        body.y.saturating_add((row - *editor.top) as u16),
-    ));
+    if row >= *editor.top && row < editor.top.saturating_add(body_height) {
+        frame.set_cursor_position((
+            body.x.saturating_add(column as u16),
+            body.y.saturating_add((row - *editor.top) as u16),
+        ));
+    }
 }
 
 pub fn draw(
@@ -187,7 +193,11 @@ pub fn draw(
     }
     let (list, editor_area) = panes(area);
     let list_height = usize::from(list.height.saturating_sub(3));
-    *list_view.top = panel::scroll_to(rows, selected, *list_view.top, list_height);
+    *list_view.top = if list_view.follow_selected {
+        panel::scroll_to(rows, selected, *list_view.top, list_height)
+    } else {
+        (*list_view.top).min(rows.len().saturating_sub(list_height))
+    };
     let heading_style = if color {
         Style::default().fg(ACCENT).add_modifier(Modifier::BOLD)
     } else {

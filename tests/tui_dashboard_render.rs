@@ -37,6 +37,201 @@ fn wheel_hit_test_uses_list_editor_and_excludes_edges() {
 }
 
 #[test]
+fn manual_list_scroll_does_not_snap_to_selected_task() {
+    let tree = format!(
+        "ID     STATUS       TASK\n{}",
+        (1..=10)
+            .map(|id| format!("{id}      New          Task {id}"))
+            .collect::<Vec<_>>()
+            .join("\n")
+    );
+    let rows = panel::rows(&tree);
+    let layout = render::Layout::new(&["Draft".into()], &[], 72);
+    let chrome = render::Chrome {
+        title: "Editor",
+        keys: render::KEYS,
+        message: "",
+    };
+    let mut top = 0;
+    let mut terminal = Terminal::new(TestBackend::new(72, 16)).unwrap();
+    terminal
+        .draw(|frame| {
+            dashboard::draw(
+                frame,
+                &rows,
+                &HashMap::new(),
+                Some(10),
+                dashboard::ListView {
+                    query: "",
+                    focused: false,
+                    top: &mut top,
+                    follow_selected: false,
+                },
+                render::DashboardEditor {
+                    layout: &layout,
+                    cursor: 0,
+                    top: &mut 0,
+                    chrome: &chrome,
+                    message_is_error: false,
+                    follow_cursor: true,
+                },
+                false,
+            )
+        })
+        .unwrap();
+    assert_eq!(top, 0);
+    assert!(line(terminal.backend().buffer(), 2).contains("ID"));
+    terminal
+        .draw(|frame| {
+            dashboard::draw(
+                frame,
+                &rows,
+                &HashMap::new(),
+                Some(10),
+                dashboard::ListView {
+                    query: "",
+                    focused: false,
+                    top: &mut top,
+                    follow_selected: true,
+                },
+                render::DashboardEditor {
+                    layout: &layout,
+                    cursor: 0,
+                    top: &mut 0,
+                    chrome: &chrome,
+                    message_is_error: false,
+                    follow_cursor: true,
+                },
+                false,
+            )
+        })
+        .unwrap();
+    assert_eq!(top, 6);
+    assert!(line(terminal.backend().buffer(), 6).contains("Task 10"));
+}
+
+#[test]
+fn manual_editor_scroll_keeps_viewport_then_keyboard_reveals_caret() {
+    let layout = render::Layout::new(&["A\nB\nC\nD\nE\nF\nG\nH\nI\nJ".into()], &[], 72);
+    let chrome = render::Chrome {
+        title: "Editor",
+        keys: render::KEYS,
+        message: "",
+    };
+    let cursor = layout.positions.len() - 1;
+    let mut top = 0;
+    let mut terminal = Terminal::new(TestBackend::new(72, 16)).unwrap();
+    terminal
+        .draw(|frame| {
+            dashboard::draw(
+                frame,
+                &[],
+                &HashMap::new(),
+                None,
+                dashboard::ListView {
+                    query: "",
+                    focused: false,
+                    top: &mut 0,
+                    follow_selected: true,
+                },
+                render::DashboardEditor {
+                    layout: &layout,
+                    cursor,
+                    top: &mut top,
+                    chrome: &chrome,
+                    message_is_error: false,
+                    follow_cursor: false,
+                },
+                false,
+            )
+        })
+        .unwrap();
+    assert_eq!(top, 0);
+    assert!(line(terminal.backend().buffer(), 9).starts_with("A"));
+    assert_eq!(terminal.get_cursor_position().unwrap(), Position::new(0, 0));
+    terminal
+        .draw(|frame| {
+            dashboard::draw(
+                frame,
+                &[],
+                &HashMap::new(),
+                None,
+                dashboard::ListView {
+                    query: "",
+                    focused: false,
+                    top: &mut 0,
+                    follow_selected: true,
+                },
+                render::DashboardEditor {
+                    layout: &layout,
+                    cursor,
+                    top: &mut top,
+                    chrome: &chrome,
+                    message_is_error: false,
+                    follow_cursor: true,
+                },
+                false,
+            )
+        })
+        .unwrap();
+    assert_eq!(top, 4);
+    assert!(line(terminal.backend().buffer(), 9).starts_with("E"));
+    assert_eq!(
+        terminal.get_cursor_position().unwrap(),
+        Position::new(1, 14)
+    );
+}
+
+#[test]
+fn manual_offsets_clamp_after_resize() {
+    let rows = panel::rows(&format!(
+        "ID     STATUS       TASK\n{}",
+        (1..=10)
+            .map(|id| format!("{id}      New          Task {id}"))
+            .collect::<Vec<_>>()
+            .join("\n")
+    ));
+    let layout = render::Layout::new(&["A\nB\nC\nD\nE\nF\nG\nH\nI\nJ".into()], &[], 72);
+    let chrome = render::Chrome {
+        title: "Editor",
+        keys: render::KEYS,
+        message: "",
+    };
+    let mut list_top = 6;
+    let mut editor_top = 4;
+    let mut terminal = Terminal::new(TestBackend::new(72, 24)).unwrap();
+    terminal
+        .draw(|frame| {
+            dashboard::draw(
+                frame,
+                &rows,
+                &HashMap::new(),
+                Some(10),
+                dashboard::ListView {
+                    query: "",
+                    focused: false,
+                    top: &mut list_top,
+                    follow_selected: false,
+                },
+                render::DashboardEditor {
+                    layout: &layout,
+                    cursor: 0,
+                    top: &mut editor_top,
+                    chrome: &chrome,
+                    message_is_error: false,
+                    follow_cursor: false,
+                },
+                false,
+            )
+        })
+        .unwrap();
+    assert_eq!(list_top, 2);
+    assert_eq!(editor_top, 0);
+    assert!(line(terminal.backend().buffer(), 2).contains("Task 2"));
+    assert!(line(terminal.backend().buffer(), 13).starts_with("A"));
+}
+
+#[test]
 fn filter_bar_shows_empty_result_and_takes_cursor_only_while_focused() {
     let layout = render::Layout::new(&["Unsaved".into()], &[], 72);
     let chrome = render::Chrome {
@@ -56,6 +251,7 @@ fn filter_bar_shows_empty_result_and_takes_cursor_only_while_focused() {
                     query: "absent",
                     focused: true,
                     top: &mut 0,
+                    follow_selected: true,
                 },
                 render::DashboardEditor {
                     layout: &layout,
@@ -63,6 +259,7 @@ fn filter_bar_shows_empty_result_and_takes_cursor_only_while_focused() {
                     top: &mut 0,
                     chrome: &chrome,
                     message_is_error: false,
+                    follow_cursor: true,
                 },
                 true,
             );
@@ -98,6 +295,7 @@ fn small_dashboard_keeps_filter_row_and_plain_style() {
                     query: "abcdefghijklmnop",
                     focused: true,
                     top: &mut 0,
+                    follow_selected: true,
                 },
                 render::DashboardEditor {
                     layout: &layout,
@@ -105,6 +303,7 @@ fn small_dashboard_keeps_filter_row_and_plain_style() {
                     top: &mut 0,
                     chrome: &chrome,
                     message_is_error: false,
+                    follow_cursor: true,
                 },
                 false,
             );
@@ -142,6 +341,7 @@ fn minimum_dashboard_height_still_shows_selected_task() {
                     query: "",
                     focused: false,
                     top: &mut 0,
+                    follow_selected: true,
                 },
                 render::DashboardEditor {
                     layout: &layout,
@@ -149,6 +349,7 @@ fn minimum_dashboard_height_still_shows_selected_task() {
                     top: &mut 0,
                     chrome: &chrome,
                     message_is_error: false,
+                    follow_cursor: true,
                 },
                 false,
             );
@@ -180,6 +381,7 @@ fn split_dashboard_keeps_list_above_editor() {
                     query: "",
                     focused: false,
                     top: &mut list_top,
+                    follow_selected: true,
                 },
                 render::DashboardEditor {
                     layout: &layout,
@@ -187,6 +389,7 @@ fn split_dashboard_keeps_list_above_editor() {
                     top: &mut editor_top,
                     chrome: &chrome,
                     message_is_error: false,
+                    follow_cursor: true,
                 },
                 false,
             );
@@ -223,6 +426,7 @@ fn narrow_dashboard_shows_plain_resize_hint() {
                     query: "",
                     focused: false,
                     top: &mut 0,
+                    follow_selected: true,
                 },
                 render::DashboardEditor {
                     layout: &layout,
@@ -230,6 +434,7 @@ fn narrow_dashboard_shows_plain_resize_hint() {
                     top: &mut 0,
                     chrome: &chrome,
                     message_is_error: false,
+                    follow_cursor: true,
                 },
                 true,
             );
@@ -262,6 +467,7 @@ fn no_color_dashboard_keeps_default_cell_styles() {
                     query: "",
                     focused: false,
                     top: &mut 0,
+                    follow_selected: true,
                 },
                 render::DashboardEditor {
                     layout: &layout,
@@ -269,6 +475,7 @@ fn no_color_dashboard_keeps_default_cell_styles() {
                     top: &mut 0,
                     chrome: &chrome,
                     message_is_error: false,
+                    follow_cursor: true,
                 },
                 false,
             );
@@ -315,6 +522,7 @@ fn status_selection_and_editor_images_use_distinct_colors() {
                     query: "",
                     focused: false,
                     top: &mut 0,
+                    follow_selected: true,
                 },
                 render::DashboardEditor {
                     layout: &layout,
@@ -322,6 +530,7 @@ fn status_selection_and_editor_images_use_distinct_colors() {
                     top: &mut 0,
                     chrome: &chrome,
                     message_is_error: false,
+                    follow_cursor: true,
                 },
                 true,
             );
@@ -368,6 +577,7 @@ fn dashboard_paste_label_uses_gold_while_body_stays_neutral() {
                     query: "",
                     focused: false,
                     top: &mut 0,
+                    follow_selected: true,
                 },
                 render::DashboardEditor {
                     layout: &layout,
@@ -375,6 +585,7 @@ fn dashboard_paste_label_uses_gold_while_body_stays_neutral() {
                     top: &mut 0,
                     chrome: &chrome,
                     message_is_error: false,
+                    follow_cursor: true,
                 },
                 true,
             );
@@ -406,6 +617,7 @@ fn failed_save_footer_uses_error_color() {
                     query: "",
                     focused: false,
                     top: &mut 0,
+                    follow_selected: true,
                 },
                 render::DashboardEditor {
                     layout: &layout,
@@ -413,6 +625,7 @@ fn failed_save_footer_uses_error_color() {
                     top: &mut 0,
                     chrome: &chrome,
                     message_is_error: true,
+                    follow_cursor: true,
                 },
                 true,
             );
