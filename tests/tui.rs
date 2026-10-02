@@ -52,6 +52,12 @@ fn dashboard_scenario(name: &str) {
 }
 
 #[test]
+fn tui_dashboard_actions_popup_keeps_background_and_restores_editor() {
+    dashboard_scenario("actions_popup");
+    dashboard_scenario("actions_popup_no_color");
+}
+
+#[test]
 fn tui_dashboard_keeps_details_and_editor_layout_stable() {
     dashboard_scenario("details");
     dashboard_scenario("details_no_color");

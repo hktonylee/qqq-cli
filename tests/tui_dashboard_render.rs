@@ -45,6 +45,99 @@ fn click(
 }
 
 #[test]
+fn action_popup_preserves_background_and_clears_overlaid_styles() {
+    let rows = panel::rows("ID STATUS TASK\n1 New Selected", 70);
+    let layout = render::Layout::new(&["Draft behind popup".into()], &[], 72);
+    let chrome = render::Chrome {
+        title: "Editor behind popup",
+        title_status_color: None,
+        keys: render::KEYS,
+        message: "",
+    };
+    let modal = [
+        "Task actions #1",
+        "c Complete",
+        "r Retry error",
+        "o Reopen",
+        "a Archive",
+        "p Priority",
+        "d Parent",
+        "Esc cancel",
+    ]
+    .map(str::to_owned);
+    for color in [true, false] {
+        let mut terminal = Terminal::new(TestBackend::new(72, 24)).unwrap();
+        let mut background = None;
+        for modal_lines in [None, Some(modal.as_slice())] {
+            terminal
+                .draw(|frame| {
+                    dashboard::draw(
+                        frame,
+                        &rows,
+                        &HashMap::from([(1, "new")]),
+                        Some(1),
+                        dashboard::View {
+                            query: "",
+                            focused: false,
+                            top: &mut 0,
+                            follow_selected: true,
+                            modal_lines,
+                            details: None,
+                        },
+                        render::DashboardEditor {
+                            layout: &layout,
+                            cursor: 0,
+                            top: &mut 0,
+                            chrome: &chrome,
+                            message_is_error: false,
+                            follow_cursor: true,
+                        },
+                        color,
+                    );
+                })
+                .unwrap();
+            if modal_lines.is_none() {
+                background = Some(terminal.backend().buffer().clone());
+            }
+        }
+        let buffer = terminal.backend().buffer();
+        let background = background.unwrap();
+        assert_eq!(buffer[(12, 7)].symbol(), "┌");
+        assert_eq!(buffer[(59, 16)].symbol(), "┘");
+        assert!(line(buffer, 8).contains("│Task actions #1"));
+        assert_eq!(buffer[(55, 13)].symbol(), " ");
+        assert_eq!(buffer[(55, 13)].modifier, Modifier::empty());
+        assert_eq!(
+            buffer[(55, 13)].fg,
+            if color {
+                Color::Indexed(252)
+            } else {
+                Color::Reset
+            }
+        );
+        assert_eq!(
+            buffer[(55, 13)].bg,
+            if color {
+                Color::Indexed(236)
+            } else {
+                Color::Reset
+            }
+        );
+        for y in 0..24 {
+            for x in 0..72 {
+                if !(12..60).contains(&x) || !(7..17).contains(&y) {
+                    assert_eq!(buffer[(x, y)], background[(x, y)], "background {x},{y}");
+                }
+            }
+        }
+        assert_eq!(
+            terminal.get_cursor_position().unwrap(),
+            Position::new(13, 8)
+        );
+    }
+}
+
+#[test]
 fn blank_draft_keeps_details_pane_and_editor_position() {
     let layout = render::Layout::new(&["Draft".into()], &[], 72);
     let chrome = render::Chrome {

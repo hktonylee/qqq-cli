@@ -59,7 +59,7 @@ class TerminalScreen:
             elif char >= " ":
                 # Task tree adds single-cell box drawing glyphs. Other wide
                 # Unicode needs a fuller screen emulator.
-                assert char.isascii() or char in "└├─│", f"Unsupported screen character {char!r}"
+                assert char.isascii() or char in "┌┐└┘├─│", f"Unsupported screen character {char!r}"
                 if self.x >= self.width:
                     self.x = 0
                     self.y = min(self.height - 1, self.y + 1)
@@ -90,7 +90,7 @@ CTRL_P = b"\x10"
 with tempfile.TemporaryDirectory(prefix="qqq-dashboard-test-") as folder:
     env = dict(os.environ, HOME=folder, TERM="xterm-256color")
     env.pop("NO_COLOR", None)
-    if scenario in ("no_color", "pasteboard_no_color", "filter_no_color", "details_no_color"):
+    if scenario in ("no_color", "pasteboard_no_color", "filter_no_color", "details_no_color", "actions_popup_no_color"):
         env["NO_COLOR"] = "1"
     elif scenario == "dumb":
         env["TERM"] = "dumb"
@@ -672,7 +672,7 @@ with tempfile.TemporaryDirectory(prefix="qqq-dashboard-test-") as folder:
                     wait_visible(lambda: visible.text().splitlines()[-1].startswith("Ctrl-S save"))
                 if scenario.endswith("menu"):
                     send(b"\x07")
-                    wait_visible(lambda: visible.text().startswith("Task actions"))
+                    wait_visible(lambda: "Task actions" in visible.text())
             key = b"\x03" if scenario.startswith("ctrl_c") else b"\x1b"
             clear_capture()
             send(key)
@@ -878,6 +878,52 @@ with tempfile.TemporaryDirectory(prefix="qqq-dashboard-test-") as folder:
             clear_capture()
             send(b"\x1b[1;2A")
             wait_visible(lambda: "task #1 (Completed)" in editor_title())
+        elif scenario in ("actions_popup", "actions_popup_no_color"):
+            initial_tasks = cli("list")
+            send(b"\x1b[1;2A")
+            wait_visible(lambda: "task #2 (New)" in editor_title()
+                         and (visible.x, visible.y) == (6, editor_row() + 1))
+            before_popup = visible.text().splitlines()
+            send(b"\x07")
+            wait_visible(lambda: visible.text().splitlines()[7][12] == "┌"
+                         and "Task actions #2" in visible.text().splitlines()[8]
+                         and visible.text().splitlines()[16][59] == "┘")
+            popup_rows = visible.text().splitlines()
+            for row in range(24):
+                for column in range(72):
+                    if not (7 <= row < 17 and 12 <= column < 60):
+                        assert popup_rows[row][column] == before_popup[row][column], (row, column)
+            send(b"\x1b[<0;6;4M\x1b[<0;6;4m\x10")
+            settle()
+            assert "Task actions #2" in visible.text(), visible.text()
+            assert cli("list") == initial_tasks
+            fcntl.ioctl(slave, termios.TIOCSWINSZ, struct.pack("HHHH", 30, 90, 0, 0))
+            visible.resize(90, 30)
+            os.kill(child.pid, signal.SIGWINCH)
+            wait_visible(lambda: visible.text().splitlines()[10][21] == "┌"
+                         and "Task actions #2" in visible.text().splitlines()[11]
+                         and visible.text().splitlines()[19][68] == "┘"
+                         and (visible.x, visible.y) == (22, 11))
+            settle()
+            send(b"p")
+            wait_visible(lambda: "Priority task #2" in visible.text()
+                         and (visible.x, visible.y) == (24, 15))
+            send(b"-9")
+            wait_visible(lambda: "Priority task #2" in visible.text()
+                         and "> -9" in visible.text()
+                         and (visible.x, visible.y) == (26, 15))
+            assert "c Complete" not in visible.text(), visible.text()
+            send(b"\x7f\x7f\x1b[200~" + b" " * 50 + b"5\x1b[201~")
+            wait_visible(lambda: visible.text().splitlines()[15][66] == "5"
+                         and (visible.x, visible.y) == (67, 15))
+            send(b"\x1b")
+            wait_visible(lambda: "task #2 (New)" in editor_title()
+                         and editor_line().startswith("Second")
+                         and (visible.x, visible.y) == (6, editor_row() + 1)
+                         and "Priority task #2" not in visible.text())
+            assert cli("list") == initial_tasks
+            if scenario == "actions_popup_no_color":
+                assert b"\x1b[38;" not in screen and b"\x1b[48;" not in screen, screen[-2000:]
         elif scenario == "actions_basic":
             wait_visible(lambda: "Owned item" in visible.text() and "Hidden item" in visible.text())
             def select_action_task(label, task_id):

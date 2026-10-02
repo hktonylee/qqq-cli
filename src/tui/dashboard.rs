@@ -1,10 +1,10 @@
 use super::{panel, render};
 use ratatui::{
     Frame,
-    layout::Rect,
+    layout::{Margin, Rect},
     style::{Color, Modifier, Style},
     text::{Line, Span},
-    widgets::{Clear, Paragraph},
+    widgets::{Block, Borders, Clear, Paragraph},
 };
 use std::collections::HashMap;
 use unicode_segmentation::UnicodeSegmentation;
@@ -46,6 +46,92 @@ pub struct Panes {
     pub list: Rect,
     pub details: Rect,
     pub editor: Rect,
+}
+
+pub struct PopupLayout {
+    pub outer: Rect,
+    pub content: Rect,
+    bordered: bool,
+}
+
+pub fn popup_layout(area: Rect, rows: usize) -> PopupLayout {
+    let bordered = area.width >= 20 && area.height >= 14;
+    let border = usize::from(bordered) * 2;
+    let width = if bordered {
+        area.width.saturating_sub(4).min(48)
+    } else {
+        area.width.min(48)
+    };
+    let max_height = if bordered {
+        area.height.saturating_sub(4)
+    } else {
+        area.height
+    };
+    let height = rows.saturating_add(border).min(usize::from(max_height)) as u16;
+    let outer = Rect::new(
+        area.x + (area.width - width) / 2,
+        area.y + (area.height - height) / 2,
+        width,
+        height,
+    );
+    let inset = u16::from(bordered);
+    PopupLayout {
+        outer,
+        content: outer.inner(Margin::new(inset, inset)),
+        bordered,
+    }
+}
+
+fn popup(frame: &mut Frame<'_>, lines: &[String], color: bool) {
+    let PopupLayout {
+        outer,
+        content,
+        bordered,
+    } = popup_layout(frame.area(), lines.len());
+    frame.render_widget(Clear, outer);
+    let body_style = if color {
+        Style::default().fg(BODY_FG).bg(BODY_BG)
+    } else {
+        Style::default()
+    };
+    let heading_style = if color {
+        body_style.fg(ACCENT).add_modifier(Modifier::BOLD)
+    } else {
+        body_style
+    };
+    let block = Block::default().style(body_style);
+    let block = if bordered {
+        block.borders(Borders::ALL).border_style(heading_style)
+    } else {
+        block
+    };
+    frame.render_widget(block, outer);
+    let mut cursor = (content.x, content.y);
+    for (index, line) in lines.iter().take(usize::from(content.height)).enumerate() {
+        let width = usize::from(content.width);
+        let text = if let Some(value) = line.strip_prefix("> ") {
+            let safe = render::clipped(value, usize::MAX);
+            let (tail, _) = text_tail(&safe, width.saturating_sub(3));
+            render::clipped(&format!("> {tail}"), width)
+        } else {
+            render::clipped(line, width)
+        };
+        if line.starts_with("> ") {
+            cursor = (
+                content.x + (text.width() as u16).min(content.width.saturating_sub(1)),
+                content.y + index as u16,
+            );
+        }
+        frame.render_widget(
+            Paragraph::new(text).style(if index == 0 {
+                heading_style
+            } else {
+                body_style
+            }),
+            Rect::new(content.x, content.y + index as u16, content.width, 1),
+        );
+    }
+    frame.set_cursor_position(cursor);
 }
 
 pub fn panes(area: Rect) -> Panes {
@@ -130,12 +216,10 @@ pub fn click_target(
     None
 }
 
-fn filter_text(query: &str, width: usize) -> (String, u16) {
-    const LABEL: &str = "Filter: ";
-    let available = width.saturating_sub(LABEL.len());
+fn text_tail(text: &str, available: usize) -> (String, usize) {
     let mut suffix = Vec::new();
     let mut used = 0;
-    for grapheme in query.graphemes(true).rev() {
+    for grapheme in text.graphemes(true).rev() {
         let cells = grapheme.width();
         if used + cells > available {
             break;
@@ -144,7 +228,13 @@ fn filter_text(query: &str, width: usize) -> (String, u16) {
         used += cells;
     }
     suffix.reverse();
-    let text = format!("{LABEL}{}", suffix.concat());
+    (suffix.concat(), used)
+}
+
+fn filter_text(query: &str, width: usize) -> (String, u16) {
+    const LABEL: &str = "Filter: ";
+    let (tail, used) = text_tail(query, width.saturating_sub(LABEL.len()));
+    let text = format!("{LABEL}{tail}");
     let cursor = (LABEL.len() + used).min(width.saturating_sub(1)) as u16;
     (text, cursor)
 }
@@ -412,24 +502,6 @@ pub fn draw(
         frame.set_cursor_position((list.x + filter_cursor, list.y + 1));
     }
     if let Some(lines) = list_view.modal_lines {
-        frame.render_widget(Clear, area);
-        let heading_style = if color {
-            Style::default().fg(ACCENT).add_modifier(Modifier::BOLD)
-        } else {
-            Style::default()
-        };
-        for (index, line) in lines.iter().take(usize::from(area.height)).enumerate() {
-            frame.render_widget(
-                Paragraph::new(render::clipped(line, usize::from(area.width))).style(
-                    if index == 0 {
-                        heading_style
-                    } else {
-                        Style::default()
-                    },
-                ),
-                Rect::new(area.x, area.y + index as u16, area.width, 1),
-            );
-        }
-        frame.set_cursor_position((area.x, area.y));
+        popup(frame, lines, color);
     }
 }

@@ -629,9 +629,20 @@ fn compose_inner(
             };
             list_row_count = rows.len();
             visible_ids = Some(panel::visible_ids(&rows));
+            let popup_content = dashboard::popup_layout(
+                ratatui::layout::Rect::new(0, 0, size.0, size.1),
+                usize::MAX,
+            )
+            .content;
             let modal_lines = action_ui
                 .as_ref()
-                .map(|ui| action_lines(ui, usize::from(size.0), usize::from(size.1)))
+                .map(|ui| {
+                    action_lines(
+                        ui,
+                        usize::from(popup_content.width),
+                        usize::from(popup_content.height),
+                    )
+                })
                 .or_else(|| match &confirmation {
                     Some(Confirmation::Action { action, dirty }) => Some(vec![
                         format!("{} task #{}?", action.label(), action.id()),
