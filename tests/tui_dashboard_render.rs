@@ -22,24 +22,117 @@ fn line(buffer: &Buffer, y: u16) -> String {
         .collect()
 }
 
+fn click(
+    size: (u16, u16),
+    column: u16,
+    row: u16,
+    rows: &[panel::ListRow],
+    list_top: usize,
+    editor_top: usize,
+    layout: &render::Layout,
+) -> Option<dashboard::ClickTarget> {
+    dashboard::click_target(
+        size,
+        column,
+        row,
+        dashboard::HitState {
+            selected: false,
+            rows,
+            list_top,
+            editor_top,
+            layout,
+        },
+    )
+}
+
+#[test]
+fn selected_task_geometry_and_details_hit_test_share_rectangles() {
+    use ratatui::layout::Rect;
+    for height in [8, 12, 18, 24] {
+        let panes = dashboard::panes(Rect::new(0, 0, 72, height), true);
+        let details = panes.details.unwrap();
+        assert!(panes.list.height >= 4);
+        assert!(details.height >= 1);
+        assert!(panes.editor.height >= 3);
+        assert_eq!(
+            panes.list.height + details.height + panes.editor.height,
+            height
+        );
+        if height >= 12 {
+            assert_eq!(panes.list.height, height / 3);
+            assert_eq!(details.height, height / 3);
+        }
+        assert_eq!(
+            dashboard::wheel_area((72, height), true, 5, details.y),
+            Some(dashboard::WheelArea::Details(dashboard::details_height(
+                details
+            )))
+        );
+        let fragments: Vec<_> = "Editable".chars().map(|ch| ch.to_string()).collect();
+        let layout = render::Layout::new(&fragments, &[], 72);
+        assert_eq!(
+            dashboard::click_target(
+                (72, height),
+                5,
+                details.y,
+                dashboard::HitState {
+                    selected: true,
+                    rows: &[],
+                    list_top: 0,
+                    editor_top: 0,
+                    layout: &layout
+                }
+            ),
+            None
+        );
+        assert_eq!(
+            dashboard::click_target(
+                (72, height),
+                2,
+                panes.editor.y + 1,
+                dashboard::HitState {
+                    selected: true,
+                    rows: &[],
+                    list_top: 0,
+                    editor_top: 0,
+                    layout: &layout
+                }
+            ),
+            Some(dashboard::ClickTarget::Editor(2))
+        );
+    }
+}
+
+#[test]
+fn new_draft_uses_one_third_for_task_list() {
+    assert_eq!(
+        dashboard::wheel_area((72, 18), false, 5, 3),
+        Some(dashboard::WheelArea::List(3))
+    );
+    assert_eq!(
+        dashboard::wheel_area((72, 18), false, 5, 7),
+        Some(dashboard::WheelArea::Editor(10))
+    );
+}
+
 #[test]
 fn wheel_hit_test_uses_list_editor_and_excludes_edges() {
     assert_eq!(
-        dashboard::wheel_area((72, 16), 5, 3),
+        dashboard::wheel_area((72, 24), false, 5, 3),
         Some(dashboard::WheelArea::List(5))
     );
     assert_eq!(
-        dashboard::wheel_area((72, 16), 5, 1),
+        dashboard::wheel_area((72, 24), false, 5, 1),
         Some(dashboard::WheelArea::List(5))
     );
-    assert_eq!(dashboard::wheel_area((72, 16), 5, 7), None);
+    assert_eq!(dashboard::wheel_area((72, 24), false, 5, 7), None);
     assert_eq!(
-        dashboard::wheel_area((72, 16), 5, 10),
-        Some(dashboard::WheelArea::Editor(6))
+        dashboard::wheel_area((72, 24), false, 5, 10),
+        Some(dashboard::WheelArea::Editor(14))
     );
-    assert_eq!(dashboard::wheel_area((72, 16), 5, 15), None);
-    assert_eq!(dashboard::wheel_area((72, 16), 72, 3), None);
-    assert_eq!(dashboard::wheel_area((10, 7), 5, 3), None);
+    assert_eq!(dashboard::wheel_area((72, 24), false, 5, 23), None);
+    assert_eq!(dashboard::wheel_area((72, 24), false, 72, 3), None);
+    assert_eq!(dashboard::wheel_area((10, 7), false, 5, 3), None);
 }
 
 #[test]
@@ -54,7 +147,7 @@ fn click_target_maps_rendered_task_rows_and_editor_caret() {
         72,
     );
     let hit = |column, row, list_top, editor_top| {
-        dashboard::click_target((72, 16), column, row, &rows, list_top, editor_top, &layout)
+        click((72, 24), column, row, &rows, list_top, editor_top, &layout)
     };
     assert_eq!(hit(5, 3, 0, 0), Some(dashboard::ClickTarget::Task(1)));
     assert_eq!(hit(5, 4, 0, 0), Some(dashboard::ClickTarget::Task(1)));
@@ -82,15 +175,12 @@ fn click_target_ignores_non_content_and_out_of_bounds() {
         (72, 3),
     ] {
         assert_eq!(
-            dashboard::click_target((72, 16), column, row, &rows, 0, 0, &layout),
+            click((72, 24), column, row, &rows, 0, 0, &layout),
             None,
             "{column},{row}"
         );
     }
-    assert_eq!(
-        dashboard::click_target((10, 7), 5, 3, &rows, 0, 0, &layout),
-        None
-    );
+    assert_eq!(click((10, 7), 5, 3, &rows, 0, 0, &layout), None);
 }
 
 #[test]

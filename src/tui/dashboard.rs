@@ -1,7 +1,7 @@
 use super::{panel, render};
 use ratatui::{
     Frame,
-    layout::{Constraint, Layout, Rect},
+    layout::Rect,
     style::{Color, Modifier, Style},
     text::{Line, Span},
     widgets::{Clear, Paragraph},
@@ -25,6 +25,7 @@ pub struct ListView<'a> {
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum WheelArea {
     List(usize),
+    Details(usize),
     Editor(usize),
 }
 
@@ -34,19 +35,56 @@ pub enum ClickTarget {
     Editor(usize),
 }
 
-fn panes(area: Rect) -> (Rect, Rect) {
-    let parts =
-        Layout::vertical([Constraint::Percentage(50), Constraint::Percentage(50)]).split(area);
-    (parts[0], parts[1])
+pub struct Panes {
+    pub list: Rect,
+    pub details: Option<Rect>,
+    pub editor: Rect,
 }
 
-pub fn wheel_area(size: (u16, u16), column: u16, row: u16) -> Option<WheelArea> {
+pub fn panes(area: Rect, selected: bool) -> Panes {
+    let list_height = (area.height / 3).max(4).min(area.height.saturating_sub(3));
+    let details_height = if selected {
+        (area.height / 3).min(area.height.saturating_sub(list_height + 3))
+    } else {
+        0
+    };
+    let editor_y = area.y + list_height + details_height;
+    Panes {
+        list: Rect::new(area.x, area.y, area.width, list_height),
+        details: selected
+            .then(|| Rect::new(area.x, area.y + list_height, area.width, details_height)),
+        editor: Rect::new(
+            area.x,
+            editor_y,
+            area.width,
+            area.height - list_height - details_height,
+        ),
+    }
+}
+
+pub fn details_height(area: Rect) -> usize {
+    usize::from(if area.height >= 3 {
+        area.height - 1
+    } else {
+        area.height
+    })
+}
+
+pub fn wheel_area(size: (u16, u16), selected: bool, column: u16, row: u16) -> Option<WheelArea> {
     if size.0 < 12 || size.1 < 8 || column >= size.0 || row >= size.1 {
         return None;
     }
-    let (list, editor) = panes(Rect::new(0, 0, size.0, size.1));
+    let Panes {
+        list,
+        details,
+        editor,
+    } = panes(Rect::new(0, 0, size.0, size.1), selected);
     if row < list.y + list.height - 1 {
         Some(WheelArea::List(usize::from(list.height.saturating_sub(3))))
+    } else if let Some(details) =
+        details.filter(|area| row >= area.y && usize::from(row - area.y) < details_height(*area))
+    {
+        Some(WheelArea::Details(details_height(details)))
     } else if row >= editor.y && row < editor.y + editor.height - 1 {
         Some(WheelArea::Editor(usize::from(
             editor.height.saturating_sub(2),
@@ -56,28 +94,33 @@ pub fn wheel_area(size: (u16, u16), column: u16, row: u16) -> Option<WheelArea> 
     }
 }
 
+pub struct HitState<'a> {
+    pub selected: bool,
+    pub rows: &'a [panel::ListRow],
+    pub list_top: usize,
+    pub editor_top: usize,
+    pub layout: &'a render::Layout,
+}
+
 pub fn click_target(
     size: (u16, u16),
     column: u16,
     row: u16,
-    rows: &[panel::ListRow],
-    list_top: usize,
-    editor_top: usize,
-    layout: &render::Layout,
+    hit: HitState<'_>,
 ) -> Option<ClickTarget> {
     if size.0 < 12 || size.1 < 8 || column >= size.0 || row >= size.1 {
         return None;
     }
-    let (list, editor) = panes(Rect::new(0, 0, size.0, size.1));
+    let Panes { list, editor, .. } = panes(Rect::new(0, 0, size.0, size.1), hit.selected);
     if row >= list.y + 2 && row < list.y + list.height - 1 {
-        let index = list_top + usize::from(row - list.y - 2);
-        return rows.get(index)?.task_id.map(ClickTarget::Task);
+        let index = hit.list_top + usize::from(row - list.y - 2);
+        return hit.rows.get(index)?.task_id.map(ClickTarget::Task);
     }
     if row > editor.y && row < editor.y + editor.height - 1 {
-        let layout_row = editor_top + usize::from(row - editor.y - 1);
-        if layout_row < layout.rows.len() {
+        let layout_row = hit.editor_top + usize::from(row - editor.y - 1);
+        if layout_row < hit.layout.rows.len() {
             return Some(ClickTarget::Editor(
-                layout.nearest(layout_row, usize::from(column)),
+                hit.layout.nearest(layout_row, usize::from(column)),
             ));
         }
     }
@@ -225,7 +268,11 @@ pub fn draw(
         frame.set_cursor_position((area.x, area.y));
         return;
     }
-    let (list, editor_area) = panes(area);
+    let Panes {
+        list,
+        editor: editor_area,
+        ..
+    } = panes(area, selected.is_some());
     let list_height = usize::from(list.height.saturating_sub(3));
     *list_view.top = if list_view.follow_selected {
         panel::scroll_to(rows, selected, *list_view.top, list_height)

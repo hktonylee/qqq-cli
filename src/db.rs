@@ -80,6 +80,13 @@ pub struct Task {
 fn is_false(value: &bool) -> bool {
     !*value
 }
+#[derive(Serialize)]
+pub struct TaskMessage {
+    pub id: i64,
+    pub body: String,
+    pub session: Option<String>,
+    pub created_at: String,
+}
 pub(crate) fn task_row(r: &rusqlite::Row<'_>) -> rusqlite::Result<Task> {
     Ok(Task {
         id: r.get(0)?,
@@ -1110,12 +1117,26 @@ impl Db {
     }
     pub fn show(&self, id: i64) -> Result<Value> {
         let task = self.task(id)?;
-        let messages=self.conn.prepare("SELECT id,body,session,created_at FROM messages WHERE task_id=? ORDER BY id")?.query_map([id],|r|Ok(json!({"id":r.get::<_,i64>(0)?,"body":r.get::<_,String>(1)?,"session":r.get::<_,Option<String>>(2)?,"created_at":r.get::<_,String>(3)?})))?.collect::<rusqlite::Result<Vec<_>>>()?;
+        let messages = self.task_messages(id)?;
         let images=self.conn.prepare("SELECT id,name,media_type,bytes FROM images WHERE task_id=? ORDER BY id")?.query_map([id],|r|Ok(json!({"id":r.get::<_,i64>(0)?,"name":r.get::<_,String>(1)?,"media_type":r.get::<_,String>(2)?,"bytes":r.get::<_,i64>(3)?})))?.collect::<rusqlite::Result<Vec<_>>>()?;
         let events=self.conn.prepare("SELECT session,action,created_at FROM events WHERE task_id=? ORDER BY id")?.query_map([id],|r|Ok(json!({"session":r.get::<_,String>(0)?,"action":r.get::<_,String>(1)?,"created_at":r.get::<_,String>(2)?})))?.collect::<rusqlite::Result<Vec<_>>>()?;
         Ok(
             json!({"task":task,"messages":messages,"images":images,"events":events,"herdr":self.link(id)?}),
         )
+    }
+    pub fn task_messages(&self, id: i64) -> Result<Vec<TaskMessage>> {
+        Ok(self
+            .conn
+            .prepare("SELECT id,body,session,created_at FROM messages WHERE task_id=? ORDER BY id")?
+            .query_map([id], |row| {
+                Ok(TaskMessage {
+                    id: row.get(0)?,
+                    body: row.get(1)?,
+                    session: row.get(2)?,
+                    created_at: row.get(3)?,
+                })
+            })?
+            .collect::<rusqlite::Result<Vec<_>>>()?)
     }
     fn save_images(
         conn: &Connection,

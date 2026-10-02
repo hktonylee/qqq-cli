@@ -1,5 +1,6 @@
 mod clipboard;
 mod dashboard;
+mod details;
 pub mod draft;
 mod panel;
 mod render;
@@ -686,16 +687,25 @@ fn compose_inner(
                     && action_ui.is_none()
                     && match mouse.kind {
                         MouseEventKind::ScrollUp | MouseEventKind::ScrollDown => {
-                            dashboard::wheel_area(size, mouse.column, mouse.row).is_some()
+                            dashboard::wheel_area(
+                                size,
+                                target_id.is_some(),
+                                mouse.column,
+                                mouse.row,
+                            )
+                            .is_some()
                         }
                         MouseEventKind::Down(MouseButton::Left) => dashboard::click_target(
                             size,
                             mouse.column,
                             mouse.row,
-                            &rows,
-                            list_top,
-                            top,
-                            &layout,
+                            dashboard::HitState {
+                                selected: target_id.is_some(),
+                                rows: &rows,
+                                list_top,
+                                editor_top: top,
+                                layout: &layout,
+                            },
                         )
                         .is_some(),
                         _ => false,
@@ -741,7 +751,7 @@ fn compose_inner(
                     MouseEventKind::ScrollUp => false,
                     _ => continue,
                 };
-                match dashboard::wheel_area(size, mouse.column, mouse.row) {
+                match dashboard::wheel_area(size, target_id.is_some(), mouse.column, mouse.row) {
                     Some(dashboard::WheelArea::List(height)) => {
                         list_follow_selected = false;
                         list_top = panel::wheel_top(list_top, list_row_count, height, down);
@@ -750,6 +760,7 @@ fn compose_inner(
                         editor_follow_cursor = false;
                         top = panel::wheel_top(top, layout.rows.len(), height, down);
                     }
+                    Some(dashboard::WheelArea::Details(_)) => (),
                     None => (),
                 }
             }
@@ -760,10 +771,13 @@ fn compose_inner(
                     size,
                     mouse.column,
                     mouse.row,
-                    &rows,
-                    list_top,
-                    top,
-                    &layout,
+                    dashboard::HitState {
+                        selected: target_id.is_some(),
+                        rows: &rows,
+                        list_top,
+                        editor_top: top,
+                        layout: &layout,
+                    },
                 ) {
                     Some(dashboard::ClickTarget::Editor(cursor)) => {
                         filter_focused = false;

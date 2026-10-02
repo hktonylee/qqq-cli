@@ -66,6 +66,27 @@ fn composition() -> Composition {
 }
 
 #[test]
+fn task_messages_preserve_body_author_order_and_show_contract() {
+    let (mut db, _dir) = database();
+    let task = db.add("Selected", None, &[]).unwrap();
+    assert!(db.task_messages(task.id).unwrap().is_empty());
+    db.message(task.id, "First\nDetails", Some("worker"))
+        .unwrap();
+    db.message(task.id, "Second", None).unwrap();
+    let messages = db.task_messages(task.id).unwrap();
+    assert_eq!(messages.len(), 2);
+    assert!(messages[0].id < messages[1].id);
+    assert_eq!(messages[0].body, "First\nDetails");
+    assert_eq!(messages[0].session.as_deref(), Some("worker"));
+    assert!(messages[1].session.is_none());
+    assert!(messages[0].created_at.ends_with('Z'));
+    assert_eq!(
+        db.show(task.id).unwrap()["messages"],
+        serde_json::to_value(messages).unwrap()
+    );
+}
+
+#[test]
 fn task_navigation_skips_archived_unless_included() {
     let (mut db, _dir) = database();
     db.add("First", None, &[]).unwrap();
