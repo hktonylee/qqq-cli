@@ -379,6 +379,12 @@ impl Draft {
             .map(|atom| matches!(atom, Atom::Image { .. } | Atom::StoredImage { .. }))
             .collect()
     }
+    pub fn paste_mask(&self) -> Vec<bool> {
+        self.atoms
+            .iter()
+            .map(|atom| matches!(atom, Atom::Paste { .. }))
+            .collect()
+    }
     pub fn is_dirty_against(&self, baseline: &str) -> bool {
         let contents = self.contents(false);
         contents.description != baseline || !contents.images.is_empty()

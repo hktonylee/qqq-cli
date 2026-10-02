@@ -14,6 +14,13 @@ pub const ADD_KEYS: &str = "Ctrl-S save  Shift-Up/Down  Esc/Ctrl-C exit";
 const BACKGROUND: Color = Color::AnsiValue(236);
 const FOREGROUND: Color = Color::AnsiValue(252);
 const IMAGE_FOREGROUND: Color = Color::AnsiValue(81);
+const PASTE_FOREGROUND: Color = Color::AnsiValue(222);
+
+#[derive(Clone, Copy, Eq, PartialEq)]
+pub(super) enum HighlightKind {
+    Image,
+    Paste,
+}
 
 pub struct Chrome<'a> {
     pub title: &'a str,
@@ -32,24 +39,39 @@ pub struct DashboardEditor<'a> {
 pub struct Layout {
     pub rows: Vec<String>,
     pub positions: Vec<(usize, usize)>,
-    pub(super) image_spans: Vec<Vec<(usize, usize)>>,
+    pub(super) highlight_spans: Vec<Vec<(usize, usize, HighlightKind)>>,
 }
 impl Layout {
     pub fn new(fragments: &[String], image_mask: &[bool], width: usize) -> Self {
+        Self::with_paste(fragments, image_mask, &[], width)
+    }
+
+    pub fn with_paste(
+        fragments: &[String],
+        image_mask: &[bool],
+        paste_mask: &[bool],
+        width: usize,
+    ) -> Self {
         let width = width.max(1);
         let mut layout = Self {
             rows: vec![String::new()],
             positions: vec![(0, 0)],
-            image_spans: vec![Vec::new()],
+            highlight_spans: vec![Vec::new()],
         };
         let mut column = 0;
         for (index, fragment) in fragments.iter().enumerate() {
-            let image = image_mask.get(index).copied().unwrap_or(false);
+            let highlight = if image_mask.get(index).copied().unwrap_or(false) {
+                Some(HighlightKind::Image)
+            } else if paste_mask.get(index).copied().unwrap_or(false) {
+                Some(HighlightKind::Paste)
+            } else {
+                None
+            };
             let safe = escape(fragment);
             for grapheme in safe.graphemes(true) {
                 if grapheme == "\n" {
                     layout.rows.push(String::new());
-                    layout.image_spans.push(Vec::new());
+                    layout.highlight_spans.push(Vec::new());
                     column = 0;
                     continue;
                 }
@@ -60,20 +82,22 @@ impl Layout {
                 };
                 if column + cells > width {
                     layout.rows.push(String::new());
-                    layout.image_spans.push(Vec::new());
+                    layout.highlight_spans.push(Vec::new());
                     column = 0;
                 }
                 let line = layout.rows.last_mut().expect("layout always has a row");
                 let start = line.len();
                 line.push_str(grapheme);
-                if image {
+                if let Some(kind) = highlight {
                     let spans = layout
-                        .image_spans
+                        .highlight_spans
                         .last_mut()
-                        .expect("layout always has image spans");
+                        .expect("layout always has highlight spans");
                     match spans.last_mut() {
-                        Some((_, end)) if *end == start => *end = line.len(),
-                        _ => spans.push((start, line.len())),
+                        Some((_, end, previous)) if *end == start && *previous == kind => {
+                            *end = line.len()
+                        }
+                        _ => spans.push((start, line.len(), kind)),
                     }
                 }
                 column += cells;
@@ -90,7 +114,7 @@ impl Layout {
             .is_some_and(|(row, _)| *row == layout.rows.len())
         {
             layout.rows.push(String::new());
-            layout.image_spans.push(Vec::new());
+            layout.highlight_spans.push(Vec::new());
         }
         layout
     }
@@ -172,11 +196,15 @@ fn paint_editor(
         queue!(output, MoveTo(0, start + index as u16 + 1))?;
         if color {
             let mut offset = 0;
-            for &(start, end) in &layout.image_spans[*top + index] {
+            for &(start, end, kind) in &layout.highlight_spans[*top + index] {
+                let foreground = match kind {
+                    HighlightKind::Image => IMAGE_FOREGROUND,
+                    HighlightKind::Paste => PASTE_FOREGROUND,
+                };
                 queue!(
                     output,
                     Print(&line[offset..start]),
-                    SetForegroundColor(IMAGE_FOREGROUND),
+                    SetForegroundColor(foreground),
                     Print(&line[start..end]),
                     SetForegroundColor(FOREGROUND)
                 )?;

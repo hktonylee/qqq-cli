@@ -43,16 +43,16 @@ fn fenced(text: &str) -> String {
 
 **Files:** `src/tui/draft.rs`, `src/tui/render.rs`, `src/tui/dashboard.rs`, `src/tui/mod.rs`, `tests/tui_render.rs`, `tests/tui_dashboard_render.rs`
 
-- [ ] Add failing render tests: image cyan and paste gold occupy distinct foreground spans across wrapped rows in single editor and Ratatui dashboard; adjacent ordinary text uses body color; color-off frames contain no paste/image colors.
-- [ ] Run `cargo test --locked --test tui_render --test tui_dashboard_render`; require expected color assertion failures.
-- [ ] Add `Draft::paste_mask()` and `Layout::with_paste(fragments, image_mask, paste_mask, width)`, preserving existing `Layout::new` for callers with no paste highlights. Replace image-only spans with ordered `(start,end,kind)` highlight spans; paint image cyan and paste gold in both renderers. Wire live editor to `with_paste`.
+- [x] Add failing render tests: image cyan and paste gold occupy distinct foreground spans across wrapped rows in single editor and Ratatui dashboard; adjacent ordinary text uses body color; color-off frames contain no paste/image colors.
+- [x] Run `cargo test --locked --test tui_render --test tui_dashboard_render`; require expected color assertion failures.
+- [x] Add `Draft::paste_mask()` and `Layout::with_paste(fragments, image_mask, paste_mask, width)`, preserving existing `Layout::new` for callers with no paste highlights. Replace image-only spans with ordered `(start,end,kind)` highlight spans; paint image cyan and paste gold in both renderers. Wire live editor to `with_paste`.
 
 ```rust
 let layout = render::Layout::with_paste(
     &draft.fragments(), &draft.image_mask(), &draft.paste_mask(), width,
 );
 ```
-- [ ] Run `cargo test --locked --test tui_render --test tui_dashboard_render`; require pass. Commit `[Feat] Color Pasteboard Items`.
+- [x] Run `cargo test --locked --test tui_render --test tui_dashboard_render`; require pass. Commit `[Feat] Color Pasteboard Items`.
 
 ### Task 3: Live editor and storage regression
 

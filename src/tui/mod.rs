@@ -234,7 +234,14 @@ fn compose_inner(
     let mut saved_any = false;
     loop {
         let size = terminal::size()?;
-        let layout = render::Layout::new(&draft.fragments(), &draft.image_mask(), size.0 as usize);
+        let fragments = draft.fragments();
+        let image_mask = draft.image_mask();
+        let paste_mask = draft.paste_mask();
+        let layout = if paste_mask.contains(&true) {
+            render::Layout::with_paste(&fragments, &image_mask, &paste_mask, size.0 as usize)
+        } else {
+            render::Layout::new(&fragments, &image_mask, size.0 as usize)
+        };
         let footer = match &confirmation {
             Some(Confirmation::Exit) if usize::from(size.0) < "Discard draft? (y/N)".len() => {
                 "Discard? y/N"

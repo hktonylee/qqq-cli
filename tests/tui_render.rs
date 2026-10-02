@@ -144,6 +144,32 @@ fn image_label_gets_distinct_foreground_across_wrapped_rows() {
 }
 
 #[test]
+fn paste_label_uses_gold_across_wrapped_rows_and_plain_mode_has_no_color() {
+    crossterm::style::force_color_output(true);
+    let fragments = vec![
+        "A".into(),
+        "[Pasted Content 1001 chars]".into(),
+        " tail".into(),
+    ];
+    let layout = render::Layout::with_paste(
+        &fragments,
+        &[false, false, false],
+        &[false, true, false],
+        12,
+    );
+    let mut output = Vec::new();
+    render::draw(&mut output, &layout, 0, &mut 0, (12, 8), &chrome(""), true).unwrap();
+    let output = String::from_utf8(output).unwrap();
+    assert!(output.matches("\x1b[38;5;222m").count() >= 2, "{output:?}");
+    assert!(output.contains("\x1b[38;5;252m tail"), "{output:?}");
+
+    let mut plain = Vec::new();
+    render::draw(&mut plain, &layout, 0, &mut 0, (12, 8), &chrome(""), false).unwrap();
+    let plain = String::from_utf8(plain).unwrap();
+    assert!(!plain.contains("\x1b[38;"));
+}
+
+#[test]
 fn editor_reclaims_hint_row_for_body_and_keeps_cursor_above_footer() {
     let layout = render::Layout::new(&["A\nB\nC\nD\nE".into()], &[], 40);
     let mut output = Vec::new();

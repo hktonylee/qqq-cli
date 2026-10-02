@@ -37,11 +37,15 @@ fn editor_line(layout: &render::Layout, index: usize, color: bool) -> Line<'stat
     }
     let mut spans = Vec::new();
     let mut offset = 0;
-    for &(start, end) in &layout.image_spans[index] {
+    for &(start, end, kind) in &layout.highlight_spans[index] {
+        let foreground = match kind {
+            render::HighlightKind::Image => ACCENT,
+            render::HighlightKind::Paste => Color::Indexed(222),
+        };
         spans.push(Span::raw(line[offset..start].to_owned()));
         spans.push(Span::styled(
             line[start..end].to_owned(),
-            Style::default().fg(ACCENT),
+            Style::default().fg(foreground),
         ));
         offset = end;
     }

@@ -181,6 +181,49 @@ fn status_selection_and_editor_images_use_distinct_colors() {
 }
 
 #[test]
+fn dashboard_paste_label_uses_gold_while_body_stays_neutral() {
+    let layout = render::Layout::with_paste(
+        &[
+            "A".into(),
+            "[Pasted Content 1001 chars]".into(),
+            " tail".into(),
+        ],
+        &[false, false, false],
+        &[false, true, false],
+        72,
+    );
+    let chrome = render::Chrome {
+        title: "qqq task editor",
+        keys: render::KEYS,
+        message: "",
+    };
+    let mut terminal = Terminal::new(TestBackend::new(72, 16)).unwrap();
+    terminal
+        .draw(|frame| {
+            dashboard::draw(
+                frame,
+                &[],
+                &HashMap::new(),
+                None,
+                &mut 0,
+                render::DashboardEditor {
+                    layout: &layout,
+                    cursor: 0,
+                    top: &mut 0,
+                    chrome: &chrome,
+                    message_is_error: false,
+                },
+                true,
+            );
+        })
+        .unwrap();
+    let buffer = terminal.backend().buffer();
+    assert_eq!(buffer[(0, 9)].fg, Color::Indexed(252));
+    assert_eq!(buffer[(1, 9)].fg, Color::Indexed(222));
+    assert_eq!(buffer[(28, 9)].fg, Color::Indexed(252));
+}
+
+#[test]
 fn failed_save_footer_uses_error_color() {
     let layout = render::Layout::new(&["Draft".into()], &[], 72);
     let chrome = render::Chrome {
