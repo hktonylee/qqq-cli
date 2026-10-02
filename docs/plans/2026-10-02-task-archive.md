@@ -44,4 +44,4 @@
 
 ### Task 5: Review and integration
 
-- [ ] Run full `cargo test --locked --quiet`, `cargo fmt --all -- --check`, `cargo clippy --locked --all-targets -- -D warnings`, and `git diff --check`. Request read-only code review, fix Critical/Important findings, rerun affected checks. Rebase on local master, fast-forward, rerun integrated full suite, install CLI, complete task 65, update this plan status, remove owned worktree/branch, then call `qqq --json next --wait --local` once.
+- [x] Run full `cargo test --locked --quiet`, `cargo fmt --all -- --check`, `cargo clippy --locked --all-targets -- -D warnings`, and `git diff --check`. Request read-only code review, fix Critical/Important findings, rerun affected checks. Rebase on local master, fast-forward, rerun integrated full suite, install CLI, and complete task 65.
