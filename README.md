@@ -260,6 +260,8 @@ nonempty query, then exits filter focus on next press. Tab or Enter returns to
 editor. `/` or Alt+/ inserts literal `/` into editor. Shift-Up/Down navigates visible
 tasks while filter is active. Query changes do not change selected task, unsaved
 draft, or DB.
+Ctrl-C also clears filter query, including when returning to new draft or
+confirming discard of unsaved new draft.
 
 Ctrl-G opens actions for selected task. Press `c` to complete owned task,
 `r` to retry error task, `o` to reopen completed task, `a` to archive or

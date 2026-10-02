@@ -121,12 +121,16 @@ fn tui_dashboard_escape_and_ctrl_c_return_to_new_before_exit() {
     dashboard_scenario("ctrl_c_selected");
     dashboard_scenario("ctrl_c_dirty_selected");
     dashboard_scenario("escape_dirty_selected");
+    dashboard_scenario("ctrl_c_dirty_selected_filter_editor");
+    dashboard_scenario("ctrl_c_dirty_selected_filter_focused");
+    dashboard_scenario("ctrl_c_selected_filter_menu");
 }
 
 #[test]
 fn tui_dashboard_ctrl_c_confirms_dirty_new_drafts() {
     dashboard_scenario("ctrl_c_new_keep");
     dashboard_scenario("ctrl_c_new_filter");
+    dashboard_scenario("ctrl_c_new_scroll");
     dashboard_scenario("ctrl_c_new_discard");
     dashboard_scenario("ctrl_c_new_image");
     dashboard_scenario("ctrl_c_new_whitespace");

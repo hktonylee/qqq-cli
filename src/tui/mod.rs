@@ -839,6 +839,11 @@ fn compose_inner(
             Event::Key(key) if key.kind != KeyEventKind::Release => {
                 let control = key.modifiers.contains(KeyModifiers::CONTROL);
                 let cancel_key = control && key.code == KeyCode::Char('c');
+                if dashboard && cancel_key && !filter_query.is_empty() {
+                    filter_query.clear();
+                    list_top = 0;
+                    list_follow_selected = true;
+                }
                 if dashboard
                     && target_id.is_none()
                     && cancel_key

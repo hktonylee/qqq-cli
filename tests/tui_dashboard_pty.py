@@ -173,7 +173,7 @@ with tempfile.TemporaryDirectory(prefix="qqq-dashboard-test-") as folder:
         cli("next", "--local", "--session", "worker")
     if scenario == "actions_narrow":
         cli("next", "--local", "--session", "worker")
-    if scenario in ("scroll", "wheel", "live_refresh_scroll"):
+    if scenario in ("scroll", "wheel", "live_refresh_scroll", "ctrl_c_new_scroll"):
         for index in range(3, 21):
             description = ("\n".join(f"Line{line:02}" for line in range(1, 16))
                            if scenario == "wheel" and index == 20 else f"Task {index}")
@@ -300,6 +300,8 @@ with tempfile.TemporaryDirectory(prefix="qqq-dashboard-test-") as folder:
 
     try:
         wait_visible(lambda: 'qqq task editor - new task' in editor_title())
+        wait_visible(lambda: visible.text().splitlines()[-1].startswith("Ctrl-S save")
+                     and (visible.x, visible.y) == (0, editor_row() + 1))
         assert "qqq tasks" in visible.text(), visible.text()
         read_until(b"\x1b[?1000h")
         read_until(b"\x1b[?1006h")
@@ -321,7 +323,7 @@ with tempfile.TemporaryDirectory(prefix="qqq-dashboard-test-") as folder:
                              and editor_line().startswith("Second"))
                 settle()
                 assert b"\x1b[38;" not in screen and b"\x1b[48;" not in screen, screen[-2000:]
-        if scenario not in ("live_refresh_scroll", "tree_navigation", "scroll", "wheel", "click", "click_filter", "workflow", "workflow_empty", "workflow_status", "filter", "filter_no_color", "archive_hidden", "archive_included", "actions_basic", "actions_rejected", "actions_hidden"):
+        if scenario not in ("ctrl_c_new_scroll", "live_refresh_scroll", "tree_navigation", "scroll", "wheel", "click", "click_filter", "workflow", "workflow_empty", "workflow_status", "filter", "filter_no_color", "archive_hidden", "archive_included", "actions_basic", "actions_rejected", "actions_hidden"):
             read_until(b"Second")
             assert "First" in visible.text() and "Second" in visible.text(), visible.text()
         assert not select.select([child.stdout], [], [], 0)[0], "TUI wrote stdout while open"
@@ -494,17 +496,34 @@ with tempfile.TemporaryDirectory(prefix="qqq-dashboard-test-") as folder:
             if scenario == "ctrl_c_new_filter":
                 send(CTRL_SLASH + b"first")
                 wait_visible(lambda: visible.text().splitlines()[1].strip() == "Filter: first")
+            if scenario == "ctrl_c_new_scroll":
+                send(b"\x1b[<64;6;4M")
+                wait_visible(lambda: "Task 13" in visible.text().splitlines()[2]
+                             and "Task 17" in visible.text().splitlines()[6])
+                scrolled_list = visible.text().splitlines()[:list_bottom() + 1]
             clear_capture()
             send(b"\x03")
             read_until(b"Discard draft? (y/N)")
+            if scenario == "ctrl_c_new_filter":
+                wait_visible(lambda: visible.text().splitlines()[1].strip() == "Filter:"
+                             and "Second" in "\n".join(visible.text().splitlines()[2:list_bottom()])
+                             and editor_line().startswith("Unsaved draft"))
             assert cli("list") == initial_tasks
             assert child.poll() is None
             settle()
+            if scenario == "ctrl_c_new_scroll":
+                assert visible.text().splitlines()[:list_bottom() + 1] == scrolled_list, visible.text()
             clear_capture()
             send(b"\x03")
             wait_visible(lambda: bool(screen)
                          and visible.text().splitlines()[-1].startswith("Discard draft? (y/N)"))
             assert child.poll() is None
+            if scenario == "ctrl_c_new_scroll":
+                send(b"n")
+                wait_visible(lambda: visible.text().splitlines()[-1].startswith("Ctrl-S save")
+                             and editor_line().startswith("Unsaved draft"))
+                assert visible.text().splitlines()[:list_bottom() + 1] == scrolled_list, visible.text()
+                assert cli("list") == initial_tasks
             if scenario in ("ctrl_c_new_keep", "ctrl_c_new_filter"):
                 send(b"n")
                 wait_visible(lambda: visible.text().splitlines()[-1].startswith("Ctrl-S save")
@@ -631,13 +650,27 @@ with tempfile.TemporaryDirectory(prefix="qqq-dashboard-test-") as folder:
             wait_visible(lambda: "task #2 (" in editor_title())
             send(b"\x1b[1;2B")
             wait_visible(lambda: "new task" in editor_title())
-        elif scenario in ("escape_selected", "ctrl_c_selected", "escape_dirty_selected", "ctrl_c_dirty_selected"):
+        elif scenario in (
+            "escape_selected", "ctrl_c_selected", "escape_dirty_selected", "ctrl_c_dirty_selected",
+            "ctrl_c_dirty_selected_filter_editor", "ctrl_c_dirty_selected_filter_focused",
+            "ctrl_c_selected_filter_menu",
+        ):
             initial_tasks = cli("list")
             send(b"\x1b[1;2A")
             wait_visible(lambda: "task #2 (" in editor_title())
-            if scenario in ("escape_dirty_selected", "ctrl_c_dirty_selected"):
+            if "dirty_selected" in scenario:
                 send(b"\x01Changed ")
                 wait_visible(lambda: editor_line().startswith("Changed Second"))
+            if "_filter_" in scenario:
+                send(CTRL_SLASH + b"first")
+                wait_visible(lambda: visible.text().splitlines()[1].strip() == "Filter: first"
+                             and "Second" not in "\n".join(visible.text().splitlines()[2:list_bottom()]))
+                if not scenario.endswith("focused"):
+                    send(b"\t")
+                    wait_visible(lambda: visible.text().splitlines()[-1].startswith("Ctrl-S save"))
+                if scenario.endswith("menu"):
+                    send(b"\x07")
+                    wait_visible(lambda: visible.text().startswith("Task actions"))
             key = b"\x03" if scenario.startswith("ctrl_c") else b"\x1b"
             clear_capture()
             send(key)
@@ -651,7 +684,10 @@ with tempfile.TemporaryDirectory(prefix="qqq-dashboard-test-") as folder:
                 read_until(b"Discard changes and switch? (y/N)")
                 send(b"y")
             wait_visible(lambda: "new task" in editor_title()
-                         and editor_line().strip() == "")
+                         and editor_line().strip() == ""
+                         and ("_filter_" not in scenario
+                              or (visible.text().splitlines()[1].strip() == "Filter:"
+                                  and "Second" in "\n".join(visible.text().splitlines()[2:list_bottom()]))))
             assert cli("list") == initial_tasks
             assert child.poll() is None
         elif scenario in ("save_selected", "after_save_open_saved", "after_save_default_restored"):
@@ -974,7 +1010,9 @@ with tempfile.TemporaryDirectory(prefix="qqq-dashboard-test-") as folder:
             clear_capture()
             os.kill(child.pid, signal.SIGWINCH)
             read_until(b"qqq tasks")
-            wait_visible(lambda: editor_row() is not None and (visible.x, visible.y) == (0, editor_row() + 1))
+            wait_visible(lambda: editor_row() is not None
+                         and editor_line().startswith("First")
+                         and (visible.x, visible.y) == (len("First"), editor_row() + 1))
             send(b"\x07")
             wait_visible(lambda: "c Complete" in visible.text() and
                          "d Parent" in visible.text() and "Esc cancel" in visible.text())
