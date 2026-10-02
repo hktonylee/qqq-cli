@@ -86,6 +86,7 @@ binary, scenario = sys.argv[1:]
 # Legacy terminals send this byte for Ctrl+/; Crossterm reads it as Ctrl+7.
 CTRL_SLASH = b"\x1f"
 SHIFT_ENTER = b"\x1b[13;2u"
+CTRL_P = b"\x10"
 with tempfile.TemporaryDirectory(prefix="qqq-dashboard-test-") as folder:
     env = dict(os.environ, HOME=folder, TERM="xterm-256color")
     env.pop("NO_COLOR", None)
@@ -408,6 +409,7 @@ with tempfile.TemporaryDirectory(prefix="qqq-dashboard-test-") as folder:
                              and "Select task to view details." in details_text()
                              and "Draft line 12" in visible.text()
                              and visible.y == height - 2)
+            settle()
             send(b"\x13")
             wait_visible(lambda: "task #3" in editor_title() and editor_row() == 13)
             assert cli("show", "3")["task"]["description"] == payload
@@ -703,9 +705,20 @@ with tempfile.TemporaryDirectory(prefix="qqq-dashboard-test-") as folder:
             assert cli("show", "3")["task"]["description"] == "Created updated"
             send(b"\x1b[1;2B")
             wait_visible(lambda: "new task" in editor_title())
+        elif scenario == "shift_enter_text":
+            send(b"\x1b[1;2A")
+            wait_visible(lambda: "task #2 (New)" in editor_title())
+            send(SHIFT_ENTER + b"tail")
+            wait_visible(lambda: "task #2 (New)" in editor_title()
+                         and editor_line().startswith("Second")
+                         and editor_line(1).startswith("tail"))
+            send(b"\x13")
+            wait_visible(lambda: "Saved #2" in visible.text().splitlines()[-1])
+            assert cli("show", "2")["task"]["description"] == "Second\ntail"
+            assert len(cli("list")) == 2
         elif scenario.startswith("child"):
             if scenario == "child_no_selection":
-                send(SHIFT_ENTER)
+                send(CTRL_P)
                 wait_visible(lambda: "Select parent task" in visible.text().splitlines()[-1])
                 assert len(cli("list")) == 2
                 assert editor_line().strip() == ""
@@ -714,19 +727,20 @@ with tempfile.TemporaryDirectory(prefix="qqq-dashboard-test-") as folder:
             if scenario == "child_dirty":
                 send(b"\x01Draft ")
                 wait_visible(lambda: editor_line().startswith("Draft Second"))
-                send(SHIFT_ENTER)
+                send(CTRL_P)
                 wait_visible(lambda: "Discard changes and switch?" in visible.text().splitlines()[-1])
                 send(b"n")
                 wait_visible(lambda: editor_line().startswith("Draft Second")
                              and visible.text().splitlines()[-1].startswith("Ctrl-S save"))
                 assert cli("show", "2")["task"]["description"] == "Second"
-                send(SHIFT_ENTER + b"y")
+                send(CTRL_P + b"y")
             else:
-                send(SHIFT_ENTER)
+                send(CTRL_P)
             wait_visible(lambda: "new task (parent #2)" in editor_title()
                          and editor_line().strip() == ""
                          and (visible.x, visible.y) == (0, editor_row() + 1))
             assert len(cli("list")) == 2
+            assert "Ctrl-P child" in visible.text().splitlines()[-1], visible.text()
             if scenario == "child_no_selection":
                 send(b"\x1b[1;2A")
                 wait_visible(lambda: "task #2 (New)" in editor_title())

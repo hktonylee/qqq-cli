@@ -103,11 +103,16 @@ fn tui_dashboard_after_save_open_new_preserves_failed_draft() {
 }
 
 #[test]
-fn tui_dashboard_shift_enter_opens_child_draft_with_selected_parent() {
+fn tui_dashboard_ctrl_p_opens_child_draft_with_selected_parent() {
     dashboard_scenario("child");
     dashboard_scenario("child_open_new");
     dashboard_scenario("child_dirty");
     dashboard_scenario("child_no_selection");
+}
+
+#[test]
+fn tui_dashboard_shift_enter_inserts_newline() {
+    dashboard_scenario("shift_enter_text");
 }
 
 #[test]

@@ -234,11 +234,9 @@ Repeated Ctrl-C keeps confirmation open. Ctrl-V or terminal paste inserts text; 
 image file path attaches image. Saves commit immediately. TUI needs terminal
 and writes no stdout, including with `--json`.
 
-Shift+Enter opens blank child draft under selected task; header shows parent ID.
+Ctrl+P opens blank child draft under selected task; header shows parent ID.
 Changed drafts ask before switching. Ctrl-S creates child with dependency;
-normal Enter inserts newline. Navigating away clears draft's parent context.
-Shift+Enter requires terminal to report modified Enter; TUI requests enhanced
-keyboard reporting on Unix, restores previous mode on exit.
+Enter or Shift+Enter inserts newline. Navigating away clears draft's parent context.
 
 Task list and details refresh after external DB commits without keyboard input. Refresh
 keeps current editor draft, filter query, and manual scroll positions. Selected

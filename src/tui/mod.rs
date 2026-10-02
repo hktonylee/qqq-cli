@@ -1103,11 +1103,11 @@ fn compose_inner(
                     continue;
                 }
                 if dashboard
-                    && key.code == KeyCode::Enter
-                    && key.modifiers.contains(KeyModifiers::SHIFT)
+                    && control
+                    && key.code == KeyCode::Char('p')
                     && !key
                         .modifiers
-                        .intersects(KeyModifiers::CONTROL | KeyModifiers::ALT | KeyModifiers::SUPER)
+                        .intersects(KeyModifiers::ALT | KeyModifiers::SUPER)
                 {
                     if let Some(parent) = target_id {
                         let target = Target::New {
