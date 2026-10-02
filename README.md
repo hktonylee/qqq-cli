@@ -217,7 +217,8 @@ latest messages appear first with author and timestamp. Empty message history
 shows `No messages yet.`.
 Each task preview shows at most three wrapped lines; clipped previews end with
 `...`. Editor loads full description, including hidden lines.
-Selection underlines task text; plain mode uses `>` marker.
+Selection fills whole row with muted blue background, including wrapped lines;
+light text stays readable. Plain mode uses `>` marker.
 Shift-Up/Down selects tasks in displayed tree order, then blank draft. Ctrl-S
 updates selected task or creates new task. By default, saved task stays open for
 further edits or task actions. Loaded and saved tasks place cursor at description

@@ -789,7 +789,7 @@ fn no_color_dashboard_keeps_default_cell_styles() {
 #[test]
 fn status_selection_and_editor_images_use_distinct_colors() {
     let rows = panel::rows(
-        "ID     STATUS       TASK\n1      New          First\n2      In progress  Working\n3      Completed    Done\n4      Error        Failed",
+        "ID     STATUS       TASK\n1      New          First\n                    Second line\n                    Third line\n2      In progress  Working\n3      Completed    Done\n4      Error        Failed",
         70,
     );
     let layout = render::Layout::new(
@@ -803,52 +803,81 @@ fn status_selection_and_editor_images_use_distinct_colors() {
         keys: render::KEYS,
         message: "Saved #1. New task",
     };
-    let mut terminal = Terminal::new(TestBackend::new(72, 24)).unwrap();
-    terminal
-        .draw(|frame| {
-            dashboard::draw(
-                frame,
-                &rows,
-                &HashMap::from([
-                    (1, "new"),
-                    (2, "in_progress"),
-                    (3, "completed"),
-                    (4, "error"),
-                ]),
-                Some(1),
-                dashboard::View {
-                    query: "",
-                    focused: false,
-                    top: &mut 0,
-                    follow_selected: true,
-                    modal_lines: None,
-                    details: None,
-                },
-                render::DashboardEditor {
-                    layout: &layout,
-                    cursor: 0,
-                    top: &mut 0,
-                    chrome: &chrome,
-                    message_is_error: false,
-                    follow_cursor: true,
-                },
-                true,
+    let mut terminal = Terminal::new(TestBackend::new(72, 30)).unwrap();
+    for selected in [Some(1), Some(2), Some(3), Some(4), None] {
+        terminal
+            .draw(|frame| {
+                dashboard::draw(
+                    frame,
+                    &rows,
+                    &HashMap::from([
+                        (1, "new"),
+                        (2, "in_progress"),
+                        (3, "completed"),
+                        (4, "error"),
+                    ]),
+                    selected,
+                    dashboard::View {
+                        query: "",
+                        focused: false,
+                        top: &mut 0,
+                        follow_selected: true,
+                        modal_lines: None,
+                        details: None,
+                    },
+                    render::DashboardEditor {
+                        layout: &layout,
+                        cursor: 0,
+                        top: &mut 0,
+                        chrome: &chrome,
+                        message_is_error: false,
+                        follow_cursor: true,
+                    },
+                    true,
+                );
+            })
+            .unwrap();
+        let buffer = terminal.backend().buffer();
+        for (y, id, foreground) in [
+            (3, 1, Color::Reset),
+            (4, 1, Color::Reset),
+            (5, 1, Color::Reset),
+            (6, 2, Color::Indexed(81)),
+            (7, 3, Color::DarkGray),
+            (8, 4, Color::Red),
+        ] {
+            let is_selected = selected == Some(id);
+            for x in 0..72 {
+                assert_eq!(
+                    buffer[(x, y)].bg,
+                    if is_selected {
+                        Color::Indexed(24)
+                    } else {
+                        Color::Reset
+                    },
+                    "selection {selected:?}, cell {x},{y}"
+                );
+                assert_eq!(buffer[(x, y)].modifier, Modifier::empty());
+            }
+            assert_eq!(
+                buffer[(2, y)].fg,
+                if is_selected {
+                    Color::Indexed(252)
+                } else {
+                    foreground
+                }
             );
-        })
-        .unwrap();
-    let buffer = terminal.backend().buffer();
-    assert_eq!(buffer[(2, 3)].fg, Color::Reset);
-    assert_eq!(buffer[(2, 3)].bg, Color::Reset);
-    assert_eq!(buffer[(2, 3)].modifier, Modifier::UNDERLINED);
-    assert_eq!(buffer[(71, 3)].modifier, Modifier::empty());
-    assert_eq!(buffer[(2, 4)].fg, Color::Indexed(81));
-    assert_eq!(buffer[(2, 5)].fg, Color::DarkGray);
-    assert_eq!(buffer[(2, 6)].fg, Color::Red);
-    assert_eq!(buffer[(0, 17)].fg, Color::Indexed(252));
-    assert_eq!(buffer[(0, 17)].bg, Color::Indexed(236));
-    assert_eq!(buffer[(1, 17)].fg, Color::Indexed(81));
-    assert_eq!(buffer[(0, 18)].bg, Color::Indexed(236));
-    assert_eq!(buffer[(0, 23)].fg, Color::Yellow);
+        }
+        for y in [0, 1, 2, 9] {
+            assert_eq!(buffer[(71, y)].bg, Color::Reset);
+        }
+        let body_y = if selected.is_some() { 21 } else { 11 };
+        assert_eq!(buffer[(0, body_y)].fg, Color::Indexed(252));
+        assert_eq!(buffer[(0, body_y)].bg, Color::Indexed(236));
+        assert_eq!(buffer[(1, body_y)].fg, Color::Indexed(81));
+        assert_eq!(buffer[(0, body_y + 1)].bg, Color::Indexed(236));
+        assert_eq!(buffer[(0, 29)].fg, Color::Yellow);
+    }
 }
 
 #[test]

@@ -11,6 +11,7 @@ use unicode_segmentation::UnicodeSegmentation;
 use unicode_width::UnicodeWidthStr;
 
 const ACCENT: Color = Color::Indexed(81);
+const SELECTION_BG: Color = Color::Indexed(24);
 const BODY_FG: Color = Color::Indexed(252);
 const BODY_BG: Color = Color::Indexed(236);
 
@@ -156,16 +157,14 @@ fn row_style(status: Option<&str>, selected: bool, color: bool) -> Style {
     if !color {
         return Style::default();
     }
-    let style = match status {
+    if selected {
+        return Style::default().fg(BODY_FG).bg(SELECTION_BG);
+    }
+    match status {
         Some("in_progress") => Style::default().fg(ACCENT),
         Some("completed") => Style::default().fg(Color::DarkGray),
         Some("error") => Style::default().fg(Color::Red),
         _ => Style::default(),
-    };
-    if selected {
-        style.add_modifier(Modifier::UNDERLINED)
-    } else {
-        style
     }
 }
 
@@ -353,7 +352,7 @@ pub fn draw(
             color,
         );
         frame.render_widget(
-            Paragraph::new(Span::styled(format!("{marker}{}", row.text), style)),
+            Paragraph::new(format!("{marker}{}", row.text)).style(style),
             Rect::new(list.x, list.y + 2 + offset as u16, list.width, 1),
         );
     }

@@ -308,12 +308,19 @@ with tempfile.TemporaryDirectory(prefix="qqq-dashboard-test-") as folder:
             read_until(b"38;5;81")
             clear_capture()
             send(b"\x1b[1;2A")
-            read_until(b"\x1b[4m")
+            read_until(b"48;5;24")
             settle()
+            assert b"\x1b[4m" not in screen, screen[-2000:]
             assert b"48;5;81" not in screen, screen[-2000:]
         elif scenario in ("no_color", "dumb", "pasteboard_no_color", "filter_no_color"):
             assert b"\x1b[38;" not in screen, screen[-2000:]
             assert b"\x1b[48;" not in screen, screen[-2000:]
+            if scenario in ("no_color", "dumb"):
+                send(b"\x1b[1;2A")
+                wait_visible(lambda: "task #2 (New)" in editor_title()
+                             and editor_line().startswith("Second"))
+                settle()
+                assert b"\x1b[38;" not in screen and b"\x1b[48;" not in screen, screen[-2000:]
         if scenario not in ("live_refresh_scroll", "tree_navigation", "scroll", "wheel", "click", "click_filter", "workflow", "workflow_empty", "workflow_status", "filter", "filter_no_color", "archive_hidden", "archive_included", "actions_basic", "actions_rejected", "actions_hidden"):
             read_until(b"Second")
             assert "First" in visible.text() and "Second" in visible.text(), visible.text()
