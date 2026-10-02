@@ -52,9 +52,11 @@ qqq list --watch
 qqq list --watch --json
 ```
 
-`list` shows status and first description line in dependency tree. `show` adds
-full description, messages, images, ownership history and Herdr link. Negative
-indexes work with `show` and `edit`; `-1` selects newest task.
+`list` shows status and dependency tree. In a terminal with a known width, it
+shows full descriptions with wrapped, aligned continuation lines; piped output
+keeps first-line previews. `show` adds messages, images, ownership history and
+Herdr link. Negative indexes work with `show` and `edit`; `-1` selects newest
+task.
 
 `--max-completed N` keeps N most recent completions plus unfinished tasks;
 `0` hides completed tasks. Hidden parents display children as roots. `--all`

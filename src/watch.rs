@@ -13,8 +13,8 @@ use std::{
 pub fn run(json_output: bool, max_completed: Option<i64>, display_limited: bool) -> Result<()> {
     let (db, _) = Db::open(false)?;
     let stdout = io::stdout();
-    let terminal =
-        stdout.is_terminal() && std::env::var_os("TERM").is_none_or(|term| term != "dumb");
+    let stdout_terminal = stdout.is_terminal();
+    let terminal = stdout_terminal && std::env::var_os("TERM").is_none_or(|term| term != "dumb");
     let color = output::color_enabled(terminal);
     let mut stdout = stdout.lock();
     // Read the counter before the first list, so a concurrent commit cannot be missed.
@@ -26,7 +26,12 @@ pub fn run(json_output: bool, max_completed: Option<i64>, display_limited: bool)
         } else if display_limited && tasks.as_array().is_some_and(Vec::is_empty) {
             "No tasks to display.".to_owned()
         } else {
-            output::render(Format::Tasks, &tasks, color, None)
+            output::render(
+                Format::Tasks,
+                &tasks,
+                color,
+                output::terminal_columns(stdout_terminal),
+            )
         };
         let written = (|| -> io::Result<()> {
             if terminal && !json_output {

@@ -462,8 +462,14 @@ fn run() -> Result<Option<String>> {
     } else if display_limit.is_some() && value.as_array().is_some_and(Vec::is_empty) {
         "No tasks to display.".to_owned()
     } else {
-        let color = output::color_enabled(std::io::stdout().is_terminal());
-        output::render(format, &value, color, None)
+        let terminal = std::io::stdout().is_terminal();
+        let color = output::color_enabled(terminal);
+        let columns = if matches!(&format, output::Format::Tasks) {
+            output::terminal_columns(terminal)
+        } else {
+            None
+        };
+        output::render(format, &value, color, columns)
     }))
 }
 fn main() {

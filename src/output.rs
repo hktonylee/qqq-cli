@@ -48,6 +48,16 @@ pub fn color_enabled(terminal: bool) -> bool {
         && std::env::var_os("TERM").is_none_or(|value| value != "dumb")
 }
 
+pub fn terminal_columns(terminal: bool) -> Option<usize> {
+    if !terminal {
+        return None;
+    }
+    crossterm::terminal::size()
+        .ok()
+        .map(|(columns, _)| usize::from(columns))
+        .filter(|&columns| columns > 0)
+}
+
 // Keep user text on one line and prevent terminal control sequences in text output.
 fn clean(text: &str) -> String {
     let mut result = String::with_capacity(text.len());
@@ -393,6 +403,21 @@ mod tests {
         assert_eq!(piped.lines().count(), 4);
         assert!(!piped.contains("more root"));
         assert!(!piped.contains("more child"));
+
+        let narrow = render(Format::Tasks, &tasks, false, Some(20));
+        assert_eq!(narrow.lines().count(), 4);
+        assert!(!narrow.contains("more root"));
+    }
+
+    #[test]
+    fn tty_list_colors_every_status_row_after_wrapping() {
+        let tasks =
+            json!([{"id":1,"description":"First\nSecond","status":"error","parent_id":null}]);
+        let rendered = render(Format::Tasks, &tasks, true, Some(40));
+        let rows: Vec<_> = rendered.lines().collect();
+        assert!(rows[1].starts_with("\x1b[31m1"));
+        assert!(rows[2].starts_with("\x1b[31m"));
+        assert!(rows[2].ends_with("Second\x1b[0m"));
     }
 
     #[test]

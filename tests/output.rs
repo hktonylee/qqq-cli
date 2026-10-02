@@ -31,6 +31,25 @@ fn project() -> TempDir {
     dir
 }
 
+#[cfg(unix)]
+#[test]
+fn human_list_tty_width_shows_multiline_rows() {
+    let output = Command::new("python3")
+        .arg(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/tests/list_tty_pty.py"
+        ))
+        .arg(env!("CARGO_BIN_EXE_qqq"))
+        .output()
+        .unwrap();
+    assert!(
+        output.status.success(),
+        "{}\n{}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+}
+
 #[test]
 fn human_tasks_show_descriptions_dependencies_and_ownership() {
     let d = project();
