@@ -81,6 +81,11 @@ fn tui_dashboard_navigation_follows_displayed_tree_order() {
 }
 
 #[test]
+fn tui_dashboard_cursor_ends_loaded_and_saved_tasks() {
+    dashboard_scenario("cursor_end");
+}
+
+#[test]
 fn tui_dashboard_save_keeps_new_task_open() {
     dashboard_scenario("save_selected");
 }
@@ -260,8 +265,8 @@ fn tui_add_history_skips_deleted_ids() {
 }
 
 #[test]
-fn tui_add_history_loads_long_task_at_top() {
-    history_scenario("long_task_starts_at_top");
+fn tui_add_history_loads_long_task_at_end() {
+    history_scenario("long_task_ends_at_bottom");
 }
 
 #[test]

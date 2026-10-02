@@ -179,8 +179,9 @@ outside `pasteboard` fences remains unchanged on save.
 In built-in `qqq add`, Ctrl-S creates or updates task, clears editor, then waits
 for next task. Saves commit immediately; exit keeps prior saves. Shift+Up loads
 newest task, then older tasks; Shift+Down moves toward newer tasks, then blank
-draft. Header shows selected ID and status. JSON output returns saved tasks as
-array on exit. Exit without any save returns error.
+draft. Loaded task places cursor at description end. Header shows selected ID
+and status. JSON output returns saved tasks as array on exit. Exit without any
+save returns error.
 
 Switching from changed draft asks before discard; N, Enter, or Esc keeps it.
 Navigation includes all unarchived tasks, regardless of status; deleted IDs are
@@ -219,8 +220,9 @@ Each task preview shows at most three wrapped lines; clipped previews end with
 Selection underlines task text; plain mode uses `>` marker.
 Shift-Up/Down selects tasks in displayed tree order, then blank draft. Ctrl-S
 updates selected task or creates new task. By default, saved task stays open for
-further edits or task actions. Set `tui.after_save_new` to `open_new` to clear
-editor after creating task; existing-task edits stay open. Shift-Down past last
+further edits or task actions. Loaded and saved tasks place cursor at description
+end; editor scrolls to keep cursor visible. Set `tui.after_save_new` to `open_new`
+to clear editor after creating task; existing-task edits stay open. Shift-Down past last
 displayed task opens blank draft. Esc/Ctrl-C in
 selected task returns to blank draft; Esc asks before discarding unsaved edits.
 Press Esc/Ctrl-C again in blank draft to exit. Esc/Ctrl-C in dirty new draft asks before

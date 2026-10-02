@@ -56,7 +56,7 @@ with tempfile.TemporaryDirectory(prefix="qqq-history-test-") as folder:
             cli("add", description)
         with sqlite3.connect(Path(folder) / ".qqq/qqq.db") as db:
             db.execute("DELETE FROM tasks WHERE id=2")
-    elif scenario == "long_task_starts_at_top":
+    elif scenario == "long_task_ends_at_bottom":
         cli("add", "Top marker\n" + "\n".join(f"Line {index}" for index in range(25)) + "\nBottom marker")
     elif scenario == "existing_and_flagged_images":
         existing = Path(folder) / "existing.png"
@@ -216,13 +216,15 @@ with tempfile.TemporaryDirectory(prefix="qqq-history-test-") as folder:
             saved = finish(3)[0]
             assert saved["id"] == 3 and saved["description"] == "Third!"
             assert [task["id"] for task in cli("list")] == [1, 3]
-        elif scenario == "long_task_starts_at_top":
+        elif scenario == "long_task_ends_at_bottom":
             press(UP, b"task #1")
             read_until(b"Shift-Up/Down")
-            assert b"Top marker" in screen, screen[-2000:]
-            assert b"Bottom marker" not in screen, screen[-2000:]
+            read_until(b"Bottom marker")
+            assert b"Top marker" not in screen, screen[-2000:]
+            send(b" appended")
             saved = finish(1)[0]
             assert saved["id"] == 1
+            assert saved["description"].endswith("Bottom marker appended")
         elif scenario == "existing_and_flagged_images":
             press(UP, b"task #1")
             send(b"\x05 edited")

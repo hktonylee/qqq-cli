@@ -143,6 +143,9 @@ with tempfile.TemporaryDirectory(prefix="qqq-dashboard-test-") as folder:
         cli("add", "Parent")
         cli("add", "Other root")
         cli("add", "Child\nWrapped child detail", "--parent", "1")
+    elif scenario == "cursor_end":
+        cli("add", "First\nOlder tail")
+        cli("add", "Second\n" + "\n".join(f"Line {index:02}" for index in range(1, 16)) + "\nNewest tail")
     elif scenario == "click":
         cli("add", "Parent\nParent detail")
         cli("add", "Child start\nChild detail " + "word " * 12, "--parent", "1")
@@ -315,7 +318,43 @@ with tempfile.TemporaryDirectory(prefix="qqq-dashboard-test-") as folder:
             read_until(b"Second")
             assert "First" in visible.text() and "Second" in visible.text(), visible.text()
         assert not select.select([child.stdout], [], [], 0)[0], "TUI wrote stdout while open"
-        if scenario in ("details", "details_no_color"):
+        if scenario == "cursor_end":
+            def wait_end(tail):
+                def at_end():
+                    start = editor_row()
+                    if start is None:
+                        return False
+                    rows = visible.text().splitlines()
+                    return any(rows[index].rstrip() == tail and
+                               (visible.x, visible.y) == (len(tail), index)
+                               for index in range(start + 1, len(rows) - 1))
+                wait_visible(at_end)
+
+            send(b"\x1b[1;2A")
+            wait_visible(lambda: "task #2 (New)" in editor_title())
+            wait_end("Newest tail")
+            send(b" appended\x1b[H!")
+            wait_visible(lambda: "!Newest tail appended" in visible.text()
+                         and visible.x == 1)
+            send(b"\x13")
+            wait_visible(lambda: "Saved #2" in visible.text())
+            wait_end("!Newest tail appended")
+            assert cli("show", "2")["task"]["description"].endswith("!Newest tail appended")
+
+            send(b"\x1b[1;2A")
+            wait_visible(lambda: "task #1 (New)" in editor_title())
+            wait_end("Older tail")
+            send(b"\x1b[1;2B")
+            wait_visible(lambda: "task #2 (New)" in editor_title())
+            wait_end("!Newest tail appended")
+            send(b"\x1b[1;2B")
+            wait_visible(lambda: "new task" in editor_title())
+            wait_visible(lambda: (visible.x, visible.y) == (0, editor_row() + 1))
+            send(b"New text\x1b[H<\x13")
+            wait_visible(lambda: "task #3 (New)" in editor_title())
+            wait_end("<New text")
+            assert cli("show", "3")["task"]["description"] == "<New text"
+        elif scenario in ("details", "details_no_color"):
             assert editor_row() == 8, visible.text()
             assert not details_text(), visible.text()
             send(b"\x1b[1;2A")
@@ -385,7 +424,7 @@ with tempfile.TemporaryDirectory(prefix="qqq-dashboard-test-") as folder:
         elif scenario == "details_refresh":
             send(b"\x1b[1;2A")
             wait_visible(lambda: "Latest message" in details_text())
-            send(b"Unsaved ")
+            send(b"\x01Unsaved ")
             wait_visible(lambda: editor_line().startswith("Unsaved Second"))
             cli("message", "2", "External message", "--session", "reviewer")
             wait_visible(lambda: "External message" in details_text())
@@ -399,7 +438,7 @@ with tempfile.TemporaryDirectory(prefix="qqq-dashboard-test-") as folder:
         elif scenario == "details_deleted":
             send(b"\x1b[1;2A")
             wait_visible(lambda: "No messages yet." in details_text())
-            send(b"Unsaved ")
+            send(b"\x01Unsaved ")
             wait_visible(lambda: editor_line().startswith("Unsaved Second"))
             with sqlite3.connect(os.path.join(folder, ".qqq", "qqq.db")) as db:
                 db.execute("DELETE FROM tasks WHERE id=2")
@@ -458,7 +497,7 @@ with tempfile.TemporaryDirectory(prefix="qqq-dashboard-test-") as folder:
             cli("edit", "2", "--priority", "8")
             send(b"\x1b[1;2A")
             wait_visible(lambda: "task #2 (New)" in editor_title())
-            send(b"Draft ")
+            send(b"\x01Draft ")
             wait_visible(lambda: editor_line().startswith("Draft Second"))
             if scenario == "live_title_filtered":
                 send(CTRL_SLASH + b"first")
@@ -520,7 +559,7 @@ with tempfile.TemporaryDirectory(prefix="qqq-dashboard-test-") as folder:
         elif scenario == "live_refresh_filter":
             send(b"\x1b[1;2A")
             wait_visible(lambda: "task #2 (" in editor_title())
-            send(b"Unsaved " + CTRL_SLASH + b"second")
+            send(b"\x01Unsaved " + CTRL_SLASH + b"second")
             wait_visible(lambda: editor_line().startswith("Unsaved Second")
                          and visible.text().splitlines()[1].strip() == "Filter: second"
                          and (visible.x, visible.y) == (len("Filter: second"), 1))
@@ -578,7 +617,7 @@ with tempfile.TemporaryDirectory(prefix="qqq-dashboard-test-") as folder:
             send(b"\x1b[1;2A")
             wait_visible(lambda: "task #2 (" in editor_title())
             if scenario in ("escape_dirty_selected", "ctrl_c_dirty_selected"):
-                send(b"Changed ")
+                send(b"\x01Changed ")
                 wait_visible(lambda: editor_line().startswith("Changed Second"))
             key = b"\x03" if scenario.startswith("ctrl_c") else b"\x1b"
             clear_capture()
@@ -604,7 +643,7 @@ with tempfile.TemporaryDirectory(prefix="qqq-dashboard-test-") as folder:
             send(b"\x05 updated\x13")
             wait_visible(lambda: editor_line().startswith("Created updated")
                          and visible.text().splitlines()[-1].startswith("Saved #3")
-                         and (visible.x, visible.y) == (0, editor_row() + 1))
+                         and (visible.x, visible.y) == (len("Created updated"), editor_row() + 1))
             assert len(cli("list")) == 3
             assert cli("show", "3")["task"]["description"] == "Created updated"
             send(b"\x1b[1;2B")
@@ -618,7 +657,7 @@ with tempfile.TemporaryDirectory(prefix="qqq-dashboard-test-") as folder:
             send(b"\x1b[1;2A")
             wait_visible(lambda: "task #2 (New)" in editor_title())
             if scenario == "child_dirty":
-                send(b"Draft ")
+                send(b"\x01Draft ")
                 wait_visible(lambda: editor_line().startswith("Draft Second"))
                 send(SHIFT_ENTER)
                 wait_visible(lambda: "Discard changes and switch?" in visible.text().splitlines()[-1])
@@ -695,7 +734,7 @@ with tempfile.TemporaryDirectory(prefix="qqq-dashboard-test-") as folder:
             wait_visible(lambda: "task #4 (New)" in editor_title()
                          and editor_line().startswith("Next updated")
                          and visible.text().splitlines()[-1].startswith("Saved #4")
-                         and (visible.x, visible.y) == (0, editor_row() + 1))
+                         and (visible.x, visible.y) == (len("Next updated"), editor_row() + 1))
             assert len(cli("list")) == 4
             assert cli("show", "4")["task"]["description"] == "Next updated"
         elif scenario == "workflow":
@@ -799,7 +838,7 @@ with tempfile.TemporaryDirectory(prefix="qqq-dashboard-test-") as folder:
             assert cli("show", "3")["task"]["status"] == "new"
 
             select_action_task("Fresh item", 4)
-            send(b"X")
+            send(b"\x01X")
             wait_visible(lambda: "XFresh item" in visible.text())
             action("p", "Priority task #4")
             send(b"7\r")
@@ -821,7 +860,7 @@ with tempfile.TemporaryDirectory(prefix="qqq-dashboard-test-") as folder:
             send(b"7\r")
             read_until(b"Priority #4: 7")
             assert cli("show", "4")["task"]["priority"] == 7
-            send(b"Y")
+            send(b"\x01Y")
             wait_visible(lambda: "YFresh item" in visible.text())
             action("p", "Priority task #4")
             send(b"-5\r")
@@ -1030,7 +1069,7 @@ with tempfile.TemporaryDirectory(prefix="qqq-dashboard-test-") as folder:
             wait_visible(lambda: editor_line().startswith("Needle 14"))
             assert cli("list") == initial_tasks
             clear_capture()
-            send(b"!")
+            send(b"\x01!")
             wait_visible(lambda: editor_line().startswith("!Needle 14"))
             clear_capture()
             click(6, task_row("Needle 14"))
@@ -1046,6 +1085,7 @@ with tempfile.TemporaryDirectory(prefix="qqq-dashboard-test-") as folder:
             clear_capture()
             click(5, task_row("Line01"))
             wait_visible(lambda: 'task #3' in editor_title())
+            wheel_editor(False, 10)
             wait_visible(lambda: editor_line().startswith("Line01"))
             clear_capture()
             wheel_editor(True, 1)
@@ -1108,6 +1148,7 @@ with tempfile.TemporaryDirectory(prefix="qqq-dashboard-test-") as folder:
             clear_capture()
             send(b"\x1b[1;2A")
             wait_visible(lambda: 'task #20' in editor_title())
+            wheel_editor(False, 10)
             wait_visible(lambda: editor_line().startswith("Line01"))
 
             clear_capture()
@@ -1155,7 +1196,7 @@ with tempfile.TemporaryDirectory(prefix="qqq-dashboard-test-") as folder:
             time.sleep(0.1)
             clear_capture()
             send(b"!")
-            wait_visible(lambda: editor_line().startswith("!Line01"))
+            wait_visible(lambda: "Line15!" in "\n".join(visible.text().splitlines()[editor_row() + 1:-1]))
             assert cli("list") == initial_tasks
             clear_capture()
             send(b"\x1b[1;2A")

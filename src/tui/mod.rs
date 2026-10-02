@@ -290,7 +290,6 @@ fn load_target(
             *draft = loaded;
         }
     }
-    draft.set_cursor(0);
     *top = 0;
 }
 
