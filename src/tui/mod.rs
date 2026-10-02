@@ -132,6 +132,7 @@ pub fn compose(description: &str) -> Result<Composition> {
                         }
                         KeyCode::Char('a') => draft.home(),
                         KeyCode::Char('e') => draft.end(),
+                        KeyCode::Char('w') => draft.delete_previous_word(),
                         _ => (),
                     }
                     continue;

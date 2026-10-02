@@ -92,7 +92,7 @@ with tempfile.TemporaryDirectory(prefix="qqq-tui-test-") as folder:
         send(b"\x1b[200~" + text.encode() + b"\x1b[201~")
 
     try:
-        read_until(b"Ctrl-S")
+        read_until(b"Ctrl-W word" if scenario == "ctrl_w" else b"Ctrl-S")
         assert b"Whole buffer =" not in screen, "Removed editor hint reappeared"
         if color:
             assert b"\x1b[48;5;236m" in screen, "Editor grey background missing"
@@ -121,6 +121,8 @@ with tempfile.TemporaryDirectory(prefix="qqq-tui-test-") as folder:
             send(b"Draft" + b"\x7f" * 5)
         elif scenario == "escape_whitespace":
             send(b" \r")
+        elif scenario == "ctrl_w":
+            send(b"alpha beta\x17")
         elif scenario in ("escape_image", "escape_narrow"):
             paste("'" + str(image) + "'")
             read_until(b"[Image #1:")
@@ -207,6 +209,8 @@ with tempfile.TemporaryDirectory(prefix="qqq-tui-test-") as folder:
                 assert flagged_export.read_bytes() == image.read_bytes()
             elif scenario == "blank":
                 assert task["description"] == "Recovered"
+            elif scenario == "ctrl_w":
+                assert task["description"] == "alpha "
             else:
                 assert task["id"] == 1
                 assert task["description"] == "Original\n\nDetails amended"

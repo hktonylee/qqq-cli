@@ -100,6 +100,78 @@ fn short_paste_and_grapheme_editing_preserve_unicode() {
 }
 
 #[test]
+fn ctrl_w_deletes_previous_word_and_spaces_without_crossing_line() {
+    let mut draft = Draft::new("alpha beta   ");
+    draft.delete_previous_word();
+    assert_eq!(draft.finish().unwrap().description, "alpha ");
+    draft.delete_previous_word();
+    assert!(draft.finish().is_err());
+
+    let mut draft = Draft::new("First\r\n  second");
+    draft.delete_previous_word();
+    assert_eq!(draft.finish().unwrap().description, "First\r\n  ");
+    draft.delete_previous_word();
+    assert_eq!(draft.finish().unwrap().description, "First\r\n");
+    draft.delete_previous_word();
+    assert_eq!(draft.finish().unwrap().description, "First\r\n");
+}
+
+#[test]
+fn ctrl_w_deletes_unicode_prefix_at_cursor() {
+    let mut draft = Draft::new("école 🦀world");
+    draft.set_cursor(9); // After "🦀wo".
+    draft.delete_previous_word();
+    assert_eq!(draft.finish().unwrap().description, "école rld");
+    draft.insert("new");
+    assert_eq!(draft.finish().unwrap().description, "école newrld");
+}
+
+#[test]
+fn ctrl_w_deletes_paste_and_image_placeholders_atomically() {
+    let mut draft = Draft::new("Keep ");
+    let pasted = "🦀".repeat(1001);
+    draft.paste(&pasted);
+    draft
+        .image(ImageInput {
+            name: "pasted.png".into(),
+            data: b"\x89PNG\r\n\x1a\nimage".to_vec(),
+        })
+        .unwrap();
+    draft.delete_previous_word();
+    let after_image = draft.finish().unwrap();
+    assert_eq!(after_image.description, format!("Keep {pasted}"));
+    assert!(after_image.images.is_empty());
+    draft.delete_previous_word();
+    assert_eq!(draft.finish().unwrap().description, "Keep ");
+}
+
+#[test]
+fn ctrl_w_preserves_placeholder_before_typed_word() {
+    let mut draft = Draft::new("Keep ");
+    draft
+        .image(ImageInput {
+            name: "pasted.png".into(),
+            data: b"\x89PNG\r\n\x1a\nimage".to_vec(),
+        })
+        .unwrap();
+    draft.insert("suffix");
+    draft.delete_previous_word();
+    let after_word = draft.finish().unwrap();
+    assert_eq!(after_word.description, "Keep [Image: pasted.png]");
+    assert_eq!(after_word.images.len(), 1);
+
+    let mut draft = Draft::new("Keep ");
+    let pasted = "🦀".repeat(1001);
+    draft.paste(&pasted);
+    draft.insert("suffix");
+    draft.delete_previous_word();
+    assert_eq!(
+        draft.finish().unwrap().description,
+        format!("Keep {pasted}")
+    );
+}
+
+#[test]
 fn image_placeholders_attach_only_while_present() {
     let mut draft = Draft::new("Details ");
     draft

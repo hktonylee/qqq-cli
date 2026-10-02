@@ -98,6 +98,29 @@ impl Draft {
             self.atoms.remove(self.cursor);
         }
     }
+    pub fn delete_previous_word(&mut self) {
+        while self.cursor > 0
+            && matches!(&self.atoms[self.cursor - 1], Atom::Text(text)
+                if !matches!(text.as_str(), "\n" | "\r\n")
+                    && text.chars().all(char::is_whitespace))
+        {
+            self.backspace();
+        }
+        let mut removed_word = false;
+        while self.cursor > 0 {
+            match &self.atoms[self.cursor - 1] {
+                Atom::Text(text) if !text.chars().all(char::is_whitespace) => {
+                    self.backspace();
+                    removed_word = true;
+                }
+                Atom::Paste { .. } | Atom::Image { .. } if !removed_word => {
+                    self.backspace();
+                    break;
+                }
+                _ => break,
+            }
+        }
+    }
     pub fn delete(&mut self) {
         if self.cursor < self.atoms.len() {
             self.atoms.remove(self.cursor);

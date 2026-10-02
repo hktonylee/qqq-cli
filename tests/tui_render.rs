@@ -32,7 +32,8 @@ fn editor_paints_only_body_rows_and_resets_colors_for_header_and_footer() {
         } else {
             message
         };
-        assert!(reset < output.find(footer).unwrap());
+        let visible_footer: String = footer.chars().take(40).collect();
+        assert!(reset < output.find(&visible_footer).unwrap());
         assert!(!output.contains("Whole buffer ="));
     }
 }

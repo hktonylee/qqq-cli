@@ -88,7 +88,8 @@ qqq edit -1                         # edit newest task interactively
 Descriptions are whole text bodies; whitespace and newlines are preserved.
 Blank-only text is rejected. `add` without text and `edit` without update flags
 open built-in terminal editor. Ctrl-S saves; Esc asks before discarding nonempty
-draft; Ctrl-C cancels. Ctrl-V reads clipboard text or images. Large pastes
+draft; Ctrl-C cancels. Ctrl-W deletes previous word on current line. Ctrl-V reads
+clipboard text or images. Large pastes
 collapse into placeholders, then expand on save. Clipboard access needs desktop
 clipboard support.
 

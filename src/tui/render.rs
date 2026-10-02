@@ -8,7 +8,7 @@ use std::io::{self, Write};
 use unicode_segmentation::UnicodeSegmentation;
 use unicode_width::UnicodeWidthStr;
 
-pub const KEYS: &str = "Ctrl-S save  Esc cancel  Ctrl-V paste";
+pub const KEYS: &str = "Ctrl-S save  Esc cancel  Ctrl-V paste  Ctrl-W word";
 const BACKGROUND: Color = Color::AnsiValue(236);
 const FOREGROUND: Color = Color::AnsiValue(252);
 

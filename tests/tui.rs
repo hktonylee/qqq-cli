@@ -27,6 +27,10 @@ fn tui_blank_body_remains_editable_until_valid_save() {
     scenario("blank");
 }
 #[test]
+fn tui_ctrl_w_deletes_previous_word() {
+    scenario("ctrl_w");
+}
+#[test]
 fn tui_edit_pins_recent_target_and_preserves_ownership() {
     scenario("edit");
 }
