@@ -227,13 +227,15 @@ impl Db {
         let tx = self
             .conn
             .transaction_with_behavior(TransactionBehavior::Immediate)?;
+        let mut pending = PendingFiles::new();
         tx.execute(
             "INSERT INTO tasks(description,parent_id) VALUES (?,?)",
             params![description, parent_id],
         )?;
         let id = tx.last_insert_rowid();
-        Self::save_images(&tx, id, images)?;
+        Self::save_images(&tx, &self.image_store, &mut pending, id, images)?;
         let task = tx.query_row("SELECT id,description,status,claim_key,created_at,updated_at,parent_id,harness_name,harness_session,orchestrator_name,orchestrator_session FROM tasks WHERE id=?", [id], task_row)?;
+        pending.keep();
         tx.commit()?;
         Ok(task)
     }
@@ -282,6 +284,7 @@ impl Db {
         let tx = self
             .conn
             .transaction_with_behavior(TransactionBehavior::Immediate)?;
+        let mut pending = PendingFiles::new();
         if let Some(parent) = parent {
             let parent_id = match parent {
                 ParentChange::Clear => None,
@@ -380,11 +383,12 @@ impl Db {
             None => {}
         }
         ensure!(tx.execute("UPDATE tasks SET description=COALESCE(?,description),updated_at=strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE id=?",params![description,id])?==1,"Task {id} not found");
-        Self::save_images(&tx, id, images)?;
+        Self::save_images(&tx, &self.image_store, &mut pending, id, images)?;
         let task = tx.query_row(
             "SELECT id,description,status,claim_key,created_at,updated_at,parent_id,harness_name,harness_session,orchestrator_name,orchestrator_session FROM tasks WHERE id=?",
             [id], task_row,
         )?;
+        pending.keep();
         tx.commit()?;
         Ok(task)
     }
@@ -661,11 +665,25 @@ impl Db {
             json!({"task":task,"messages":messages,"images":images,"events":events,"herdr":self.link(id)?}),
         )
     }
-    fn save_images(conn: &Connection, id: i64, images: &[ImageInput]) -> Result<()> {
+    fn save_images(
+        conn: &Connection,
+        store: &ImageStore,
+        pending: &mut PendingFiles,
+        id: i64,
+        images: &[ImageInput],
+    ) -> Result<()> {
         for image in images {
+            let media_type = image.media_type()?;
             conn.execute(
-                "INSERT INTO images(task_id,name,media_type,data) VALUES (?,?,?,?)",
-                params![id, image.name, image.media_type()?, image.data],
+                "INSERT INTO images(task_id,name,media_type,bytes) VALUES (?,?,?,?)",
+                params![id, image.name, media_type, image.data.len() as i64],
+            )?;
+            store.write(
+                pending,
+                id,
+                conn.last_insert_rowid(),
+                media_type,
+                &image.data,
             )?;
         }
         Ok(())
@@ -673,15 +691,16 @@ impl Db {
     pub fn image_export(&self, task_id: i64, id: i64, path: &Path) -> Result<Value> {
         use std::io::Write;
         self.task(task_id)?;
-        let data: Vec<u8> = self
+        let (media_type, bytes): (String, i64) = self
             .conn
             .query_row(
-                "SELECT data FROM images WHERE id=? AND task_id=?",
+                "SELECT media_type,bytes FROM images WHERE id=? AND task_id=?",
                 [id, task_id],
-                |r| r.get(0),
+                |r| Ok((r.get(0)?, r.get(1)?)),
             )
             .optional()?
             .context("Image not found")?;
+        let data = self.image_store.read(task_id, id, &media_type, bytes)?;
         let mut file = std::fs::OpenOptions::new()
             .write(true)
             .create_new(true)

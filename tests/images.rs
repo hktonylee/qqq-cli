@@ -3,7 +3,7 @@ use serde_json::Value;
 use std::{
     fs,
     path::Path,
-    process::{Command, Output},
+    process::{Command, Output, Stdio},
 };
 use tempfile::TempDir;
 
@@ -155,6 +155,66 @@ fn v5_migration_conflict_keeps_blob_rows_and_succeeds_after_retry() {
 }
 
 #[test]
+fn concurrent_v5_openers_migrate_files_once() {
+    let dir = legacy_v5_project();
+    let children: Vec<_> = (0..6)
+        .map(|_| {
+            command(dir.path())
+                .args(["show", "1"])
+                .stdout(Stdio::piped())
+                .stderr(Stdio::piped())
+                .spawn()
+                .unwrap()
+        })
+        .collect();
+    for child in children {
+        let output = child.wait_with_output().unwrap();
+        assert!(
+            output.status.success(),
+            "{}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+        let detail: Value = serde_json::from_slice(&output.stdout).unwrap();
+        assert_eq!(detail["images"].as_array().unwrap().len(), 2);
+    }
+    assert_eq!(
+        fs::read(dir.path().join(".qqq/images/1/3.png")).unwrap(),
+        PNG
+    );
+    assert_eq!(
+        fs::read(dir.path().join(".qqq/images/1/7.jpg")).unwrap(),
+        JPEG
+    );
+}
+
+#[test]
+fn failed_v6_foreign_key_check_keeps_blobs_and_removes_new_files() {
+    let dir = legacy_v5_project();
+    let p = dir.path();
+    let conn = Connection::open(p.join(".qqq/qqq.db")).unwrap();
+    conn.pragma_update(None, "foreign_keys", "OFF").unwrap();
+    conn.execute(
+        "INSERT INTO images(id,task_id,name,media_type,data) VALUES (30,999,'orphan.png','image/png',?1)",
+        [PNG],
+    )
+    .unwrap();
+    error(p, &["show", "1"], 1, "invalid foreign key references");
+    assert_eq!(
+        conn.pragma_query_value(None, "user_version", |r| r.get::<_, i64>(0))
+            .unwrap(),
+        5
+    );
+    assert_eq!(
+        conn.query_row("SELECT data FROM images WHERE id=30", [], |r| r
+            .get::<_, Vec<u8>>(0))
+            .unwrap(),
+        PNG
+    );
+    assert!(!p.join(".qqq/images/1/3.png").exists());
+    assert!(!p.join(".qqq/images/999/30.png").exists());
+}
+
+#[test]
 fn add_copies_repeated_images_and_show_exports_scoped_bytes() {
     let dir = project();
     let p = dir.path();
@@ -177,6 +237,17 @@ fn add_copies_repeated_images_and_show_exports_scoped_bytes() {
     assert_eq!(detail["images"].as_array().unwrap().len(), 2);
     assert_eq!(detail["images"][0]["name"], "a.png");
     assert_eq!(detail["images"][1]["media_type"], "image/jpeg");
+    assert_eq!(fs::read(p.join(".qqq/images/1/1.png")).unwrap(), PNG);
+    assert_eq!(fs::read(p.join(".qqq/images/1/2.jpg")).unwrap(), JPEG);
+    let conn = Connection::open(p.join(".qqq/qqq.db")).unwrap();
+    let has_data: bool = conn
+        .query_row(
+            "SELECT EXISTS(SELECT 1 FROM pragma_table_info('images') WHERE name='data')",
+            [],
+            |r| r.get(0),
+        )
+        .unwrap();
+    assert!(!has_data);
     let exported = ok(
         p,
         &["show", "1", "--export-image", "2", "--output", "out.jpg"],
@@ -192,6 +263,22 @@ fn add_copies_repeated_images_and_show_exports_scoped_bytes() {
         "destination must not exist",
     );
     assert_eq!(fs::read(p.join("out.jpg")).unwrap(), JPEG);
+    fs::remove_file(p.join(".qqq/images/1/2.jpg")).unwrap();
+    assert_eq!(ok(p, &["show", "1"])["images"], detail["images"]);
+    error(
+        p,
+        &[
+            "show",
+            "1",
+            "--export-image",
+            "2",
+            "--output",
+            "missing-out.jpg",
+        ],
+        1,
+        "Cannot read stored image",
+    );
+    assert!(!p.join("missing-out.jpg").exists());
     ok(p, &["add", "Other"]);
     error(
         p,
@@ -349,6 +436,7 @@ fn rejected_image_insert_rolls_back_new_task_and_released_edit() {
             .unwrap(),
         0
     );
+    assert!(!p.join(".qqq/images/1/1.png").exists());
     ok(p, &["add", "Original", "--image", "a.png"]);
     ok(p, &["next", "--session", "owner"]);
     let before = ok(p, &["show", "1"]);
@@ -372,6 +460,7 @@ fn rejected_image_insert_rolls_back_new_task_and_released_edit() {
         "image rejected",
     );
     assert_eq!(ok(p, &["show", "1"]), before);
+    assert!(!p.join(".qqq/images/1/2.png").exists());
 }
 
 #[test]

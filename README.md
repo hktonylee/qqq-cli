@@ -1,7 +1,7 @@
 # qqq
 
-Local task queue for coding agents. Task data, including images, lives in each
-project's `.qqq/qqq.db`. No server needed.
+Local task queue for coding agents. Task metadata lives in each project's
+`.qqq/qqq.db`; image bytes live in `.qqq/images/`. No server needed.
 
 ## Install
 
@@ -145,8 +145,9 @@ qqq show 2 --export-image 1 --output ./exported.png
 
 Image IDs come from `show`. Export needs selected task's image ID and new output
 path. PNG, JPEG, GIF and WebP signatures supported, up to 20 MiB each; signature
-check does not fully validate file. Bytes copy into DB. Built-in editor also
-accepts pasted image paths or clipboard images.
+check does not fully validate file. Bytes copy into
+`.qqq/images/<task_id>/<image_id>.<ext>`. Built-in editor also accepts pasted
+image paths or clipboard images.
 
 Description, status, parent and image updates save atomically.
 
@@ -293,10 +294,11 @@ before retry or forced release.
 
 ## Data
 
-Keep `.qqq/` out of Git. Back up through SQLite while workers may be running:
+Keep `.qqq/` out of Git. Stop qqq writers, then copy entire directory for a
+consistent backup. SQLite-only backups omit image bytes:
 
 ```sh
-sqlite3 .qqq/qqq.db '.backup backup.sqlite'
+cp -R .qqq ../qqq-backup
 ```
 
 To move old root-level `qqq.db`, stop DB writers. Before `qqq init`, check that
@@ -311,7 +313,10 @@ qqq list # run updated CLI
 Check task data before removing old DB. New CLI does not discover root-level
 `qqq.db`; `qqq init` without migration creates separate empty DB.
 
-Compatible DBs at schema versions 1–4 migrate to version 5. Legacy `title` or
+Compatible DBs at schema versions 1–5 migrate to version 6. Existing image
+blobs copy to `.qqq/images/` before SQLite drops its `data` column. Migration
+tries `VACUUM` to reclaim old blob pages; if compaction reports a warning, stop
+writers and run `sqlite3 .qqq/qqq.db 'VACUUM;'` later. Legacy `title` or
 `pending` schemas need manual conversion; newer unknown schemas fail. Back up
 before conversion.
 

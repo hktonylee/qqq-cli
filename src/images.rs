@@ -72,6 +72,10 @@ impl ImageStore {
         let directory = path.parent().context("Missing image directory")?;
         fs::create_dir_all(directory)
             .with_context(|| format!("Cannot create {}", directory.display()))?;
+        if let Some(parent) = self.root.parent() {
+            sync_directory(parent)?;
+        }
+        sync_directory(&self.root)?;
         let mut temporary = NamedTempFile::new_in(directory)?;
         temporary.write_all(data)?;
         temporary.as_file().sync_all()?;
