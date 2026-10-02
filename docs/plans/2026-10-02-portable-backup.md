@@ -68,5 +68,5 @@ ensure!(expected.remove(&relative), "Unexpected or duplicate archive entry");
 **Files:** `README.md`, this plan.
 
 - [x] Replace stop-writers copy guidance with backup/restore examples, format, no-overwrite and empty-location behavior. Run focused tests and commit.
-- [ ] Run `cargo test --locked --quiet`, `cargo fmt --all -- --check`, `cargo clippy --locked --all-targets -- -D warnings`, `git diff --check`; request read-only review and fix Critical/Important findings.
+- [x] Run `cargo test --locked --quiet`, `cargo fmt --all -- --check`, `cargo clippy --locked --all-targets -- -D warnings`, `git diff --check`; read-only review found Windows path and directory-sync issues, now fixed and reverified.
 - [ ] Rebase on local master, fast-forward, rerun integrated checks, install CLI, `qqq --json complete 67`, mark plan complete, remove owned worktree/branch, call `qqq --json next --wait --local` once.
