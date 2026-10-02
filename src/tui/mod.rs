@@ -746,6 +746,36 @@ fn compose_inner(
             }
             Event::Key(key) if key.kind != KeyEventKind::Release => {
                 let control = key.modifiers.contains(KeyModifiers::CONTROL);
+                let cancel_key = control && key.code == KeyCode::Char('c');
+                let editor_escape = key.code == KeyCode::Esc
+                    && confirmation.is_none()
+                    && action_ui.is_none()
+                    && !filter_focused;
+                if dashboard && target_id.is_some() && (cancel_key || editor_escape) {
+                    if !cancel_key && draft.is_dirty_against(&baseline) {
+                        confirmation = Some(Confirmation::Switch {
+                            target: Target::New,
+                            focus_editor: true,
+                        });
+                    } else {
+                        load_target(
+                            Target::New,
+                            &mut draft,
+                            &mut target_id,
+                            &mut target_status,
+                            &mut baseline,
+                            &mut top,
+                        );
+                        confirmation = None;
+                        action_ui = None;
+                        filter_focused = false;
+                        list_follow_selected = true;
+                        editor_follow_cursor = true;
+                        message.clear();
+                        message_is_error = false;
+                    }
+                    continue;
+                }
                 if let Some(pending) = confirmation.take() {
                     if control && key.code == KeyCode::Char('c') {
                         return cancel(saved_any, dashboard);

@@ -68,6 +68,14 @@ fn tui_dashboard_save_keeps_new_task_open() {
 }
 
 #[test]
+fn tui_dashboard_escape_and_ctrl_c_return_to_new_before_exit() {
+    dashboard_scenario("escape_selected");
+    dashboard_scenario("ctrl_c_selected");
+    dashboard_scenario("ctrl_c_dirty_selected");
+    dashboard_scenario("escape_dirty_selected");
+}
+
+#[test]
 fn tui_dashboard_hides_archived_unless_explicitly_included() {
     dashboard_scenario("archive_hidden");
     dashboard_scenario("archive_included");

@@ -286,6 +286,29 @@ with tempfile.TemporaryDirectory(prefix="qqq-dashboard-test-") as folder:
             wait_visible(lambda: "task #2 (" in visible.text().splitlines()[8])
             send(b"\x1b[1;2B")
             wait_visible(lambda: "new task" in visible.text().splitlines()[8])
+        elif scenario in ("escape_selected", "ctrl_c_selected", "escape_dirty_selected", "ctrl_c_dirty_selected"):
+            initial_tasks = cli("list")
+            send(b"\x1b[1;2A")
+            wait_visible(lambda: "task #2 (" in visible.text().splitlines()[8])
+            if scenario in ("escape_dirty_selected", "ctrl_c_dirty_selected"):
+                send(b"Changed ")
+                wait_visible(lambda: visible.text().splitlines()[9].startswith("Changed Second"))
+            key = b"\x03" if scenario.startswith("ctrl_c") else b"\x1b"
+            clear_capture()
+            send(key)
+            if scenario == "escape_dirty_selected":
+                read_until(b"Discard changes and switch? (y/N)")
+                send(b"n")
+                wait_visible(lambda: visible.text().splitlines()[9].startswith("Changed Second")
+                             and visible.text().splitlines()[-1].startswith("Ctrl-S save"))
+                clear_capture()
+                send(b"\x1b")
+                read_until(b"Discard changes and switch? (y/N)")
+                send(b"y")
+            wait_visible(lambda: "new task" in visible.text().splitlines()[8]
+                         and visible.text().splitlines()[9].strip() == "")
+            assert cli("list") == initial_tasks
+            assert child.poll() is None
         elif scenario == "save_selected":
             send(b"Created\x13")
             wait_visible(lambda: "task #3 (New)" in visible.text().splitlines()[8]
@@ -1006,7 +1029,7 @@ with tempfile.TemporaryDirectory(prefix="qqq-dashboard-test-") as folder:
             read_until(b"Saved #3")
             assert cli("show", "3")["task"]["description"] == "Draft"
         if scenario != "wheel_error":
-            send(b"\x1b" if scenario in ("empty", "empty_json", "workflow_empty") else b"\x03")
+            send(b"\x1b" if scenario in ("empty", "empty_json", "workflow_empty", "escape_selected", "escape_dirty_selected") else b"\x03\x03")
         deadline = time.monotonic() + 5
         while child.poll() is None:
             assert time.monotonic() < deadline, f"TUI failed to exit: {screen[-1000:]!r}\n{visible.text()}"
