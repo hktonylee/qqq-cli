@@ -13,7 +13,7 @@ fn chrome(message: &str) -> render::Chrome<'_> {
 #[test]
 fn editor_paints_only_body_rows_and_resets_colors_for_header_and_footer() {
     crossterm::style::force_color_output(true);
-    let layout = render::Layout::new(&["Body".into()], 40);
+    let layout = render::Layout::new(&["Body".into()], &[], 40);
     for message in [
         "",
         "Task description cannot be empty",
@@ -61,7 +61,7 @@ fn resize_hint_uses_default_colors_without_editor_body() {
     let mut output = Vec::new();
     render::draw(
         &mut output,
-        &render::Layout::new(&["Body".into()], 10),
+        &render::Layout::new(&["Body".into()], &[], 10),
         0,
         &mut 0,
         (10, 2),
@@ -81,7 +81,7 @@ fn plain_editor_does_not_emit_color_commands() {
     let mut output = Vec::new();
     render::draw(
         &mut output,
-        &render::Layout::new(&["Body".into()], 40),
+        &render::Layout::new(&["Body".into()], &[], 40),
         0,
         &mut 0,
         (40, 8),
@@ -96,8 +96,31 @@ fn plain_editor_does_not_emit_color_commands() {
 }
 
 #[test]
+fn image_label_gets_distinct_foreground_across_wrapped_rows() {
+    crossterm::style::force_color_output(true);
+    let fragments = vec![
+        "Text ".into(),
+        "[Image #1: sample.png]".into(),
+        " tail".into(),
+    ];
+    let layout = render::Layout::new(&fragments, &[false, true, false], 12);
+    let mut output = Vec::new();
+    render::draw(&mut output, &layout, 0, &mut 0, (12, 8), &chrome(""), true).unwrap();
+    let output = String::from_utf8(output).unwrap();
+    assert!(output.contains("\x1b[38;5;81m"), "{output:?}");
+    assert!(output.matches("\x1b[38;5;81m").count() >= 2, "{output:?}");
+    assert!(output.contains("\x1b[38;5;252m tail"), "{output:?}");
+
+    let mut plain = Vec::new();
+    render::draw(&mut plain, &layout, 0, &mut 0, (12, 8), &chrome(""), false).unwrap();
+    let plain = String::from_utf8(plain).unwrap();
+    assert!(!plain.contains("\x1b[38;"));
+    assert!(plain.contains("[Image ") && plain.contains("sample.p"));
+}
+
+#[test]
 fn editor_reclaims_hint_row_for_body_and_keeps_cursor_above_footer() {
-    let layout = render::Layout::new(&["A\nB\nC\nD\nE".into()], 40);
+    let layout = render::Layout::new(&["A\nB\nC\nD\nE".into()], &[], 40);
     let mut output = Vec::new();
     let mut top = 0;
     render::draw(
@@ -124,14 +147,14 @@ fn editor_reclaims_hint_row_for_body_and_keeps_cursor_above_footer() {
 
 #[test]
 fn preserved_crlf_displays_as_line_break() {
-    let layout = render::Layout::new(&["First".into(), "\r\n".into(), "Second".into()], 20);
+    let layout = render::Layout::new(&["First".into(), "\r\n".into(), "Second".into()], &[], 20);
     assert_eq!(layout.rows, ["First", "Second"]);
     assert_eq!(layout.positions[2], (1, 0));
 }
 
 #[test]
 fn newline_after_exact_width_does_not_add_blank_visual_row() {
-    let layout = render::Layout::new(&["abcd".into(), "\n".into(), "x".into()], 4);
+    let layout = render::Layout::new(&["abcd".into(), "\n".into(), "x".into()], &[], 4);
     assert_eq!(layout.rows, vec!["abcd", "x"]);
     assert_eq!(layout.positions, vec![(0, 0), (1, 0), (1, 0), (1, 1)]);
     assert_eq!(layout.nearest(1, 0), 2);
@@ -147,6 +170,7 @@ fn layout_wraps_unicode_and_escapes_terminal_controls() {
             "\n".into(),
             "tail".into(),
         ],
+        &[],
         4,
     );
     assert_eq!(layout.positions[0], (0, 0));
@@ -168,7 +192,7 @@ fn narrow_layout_preserves_atomic_placeholder_cursor_boundaries() {
         "\n".into(),
         "[Pasted text #1: 1001 chars]".into(),
     ];
-    let layout = render::Layout::new(&fragments, 5);
+    let layout = render::Layout::new(&fragments, &[], 5);
     assert_eq!(layout.positions.len(), 4);
     let start = layout.positions[2];
     assert_eq!(layout.nearest(start.0, start.1), 2);

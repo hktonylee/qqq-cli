@@ -220,6 +220,27 @@ fn image_placeholders_attach_only_while_present() {
 }
 
 #[test]
+fn image_mask_marks_attachment_atom_but_not_literal_label() {
+    let mut draft = Draft::new("[Image #9: literal.png] ");
+    draft
+        .image(ImageInput {
+            name: "pasted.png".into(),
+            data: b"\x89PNG\r\n\x1a\nimage".to_vec(),
+        })
+        .unwrap();
+    let fragments = draft.fragments();
+    let image_mask = draft.image_mask();
+    assert_eq!(fragments.len(), image_mask.len());
+    assert_eq!(image_mask.iter().filter(|image| **image).count(), 1);
+    assert_eq!(
+        fragments[image_mask.iter().position(|image| *image).unwrap()],
+        "[Image #1: pasted.png]"
+    );
+    draft.backspace();
+    assert!(draft.image_mask().iter().all(|image| !image));
+}
+
+#[test]
 fn draft_rejects_blank_body_but_allows_image_on_first_line() {
     let mut draft = Draft::new("");
     assert!(draft.finish().is_err());

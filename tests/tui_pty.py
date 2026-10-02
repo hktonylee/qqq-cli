@@ -131,6 +131,8 @@ with tempfile.TemporaryDirectory(prefix="qqq-tui-test-") as folder:
         elif scenario in ("escape_image", "escape_narrow"):
             paste("'" + str(image) + "'")
             read_until(b"[Image #1:")
+            if color:
+                assert b"\x1b[38;5;81m" in screen, "Image placeholder accent missing"
         else:
             # One input burst puts keys and a multi-read paste in the same PTY
             # readiness event; neither may need a later keypress to finish.

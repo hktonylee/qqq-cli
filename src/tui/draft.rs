@@ -158,6 +158,12 @@ impl Draft {
     pub fn fragments(&self) -> Vec<String> {
         self.atoms.iter().map(Atom::label).collect()
     }
+    pub fn image_mask(&self) -> Vec<bool> {
+        self.atoms
+            .iter()
+            .map(|atom| matches!(atom, Atom::Image { .. }))
+            .collect()
+    }
     pub fn is_dirty_against(&self, baseline: &str) -> bool {
         let contents = self.contents();
         contents.description != baseline || !contents.images.is_empty()

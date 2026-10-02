@@ -12,6 +12,7 @@ pub const KEYS: &str = "Ctrl-S save  Esc cancel  Ctrl-V paste  Ctrl-W word";
 pub const NAV_KEYS: &str = "Ctrl-S save  Shift-Up/Down tasks  Esc cancel  Ctrl-W word";
 const BACKGROUND: Color = Color::AnsiValue(236);
 const FOREGROUND: Color = Color::AnsiValue(252);
+const IMAGE_FOREGROUND: Color = Color::AnsiValue(81);
 
 pub struct Chrome<'a> {
     pub title: &'a str,
@@ -22,20 +23,24 @@ pub struct Chrome<'a> {
 pub struct Layout {
     pub rows: Vec<String>,
     pub positions: Vec<(usize, usize)>,
+    image_spans: Vec<Vec<(usize, usize)>>,
 }
 impl Layout {
-    pub fn new(fragments: &[String], width: usize) -> Self {
+    pub fn new(fragments: &[String], image_mask: &[bool], width: usize) -> Self {
         let width = width.max(1);
         let mut layout = Self {
             rows: vec![String::new()],
             positions: vec![(0, 0)],
+            image_spans: vec![Vec::new()],
         };
         let mut column = 0;
-        for fragment in fragments {
+        for (index, fragment) in fragments.iter().enumerate() {
+            let image = image_mask.get(index).copied().unwrap_or(false);
             let safe = escape(fragment);
             for grapheme in safe.graphemes(true) {
                 if grapheme == "\n" {
                     layout.rows.push(String::new());
+                    layout.image_spans.push(Vec::new());
                     column = 0;
                     continue;
                 }
@@ -46,13 +51,22 @@ impl Layout {
                 };
                 if column + cells > width {
                     layout.rows.push(String::new());
+                    layout.image_spans.push(Vec::new());
                     column = 0;
                 }
-                layout
-                    .rows
-                    .last_mut()
-                    .expect("layout always has a row")
-                    .push_str(grapheme);
+                let line = layout.rows.last_mut().expect("layout always has a row");
+                let start = line.len();
+                line.push_str(grapheme);
+                if image {
+                    let spans = layout
+                        .image_spans
+                        .last_mut()
+                        .expect("layout always has image spans");
+                    match spans.last_mut() {
+                        Some((_, end)) if *end == start => *end = line.len(),
+                        _ => spans.push((start, line.len())),
+                    }
+                }
                 column += cells;
             }
             layout.positions.push(if column == width {
@@ -67,6 +81,7 @@ impl Layout {
             .is_some_and(|(row, _)| *row == layout.rows.len())
         {
             layout.rows.push(String::new());
+            layout.image_spans.push(Vec::new());
         }
         layout
     }
@@ -153,7 +168,23 @@ pub fn draw(
         }
     }
     for (index, line) in layout.rows.iter().skip(*top).take(body_height).enumerate() {
-        queue!(output, MoveTo(0, index as u16 + 1), Print(line))?;
+        queue!(output, MoveTo(0, index as u16 + 1))?;
+        if color {
+            let mut offset = 0;
+            for &(start, end) in &layout.image_spans[*top + index] {
+                queue!(
+                    output,
+                    Print(&line[offset..start]),
+                    SetForegroundColor(IMAGE_FOREGROUND),
+                    Print(&line[start..end]),
+                    SetForegroundColor(FOREGROUND)
+                )?;
+                offset = end;
+            }
+            queue!(output, Print(&line[offset..]))?;
+        } else {
+            queue!(output, Print(line))?;
+        }
     }
     if color {
         queue!(output, ResetColor)?;

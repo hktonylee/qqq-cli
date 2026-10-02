@@ -122,7 +122,7 @@ pub fn compose(description: &str, navigation: Option<&crate::db::Db>) -> Result<
     let mut confirmation: Option<Confirmation> = None;
     loop {
         let size = terminal::size()?;
-        let layout = render::Layout::new(&draft.fragments(), size.0 as usize);
+        let layout = render::Layout::new(&draft.fragments(), &draft.image_mask(), size.0 as usize);
         let footer = match &confirmation {
             Some(Confirmation::Exit) if usize::from(size.0) < "Discard draft? (y/N)".len() => {
                 "Discard? y/N"
