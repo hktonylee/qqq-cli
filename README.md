@@ -120,7 +120,7 @@ qqq tui
 Upper panel lists all tasks; lower panel edits current task. Shift-Up/Down
 selects tasks, then blank draft. Ctrl-S updates selected task or creates new
 task, then clears editor for next task. Esc exits blank draft or confirms
-discard of changed draft; Ctrl-C exits. Saves commit immediately. TUI needs
+discard of nonempty draft; Ctrl-C exits. Saves commit immediately. TUI needs
 terminal and writes no stdout, including with `--json`.
 
 ## Dependencies and images

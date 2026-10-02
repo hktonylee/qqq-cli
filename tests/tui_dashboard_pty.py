@@ -41,7 +41,7 @@ with tempfile.TemporaryDirectory(prefix="qqq-dashboard-test-") as folder:
     os.setsid()
     fcntl.ioctl(slave, termios.TIOCSCTTY, 0)
     signal.signal(signal.SIGHUP, signal.SIG_IGN)
-    args = [binary, "--json", "tui"] if scenario == "empty_json" else [binary, "tui"]
+    args = [binary, "--json", "tui"] if scenario in ("empty_json", "save_json") else [binary, "tui"]
     child = subprocess.Popen(args, cwd=folder, env=env, stdin=slave,
                              stderr=slave, stdout=subprocess.PIPE)
     screen = bytearray()
@@ -74,7 +74,7 @@ with tempfile.TemporaryDirectory(prefix="qqq-dashboard-test-") as folder:
         if scenario != "scroll":
             assert b"First" in screen and b"Second" in screen, screen[-2000:]
         assert not select.select([child.stdout], [], [], 0)[0], "TUI wrote stdout while open"
-        if scenario == "save":
+        if scenario in ("save", "save_json"):
             screen.clear()
             send(b"\x1b[1;2A")
             read_until(b"task #2")
@@ -86,7 +86,10 @@ with tempfile.TemporaryDirectory(prefix="qqq-dashboard-test-") as folder:
             screen.clear()
             send(b"Third\x13")
             read_until(b"Saved #3. New task")
-            assert b"Third" in screen, screen[-2000:]
+            screen.clear()
+            send(b"\x1b[C")
+            read_until(b"Third")
+            assert b"3      New" in screen, screen[-2000:]
             assert cli("show", "3")["task"]["description"] == "Third"
         elif scenario == "scroll":
             assert b"Task 20" in screen, screen[-2000:]

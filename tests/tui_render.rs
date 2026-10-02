@@ -28,6 +28,14 @@ fn dashboard_rows_keep_task_identity_across_continuations() {
 }
 
 #[test]
+fn dashboard_new_draft_follows_newest_child_not_last_tree_row() {
+    let rows = panel::rows(
+        "ID     STATUS       TASK\n1      New          Parent\n21     New          New child\n2      New          Older root\n20     New          Last root",
+    );
+    assert_eq!(panel::scroll_to(&rows, None, 0, 2), 1);
+}
+
+#[test]
 fn dashboard_places_list_above_editor_and_keeps_cursor_in_lower_panel() {
     let rows = panel::rows("ID     STATUS       TASK\n1      New          First");
     let layout = render::Layout::new(&["Draft".into()], &[], 72);

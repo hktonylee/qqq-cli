@@ -54,6 +54,7 @@ fn dashboard_scenario(name: &str) {
 #[test]
 fn tui_dashboard_edits_and_adds_without_leaving_screen() {
     dashboard_scenario("save");
+    dashboard_scenario("save_json");
 }
 
 #[test]
