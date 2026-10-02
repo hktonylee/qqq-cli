@@ -1,18 +1,18 @@
 # qqq
 
-Local-first task queue for coding agents. Task descriptions, messages, images,
-ownership and history live in per-project SQLite file `.qqq/qqq.db`. No server needed.
+Local-first task queue for coding agents. Tasks, messages, image bytes,
+ownership, history live in each project's `.qqq/qqq.db`. No server needed.
 
 ## Install
 
-Requires Rust 1.85+ and C compiler for bundled SQLite. Package name: `qqq-cli`;
-installed command: `qqq`.
+Requires Rust 1.85+ and C compiler for bundled SQLite. Crate: `qqq-cli`;
+command: `qqq`.
 
 ```sh
 cargo install qqq-cli --locked
 ```
 
-From source, run in repo root:
+To install from source, run in repo root:
 
 ```sh
 cargo install --path . --locked
@@ -20,10 +20,9 @@ cargo install --path . --locked
 
 ## Quick start
 
-Run `init` in project root to create `.qqq/qqq.db`. Other task commands search
-current directory, then each parent for nearest `.qqq` directory. Nearest
-directory wins; if its `qqq.db` is missing, command fails instead of opening
-outer project. Config commands need no DB.
+Run `init` in project root. Other task commands use nearest `.qqq` directory
+in current directory or parents; missing `qqq.db` there causes error. Config
+commands need no DB.
 
 ```sh
 qqq init
@@ -37,9 +36,9 @@ qqq next --session worker-1
 ```
 
 Tasks start `new`. `next` claims oldest ready task as `in_progress`; `complete`
-marks it `completed`. In this example, task 2 becomes ready after task 1 completes.
-In existing queues, use IDs returned by `add` and `next`.
-Use `qqq --help` or `qqq <command> --help` for full flag reference.
+marks it `completed`. Task 2 becomes ready after task 1 completes. Use IDs
+returned by `add` and `next` in existing queues. Run `qqq --help` or
+`qqq <command> --help` for all flags.
 
 ## Tasks
 
@@ -55,26 +54,25 @@ qqq list --watch
 qqq list --watch --json
 ```
 
-`list` shows IDs, statuses and first description lines as dependency tree.
-`show` includes full description, messages, images, ownership, history and Herdr
-link. Negative indexes work with `show` and `edit`, counting existing tasks by
+`list` shows IDs, statuses, first description lines as dependency tree. `show`
+includes full description, messages, image metadata, ownership history and
+Herdr link. Negative indexes work with `show` and `edit`, counting tasks by
 creation order across all statuses.
 
-`--max-completed N` keeps most recently completed tasks plus every unfinished
-task, including errors. `0` hides completed tasks. Completion history determines
-recency; editing completed text does not count as another completion. Hidden
-parents make children display as roots. `--all` conflicts with an explicit limit.
+`--max-completed N` keeps N most recent completions plus unfinished tasks,
+including errors. `0` hides completed tasks. Completion history sets recency;
+hidden parents make children display as roots. `--all` conflicts with explicit
+limit.
 
-`--watch` prints initial snapshot, then refreshes after DB commits, checking every
-250 ms. Terminals redraw in place; piped output and `TERM=dumb` append snapshots.
-Ctrl-C stops watching.
+`--watch` prints initial list, then checks for DB commits every 250 ms. Human
+terminal output redraws; pipes, `TERM=dumb` and JSON append snapshots. Ctrl-C
+stops watching.
 
-Commands print readable text by default. Global `--json` works before or after
+Commands print text by default. Global `--json` works before or after
 subcommands. JSON lists stay flat, preserve full descriptions and `parent_id`;
-watch mode emits one compact JSON array per line. Empty lists return `[]`; no
-ready task returns `null`. Errors go to stderr: exit 1 for runtime errors, 2 for
-argument errors. Terminal status colors can be disabled with `NO_COLOR=1` or
-`TERM=dumb`; piped output and JSON stay plain.
+watch emits one array per line. Empty lists return `[]`; no ready task returns
+`null`. Errors use stderr (exit 1 for runtime, 2 for arguments). Disable
+terminal colors with `NO_COLOR=1` or `TERM=dumb`; pipes and JSON stay plain.
 
 ### Edit descriptions
 
@@ -85,16 +83,15 @@ qqq edit 1 --description "Updated details"
 qqq edit -1                         # edit newest task interactively
 ```
 
-Descriptions are whole text bodies; whitespace and newlines are preserved.
-Blank-only text is rejected. `add` without text and `edit` without update flags
-open built-in terminal editor. Ctrl-S saves; Esc asks before discarding nonempty
-draft; Ctrl-C cancels. Ctrl-W deletes previous word on current line. Ctrl-V reads
-clipboard text or images. Large pastes
-collapse into placeholders, then expand on save. Clipboard access needs desktop
-clipboard support.
+Descriptions preserve whitespace and newlines; blank-only text fails. `add`
+without text and `edit` without update flags open built-in terminal editor.
+Ctrl-S saves; Esc prompts before discarding nonempty draft; Ctrl-C cancels;
+Ctrl-W deletes previous word without crossing line; Ctrl-V pastes clipboard text
+or image. Large pastes collapse into placeholders, then expand on save. Ctrl-V
+needs desktop clipboard support.
 
 Use `--edit` (`-e`) to force external editor; nonterminal interactive calls also
-require `$EDITOR`. Editor must wait until editing finishes.
+need `$EDITOR`. Editor must wait until editing finishes.
 
 ```sh
 export EDITOR='vim'
@@ -102,9 +99,9 @@ qqq add --edit
 qqq edit 1 --edit --description "Prefilled draft"
 ```
 
-Editor UI uses stderr; stdout contains only final result. Cancelled or failed
-composition saves nothing. Inline field edits skip editor and preserve omitted
-fields. Content edits preserve ownership and existing attachments.
+Editor UI uses stderr; stdout holds final result. Cancellation or error saves
+nothing. Inline content edits skip editor; omitted fields, ownership and
+attachments stay.
 
 ### Dependencies and images
 
@@ -137,7 +134,7 @@ validation failures leave task unchanged.
 
 ## Agents and recovery
 
-Use stable, unique session ID for each worker:
+Use stable, unique session ID per worker:
 
 ```sh
 export QQQ_SESSION='worker-1'
@@ -147,26 +144,25 @@ qqq complete 1
 qqq next --wait
 ```
 
-`--session` overrides `QQQ_SESSION`. One active task per session; repeated `next`
-returns same task. Concurrent workers cannot claim same task. Claims never expire.
-`--wait` waits for ready work; without it, empty queue prints `No ready tasks.`
-and exits successfully. Error tasks and children with incomplete parents are skipped.
+`--session` overrides `QQQ_SESSION`. Each owner has one active task; repeated
+`next` returns it. Concurrent workers cannot claim same task. Claims never
+expire. `--wait` waits for ready work; without it, empty queue prints
+`No ready tasks.` and exits successfully. Error tasks and blocked children stay
+out of queue.
 
-Without explicit session ID, ownership discovery uses:
+Without `--session` or `QQQ_SESSION`, owner discovery uses:
 
 1. Exact Herdr pane from `HERDR_PANE_ID` or `HERDR_ENV=1` (requires pane ID).
 2. Native Codex `CODEX_THREAD_ID`, then `CODEX_SESSION_ID` fallback.
 3. Unique Herdr agent whose cwd matches project root (parent of `.qqq`).
 
 Explicit IDs and native Codex ownership work without Herdr when dispatch is
-disabled or `next --local` is used; native Codex discovery also requires being
-outside exact Herdr context. Other clients can supply session ID or use Herdr
-discovery. `next --local` bypasses dispatch; it still resolves caller ownership.
+disabled or `next --local` is used. Exact Herdr context takes precedence over
+native Codex discovery. `next --local` skips dispatch but still resolves owner.
 
-Completion, ordinary release and error marking require matching task owner.
-Owner lookup prefers original session token, then uniquely matching displayed
-`harness_session`. Use `--harness-name` to disambiguate public sessions.
-JSON assignment fields are
+Completion, release and error marking require task owner. Lookup uses original
+session token, then uniquely matching displayed `harness_session`; use
+`--harness-name` for duplicate public sessions. JSON assignment fields:
 `harness_name`, `harness_session`, `orchestrator_name`, `orchestrator_session`.
 Override flags appear in command help.
 
