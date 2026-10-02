@@ -147,7 +147,10 @@ Image IDs come from `show`. Export needs selected task's image ID and new output
 path. PNG, JPEG, GIF and WebP signatures supported, up to 20 MiB each; signature
 check does not fully validate file. Bytes copy into
 `.qqq/images/<task_id>/<image_id>.<ext>`. Built-in editor also accepts pasted
-image paths or clipboard images.
+image paths or clipboard images. Pasted images become Markdown links in the
+description, such as `![before.png](.qqq/images/2/4.png)`. Reloading a task
+shows each linked image as one editable item; deleting that item removes its
+description link while keeping the attachment available through `show`.
 
 Description, status, parent and image updates save atomically.
 

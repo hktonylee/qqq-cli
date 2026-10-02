@@ -42,6 +42,6 @@
 
 **Files:** `docs/plans/2026-10-01-markdown-image-references.md`; `README.md` only if image behavior docs need correction.
 
-- [ ] Run `cargo fmt --all -- --check`, `cargo clippy --locked --all-targets -- -D warnings`, `cargo test --locked`, and `git diff --check`; require exit 0.
+- [x] Run `cargo fmt --all -- --check`, `cargo clippy --locked --all-targets -- -D warnings`, `cargo test --locked`, and `git diff --check`; require exit 0.
 - [ ] Request read-only code review; fix confirmed issues, rerun affected checks.
 - [ ] Rebase branch onto current local master, fast-forward local master, run integrated full suite, remove owned worktree and merged branch. Complete task 57 with `qqq --json complete 57`, verify `qqq --json show 57`, then resume one blocking `qqq --json next --wait --local` call.
