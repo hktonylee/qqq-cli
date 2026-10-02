@@ -491,18 +491,28 @@ fn compose_inner(
             Some(Confirmation::Action { .. }) => "Confirm action? (y/N)",
             None => &message,
         };
-        let title = match (mode.db().is_some(), target_id) {
-            (true, Some(id)) => format!(
-                "qqq task editor - task #{id} ({})",
-                crate::output::status_label(
-                    target_status.as_deref().expect("selected task has status")
-                )
-            ),
-            (true, None) => "qqq task editor - new task".to_owned(),
-            (false, _) => "qqq task editor".to_owned(),
+        let (title, status_start) = match (mode.db().is_some(), target_id) {
+            (true, Some(id)) => {
+                let prefix = format!("qqq task editor - task #{id} ");
+                let label = crate::output::status_label(
+                    target_status.as_deref().expect("selected task has status"),
+                );
+                (format!("{prefix}({label})"), Some(prefix.len()))
+            }
+            (true, None) => ("qqq task editor - new task".to_owned(), None),
+            (false, _) => ("qqq task editor".to_owned(), None),
         };
         let chrome = render::Chrome {
             title: &title,
+            title_status_color: if dashboard {
+                None
+            } else {
+                status_start.zip(
+                    target_status
+                        .as_deref()
+                        .and_then(crate::output::status_color_code),
+                )
+            },
             keys: if filter_focused {
                 render::FILTER_KEYS
             } else if dashboard {

@@ -99,6 +99,7 @@ fn manual_list_scroll_does_not_snap_to_selected_task() {
     let layout = render::Layout::new(&["Draft".into()], &[], 72);
     let chrome = render::Chrome {
         title: "Editor",
+        title_status_color: None,
         keys: render::KEYS,
         message: "",
     };
@@ -167,6 +168,7 @@ fn manual_editor_scroll_keeps_viewport_then_keyboard_reveals_caret() {
     let layout = render::Layout::new(&["A\nB\nC\nD\nE\nF\nG\nH\nI\nJ".into()], &[], 72);
     let chrome = render::Chrome {
         title: "Editor",
+        title_status_color: None,
         keys: render::KEYS,
         message: "",
     };
@@ -248,6 +250,7 @@ fn manual_offsets_clamp_after_resize() {
     let layout = render::Layout::new(&["A\nB\nC\nD\nE\nF\nG\nH\nI\nJ".into()], &[], 72);
     let chrome = render::Chrome {
         title: "Editor",
+        title_status_color: None,
         keys: render::KEYS,
         message: "",
     };
@@ -291,6 +294,7 @@ fn filter_bar_shows_empty_result_and_takes_cursor_only_while_focused() {
     let layout = render::Layout::new(&["Unsaved".into()], &[], 72);
     let chrome = render::Chrome {
         title: "qqq task editor - new task",
+        title_status_color: None,
         keys: render::KEYS,
         message: "",
     };
@@ -336,6 +340,7 @@ fn small_dashboard_keeps_filter_row_and_plain_style() {
     let layout = render::Layout::new(&["Draft".into()], &[], 12);
     let chrome = render::Chrome {
         title: "Editor",
+        title_status_color: None,
         keys: render::KEYS,
         message: "",
     };
@@ -383,6 +388,7 @@ fn minimum_dashboard_height_still_shows_selected_task() {
     let layout = render::Layout::new(&["Draft".into()], &[], 12);
     let chrome = render::Chrome {
         title: "Editor",
+        title_status_color: None,
         keys: render::KEYS,
         message: "",
     };
@@ -422,6 +428,7 @@ fn split_dashboard_keeps_list_above_editor() {
     let layout = render::Layout::new(&["Draft".into()], &[], 72);
     let chrome = render::Chrome {
         title: "qqq task editor - task #1 (New)",
+        title_status_color: None,
         keys: render::KEYS,
         message: "",
     };
@@ -470,6 +477,7 @@ fn narrow_dashboard_shows_plain_resize_hint() {
     let layout = render::Layout::new(&["Draft".into()], &[], 10);
     let chrome = render::Chrome {
         title: "qqq task editor",
+        title_status_color: None,
         keys: render::KEYS,
         message: "",
     };
@@ -512,6 +520,7 @@ fn no_color_dashboard_keeps_default_cell_styles() {
     let layout = render::Layout::new(&["Draft".into()], &[], 72);
     let chrome = render::Chrome {
         title: "qqq task editor",
+        title_status_color: None,
         keys: render::KEYS,
         message: "",
     };
@@ -563,6 +572,7 @@ fn status_selection_and_editor_images_use_distinct_colors() {
     );
     let chrome = render::Chrome {
         title: "qqq task editor - task #1 (New)",
+        title_status_color: None,
         keys: render::KEYS,
         message: "Saved #1. New task",
     };
@@ -624,6 +634,7 @@ fn dashboard_paste_label_uses_gold_while_body_stays_neutral() {
     );
     let chrome = render::Chrome {
         title: "qqq task editor",
+        title_status_color: None,
         keys: render::KEYS,
         message: "",
     };
@@ -665,6 +676,7 @@ fn failed_save_footer_uses_error_color() {
     let layout = render::Layout::new(&["Draft".into()], &[], 72);
     let chrome = render::Chrome {
         title: "qqq task editor",
+        title_status_color: None,
         keys: render::KEYS,
         message: "Task description cannot be empty",
     };

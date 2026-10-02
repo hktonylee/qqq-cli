@@ -23,6 +23,8 @@ DOWN = b"\x1b[1;2B"
 with tempfile.TemporaryDirectory(prefix="qqq-history-test-") as folder:
     env = dict(os.environ, HOME=folder, TERM="xterm-256color")
     env.pop("NO_COLOR", None)
+    if scenario == "status_header_no_color":
+        env["NO_COLOR"] = "1"
     for key in ("EDITOR", "QQQ_SESSION", "HERDR_ENV", "HERDR_PANE_ID", "CODEX_THREAD_ID", "CODEX_SESSION_ID"):
         env.pop(key, None)
 
@@ -41,7 +43,7 @@ with tempfile.TemporaryDirectory(prefix="qqq-history-test-") as folder:
             assert cli("next", "--local", "--session", "worker")["id"] == task_id
             cli("complete", str(task_id), "--session", "worker")
         assert cli("next", "--local", "--session", "worker")["id"] == 3
-    elif scenario == "status_header":
+    elif scenario in ("status_header", "status_header_no_color"):
         for description in ("Done", "Active", "Failed", "Waiting"):
             cli("add", description)
         assert cli("next", "--local", "--session", "worker-1")["id"] == 1
@@ -186,11 +188,23 @@ with tempfile.TemporaryDirectory(prefix="qqq-history-test-") as folder:
             assert [task["description"] for task in cli("list")] == ["First", "Second", "Third updated", "Fresh"]
             assert [image["name"] for image in cli("show", "3")["images"]] == ["selected.png"]
             assert cli("show", "4")["images"] == []
-        elif scenario == "status_header":
+        elif scenario in ("status_header", "status_header_no_color"):
+            def status_title(direction, task_id, status, code):
+                screen.clear()
+                send(direction)
+                title = f"task #{task_id} ".encode()
+                colored = scenario == "status_header" and code is not None
+                expected = title + (f"\x1b[{code}m".encode() if colored else b"") + f"({status})".encode()
+                read_until(expected)
+                if scenario == "status_header_no_color":
+                    assert b"\x1b[36m" not in screen and b"\x1b[90m" not in screen and b"\x1b[31m" not in screen
+
             for task_id, status in ((4, "New"), (3, "Error"), (2, "In progress"), (1, "Completed")):
-                press(UP, f"task #{task_id} ({status})".encode())
+                status_title(UP, task_id, status,
+                             {"New": None, "Error": "31", "In progress": "36", "Completed": "90"}[status])
             for task_id, status in ((2, "In progress"), (3, "Error"), (4, "New")):
-                press(DOWN, f"task #{task_id} ({status})".encode())
+                status_title(DOWN, task_id, status,
+                             {"New": None, "Error": "31", "In progress": "36", "Completed": "90"}[status])
             press(DOWN, b"new task")
             send(b"Fresh")
             assert finish(5)[0]["description"] == "Fresh"

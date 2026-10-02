@@ -8,6 +8,7 @@ mod render;
 fn chrome(message: &str) -> render::Chrome<'_> {
     render::Chrome {
         title: "qqq task editor",
+        title_status_color: None,
         keys: render::KEYS,
         message,
     }

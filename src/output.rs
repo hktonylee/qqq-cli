@@ -146,12 +146,20 @@ pub fn status_label(status: &str) -> &'static str {
     }
 }
 
-fn status_color(value: &Value, color: bool) -> Option<&'static str> {
-    match value["status"].as_str() {
-        Some("in_progress") if color => Some("36"),
-        Some("completed") if color => Some("90"),
-        Some("error") if color => Some("31"),
+pub(crate) fn status_color_code(status: &str) -> Option<&'static str> {
+    match status {
+        "in_progress" => Some("36"),
+        "completed" => Some("90"),
+        "error" => Some("31"),
         _ => None,
+    }
+}
+
+fn status_color(value: &Value, color: bool) -> Option<&'static str> {
+    if color {
+        value["status"].as_str().and_then(status_color_code)
+    } else {
+        None
     }
 }
 

@@ -27,6 +27,7 @@ pub(super) enum HighlightKind {
 
 pub struct Chrome<'a> {
     pub title: &'a str,
+    pub title_status_color: Option<(usize, &'static str)>,
     pub keys: &'a str,
     pub message: &'a str,
 }
@@ -179,11 +180,23 @@ fn paint_editor(
     if row >= *top + body_height {
         *top = row + 1 - body_height;
     }
-    queue!(
-        output,
-        MoveTo(0, start),
-        Print(clipped(chrome.title, width as usize))
-    )?;
+    queue!(output, MoveTo(0, start))?;
+    if let Some((status_start, code)) = chrome.title_status_color.filter(|_| color) {
+        let (prefix, status) = chrome.title.split_at(status_start);
+        let prefix = clipped(prefix, width as usize);
+        let status = clipped(status, (width as usize).saturating_sub(prefix.width()));
+        queue!(output, Print(prefix))?;
+        if !status.is_empty() {
+            queue!(
+                output,
+                Print(format!("\x1b[{code}m")),
+                Print(status),
+                ResetColor
+            )?;
+        }
+    } else {
+        queue!(output, Print(clipped(chrome.title, width as usize)))?;
+    }
     if color {
         queue!(
             output,

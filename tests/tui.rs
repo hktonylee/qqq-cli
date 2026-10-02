@@ -150,6 +150,7 @@ fn tui_add_history_saves_selected_task() {
 #[test]
 fn tui_add_history_shows_selected_task_status() {
     history_scenario("status_header");
+    history_scenario("status_header_no_color");
 }
 
 #[test]
