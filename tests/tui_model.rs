@@ -6,7 +6,7 @@ mod draft;
 mod images;
 
 use draft::Draft;
-use images::ImageInput;
+use images::{ImageInput, ImageReference};
 
 #[test]
 fn dirty_check_ignores_cursor_motion_and_reverted_edits() {
@@ -264,8 +264,74 @@ fn image_placeholders_attach_only_while_present() {
     let composition = draft.finish().unwrap();
     assert_eq!(composition.images.len(), 1);
     assert_eq!(composition.description, "Details [Image: pasted.png]");
+    assert_eq!(composition.image_spans, vec![8..27]);
     draft.backspace();
     assert!(draft.finish().unwrap().images.is_empty());
+}
+
+#[test]
+fn stored_markdown_image_reloads_as_single_atom_and_deletes_as_one() {
+    let image = ImageReference {
+        id: 2,
+        name: "pasted.png".into(),
+        media_type: "image/png".into(),
+    };
+    let link = "![pasted.png](.qqq/images/1/2.png)";
+    let mut draft = Draft::from_saved(&format!("Before {link} after"), 1, &[image]).unwrap();
+    assert_eq!(draft.image_mask().iter().filter(|image| **image).count(), 1);
+    assert!(
+        draft
+            .fragments()
+            .concat()
+            .contains("[Image #1: pasted.png]")
+    );
+    assert_eq!(
+        draft.finish().unwrap().description,
+        format!("Before {link} after")
+    );
+    assert!(!draft.is_dirty_against(&format!("Before {link} after")));
+    let image_index = draft.image_mask().iter().position(|image| *image).unwrap();
+    draft.set_cursor(image_index + 1);
+    draft.backspace();
+    assert_eq!(draft.finish().unwrap().description, "Before  after");
+}
+
+#[test]
+fn legacy_labels_match_duplicate_attachments_in_order() {
+    let images = [1, 2].map(|id| ImageReference {
+        id,
+        name: "dup.png".into(),
+        media_type: "image/png".into(),
+    });
+    let original = "A [Image: dup.png] B [Image: dup.png]";
+    let draft = Draft::from_saved(original, 4, &images).unwrap();
+    assert!(!draft.is_dirty_against(original));
+    assert_eq!(draft.image_mask().iter().filter(|image| **image).count(), 2);
+    assert_eq!(
+        draft.finish().unwrap().description,
+        "A ![dup.png](.qqq/images/4/1.png) B ![dup.png](.qqq/images/4/2.png)"
+    );
+    let literal =
+        Draft::from_saved("![dup.png](elsewhere) [Image: other.png]", 4, &images).unwrap();
+    assert!(literal.image_mask().iter().all(|image| !image));
+    assert_eq!(
+        literal.finish().unwrap().description,
+        "![dup.png](elsewhere) [Image: other.png]"
+    );
+}
+
+#[test]
+fn markdown_image_reference_escapes_filename_without_changing_metadata() {
+    let image = ImageReference {
+        id: 7,
+        name: "a]b\\c.png".into(),
+        media_type: "image/png".into(),
+    };
+    assert_eq!(
+        image.markdown(3).unwrap(),
+        "![a\\]b\\\\c.png](.qqq/images/3/7.png)"
+    );
+    assert_eq!(image.name, "a]b\\c.png");
 }
 
 #[test]

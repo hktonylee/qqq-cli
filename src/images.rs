@@ -8,6 +8,45 @@ use tempfile::NamedTempFile;
 
 pub const MAX_IMAGE_BYTES: usize = 20 * 1024 * 1024;
 
+#[derive(Clone)]
+pub struct ImageReference {
+    pub id: i64,
+    pub name: String,
+    pub media_type: String,
+}
+
+impl ImageReference {
+    pub fn markdown(&self, task_id: i64) -> Result<String> {
+        ensure!(task_id > 0 && self.id > 0, "Invalid image identity");
+        let alt = self
+            .name
+            .chars()
+            .map(|ch| match ch {
+                '\\' => "\\\\".to_owned(),
+                '[' => "\\[".to_owned(),
+                ']' => "\\]".to_owned(),
+                '\r' | '\n' | '\t' => " ".to_owned(),
+                _ => ch.to_string(),
+            })
+            .collect::<String>();
+        Ok(format!(
+            "![{alt}](.qqq/images/{task_id}/{}.{})",
+            self.id,
+            image_extension(&self.media_type)?
+        ))
+    }
+}
+
+fn image_extension(media_type: &str) -> Result<&'static str> {
+    Ok(match media_type {
+        "image/png" => "png",
+        "image/jpeg" => "jpg",
+        "image/gif" => "gif",
+        "image/webp" => "webp",
+        _ => bail!("Unsupported stored image media type: {media_type}"),
+    })
+}
+
 pub struct ImageStore {
     root: PathBuf,
 }
@@ -64,13 +103,7 @@ impl ImageStore {
 
     pub fn path(&self, task_id: i64, image_id: i64, media_type: &str) -> Result<PathBuf> {
         ensure!(task_id > 0 && image_id > 0, "Invalid image identity");
-        let ext = match media_type {
-            "image/png" => "png",
-            "image/jpeg" => "jpg",
-            "image/gif" => "gif",
-            "image/webp" => "webp",
-            _ => bail!("Unsupported stored image media type: {media_type}"),
-        };
+        let ext = image_extension(media_type)?;
         Ok(self
             .root
             .join(task_id.to_string())

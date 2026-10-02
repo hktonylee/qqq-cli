@@ -14,11 +14,11 @@
 
 **Files:** `src/images.rs`, `src/tui/draft.rs`, `tests/tui_model.rs`
 
-- [ ] Add failing `tests/tui_model.rs` cases: pasted image yields one `image_spans` range over its provisional text; stored `![name](.qqq/images/1/2.png)` reloads as one masked atom and serializes identically; two legacy `[Image: dup.png]` labels map to distinct IDs, remain clean until edited, then serialize as distinct Markdown links; unmatched Markdown/labels remain text; deleting loaded atom removes link.
-- [ ] Run `cargo test --locked --test tui_model`; confirm new assertions fail from missing spans/parser.
-- [ ] Add `ImageReference { id, name, media_type }` in `src/images.rs` with `markdown(task_id) -> Result<String>`. Use existing media-type mapping; format `.qqq/images/{task_id}/{id}.{ext}`. Escape `\\`, `[`, `]` in alt text; normalize CR/LF/tab to spaces. Keep original `name` in metadata.
-- [ ] Add `Composition.image_spans: Vec<Range<usize>>`; new image atoms record byte ranges when serializing provisional `[Image: name]`. Add stored-image atom holding visible label, original token, normalized Markdown token. `Draft::from_saved(description, task_id, &[ImageReference]) -> Result<Draft>` matches exact references, then exact legacy labels in ID order. `is_dirty_against` serializes original tokens; `finish` serializes normalized tokens. Update word motion and image mask for stored atoms.
-- [ ] Run `cargo test --locked --test tui_model`; require pass. Commit `[Feat] Model Stored Image References`.
+- [x] Add failing `tests/tui_model.rs` cases: pasted image yields one `image_spans` range over its provisional text; stored `![name](.qqq/images/1/2.png)` reloads as one masked atom and serializes identically; two legacy `[Image: dup.png]` labels map to distinct IDs, remain clean until edited, then serialize as distinct Markdown links; unmatched Markdown/labels remain text; deleting loaded atom removes link.
+- [x] Run `cargo test --locked --test tui_model`; confirm new assertions fail from missing spans/parser.
+- [x] Add `ImageReference { id, name, media_type }` in `src/images.rs` with `markdown(task_id) -> Result<String>`. Use existing media-type mapping; format `.qqq/images/{task_id}/{id}.{ext}`. Escape `\\`, `[`, `]` in alt text; normalize CR/LF/tab to spaces. Keep original `name` in metadata.
+- [x] Add `Composition.image_spans: Vec<Range<usize>>`; new image atoms record byte ranges when serializing provisional `[Image: name]`. Add stored-image atom holding visible label, original token, normalized Markdown token. `Draft::from_saved(description, task_id, &[ImageReference]) -> Result<Draft>` matches exact references, then exact legacy labels in ID order. `is_dirty_against` serializes original tokens; `finish` serializes normalized tokens. Update word motion and image mask for stored atoms.
+- [x] Run `cargo test --locked --test tui_model`; require pass. Commit `[Feat] Model Stored Image References`.
 
 ### Task 2: Atomic DB reference persistence
 

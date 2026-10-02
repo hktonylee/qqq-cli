@@ -22,6 +22,7 @@ pub fn compose(
         composition: crate::tui::draft::Composition {
             description,
             images: Vec::new(),
+            image_spans: Vec::new(),
         },
         target_id: None,
     })

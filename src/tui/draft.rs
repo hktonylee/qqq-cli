@@ -1,10 +1,12 @@
-use crate::images::ImageInput;
+use crate::images::{ImageInput, ImageReference};
 use anyhow::{Result, ensure};
+use std::ops::Range;
 use unicode_segmentation::UnicodeSegmentation;
 
 pub struct Composition {
     pub description: String,
     pub images: Vec<ImageInput>,
+    pub image_spans: Vec<Range<usize>>,
 }
 enum Atom {
     Text(String),
@@ -16,6 +18,12 @@ enum Atom {
     Image {
         id: usize,
         input: ImageInput,
+    },
+    StoredImage {
+        id: usize,
+        name: String,
+        original: String,
+        markdown: String,
     },
 }
 impl Atom {
@@ -32,6 +40,7 @@ impl Atom {
             Self::Text(text) => text.clone(),
             Self::Paste { id, chars, .. } => format!("[Pasted text #{id}: {chars} chars]"),
             Self::Image { id, input } => format!("[Image #{id}: {}]", input.name),
+            Self::StoredImage { id, name, .. } => format!("[Image #{id}: {name}]"),
         }
     }
 }
@@ -51,6 +60,60 @@ impl Draft {
         };
         draft.paste(description);
         draft
+    }
+
+    pub fn from_saved(
+        description: &str,
+        task_id: i64,
+        references: &[ImageReference],
+    ) -> Result<Self> {
+        let mut draft = Self::new("");
+        let markdown = references
+            .iter()
+            .map(|image| image.markdown(task_id))
+            .collect::<Result<Vec<_>>>()?;
+        let legacy = references
+            .iter()
+            .map(|image| format!("[Image: {}]", image.name))
+            .collect::<Vec<_>>();
+        let mut used_legacy = vec![false; references.len()];
+        let mut remaining = description;
+        while !remaining.is_empty() {
+            let mut found: Option<(usize, usize, bool)> = None;
+            for index in 0..references.len() {
+                for (token, is_legacy) in [(&markdown[index], false), (&legacy[index], true)] {
+                    if is_legacy && used_legacy[index] {
+                        continue;
+                    }
+                    if let Some(position) = remaining.find(token) {
+                        if found.is_none_or(|(best, _, _)| position < best) {
+                            found = Some((position, index, is_legacy));
+                        }
+                    }
+                }
+            }
+            let Some((position, index, is_legacy)) = found else {
+                draft.paste(remaining);
+                break;
+            };
+            draft.paste(&remaining[..position]);
+            let original = if is_legacy {
+                used_legacy[index] = true;
+                &legacy[index]
+            } else {
+                &markdown[index]
+            };
+            draft.atoms.push(Atom::StoredImage {
+                id: draft.next_image,
+                name: references[index].name.clone(),
+                original: original.clone(),
+                markdown: markdown[index].clone(),
+            });
+            draft.next_image += 1;
+            draft.cursor += 1;
+            remaining = &remaining[position + original.len()..];
+        }
+        Ok(draft)
     }
     pub fn insert(&mut self, text: &str) {
         for grapheme in text.graphemes(true) {
@@ -121,7 +184,9 @@ impl Draft {
                     self.backspace();
                     removed_word = true;
                 }
-                Atom::Paste { .. } | Atom::Image { .. } if !removed_word => {
+                Atom::Paste { .. } | Atom::Image { .. } | Atom::StoredImage { .. }
+                    if !removed_word =>
+                {
                     self.backspace();
                     break;
                 }
@@ -193,32 +258,39 @@ impl Draft {
     pub fn image_mask(&self) -> Vec<bool> {
         self.atoms
             .iter()
-            .map(|atom| matches!(atom, Atom::Image { .. }))
+            .map(|atom| matches!(atom, Atom::Image { .. } | Atom::StoredImage { .. }))
             .collect()
     }
     pub fn is_dirty_against(&self, baseline: &str) -> bool {
-        let contents = self.contents();
+        let contents = self.contents(false);
         contents.description != baseline || !contents.images.is_empty()
     }
-    fn contents(&self) -> Composition {
+    fn contents(&self, normalize_legacy: bool) -> Composition {
         let mut text = String::new();
         let mut images = Vec::new();
+        let mut image_spans = Vec::new();
         for atom in &self.atoms {
             match atom {
                 Atom::Text(value) | Atom::Paste { text: value, .. } => text.push_str(value),
                 Atom::Image { input, .. } => {
+                    let start = text.len();
                     text.push_str(&format!("[Image: {}]", input.name));
+                    image_spans.push(start..text.len());
                     images.push(input.clone());
                 }
+                Atom::StoredImage {
+                    original, markdown, ..
+                } => text.push_str(if normalize_legacy { markdown } else { original }),
             }
         }
         Composition {
             description: text,
             images,
+            image_spans,
         }
     }
     pub fn finish(&self) -> Result<Composition> {
-        let contents = self.contents();
+        let contents = self.contents(true);
         for image in &contents.images {
             image.media_type()?;
         }
