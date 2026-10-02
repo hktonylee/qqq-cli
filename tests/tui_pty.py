@@ -96,7 +96,8 @@ with tempfile.TemporaryDirectory(prefix="qqq-tui-test-") as folder:
         send(b"\x1b[200~" + text.encode() + b"\x1b[201~")
 
     try:
-        read_until(b"Ctrl-W word" if scenario == "ctrl_w" else b"Ctrl-S")
+        read_until(b"Ctrl-S")
+        assert b"Ctrl-W word" not in screen, "Ctrl-W appeared in editor hint"
         assert b"Whole buffer =" not in screen, "Removed editor hint reappeared"
         if color:
             assert b"\x1b[48;5;236m" in screen, "Editor grey background missing"
