@@ -69,4 +69,4 @@ ensure!(expected.remove(&relative), "Unexpected or duplicate archive entry");
 
 - [x] Replace stop-writers copy guidance with backup/restore examples, format, no-overwrite and empty-location behavior. Run focused tests and commit.
 - [x] Run `cargo test --locked --quiet`, `cargo fmt --all -- --check`, `cargo clippy --locked --all-targets -- -D warnings`, `git diff --check`; read-only review found Windows path and directory-sync issues, now fixed and reverified.
-- [ ] Rebase on local master, fast-forward, rerun integrated checks, install CLI, `qqq --json complete 67`, mark plan complete, remove owned worktree/branch, call `qqq --json next --wait --local` once.
+- [x] Rebase on local master, fast-forward, rerun integrated checks, install CLI, `qqq --json complete 67`, mark plan complete, remove owned worktree/branch, call `qqq --json next --wait --local` once.
