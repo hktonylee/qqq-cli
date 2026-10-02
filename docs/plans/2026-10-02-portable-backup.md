@@ -14,9 +14,9 @@
 
 **Files:** `Cargo.toml`, `Cargo.lock`, `src/snapshot/mod.rs`, `src/snapshot/format.rs`, `tests/snapshot.rs`.
 
-- [ ] Add `tar = "0.4"` and `sha2 = "0.10"` with Cargo, record lockfile. Define versioned manifest with DB size/hash and image `{path,bytes,sha256}` rows. Use `serde::{Serialize, Deserialize}` with `#[serde(deny_unknown_fields)]`.
-- [ ] Write tests for accepted paths `images/7/3.png`, rejected absolute/`..`/noncanonical IDs/extensions, duplicate image entries, unsupported manifest version. Run `cargo test --locked --test snapshot`; expect missing commands/module or format validation failures.
-- [ ] Implement exact archive path grammar and hash helper. Require safe relative path components, positive canonical decimal IDs, known extension, unique image paths. Use streaming digest:
+- [x] Add `tar = "0.4"` and `sha2 = "0.10"` with Cargo, record lockfile. Define versioned manifest with DB size/hash and image `{path,bytes,sha256}` rows. Use `serde::{Serialize, Deserialize}` with `#[serde(deny_unknown_fields)]`.
+- [x] Write tests for accepted paths `images/7/3.png`, rejected absolute/`..`/noncanonical IDs/extensions, duplicate image entries, unsupported manifest version. Run `cargo test --locked --test snapshot`; expect missing commands/module or format validation failures.
+- [x] Implement exact archive path grammar and hash helper. Require safe relative path components, positive canonical decimal IDs, known extension, unique image paths. Use streaming digest:
 
 ```rust
 let mut hash = sha2::Sha256::new();
