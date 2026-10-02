@@ -106,6 +106,21 @@ fn pasteboard_fence_round_trips_crlf_trailing_newline_and_nested_ticks() {
 }
 
 #[test]
+fn text_inserted_after_restored_fence_keeps_closing_delimiter_valid() {
+    let saved = format!("Prefix \n```pasteboard\n{}\n```", "x".repeat(1001));
+    let mut draft = Draft::from_saved(&saved, 1, &[]).unwrap();
+    draft.insert(" suffix");
+    let updated = draft.finish().unwrap().description;
+    assert_eq!(updated, format!("{saved}\n suffix"));
+    let restored = Draft::from_saved(&updated, 1, &[]).unwrap();
+    assert!(
+        restored
+            .fragments()
+            .contains(&"[Pasted Content 1001 chars]".to_owned())
+    );
+}
+
+#[test]
 fn incomplete_or_wrong_language_fence_stays_literal_text() {
     for text in [
         "```pasteboard\nshort",

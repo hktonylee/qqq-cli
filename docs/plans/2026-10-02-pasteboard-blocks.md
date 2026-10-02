@@ -58,10 +58,10 @@ let layout = render::Layout::with_paste(
 
 **Files:** `tests/tui_pty.py`, `tests/tui_history_pty.py`, `tests/tui_dashboard_pty.py`, `tests/tui.rs`, `README.md`
 
-- [ ] Add PTY regression: paste >1000 chars, observe `[Pasted Content 1001 chars]` and gold style, save, verify fenced DB description, reload task through navigation and `qqq edit`, verify atomic item, delete/save and inspect result. Add payload containing a triple-backtick line and a `NO_COLOR`/`TERM=dumb` case. Update old raw-paste expectations.
-- [ ] Run `cargo test --locked --test tui`; inspect each new PTY assertion. Fix any failure from feature behavior; passing tests provide live-path coverage for Tasks 1–2.
-- [ ] Fix PTY integration or draft edge cases exposed by red tests. Document fence format, reload/edit behavior, and color in `README.md`.
-- [ ] Run `cargo test --locked --test tui --test tui_model --test tui_db`; require pass. Commit `[Fix] Restore Pasteboard Blocks In Interactive Editors`.
+- [x] Add PTY regression: paste >1000 chars, observe `[Pasted Content 1001 chars]` and gold style, save, verify fenced DB description, reload task through navigation and `qqq edit`, verify atomic item, delete/save and inspect result. Add payload containing a triple-backtick line and a `NO_COLOR`/`TERM=dumb` case. Update old raw-paste expectations.
+- [x] Run `cargo test --locked --test tui`; inspect each new PTY assertion. Fix any failure from feature behavior; passing tests provide live-path coverage for Tasks 1–2.
+- [x] Fix PTY integration or draft edge cases exposed by red tests. Document fence format, reload/edit behavior, and color in `README.md`.
+- [x] Run `cargo test --locked --test tui --test tui_model --test tui_db`; require pass. Commit `[Fix] Restore Pasteboard Blocks In Interactive Editors`.
 
 ### Task 4: Verification, review, integration
 

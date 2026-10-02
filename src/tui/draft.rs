@@ -415,7 +415,19 @@ impl Draft {
                         }
                     }
                     PasteSource::SeededPlain => text.push_str(value),
-                    PasteSource::StoredFence(original) => text.push_str(original),
+                    PasteSource::StoredFence(original) => {
+                        if !text.is_empty() && !text.ends_with('\n') {
+                            text.push('\n');
+                        }
+                        text.push_str(original);
+                        if self
+                            .atoms
+                            .get(index + 1)
+                            .is_some_and(|next| !next.starts_with_line_break())
+                        {
+                            text.push('\n');
+                        }
+                    }
                 },
                 Atom::Image { input, .. } => {
                     let start = text.len();

@@ -86,6 +86,20 @@ draft, Ctrl-C exits, Ctrl-W deletes previous word on same line, Ctrl-V pastes
 clipboard text or image. Option+Left/Right moves cursor by word. Clipboard paste
 needs desktop clipboard support.
 
+Built-in editors collapse pastes over 1,000 characters into one gold
+`[Pasted Content N chars]` item. Saving stores full payload in Markdown:
+
+````markdown
+```pasteboard
+pasted text
+```
+````
+
+Shift-Up/Down and `qqq edit` restore complete fences as one editable item;
+Backspace or Delete removes entire item. Payload containing backticks gets a
+longer fence. `NO_COLOR=1` and `TERM=dumb` keep label plain. Existing task text
+outside `pasteboard` fences remains unchanged on save.
+
 In built-in `qqq add`, Ctrl-S creates or updates task, clears editor, then waits
 for next task. Saves commit immediately; exit keeps prior saves. Shift+Up loads
 newest task, then older tasks; Shift+Down moves toward newer tasks, then blank

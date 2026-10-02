@@ -45,6 +45,9 @@ with tempfile.TemporaryDirectory(prefix="qqq-tui-test-") as folder:
     if scenario == "edit_image":
         cli("add", "Before ![test image.png](.qqq/images/1/1.png)", "--image", str(image))
         args = ["edit", "-1"]
+    if scenario == "edit_pasteboard":
+        cli("add", "Prefix \n```pasteboard\n" + "x" * 1001 + "\n```")
+        args = ["edit", "-1"]
     if scenario == "continuous_flags":
         cli("add", "Parent")
         args.extend(["--parent", "1", "--image", str(image)])
@@ -132,6 +135,10 @@ with tempfile.TemporaryDirectory(prefix="qqq-tui-test-") as folder:
             read_until(b"[Image #1: test image.png]")
             paste("'" + str(image) + "'")
             read_until(b"[Image #2: test image.png]")
+        elif scenario == "edit_pasteboard":
+            read_until(b"[Pasted Content 1001 chars]")
+            assert b"\x1b[38;5;222m" in screen, "Paste accent missing on reload"
+            send(b" suffix")
         elif scenario == "escape_empty":
             pass
         elif scenario == "escape_deleted":
@@ -199,6 +206,8 @@ with tempfile.TemporaryDirectory(prefix="qqq-tui-test-") as folder:
             # readiness event; neither may need a later keypress to finish.
             send(b"Title\r\r\x1b[200~" + ("\u754c" * 1001).encode() + b"\x1b[201~")
             read_until(b"1001 chars")
+            if color:
+                assert b"\x1b[38;5;222m" in screen, "Paste accent missing"
             send(b"\r")
             paste("'" + str(image) + "'")
             read_until(b"[Image #1:")
@@ -284,7 +293,7 @@ with tempfile.TemporaryDirectory(prefix="qqq-tui-test-") as folder:
                 task = task[0]
             if scenario in ("save", "escape_keep"):
                 assert "title" not in task
-                assert task["description"] == "Title\n\n" + "\u754c" * 1001 + "\n![test image.png](.qqq/images/1/1.png)"
+                assert task["description"] == "Title\n\n```pasteboard\n" + "\u754c" * 1001 + "\n```\n![test image.png](.qqq/images/1/1.png)"
                 attachments = cli("show", "1")["images"]
                 assert [item["name"] for item in attachments] == ["test image.png", "flag image.png"]
                 exported = Path(folder) / "export.png"
@@ -306,6 +315,8 @@ with tempfile.TemporaryDirectory(prefix="qqq-tui-test-") as folder:
                     "![test image.png](.qqq/images/1/2.png)"
                 )
                 assert [item["id"] for item in cli("show", "1")["images"]] == [1, 2]
+            elif scenario == "edit_pasteboard":
+                assert task["description"] == "Prefix \n```pasteboard\n" + "x" * 1001 + "\n```\n suffix"
             elif scenario not in ("continuous", "continuous_flags", "continuous_discard"):
                 assert task["id"] == 1
                 assert task["description"] == "Original\n\nDetails amended"

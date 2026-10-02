@@ -87,6 +87,12 @@ fn tui_dashboard_keeps_draft_after_failed_save() {
 }
 
 #[test]
+fn tui_dashboard_pasteboard_round_trip_and_plain_mode() {
+    dashboard_scenario("pasteboard");
+    dashboard_scenario("pasteboard_no_color");
+}
+
+#[test]
 fn tui_add_history_saves_selected_task() {
     history_scenario("history_save");
 }
@@ -114,6 +120,16 @@ fn tui_add_history_preserves_existing_and_adds_flagged_images() {
 #[test]
 fn tui_pasted_image_reloads_as_editable_atom() {
     history_scenario("markdown_image_reload");
+}
+
+#[test]
+fn tui_pasteboard_reloads_as_colored_atomic_item() {
+    history_scenario("pasteboard_reload");
+}
+
+#[test]
+fn tui_edit_command_reloads_pasteboard_and_keeps_fence_valid() {
+    scenario("edit_pasteboard");
 }
 
 #[test]

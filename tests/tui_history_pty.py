@@ -22,6 +22,7 @@ DOWN = b"\x1b[1;2B"
 
 with tempfile.TemporaryDirectory(prefix="qqq-history-test-") as folder:
     env = dict(os.environ, HOME=folder, TERM="xterm-256color")
+    env.pop("NO_COLOR", None)
     for key in ("EDITOR", "QQQ_SESSION", "HERDR_ENV", "HERDR_PANE_ID", "CODEX_THREAD_ID", "CODEX_SESSION_ID"):
         env.pop(key, None)
 
@@ -65,7 +66,7 @@ with tempfile.TemporaryDirectory(prefix="qqq-history-test-") as folder:
         image = Path(folder) / "old.png"
         image.write_bytes(b"\x89PNG\r\n\x1a\nbytes")
         cli("add", "Prefix [Image: old.png]", "--image", str(image))
-    elif scenario not in ("empty_boundary", "markdown_image_reload"):
+    elif scenario not in ("empty_boundary", "markdown_image_reload", "pasteboard_reload"):
         cli("add", "First")
         if scenario == "dirty_loaded_keep":
             cli("add", "Second")
@@ -219,6 +220,21 @@ with tempfile.TemporaryDirectory(prefix="qqq-history-test-") as folder:
             saved = finish(1)[-1]
             assert saved["description"] == "Prefix "
             assert [item["name"] for item in cli("show", "1")["images"]] == ["pasted.png"]
+        elif scenario == "pasteboard_reload":
+            payload = "x" * 1001 + "\n```\n"
+            send(b"Prefix ")
+            send(b"\x1b[200~" + payload.encode() + b"\x1b[201~")
+            read_until(f"[Pasted Content {len(payload)} chars]".encode())
+            assert b"\x1b[38;5;222m" in screen, "Paste accent missing"
+            press(b"\x13", b"Saved #1. New task")
+            stored = "Prefix \n````pasteboard\n" + payload + "\n````"
+            assert cli("show", "1")["task"]["description"] == stored
+            press(UP, b"task #1")
+            read_until(f"[Pasted Content {len(payload)} chars]".encode())
+            assert b"\x1b[38;5;222m" in screen, "Reloaded paste accent missing"
+            send(b"\x1b[C" * (len("Prefix \n") + 1) + b"\x17")
+            saved = finish(1)[-1]
+            assert saved["description"] == "Prefix \n", repr(saved["description"])
         elif scenario == "legacy_image_reload":
             press(UP, b"task #1")
             read_until(b"[Image #1: old.png]")

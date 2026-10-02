@@ -83,7 +83,7 @@ binary, scenario = sys.argv[1:]
 with tempfile.TemporaryDirectory(prefix="qqq-dashboard-test-") as folder:
     env = dict(os.environ, HOME=folder, TERM="xterm-256color")
     env.pop("NO_COLOR", None)
-    if scenario == "no_color":
+    if scenario in ("no_color", "pasteboard_no_color"):
         env["NO_COLOR"] = "1"
     elif scenario == "dumb":
         env["TERM"] = "dumb"
@@ -165,7 +165,7 @@ with tempfile.TemporaryDirectory(prefix="qqq-dashboard-test-") as folder:
             clear_capture()
             send(b"\x1b[1;2A")
             read_until(b"48;5;81")
-        elif scenario in ("no_color", "dumb"):
+        elif scenario in ("no_color", "dumb", "pasteboard_no_color"):
             assert b"\x1b[38;" not in screen, screen[-2000:]
             assert b"\x1b[48;" not in screen, screen[-2000:]
         if scenario != "scroll":
@@ -197,6 +197,32 @@ with tempfile.TemporaryDirectory(prefix="qqq-dashboard-test-") as folder:
             send(b"\x1b[1;2B")
             read_until(b"qqq task editor - task #2")
             assert "> 2" in visible.text(), visible.text()
+        elif scenario in ("pasteboard", "pasteboard_no_color"):
+            payload = "x" * 1001
+            clear_capture()
+            send(b"Prefix \x1b[200~" + payload.encode() + b"\x1b[201~")
+            read_until(b"[Pasted Content 1001 chars]")
+            if scenario == "pasteboard":
+                assert b"38;5;222" in screen, "Paste accent missing"
+            else:
+                assert b"\x1b[38;" not in screen, screen[-2000:]
+            clear_capture()
+            send(b"\x13")
+            read_until(b"Saved #3. New task")
+            assert cli("show", "3")["task"]["description"] == (
+                "Prefix \n```pasteboard\n" + payload + "\n```"
+            )
+            clear_capture()
+            send(b"\x1b[1;2A")
+            read_until(b"task #3")
+            read_until(b"[Pasted Content 1001 chars]")
+            if scenario == "pasteboard":
+                assert b"38;5;222" in screen, "Reloaded paste accent missing"
+            else:
+                assert b"\x1b[38;" not in screen, screen[-2000:]
+            send(b"\x1b[C" * (len("Prefix \n") + 1) + b"\x17\x13")
+            read_until(b"Saved #3. New task")
+            assert cli("show", "3")["task"]["description"] == "Prefix \n"
         elif scenario == "dirty":
             send(b"Draft")
             clear_capture()
