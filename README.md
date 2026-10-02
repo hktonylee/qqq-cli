@@ -390,12 +390,25 @@ before retry or forced release.
 
 ## Data
 
-Keep `.qqq/` out of Git. Stop qqq writers, then copy entire directory for a
-consistent backup. SQLite-only backups omit image bytes:
+Keep `.qqq/` out of Git. Create portable snapshot while other local qqq
+writers run:
 
 ```sh
-cp -R .qqq ../qqq-backup
+qqq backup ../project-snapshot.tar
+mkdir ../restored-project
+cd ../restored-project
+qqq restore ../project-snapshot.tar
+qqq list
 ```
+
+Backup contains consistent SQLite data plus every stored image. Tar archive
+starts with `manifest.json`, then `qqq.db`, then `images/<task-id>/<image-id>.<ext>`.
+Manifest records SHA-256 hashes and sizes; restore checks those, image rows,
+SQLite integrity, and foreign keys before installing `.qqq`. Backup refuses to
+overwrite destination. Restore works only from new project directory or one
+with empty `.qqq`; existing data and nested projects are rejected. Invalid
+archives leave project unchanged. Relative snapshot paths resolve from current
+directory.
 
 To move old root-level `qqq.db`, stop DB writers. Before `qqq init`, check that
 `.qqq/qqq.db` does not exist. From project root:

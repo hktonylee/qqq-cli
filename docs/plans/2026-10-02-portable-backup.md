@@ -52,8 +52,8 @@ validate_database(staged_db)?;
 
 **Files:** `src/snapshot/restore.rs`, `src/snapshot/format.rs`, `src/main.rs`, `src/output.rs`, `tests/snapshot.rs`.
 
-- [ ] Write failing tests: restore into fresh and existing-empty `.qqq`; reject nonempty `.qqq`, ancestor project, malformed tar paths/link/duplicate/extra entry, corrupt manifest/DB, missing/wrong-size/wrong-hash image; verify no target mutation on every failure. Run focused tests.
-- [ ] Add `Restore { source: PathBuf }` command handled before `Db::open`. Check source regular file, destination/ancestor rules, and staging path. Require manifest first and bounded length; for every tar entry, reject non-regular type and path outside exact manifest set; never call `unpack`. Extract to private stage, verify hash/size, DB schema/integrity/FK, and exact DB image metadata; rename staged `.qqq` into place, preserving existing empty target on failure. Representative guard:
+- [x] Write failing tests: restore into fresh and existing-empty `.qqq`; reject nonempty `.qqq`, ancestor project, malformed tar paths/link/duplicate/extra entry, corrupt manifest/DB, missing/wrong-size/wrong-hash image; verify no target mutation on every failure. Run focused tests.
+- [x] Add `Restore { source: PathBuf }` command handled before `Db::open`. Check source regular file, destination/ancestor rules, and staging path. Require manifest first and bounded length; for every tar entry, reject non-regular type and path outside exact manifest set; never call `unpack`. Extract to private stage, verify hash/size, DB schema/integrity/FK, and exact DB image metadata; rename staged `.qqq` into place, preserving existing empty target on failure. Representative guard:
 
 ```rust
 ensure!(entry.header().entry_type().is_file(), "Archive entry is not a regular file");
@@ -61,12 +61,12 @@ let relative = validate_archive_path(entry.path()?.as_ref())?;
 ensure!(expected.remove(&relative), "Unexpected or duplicate archive entry");
 ```
 
-- [ ] Run focused tests and `qqq backup --help` / `qqq restore --help`; commit.
+- [x] Run focused tests and `qqq backup --help` / `qqq restore --help`; commit.
 
 ### Task 4: Docs, review, integration
 
 **Files:** `README.md`, this plan.
 
-- [ ] Replace stop-writers copy guidance with backup/restore examples, format, no-overwrite and empty-location behavior. Run focused tests and commit.
+- [x] Replace stop-writers copy guidance with backup/restore examples, format, no-overwrite and empty-location behavior. Run focused tests and commit.
 - [ ] Run `cargo test --locked --quiet`, `cargo fmt --all -- --check`, `cargo clippy --locked --all-targets -- -D warnings`, `git diff --check`; request read-only review and fix Critical/Important findings.
 - [ ] Rebase on local master, fast-forward, rerun integrated checks, install CLI, `qqq --json complete 67`, mark plan complete, remove owned worktree/branch, call `qqq --json next --wait --local` once.

@@ -197,6 +197,8 @@ enum Commands {
     },
     /// Write consistent project snapshot with database and attachments.
     Backup { destination: PathBuf },
+    /// Restore snapshot into new or empty project location.
+    Restore { source: PathBuf },
     /// Append message; session, when supplied, is recorded as author.
     Message { id: i64, body: String },
     /// Link tasks to exact Herdr agent sessions, find their live panes.
@@ -263,6 +265,9 @@ fn execute(cli: Cli, display_limit: Option<i64>) -> Result<Value> {
         orchestrator_session: cli.orchestrator_session.clone(),
     };
     overrides.validate()?;
+    if let Commands::Restore { source } = &cli.command {
+        return snapshot::restore::run(source);
+    }
     let session_input = cli.session.as_deref().or(cli.harness_session.as_deref());
     let (mut db, path) = db::Db::open(matches!(cli.command, Commands::Init))?;
     let project_dir = path
@@ -492,6 +497,7 @@ fn execute(cli: Cli, display_limit: Option<i64>) -> Result<Value> {
             json!(db.reopen(id, session_input.unwrap_or("cli"))?)
         }
         Commands::Backup { destination } => snapshot::backup::run(&mut db, &path, &destination)?,
+        Commands::Restore { .. } => unreachable!("restore handled before database open"),
         Commands::Message { id, body } => db.message(id, &body, session_input)?,
         Commands::Herdr { command } => match command {
             HerdrCommand::Link {

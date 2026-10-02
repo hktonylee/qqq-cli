@@ -21,6 +21,7 @@ pub enum Format {
     Link,
     Pane,
     Backup,
+    Restore,
 }
 
 impl From<&Commands> for Format {
@@ -40,6 +41,7 @@ impl From<&Commands> for Format {
             },
             Commands::Add { .. } => Self::AddedTask,
             Commands::Backup { .. } => Self::Backup,
+            Commands::Restore { .. } => Self::Restore,
             Commands::Tui { .. } => Self::Task,
             Commands::Edit { .. }
             | Commands::Archive { .. }
@@ -365,6 +367,13 @@ pub fn render(format: Format, value: &Value, color: bool, columns: Option<usize>
         Format::Database => format!("Database: {}", field(value, "database")),
         Format::Backup => format!(
             "Backup: {} ({} tasks, {} images, {} bytes)",
+            field(value, "destination"),
+            field(value, "tasks"),
+            field(value, "images"),
+            field(value, "bytes")
+        ),
+        Format::Restore => format!(
+            "Restored: {} ({} tasks, {} images, {} bytes)",
             field(value, "destination"),
             field(value, "tasks"),
             field(value, "images"),

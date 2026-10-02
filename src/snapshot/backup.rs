@@ -71,8 +71,8 @@ pub fn run(db: &mut Db, db_path: &Path, destination: &Path) -> Result<Value> {
         archive.finish()?;
     }
     temp.as_file().sync_all()?;
-    let file = temp
-        .persist_noclobber(&destination)
+    let bytes = temp.as_file().metadata()?.len();
+    temp.persist_noclobber(&destination)
         .map_err(|error| error.error)
         .with_context(|| {
             format!(
@@ -80,12 +80,11 @@ pub fn run(db: &mut Db, db_path: &Path, destination: &Path) -> Result<Value> {
                 destination.display()
             )
         })?;
-    sync_directory(&parent)?;
     Ok(json!({
         "destination": destination,
         "tasks": tasks,
         "images": manifest.images.len(),
-        "bytes": file.metadata()?.len(),
+        "bytes": bytes,
     }))
 }
 
@@ -173,16 +172,5 @@ fn append_bytes(archive: &mut Builder<&mut fs::File>, name: &str, data: &[u8]) -
     header.set_mode(0o600);
     header.set_cksum();
     archive.append_data(&mut header, name, Cursor::new(data))?;
-    Ok(())
-}
-
-#[cfg(unix)]
-fn sync_directory(path: &Path) -> Result<()> {
-    fs::File::open(path)?.sync_all()?;
-    Ok(())
-}
-
-#[cfg(not(unix))]
-fn sync_directory(_path: &Path) -> Result<()> {
     Ok(())
 }
