@@ -68,11 +68,11 @@ Additional scenarios: Shift+Down from newest returns new draft and creates task;
 
 ```sql
 SELECT id,description FROM tasks
-WHERE (?1 IS NULL OR id < ?1)
+WHERE id < ?1
 ORDER BY id DESC LIMIT 1
 ```
 
-Newer query uses `WHERE id > ?1 ORDER BY id ASC LIMIT 1`. `OptionalExtension` turns no row into `None`.
+The new draft uses `ORDER BY id DESC LIMIT 1` without a bound. Newer query uses `WHERE id > ?1 ORDER BY id ASC LIMIT 1`. `OptionalExtension` turns no row into `None`.
 
 - [x] Add `tui::Outcome { composition: Composition, target_id: Option<i64> }`; change `editor::compose(description, external, navigation: Option<&Db>) -> Result<Outcome>`. External editor returns target `None`; `qqq edit` passes `None`. Built-in `qqq add` passes `Some(&db)` and calls `db.save_composition(outcome.target_id, parent, &outcome.composition)`.
 - [x] In TUI, retain `target_id`, loaded `baseline`, pending destination, and confirmation mode. On Shift+Up/Down with navigation enabled, query destination first. No destination means footer boundary message and no prompt. If dirty, show `Discard changes and switch? (y/N)`; Y loads destination, N/Enter/Esc keeps draft, Ctrl-C cancels. Loading sets `Draft::new(description)`, target ID, baseline, cursor, and scroll top. Ctrl-S returns `Outcome` with current target ID. DB query errors show footer and keep draft.
@@ -85,7 +85,7 @@ Newer query uses `WHERE id > ?1 ORDER BY id ASC LIMIT 1`. `OptionalExtension` tu
 
 - [x] Document Shift+Up/Down order, new-draft return, confirmation, and save semantics in README.
 - [x] Run `cargo fmt --check`, `cargo clippy --locked --all-targets -- -D warnings`, `cargo test --locked --quiet` using task target dir; expect pass.
-- [ ] Commit code, tests, docs with `[Feat] Navigate Tasks In Add Editor`.
-- [ ] Request read-only code review; address verified issues and rerun relevant checks.
+- [x] Commit code, tests, docs with `[Feat] Navigate Tasks In Add Editor`.
+- [x] Request read-only code review; address verified issues and rerun relevant checks.
 - [ ] Rebase task branch onto current master, fast-forward master, run full tests on integrated tree with isolated target dir, remove task worktree, delete merged branch.
 - [ ] Complete queue task 46 with `qqq --json complete 46`; verify `qqq show 46 --json` reports completed.

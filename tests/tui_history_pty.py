@@ -45,6 +45,14 @@ with tempfile.TemporaryDirectory(prefix="qqq-history-test-") as folder:
             cli("add", description)
         with sqlite3.connect(Path(folder) / ".qqq/qqq.db") as db:
             db.execute("DELETE FROM tasks WHERE id=2")
+    elif scenario == "long_task_starts_at_top":
+        cli("add", "Top marker\n" + "\n".join(f"Line {index}" for index in range(25)) + "\nBottom marker")
+    elif scenario == "existing_and_flagged_images":
+        existing = Path(folder) / "existing.png"
+        existing.write_bytes(b"\x89PNG\r\n\x1a\nexisting")
+        flagged = Path(folder) / "flagged.png"
+        flagged.write_bytes(b"\x89PNG\r\n\x1a\nflagged")
+        cli("add", "First", "--image", str(existing))
     elif scenario != "empty_boundary":
         cli("add", "First")
         if scenario == "dirty_loaded_keep":
@@ -57,7 +65,10 @@ with tempfile.TemporaryDirectory(prefix="qqq-history-test-") as folder:
     os.setsid()
     fcntl.ioctl(slave, termios.TIOCSCTTY, 0)
     signal.signal(signal.SIGHUP, signal.SIG_IGN)
-    child = subprocess.Popen([binary, "--json", "add"], cwd=folder, env=env,
+    args = [binary, "--json", "add"]
+    if scenario == "existing_and_flagged_images":
+        args.extend(["--image", str(flagged)])
+    child = subprocess.Popen(args, cwd=folder, env=env,
                              stdin=slave, stderr=slave, stdout=subprocess.PIPE)
     screen = bytearray()
 
@@ -91,7 +102,7 @@ with tempfile.TemporaryDirectory(prefix="qqq-history-test-") as folder:
         send(data)
         read_until(needle)
 
-    def finish():
+    def finish(expect_error=False):
         send(b"\x13")
         deadline = time.monotonic() + 5
         pending_stdout = bytearray()
@@ -107,10 +118,14 @@ with tempfile.TemporaryDirectory(prefix="qqq-history-test-") as folder:
                 else:
                     pending_stdout.extend(os.read(child.stdout.fileno(), 65536))
         stdout, _ = child.communicate(timeout=5)
-        assert child.returncode == 0, screen[-2000:]
+        output = bytes(pending_stdout) + stdout
         assert before[3] == termios.tcgetattr(slave)[3], "Terminal flags not restored"
         assert b"\x1b[?1049l" in screen, "Alternate screen not restored"
-        return json.loads(bytes(pending_stdout) + stdout)
+        if expect_error:
+            assert child.returncode == 1 and output == b"", screen[-2000:]
+            return None
+        assert child.returncode == 0, screen[-2000:]
+        return json.loads(output)
 
     try:
         read_until(b"Ctrl-S")
@@ -118,7 +133,7 @@ with tempfile.TemporaryDirectory(prefix="qqq-history-test-") as folder:
             press(UP, b"task #3")
             press(UP, b"task #2")
             press(DOWN, b"task #3")
-            send(b" updated")
+            send(b"\x05 updated")
             saved = finish()
             assert saved["id"] == 3 and saved["description"] == "Third updated"
             assert saved["parent_id"] == 1
@@ -129,10 +144,31 @@ with tempfile.TemporaryDirectory(prefix="qqq-history-test-") as folder:
             press(UP, b"task #3")
             press(UP, b"task #1")
             press(DOWN, b"task #3")
-            send(b"!")
+            send(b"\x05!")
             saved = finish()
             assert saved["id"] == 3 and saved["description"] == "Third!"
             assert [task["id"] for task in cli("list")] == [1, 3]
+        elif scenario == "long_task_starts_at_top":
+            press(UP, b"task #1")
+            read_until(b"Shift-Up/Down tasks")
+            assert b"Top marker" in screen, screen[-2000:]
+            assert b"Bottom marker" not in screen, screen[-2000:]
+            saved = finish()
+            assert saved["id"] == 1
+        elif scenario == "existing_and_flagged_images":
+            press(UP, b"task #1")
+            send(b"\x05 edited")
+            saved = finish()
+            assert saved["id"] == 1 and saved["description"] == "First edited"
+            assert [image["name"] for image in cli("show", "1")["images"]] == ["existing.png", "flagged.png"]
+        elif scenario == "selected_deleted":
+            press(UP, b"task #1")
+            with sqlite3.connect(Path(folder) / ".qqq/qqq.db") as db:
+                db.execute("DELETE FROM tasks WHERE id=1")
+            send(b"\x05!")
+            finish(expect_error=True)
+            assert b"Task 1 not found" in screen
+            assert cli("list") == []
         elif scenario == "return_new":
             press(UP, b"task #1")
             press(DOWN, b"new task")
@@ -151,7 +187,7 @@ with tempfile.TemporaryDirectory(prefix="qqq-history-test-") as folder:
             send(b"Draft")
             press(UP, b"Discard changes and switch? (y/N)")
             press(b"y", b"task #1")
-            send(b" edited")
+            send(b"\x05 edited")
             saved = finish()
             assert saved["id"] == 1 and saved["description"] == "First edited"
             assert len(cli("list")) == 1
@@ -162,13 +198,13 @@ with tempfile.TemporaryDirectory(prefix="qqq-history-test-") as folder:
             read_until(b"[Image #1:")
             press(UP, b"Discard changes and switch? (y/N)")
             press(b"y", b"task #1")
-            send(b" edited")
+            send(b"\x05 edited")
             saved = finish()
             assert saved["id"] == 1 and saved["description"] == "First edited"
             assert cli("show", "1")["images"] == []
         elif scenario == "dirty_loaded_keep":
             press(UP, b"task #2")
-            send(b"!")
+            send(b"\x05!")
             press(UP, b"Discard changes and switch? (y/N)")
             press(b"\x1b", b"task #2")
             saved = finish()
@@ -176,7 +212,7 @@ with tempfile.TemporaryDirectory(prefix="qqq-history-test-") as folder:
             assert cli("show", "1")["task"]["description"] == "First"
         elif scenario == "oldest_boundary":
             press(UP, b"task #1")
-            send(b"!")
+            send(b"\x05!")
             press(UP, b"No older task")
             assert b"Discard changes and switch?" not in screen
             saved = finish()

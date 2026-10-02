@@ -374,15 +374,25 @@ impl Db {
         current: Option<i64>,
         older: bool,
     ) -> Result<Option<(i64, String)>> {
-        let sql = if older {
-            "SELECT id,description FROM tasks WHERE (?1 IS NULL OR id < ?1) ORDER BY id DESC LIMIT 1"
-        } else {
-            "SELECT id,description FROM tasks WHERE id > ?1 ORDER BY id ASC LIMIT 1"
+        let found = match (older, current) {
+            (true, None) => self.conn.query_row(
+                "SELECT id,description FROM tasks ORDER BY id DESC LIMIT 1",
+                [],
+                |row| Ok((row.get(0)?, row.get(1)?)),
+            ),
+            (true, Some(id)) => self.conn.query_row(
+                "SELECT id,description FROM tasks WHERE id < ?1 ORDER BY id DESC LIMIT 1",
+                [id],
+                |row| Ok((row.get(0)?, row.get(1)?)),
+            ),
+            (false, Some(id)) => self.conn.query_row(
+                "SELECT id,description FROM tasks WHERE id > ?1 ORDER BY id ASC LIMIT 1",
+                [id],
+                |row| Ok((row.get(0)?, row.get(1)?)),
+            ),
+            (false, None) => return Ok(None),
         };
-        Ok(self
-            .conn
-            .query_row(sql, [current], |row| Ok((row.get(0)?, row.get(1)?)))
-            .optional()?)
+        Ok(found.optional()?)
     }
     pub fn active_identity_for_terminal(
         &self,

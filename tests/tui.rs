@@ -44,6 +44,21 @@ fn tui_add_history_skips_deleted_ids() {
 }
 
 #[test]
+fn tui_add_history_loads_long_task_at_top() {
+    history_scenario("long_task_starts_at_top");
+}
+
+#[test]
+fn tui_add_history_preserves_existing_and_adds_flagged_images() {
+    history_scenario("existing_and_flagged_images");
+}
+
+#[test]
+fn tui_add_history_deleted_selection_does_not_create_task() {
+    history_scenario("selected_deleted");
+}
+
+#[test]
 fn tui_add_history_returns_to_new_draft() {
     history_scenario("return_new");
 }
@@ -84,6 +99,11 @@ fn tui_ctrl_w_deletes_previous_word() {
 #[test]
 fn tui_edit_pins_recent_target_and_preserves_ownership() {
     scenario("edit");
+}
+
+#[test]
+fn tui_edit_shift_arrows_do_not_navigate_tasks() {
+    scenario("edit_shift");
 }
 #[test]
 fn tui_no_color_keeps_plain_editor_and_terminal_restoration() {

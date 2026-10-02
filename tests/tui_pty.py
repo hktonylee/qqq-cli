@@ -35,7 +35,7 @@ with tempfile.TemporaryDirectory(prefix="qqq-tui-test-") as folder:
 
     cli("init")
     args = ["add"]
-    if scenario in ("edit", "escape_edit"):
+    if scenario in ("edit", "escape_edit", "edit_shift"):
         cli("add", "Original\n\nDetails")
         cli("next", "--local", "--session", "worker")
         args = ["edit", "-1"]
@@ -104,7 +104,7 @@ with tempfile.TemporaryDirectory(prefix="qqq-tui-test-") as folder:
             send(b"\x13")
             read_until(b"Task description cannot be empty")
             send(b"Recovered")
-        elif scenario in ("edit", "escape_edit"):
+        elif scenario in ("edit", "escape_edit", "edit_shift"):
             if scenario == "escape_edit":
                 send(b"\x1b")
                 read_until(b"Discard draft? (y/N)")
@@ -114,6 +114,11 @@ with tempfile.TemporaryDirectory(prefix="qqq-tui-test-") as folder:
                 send(b"\x1b")
                 read_until(b"Ctrl-S")
             cli("add", "Created while editing")
+            if scenario == "edit_shift":
+                screen.clear()
+                send(b"\x1b[1;2A\x1b[1;2B\x05")
+                read_until(b"Ctrl-S")
+                assert b"task #2" not in screen and b"new task" not in screen
             paste(" amended")
         elif scenario == "escape_empty":
             pass

@@ -64,6 +64,7 @@ fn load_target(
         }
     }
     *draft = Draft::new(baseline);
+    draft.set_cursor(0);
     *top = 0;
 }
 
