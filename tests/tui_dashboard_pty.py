@@ -486,12 +486,15 @@ with tempfile.TemporaryDirectory(prefix="qqq-dashboard-test-") as folder:
             clear_capture()
             os.kill(child.pid, signal.SIGWINCH)
             read_until(b"qqq tasks")
+            read_until(b"\x1b[?25h\x1b[6;1H")
             send(b"\x07")
             wait_visible(lambda: "c Complete" in visible.text() and
                          "d Parent" in visible.text() and "Esc cancel" in visible.text())
             send(b"p")
             wait_visible(lambda: "Enter -100" in visible.text())
             send(b"5\r")
+            # Narrow footer clips value; wait for committed action before reading DB.
+            wait_visible(lambda: visible.text().splitlines()[-1].startswith("Priority #1:"))
             assert cli("show", "1")["task"]["priority"] == 5
             send(b"\x07p101\r")
             wait_visible(lambda: "Priority must be -100..100" in
@@ -506,6 +509,7 @@ with tempfile.TemporaryDirectory(prefix="qqq-dashboard-test-") as folder:
             send(b"X\x07p-1\r")
             wait_visible(lambda: "Lose draft?" in visible.text())
             send(b"y")
+            wait_visible(lambda: visible.text().splitlines()[-1].startswith("Priority #1:"))
             assert cli("show", "1")["task"]["priority"] == -1
             send(b"\x07a")
             wait_visible(lambda: "Archive task" in visible.text())
