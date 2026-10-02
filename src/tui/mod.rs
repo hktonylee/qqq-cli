@@ -2,6 +2,7 @@ mod clipboard;
 mod dashboard;
 mod details;
 pub mod draft;
+mod handoff;
 mod panel;
 mod render;
 
@@ -473,7 +474,7 @@ fn compose_inner(
         Mode::Continuous { after_save_new, .. } => *after_save_new,
         Mode::Single(_) => AfterSaveNew::default(),
     };
-    let terminal = TerminalGuard::enter(dashboard)?;
+    let mut terminal = TerminalGuard::enter(dashboard)?;
     let mut dashboard_terminal = if dashboard {
         Some(Terminal::new(CrosstermBackend::new(io::stderr()))?)
     } else {
@@ -974,6 +975,32 @@ fn compose_inner(
                     } else {
                         confirmation = Some(pending);
                     }
+                    continue;
+                }
+                if dashboard && control && key.code == KeyCode::Char('h') {
+                    let focus = target_id
+                        .ok_or_else(|| anyhow::anyhow!("Select task to open its Herdr agent"))
+                        .and_then(|id| {
+                            handoff::focus(mode.db().expect("dashboard has database"), id)
+                        });
+                    let result = match focus {
+                        Ok(server) => {
+                            drop(terminal);
+                            let result = handoff::attach(server.as_deref());
+                            terminal = TerminalGuard::enter(dashboard)?;
+                            dashboard_terminal
+                                .as_mut()
+                                .expect("dashboard has terminal")
+                                .clear()?;
+                            result
+                        }
+                        Err(error) => Err(error),
+                    };
+                    message_is_error = result.is_err();
+                    message = result.err().map_or_else(
+                        || "Returned from Herdr".to_owned(),
+                        |error| format!("{error:#}"),
+                    );
                     continue;
                 }
                 if let Some(ui) = action_ui.take() {

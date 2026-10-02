@@ -58,6 +58,30 @@ fn tui_dashboard_actions_popup_keeps_background_and_restores_editor() {
 }
 
 #[test]
+fn tui_dashboard_ctrl_h_opens_selected_herdr_agent_and_preserves_editor() {
+    dashboard_scenario("handoff_success");
+    dashboard_scenario("handoff_terminal");
+    dashboard_scenario("handoff_json");
+    dashboard_scenario("handoff_filter");
+    dashboard_scenario("handoff_scroll");
+}
+
+#[test]
+fn tui_dashboard_ctrl_h_errors_preserve_editor() {
+    for scenario in [
+        "handoff_no_selection",
+        "handoff_missing",
+        "handoff_stale",
+        "handoff_ambiguous",
+        "handoff_focus_error",
+        "handoff_launch_error",
+        "handoff_client_error",
+    ] {
+        dashboard_scenario(scenario);
+    }
+}
+
+#[test]
 fn tui_dashboard_keeps_details_and_editor_layout_stable() {
     dashboard_scenario("details");
     dashboard_scenario("details_no_color");

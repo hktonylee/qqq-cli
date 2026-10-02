@@ -240,6 +240,12 @@ Ctrl+P opens blank child draft under selected task; header shows parent ID.
 Changed drafts ask before switching. Ctrl-S creates child with dependency;
 Enter or Shift+Enter inserts newline. Navigating away clears draft's parent context.
 
+Ctrl-H focuses selected task's live Herdr agent and opens Herdr client using
+task's linked server. Detach from client to return to TUI with draft, selection,
+filter, cursor and scroll positions preserved. No task is saved or changed.
+Missing links, unavailable agents and client errors appear in status bar.
+Link task with `qqq herdr link` first if needed. Backspace still edits text.
+
 Task list and details refresh after external DB commits without keyboard input. Refresh
 keeps current editor draft, filter query, and manual scroll positions. Selected
 task status updates in editor title; task text stays in editor until reloaded

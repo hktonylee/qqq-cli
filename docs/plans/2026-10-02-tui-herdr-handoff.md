@@ -33,8 +33,8 @@ fn tui_dashboard_ctrl_h_errors_preserve_editor() {
 }
 ```
 
-- [ ] Scenarios select #2, modify `Second` to `Changed Second`, send legacy Ctrl-H (`b"\x08"`). Assert calls exactly `[["--session", "named", "agent", "list"], ["--session", "named", "agent", "focus", "live:p2"], ["--session", "named"]]`. After return, assert editor title #2, edited text, filter/cursor unchanged; save and assert DB description. Enhanced Ctrl-H (`b"\x1b[104;5u"`) also attaches. `b"\x7f"` deletes text without calling Herdr. Error scenarios assert error footer, unchanged draft and expected partial command list. JSON output remains `null`.
-- [ ] Run `CARGO_TARGET_DIR=../../target cargo test --locked --test tui tui_dashboard_ctrl_h -- --nocapture`; expect failure because Ctrl-H does nothing.
+- [ ] Scenarios select #2, modify `Second` to `Changed Second`, send legacy Ctrl-H (`b"\x08"`). Assert calls exactly `[["--session", "named", "agent", "list"], ["--session", "named", "agent", "focus", "live:p2"], ["--session", "named"]]`. After return, assert editor title #2, edited text, filter/cursor unchanged; save and assert DB description. Enhanced Ctrl-H (`b"\x1b[104;5u"`) also attaches. `b"\x7f"` deletes text without calling Herdr. Error scenarios assert error footer, unchanged draft and expected partial command list. JSON stdout remains empty.
+- [ ] Run `cargo test --locked --test tui tui_dashboard_ctrl_h -- --nocapture`; expect failure because Ctrl-H does nothing.
 
 ## Task 2: Handoff implementation
 
@@ -69,5 +69,5 @@ pub(super) fn attach(server: Option<&str>) -> Result<()> {
 
 - [ ] Declare `mod handoff`, make terminal guard mutable. After confirmation handling, before action/filter handling, intercept dashboard Control + Char('h'). Missing selection becomes visible error. Successful focus drops guard, runs attach, recreates guard, clears dashboard terminal; result updates footer. Always continue event loop without changing draft/filter/selection.
 - [ ] Document Ctrl-H behavior in README TUI section.
-- [ ] Run focused regression until green. Run `cargo fmt --check`, `cargo clippy --locked --all-targets -- -D warnings`, `cargo test --locked` with `CARGO_TARGET_DIR=../../target`.
+- [ ] Run focused regression until green. Run `cargo fmt --check`, `cargo clippy --locked --all-targets -- -D warnings`, `cargo test --locked` in private worktree Cargo target; shared targets allow concurrent workers to replace binaries.
 - [ ] Review diff, commit `[Feat] Open Task Agent In Herdr From TUI`, rebase current master, fast-forward master. Run merged focused tests, install via `cargo install --path . --locked --offline --force`, remove clean worktree/merged branch, `qqq complete 102 --json`. Resume `qqq next --wait --local --json`.

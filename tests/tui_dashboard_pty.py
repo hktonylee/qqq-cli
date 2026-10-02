@@ -191,6 +191,64 @@ with tempfile.TemporaryDirectory(prefix="qqq-dashboard-test-") as folder:
                 message += "\n" + "W" * 66 + "TAIL"
             cli("message", "2", message, "--session", "reviewer")
 
+    if scenario.startswith("handoff_"):
+        if scenario == "handoff_scroll":
+            cli("edit", "2", "--description", "Second\n" + "\n".join(f"Line {index:02}" for index in range(1, 21)))
+            cli("message", "2", "\n".join(f"Message {index:02}" for index in range(1, 31)))
+            for index in range(3, 21):
+                cli("add", f"Task {index}")
+        live_pane = {
+            "pane_id": "live:p2", "workspace_id": "live", "tab_id": "live:t1",
+            "agent": "codex", "terminal_id": "live-terminal",
+            "agent_session": {"agent": "codex", "kind": "id", "value": "linked-agent"},
+        }
+        identity = (live_pane["agent_session"] if scenario != "handoff_terminal"
+                    else {"agent": "codex", "kind": "terminal", "value": "live-terminal"})
+        cached_pane = dict(live_pane, pane_id="cached:p1")
+        if scenario not in ("handoff_missing", "handoff_no_selection"):
+            with sqlite3.connect(Path(folder) / ".qqq/qqq.db") as connection:
+                connection.execute("INSERT INTO herdr_links(task_id,link_json) VALUES(?,?)", (
+                    2, json.dumps({"server": "named", "identity": identity, "pane": cached_pane}),
+                ))
+        fake = Path(folder) / "herdr"
+        fake.write_text(f"#!{sys.executable}\n" + r'''
+import json, os, sys, termios
+from pathlib import Path
+args = sys.argv[1:]
+with open("herdr-calls", "a") as log:
+    log.write(json.dumps(args) + "\n")
+assert args[:2] == ["--session", "named"], args
+args = args[2:]
+scenario = os.environ["HANDOFF_SCENARIO"]
+pane = json.loads(os.environ["HANDOFF_PANE"])
+if args == ["agent", "list"]:
+    agents = ([] if scenario == "handoff_stale" else [pane, pane]
+              if scenario == "handoff_ambiguous" else [pane])
+    result = {"agents": agents}
+elif args == ["agent", "focus", "live:p2"]:
+    if scenario == "handoff_focus_error":
+        print("focus denied", file=sys.stderr)
+        sys.exit(1)
+    if scenario == "handoff_launch_error":
+        Path(sys.argv[0]).unlink()
+    result = {}
+elif not args:
+    assert all(os.isatty(fd) for fd in (0, 1, 2)), "client lacks terminal streams"
+    flags = termios.tcgetattr(0)[3]
+    assert flags & termios.ICANON and flags & termios.ECHO, "client inherits raw mode"
+    Path("herdr-client-opened").write_text("cooked")
+    print("\x1b[2JHERDR_CLIENT", flush=True)
+    sys.exit(1 if scenario == "handoff_client_error" else 0)
+else:
+    raise AssertionError(args)
+print(json.dumps({"result": result}))
+''')
+        fake.chmod(0o755)
+        # Prevent launch-failure regression from falling through to real Herdr.
+        env["PATH"] = os.pathsep.join((folder, os.defpath))
+        env["HANDOFF_SCENARIO"] = scenario
+        env["HANDOFF_PANE"] = json.dumps(live_pane)
+
     master, slave = pty.openpty()
     os.set_blocking(master, False)
     fcntl.ioctl(slave, termios.TIOCSWINSZ, struct.pack("HHHH", 24, 72, 0, 0))
@@ -198,7 +256,7 @@ with tempfile.TemporaryDirectory(prefix="qqq-dashboard-test-") as folder:
     os.setsid()
     fcntl.ioctl(slave, termios.TIOCSCTTY, 0)
     signal.signal(signal.SIGHUP, signal.SIG_IGN)
-    args = [binary, "--json", "tui"] if scenario in ("empty_json", "save_json") else [binary, "tui"]
+    args = [binary, "--json", "tui"] if scenario in ("empty_json", "save_json", "handoff_json") else [binary, "tui"]
     if scenario in ("actions_basic", "actions_rejected", "actions_narrow"):
         args.extend(["--session", "worker"])
     if scenario in ("archive_included", "actions_basic", "actions_rejected"):
@@ -331,7 +389,7 @@ with tempfile.TemporaryDirectory(prefix="qqq-dashboard-test-") as folder:
                              and editor_line().startswith("Second"))
                 settle()
                 assert b"\x1b[38;" not in screen and b"\x1b[48;" not in screen, screen[-2000:]
-        if scenario not in ("ctrl_c_new_scroll", "live_refresh_scroll", "tree_navigation", "scroll", "wheel", "click", "click_filter", "workflow", "workflow_empty", "workflow_status", "filter", "filter_no_color", "archive_hidden", "archive_included", "actions_basic", "actions_rejected", "actions_hidden"):
+        if scenario not in ("handoff_scroll", "ctrl_c_new_scroll", "live_refresh_scroll", "tree_navigation", "scroll", "wheel", "click", "click_filter", "workflow", "workflow_empty", "workflow_status", "filter", "filter_no_color", "archive_hidden", "archive_included", "actions_basic", "actions_rejected", "actions_hidden"):
             read_until(b"Second")
             assert "First" in visible.text() and "Second" in visible.text(), visible.text()
         assert not select.select([child.stdout], [], [], 0)[0], "TUI wrote stdout while open"
@@ -517,6 +575,84 @@ with tempfile.TemporaryDirectory(prefix="qqq-dashboard-test-") as folder:
             assert editor_line().strip() == "", visible.text()
             assert cli("list") == initial_tasks
             assert child.poll() is None
+        elif scenario.startswith("handoff_"):
+            initial_tasks = cli("list")
+            if scenario == "handoff_no_selection":
+                send(b"Unsaved draft")
+                wait_visible(lambda: editor_line().startswith("Unsaved draft")
+                             and (visible.x, visible.y) == (13, editor_row() + 1))
+            else:
+                send(b"\x1b[1;2A" * (19 if scenario == "handoff_scroll" else 1))
+                wait_visible(lambda: "task #2 (" in editor_title())
+                if scenario == "handoff_scroll":
+                    send(b"\x1b[A" * 20)
+                send(b"\x01Changed ")
+                wait_visible(lambda: editor_line().startswith("Changed Second")
+                             and (visible.x, visible.y) == (8, editor_row() + 1))
+            if scenario == "handoff_filter":
+                send(CTRL_SLASH + b"first")
+                wait_visible(lambda: visible.text().splitlines()[1].strip() == "Filter: first"
+                             and (visible.x, visible.y) == (13, 1))
+            cursor = (visible.x, visible.y)
+            if scenario == "handoff_scroll":
+                send(b"\x1b[<65;6;4M\x1b[<65;6;10M\x1b[<65;6;16M")
+                wait_visible(lambda: "First" not in "\n".join(visible.text().splitlines()[2:list_bottom()])
+                             and not details_text().startswith("Task #2")
+                             and editor_line().startswith("Line 03"))
+                settle()
+                viewport = visible.text().splitlines()[:-1]
+            clear_capture()
+            send(b"\x08")
+            errors = {
+                "handoff_no_selection": "Select task to open its Herdr agent",
+                "handoff_missing": "Task has no Herdr link",
+                "handoff_stale": "Linked Herdr agent session is not live",
+                "handoff_ambiguous": "Multiple Herdr panes match agent session",
+                "handoff_focus_error": "Herdr failed: focus denied",
+                "handoff_launch_error": "Cannot open Herdr client",
+                "handoff_client_error": "Herdr client failed",
+            }
+            expected = errors.get(scenario, "Returned from Herdr")
+            if scenario == "handoff_scroll":
+                read_until(b"HERDR_CLIENT")
+            wait_visible(lambda: visible.text().splitlines()[-1].startswith(expected)
+                         and (scenario == "handoff_scroll" or (visible.x, visible.y) == cursor))
+            if scenario == "handoff_scroll":
+                assert visible.text().splitlines()[:-1] == viewport, visible.text()
+            else:
+                assert (visible.x, visible.y) == cursor, visible.text()
+                assert editor_line().startswith("Unsaved draft" if scenario == "handoff_no_selection" else "Changed Second")
+            assert cli("list") == initial_tasks
+            calls_path = Path(folder) / "herdr-calls"
+            calls = [json.loads(line) for line in calls_path.read_text().splitlines()] if calls_path.exists() else []
+            prefix = ["--session", "named"]
+            expected_calls = [prefix + ["agent", "list"], prefix + ["agent", "focus", "live:p2"], prefix]
+            count = (0 if scenario in ("handoff_missing", "handoff_no_selection") else 1
+                     if scenario in ("handoff_stale", "handoff_ambiguous") else 2
+                     if scenario in ("handoff_focus_error", "handoff_launch_error") else 3)
+            assert calls == expected_calls[:count], calls
+            opened = Path(folder) / "herdr-client-opened"
+            assert opened.exists() == (count == 3)
+            assert child.poll() is None
+            if scenario not in errors and scenario != "handoff_scroll":
+                assert opened.read_text() == "cooked"
+                assert b"\x1b[?1049l" in screen, "TUI terminal not restored before client"
+                if scenario == "handoff_filter":
+                    assert visible.text().splitlines()[1].strip() == "Filter: first"
+                    send(b"\t")
+                    wait_visible(lambda: (visible.x, visible.y) == (8, editor_row() + 1))
+                clear_capture()
+                send(b"\x1b[104;5u")
+                read_until(b"HERDR_CLIENT")
+                wait_visible(lambda: visible.text().splitlines()[-1].startswith("Returned from Herdr")
+                             and (visible.x, visible.y) == (8, editor_row() + 1))
+                assert len(calls_path.read_text().splitlines()) == 6
+                send(b"\x7f")
+                wait_visible(lambda: editor_line().startswith("ChangedSecond"))
+                assert len(calls_path.read_text().splitlines()) == 6
+                send(b"\x13")
+                wait_visible(lambda: visible.text().splitlines()[-1].startswith("Saved #2"))
+                assert cli("show", "2")["task"]["description"] == "ChangedSecond"
         elif scenario.startswith("ctrl_c_new_"):
             initial_tasks = cli("list")
             if scenario == "ctrl_c_new_image":
