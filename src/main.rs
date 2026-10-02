@@ -158,6 +158,18 @@ enum Commands {
         #[arg(long = "image", value_name = "PATH")]
         images: Vec<PathBuf>,
     },
+    /// Hide a task from default lists and claims while preserving its data.
+    Archive {
+        /// Task ID, or negative creation index: -1 is newest.
+        #[arg(allow_negative_numbers = true)]
+        id: i64,
+    },
+    /// Restore an archived task to default lists and claims.
+    Unarchive {
+        /// Task ID, or negative creation index: -1 is newest.
+        #[arg(allow_negative_numbers = true)]
+        id: i64,
+    },
     /// Return owned task or atomically claim highest-priority ready task (oldest ID on ties).
     Next {
         /// Wait until a task is available; concurrent sessions claim each task once.
@@ -427,6 +439,14 @@ fn execute(cli: Cli, display_limit: Option<i64>) -> Result<Value> {
                     priority
                 )?)
             }
+        }
+        Commands::Archive { id } => {
+            let id = db.resolve_task_id(id)?;
+            json!(db.set_archived(id, true, session_input.unwrap_or("cli"))?)
+        }
+        Commands::Unarchive { id } => {
+            let id = db.resolve_task_id(id)?;
+            json!(db.set_archived(id, false, session_input.unwrap_or("cli"))?)
         }
         Commands::Next { wait, .. } => {
             loop {

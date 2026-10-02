@@ -35,6 +35,23 @@ fn ok(path: &Path, args: &[&str]) -> Value {
     serde_json::from_slice(&output.stdout).unwrap()
 }
 
+fn fail(path: &Path, args: &[&str], expected: &str) {
+    let output = run(path, args);
+    assert_eq!(output.status.code(), Some(1), "{args:?}");
+    assert!(output.stdout.is_empty());
+    assert!(
+        String::from_utf8_lossy(&output.stderr).contains(expected),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+}
+
+fn project() -> TempDir {
+    let dir = TempDir::new().unwrap();
+    ok(dir.path(), &["init"]);
+    dir
+}
+
 fn v7_project() -> TempDir {
     let dir = TempDir::new().unwrap();
     std::fs::create_dir(dir.path().join(".qqq")).unwrap();
@@ -117,4 +134,107 @@ fn concurrent_version_seven_opens_migrate_once() {
             .unwrap(),
         8
     );
+}
+
+#[test]
+fn archive_round_trip_preserves_task_and_history_without_duplicate_events() {
+    let dir = project();
+    let path = dir.path();
+    std::fs::write(path.join("a.png"), b"\x89PNG\r\n\x1a\nfixture").unwrap();
+    let created = ok(
+        path,
+        &["add", "Keep content", "--priority", "7", "--image", "a.png"],
+    );
+    ok(path, &["message", "1", "Keep note"]);
+    let before = ok(path, &["show", "1"]);
+    let archived = ok(path, &["archive", "1"]);
+    assert_eq!(archived["status"], created["status"]);
+    assert_eq!(archived["description"], created["description"]);
+    assert_eq!(archived["priority"], 7);
+    assert_eq!(archived["archived"], true);
+    let after = ok(path, &["show", "1"]);
+    assert_eq!(after["messages"], before["messages"]);
+    assert_eq!(after["images"], before["images"]);
+    assert_eq!(
+        std::fs::read(path.join(".qqq/images/1/1.png")).unwrap(),
+        b"\x89PNG\r\n\x1a\nfixture"
+    );
+    assert_eq!(after["events"].as_array().unwrap().len(), 1);
+    assert_eq!(after["events"][0]["action"], "archive");
+    assert_eq!(after["events"][0]["session"], "cli");
+    let repeated = ok(path, &["archive", "1"]);
+    assert_eq!(repeated["updated_at"], archived["updated_at"]);
+    assert_eq!(ok(path, &["show", "1"])["events"], after["events"]);
+    let restored = ok(path, &["unarchive", "1"]);
+    assert_eq!(restored["archived"], false);
+    assert_eq!(ok(path, &["show", "1"])["events"][1]["action"], "unarchive");
+    let repeated = ok(path, &["unarchive", "1"]);
+    assert_eq!(repeated["updated_at"], restored["updated_at"]);
+    assert_eq!(
+        ok(path, &["show", "1"])["events"].as_array().unwrap().len(),
+        2
+    );
+
+    ok(path, &["next", "--session", "worker"]);
+    ok(path, &["complete", "1", "--session", "worker"]);
+    let completed_before = ok(path, &["show", "1"]);
+    let completed = ok(path, &["archive", "1"]);
+    assert_eq!(completed["status"], "completed");
+    let completed_after = ok(path, &["show", "1"]);
+    assert_eq!(completed_after["events"][2], completed_before["events"][2]);
+    assert_eq!(completed_after["events"][3], completed_before["events"][3]);
+    assert_eq!(completed_after["events"][4]["action"], "archive");
+}
+
+#[test]
+fn active_tasks_cannot_be_archived() {
+    let dir = project();
+    let path = dir.path();
+    ok(path, &["add", "Active"]);
+    ok(path, &["next", "--session", "worker"]);
+    fail(path, &["archive", "1"], "in progress");
+    assert_eq!(ok(path, &["show", "1"])["task"]["archived"], false);
+    assert_eq!(ok(path, &["next", "--session", "worker"])["id"], 1);
+}
+
+#[test]
+fn archive_rejects_blocked_children_and_completed_parent_still_releases_child() {
+    let dir = project();
+    let path = dir.path();
+    ok(path, &["add", "Parent"]);
+    ok(path, &["add", "Child", "--parent", "1"]);
+    ok(path, &["add", "Grandchild", "--parent", "2"]);
+    fail(path, &["archive", "1"], "unfinished child");
+    fail(path, &["archive", "2"], "unfinished child");
+    ok(path, &["archive", "3"]);
+    ok(path, &["archive", "2"]);
+    ok(path, &["archive", "1"]);
+    fail(path, &["unarchive", "2"], "archived unfinished parent");
+    ok(path, &["unarchive", "1"]);
+    ok(path, &["unarchive", "2"]);
+    ok(path, &["unarchive", "3"]);
+    ok(path, &["next", "--session", "parent-worker"]);
+    ok(path, &["complete", "1", "--session", "parent-worker"]);
+    ok(path, &["archive", "1"]);
+    assert_eq!(ok(path, &["next", "--session", "child-worker"])["id"], 2);
+}
+
+#[test]
+fn archived_unfinished_parent_rejects_new_and_reparented_visible_children() {
+    let dir = project();
+    let path = dir.path();
+    ok(path, &["add", "Parent"]);
+    ok(path, &["add", "Existing"]);
+    ok(path, &["archive", "1"]);
+    fail(
+        path,
+        &["add", "Blocked", "--parent", "1"],
+        "archived unfinished parent",
+    );
+    fail(
+        path,
+        &["edit", "2", "--set-parent", "1"],
+        "archived unfinished parent",
+    );
+    assert_eq!(ok(path, &["show", "2"])["task"]["parent_id"], Value::Null);
 }

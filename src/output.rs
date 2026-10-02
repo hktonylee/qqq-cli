@@ -39,7 +39,11 @@ impl From<&Commands> for Format {
             },
             Commands::Add { .. } => Self::AddedTask,
             Commands::Tui => Self::Task,
-            Commands::Edit { .. } | Commands::Next { .. } | Commands::Complete { .. } => Self::Task,
+            Commands::Edit { .. }
+            | Commands::Archive { .. }
+            | Commands::Unarchive { .. }
+            | Commands::Next { .. }
+            | Commands::Complete { .. } => Self::Task,
         }
     }
 }

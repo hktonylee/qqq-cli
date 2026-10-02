@@ -107,6 +107,25 @@ pub fn validate_priority(priority: i64) -> Result<()> {
     );
     Ok(())
 }
+fn ensure_parent_available(
+    conn: &Connection,
+    parent_id: i64,
+    visible_unfinished: bool,
+) -> Result<()> {
+    let (status, archived): (String, bool) = conn
+        .query_row(
+            "SELECT status,archived FROM tasks WHERE id=?",
+            [parent_id],
+            |row| Ok((row.get(0)?, row.get(1)?)),
+        )
+        .optional()?
+        .with_context(|| format!("Task {parent_id} not found"))?;
+    ensure!(
+        !visible_unfinished || !archived || status == "completed",
+        "Task {parent_id} is archived unfinished parent"
+    );
+    Ok(())
+}
 
 fn image_description(
     source: &str,
@@ -319,6 +338,60 @@ impl Db {
     pub fn task(&self, id: i64) -> Result<Task> {
         self.conn.query_row("SELECT id,description,status,claim_key,created_at,updated_at,parent_id,harness_name,harness_session,orchestrator_name,orchestrator_session,priority,archived FROM tasks WHERE id=?",[id],task_row).optional()?.with_context(||format!("Task {id} not found"))
     }
+    pub fn set_archived(&mut self, id: i64, archived: bool, actor: &str) -> Result<Task> {
+        nonempty(actor, "Actor")?;
+        let tx = self
+            .conn
+            .transaction_with_behavior(TransactionBehavior::Immediate)?;
+        let task = tx
+            .query_row(
+                "SELECT id,description,status,claim_key,created_at,updated_at,parent_id,harness_name,harness_session,orchestrator_name,orchestrator_session,priority,archived FROM tasks WHERE id=?",
+                [id],
+                task_row,
+            )
+            .optional()?
+            .with_context(|| format!("Task {id} not found"))?;
+        if task.archived == archived {
+            tx.commit()?;
+            return Ok(task);
+        }
+        if archived {
+            ensure!(
+                task.status != "in_progress",
+                "Task {id} is in progress and cannot be archived"
+            );
+            if task.status != "completed" {
+                let unfinished_child: bool = tx.query_row(
+                    "SELECT EXISTS(SELECT 1 FROM tasks WHERE parent_id=? AND archived=0 AND status!='completed')",
+                    [id],
+                    |row| row.get(0),
+                )?;
+                ensure!(
+                    !unfinished_child,
+                    "Task {id} has non-archived unfinished child"
+                );
+            }
+        } else if task.status != "completed" {
+            if let Some(parent_id) = task.parent_id {
+                ensure_parent_available(&tx, parent_id, true)?;
+            }
+        }
+        tx.execute(
+            "UPDATE tasks SET archived=?,updated_at=strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE id=?",
+            params![archived, id],
+        )?;
+        tx.execute(
+            "INSERT INTO events(task_id,session,action) VALUES (?,?,?)",
+            params![id, actor, if archived { "archive" } else { "unarchive" }],
+        )?;
+        let task = tx.query_row(
+            "SELECT id,description,status,claim_key,created_at,updated_at,parent_id,harness_name,harness_session,orchestrator_name,orchestrator_session,priority,archived FROM tasks WHERE id=?",
+            [id],
+            task_row,
+        )?;
+        tx.commit()?;
+        Ok(task)
+    }
     pub fn add(
         &mut self,
         description: &str,
@@ -350,15 +423,15 @@ impl Db {
     ) -> Result<Task> {
         nonempty(description, "Description")?;
         validate_priority(priority)?;
-        if let Some(id) = parent_id {
-            self.task(id)?;
-        }
         for image in images {
             image.media_type()?;
         }
         let tx = self
             .conn
             .transaction_with_behavior(TransactionBehavior::Immediate)?;
+        if let Some(parent_id) = parent_id {
+            ensure_parent_available(&tx, parent_id, true)?;
+        }
         let mut pending = PendingFiles::new();
         tx.execute(
             "INSERT INTO tasks(description,parent_id,priority) VALUES (?,?,?)",
@@ -522,14 +595,15 @@ impl Db {
                 ParentChange::Clear => None,
                 ParentChange::Set(parent_id) => {
                     ensure!(parent_id != id, "Task {id} cannot depend on itself");
-                    ensure!(
-                        tx.query_row(
-                            "SELECT EXISTS(SELECT 1 FROM tasks WHERE id=?)",
-                            [parent_id],
-                            |row| row.get::<_, bool>(0)
-                        )?,
-                        "Task {parent_id} not found"
-                    );
+                    let visible_unfinished: bool = tx
+                        .query_row(
+                            "SELECT status!='completed' AND archived=0 FROM tasks WHERE id=?",
+                            [id],
+                            |row| row.get(0),
+                        )
+                        .optional()?
+                        .with_context(|| format!("Task {id} not found"))?;
+                    ensure_parent_available(&tx, parent_id, visible_unfinished)?;
                     let cycle: bool = tx.query_row(
                         "WITH RECURSIVE ancestors(id,parent_id) AS (
                             SELECT id,parent_id FROM tasks WHERE id=?1
