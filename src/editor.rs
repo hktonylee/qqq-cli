@@ -5,14 +5,21 @@ use std::{
     process::{Command, Stdio},
 };
 
-pub fn compose(description: &str, external: bool) -> Result<crate::tui::draft::Composition> {
+pub fn compose(
+    description: &str,
+    external: bool,
+    navigation: Option<&crate::db::Db>,
+) -> Result<crate::tui::Outcome> {
     if !external && std::io::stdin().is_terminal() && std::io::stderr().is_terminal() {
-        return crate::tui::compose(description);
+        return crate::tui::compose(description, navigation);
     }
     let description = compose_external(description)?;
-    Ok(crate::tui::draft::Composition {
-        description,
-        images: Vec::new(),
+    Ok(crate::tui::Outcome {
+        composition: crate::tui::draft::Composition {
+            description,
+            images: Vec::new(),
+        },
+        target_id: None,
     })
 }
 fn compose_external(description: &str) -> Result<String> {

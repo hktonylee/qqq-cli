@@ -2,6 +2,14 @@
 #[path = "../src/tui/render.rs"]
 mod render;
 
+fn chrome(message: &str) -> render::Chrome<'_> {
+    render::Chrome {
+        title: "qqq task editor",
+        keys: render::KEYS,
+        message,
+    }
+}
+
 #[test]
 fn editor_paints_only_body_rows_and_resets_colors_for_header_and_footer() {
     crossterm::style::force_color_output(true);
@@ -12,7 +20,16 @@ fn editor_paints_only_body_rows_and_resets_colors_for_header_and_footer() {
         "Discard draft? (y/N)",
     ] {
         let mut output = Vec::new();
-        render::draw(&mut output, &layout, 0, &mut 0, (40, 8), message, true).unwrap();
+        render::draw(
+            &mut output,
+            &layout,
+            0,
+            &mut 0,
+            (40, 8),
+            &chrome(message),
+            true,
+        )
+        .unwrap();
         let output = String::from_utf8(output).unwrap();
         assert!(output.starts_with("\x1b[0m"), "{output:?}");
         let background = output.find("\x1b[48;5;236m").unwrap();
@@ -48,7 +65,7 @@ fn resize_hint_uses_default_colors_without_editor_body() {
         0,
         &mut 0,
         (10, 2),
-        "",
+        &chrome(""),
         true,
     )
     .unwrap();
@@ -68,7 +85,7 @@ fn plain_editor_does_not_emit_color_commands() {
         0,
         &mut 0,
         (40, 8),
-        "",
+        &chrome(""),
         false,
     )
     .unwrap();
@@ -83,7 +100,16 @@ fn editor_reclaims_hint_row_for_body_and_keeps_cursor_above_footer() {
     let layout = render::Layout::new(&["A\nB\nC\nD\nE".into()], 40);
     let mut output = Vec::new();
     let mut top = 0;
-    render::draw(&mut output, &layout, 1, &mut top, (40, 5), "", false).unwrap();
+    render::draw(
+        &mut output,
+        &layout,
+        1,
+        &mut top,
+        (40, 5),
+        &chrome(""),
+        false,
+    )
+    .unwrap();
     let output = String::from_utf8(output).unwrap();
     assert_eq!(top, 2);
     for (row, text) in [(2, "C"), (3, "D"), (4, "E")] {

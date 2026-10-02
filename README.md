@@ -90,6 +90,15 @@ Ctrl-W deletes previous word without crossing line; Ctrl-V pastes clipboard text
 or image. Large pastes collapse into placeholders, then expand on save. Ctrl-V
 needs desktop clipboard support.
 
+In built-in `qqq add` editor, Shift+Up loads newest task, then older tasks by ID;
+Shift+Down moves toward newer tasks, then returns to blank new-task draft. Header
+shows selected task ID. Ctrl-S updates selected task or creates one from new
+draft. Switching away from changed text or new image asks before discarding it;
+N, Enter, or Esc keeps draft. Navigation includes completed and active tasks and
+skips deleted IDs. `--parent` applies only when saving new task; `--image` files
+attach to whichever task Ctrl-S saves. External editor and `qqq edit` do not
+navigate tasks.
+
 Use `--edit` (`-e`) to force external editor; nonterminal interactive calls also
 need `$EDITOR`. Editor must wait until editing finishes.
 

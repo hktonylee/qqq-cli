@@ -72,7 +72,7 @@ enum Commands {
     },
     /// Create .qqq/qqq.db in current directory (safe to repeat).
     Init,
-    /// Create a new task.
+    /// Create a task; built-in editor can browse and edit existing tasks.
     Add {
         /// Whole task description. Omit to compose interactively.
         #[arg(conflicts_with = "description")]
@@ -252,9 +252,10 @@ fn execute(cli: Cli, display_limit: Option<i64>) -> Result<Value> {
             match text.or(description) {
                 Some(description) if !edit => json!(db.add(&description, parent, &images)?),
                 description => {
-                    let mut draft = editor::compose(description.as_deref().unwrap_or(""), edit)?;
-                    draft.images.extend(images);
-                    json!(db.save_composition(None, parent, &draft)?)
+                    let mut outcome =
+                        editor::compose(description.as_deref().unwrap_or(""), edit, Some(&db))?;
+                    outcome.composition.images.extend(images);
+                    json!(db.save_composition(outcome.target_id, parent, &outcome.composition)?)
                 }
             }
         }
@@ -304,13 +305,13 @@ fn execute(cli: Cli, display_limit: Option<i64>) -> Result<Value> {
                     && images.is_empty())
             {
                 let description = description.as_deref().unwrap_or(&task.description);
-                let mut draft = editor::compose(description, edit)?;
-                draft.images.extend(images);
+                let mut outcome = editor::compose(description, edit, None)?;
+                outcome.composition.images.extend(images);
                 json!(db.edit(
                     id,
-                    Some(&draft.description),
+                    Some(&outcome.composition.description),
                     None,
-                    &draft.images,
+                    &outcome.composition.images,
                     set_parent
                 )?)
             } else {

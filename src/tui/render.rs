@@ -9,8 +9,15 @@ use unicode_segmentation::UnicodeSegmentation;
 use unicode_width::UnicodeWidthStr;
 
 pub const KEYS: &str = "Ctrl-S save  Esc cancel  Ctrl-V paste  Ctrl-W word";
+pub const NAV_KEYS: &str = "Ctrl-S save  Shift-Up/Down tasks  Esc cancel  Ctrl-W word";
 const BACKGROUND: Color = Color::AnsiValue(236);
 const FOREGROUND: Color = Color::AnsiValue(252);
+
+pub struct Chrome<'a> {
+    pub title: &'a str,
+    pub keys: &'a str,
+    pub message: &'a str,
+}
 
 pub struct Layout {
     pub rows: Vec<String>,
@@ -108,7 +115,7 @@ pub fn draw(
     cursor: usize,
     top: &mut usize,
     size: (u16, u16),
-    message: &str,
+    chrome: &Chrome<'_>,
     color: bool,
 ) -> io::Result<()> {
     let (width, height) = size;
@@ -132,7 +139,7 @@ pub fn draw(
     if row >= *top + body_height {
         *top = row + 1 - body_height;
     }
-    queue!(output, Print(clipped("qqq task editor", width as usize)))?;
+    queue!(output, Print(clipped(chrome.title, width as usize)))?;
     if color {
         queue!(
             output,
@@ -151,7 +158,11 @@ pub fn draw(
     if color {
         queue!(output, ResetColor)?;
     }
-    let footer = if message.is_empty() { KEYS } else { message };
+    let footer = if chrome.message.is_empty() {
+        chrome.keys
+    } else {
+        chrome.message
+    };
     queue!(
         output,
         MoveTo(0, height - 1),

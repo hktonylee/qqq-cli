@@ -14,6 +14,57 @@ fn scenario(name: &str) {
         String::from_utf8_lossy(&output.stderr)
     );
 }
+
+fn history_scenario(name: &str) {
+    let output = Command::new("python3")
+        .arg(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/tests/tui_history_pty.py"
+        ))
+        .arg(env!("CARGO_BIN_EXE_qqq"))
+        .arg(name)
+        .output()
+        .unwrap();
+    assert!(
+        output.status.success(),
+        "{}\n{}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+}
+
+#[test]
+fn tui_add_history_saves_selected_task() {
+    history_scenario("history_save");
+}
+
+#[test]
+fn tui_add_history_skips_deleted_ids() {
+    history_scenario("skip_deleted");
+}
+
+#[test]
+fn tui_add_history_returns_to_new_draft() {
+    history_scenario("return_new");
+}
+
+#[test]
+fn tui_add_history_checks_dirty_new_draft() {
+    history_scenario("dirty_new_keep");
+    history_scenario("dirty_new_discard");
+    history_scenario("dirty_image_discard");
+}
+
+#[test]
+fn tui_add_history_checks_dirty_loaded_task() {
+    history_scenario("dirty_loaded_keep");
+}
+
+#[test]
+fn tui_add_history_boundary_keeps_draft() {
+    history_scenario("oldest_boundary");
+    history_scenario("empty_boundary");
+}
 #[test]
 fn tui_saves_large_paste_and_image_with_clean_json_stdout() {
     scenario("save");

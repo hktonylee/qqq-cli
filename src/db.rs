@@ -369,6 +369,21 @@ impl Db {
             .optional()?
             .with_context(|| format!("No task at recent creation index {reference}"))
     }
+    pub fn adjacent_description(
+        &self,
+        current: Option<i64>,
+        older: bool,
+    ) -> Result<Option<(i64, String)>> {
+        let sql = if older {
+            "SELECT id,description FROM tasks WHERE (?1 IS NULL OR id < ?1) ORDER BY id DESC LIMIT 1"
+        } else {
+            "SELECT id,description FROM tasks WHERE id > ?1 ORDER BY id ASC LIMIT 1"
+        };
+        Ok(self
+            .conn
+            .query_row(sql, [current], |row| Ok((row.get(0)?, row.get(1)?)))
+            .optional()?)
+    }
     pub fn active_identity_for_terminal(
         &self,
         agent: &str,

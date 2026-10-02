@@ -16,6 +16,57 @@ use crossterm::{
 use draft::{Composition, Draft};
 use std::io::{self, IsTerminal};
 
+pub struct Outcome {
+    pub composition: Composition,
+    pub target_id: Option<i64>,
+}
+
+enum Target {
+    New,
+    Task { id: i64, description: String },
+}
+
+enum Confirmation {
+    Exit,
+    Switch(Target),
+}
+
+fn adjacent_target(
+    db: &crate::db::Db,
+    current: Option<i64>,
+    older: bool,
+) -> Result<Option<Target>> {
+    if !older && current.is_none() {
+        return Ok(None);
+    }
+    Ok(match db.adjacent_description(current, older)? {
+        Some((id, description)) => Some(Target::Task { id, description }),
+        None if !older => Some(Target::New),
+        None => None,
+    })
+}
+
+fn load_target(
+    target: Target,
+    draft: &mut Draft,
+    target_id: &mut Option<i64>,
+    baseline: &mut String,
+    top: &mut usize,
+) {
+    match target {
+        Target::New => {
+            *target_id = None;
+            baseline.clear();
+        }
+        Target::Task { id, description } => {
+            *target_id = Some(id);
+            *baseline = description;
+        }
+    }
+    *draft = Draft::new(baseline);
+    *top = 0;
+}
+
 struct TerminalGuard {
     color: bool,
 }
@@ -60,23 +111,34 @@ fn paste(draft: &mut Draft, text: &str) -> Result<()> {
     }
     Ok(())
 }
-pub fn compose(description: &str) -> Result<Composition> {
+pub fn compose(description: &str, navigation: Option<&crate::db::Db>) -> Result<Outcome> {
     let terminal = TerminalGuard::enter()?;
     let mut draft = Draft::new(description);
+    let mut baseline = description.to_owned();
+    let mut target_id = None;
     let mut top = 0;
     let mut message = String::new();
-    let mut confirm_discard = false;
+    let mut confirmation: Option<Confirmation> = None;
     loop {
         let size = terminal::size()?;
         let layout = render::Layout::new(&draft.fragments(), size.0 as usize);
-        let footer = if confirm_discard {
-            if usize::from(size.0) < "Discard draft? (y/N)".len() {
+        let footer = match &confirmation {
+            Some(Confirmation::Exit) if usize::from(size.0) < "Discard draft? (y/N)".len() => {
                 "Discard? y/N"
-            } else {
-                "Discard draft? (y/N)"
             }
-        } else {
-            &message
+            Some(Confirmation::Exit) => "Discard draft? (y/N)",
+            Some(Confirmation::Switch(_))
+                if usize::from(size.0) < "Discard changes and switch? (y/N)".len() =>
+            {
+                "Switch? y/N"
+            }
+            Some(Confirmation::Switch(_)) => "Discard changes and switch? (y/N)",
+            None => &message,
+        };
+        let title = match (navigation.is_some(), target_id) {
+            (true, Some(id)) => format!("qqq task editor - task #{id}"),
+            (true, None) => "qqq task editor - new task".to_owned(),
+            (false, _) => "qqq task editor".to_owned(),
         };
         render::draw(
             &mut io::stderr(),
@@ -84,18 +146,26 @@ pub fn compose(description: &str) -> Result<Composition> {
             draft.cursor(),
             &mut top,
             size,
-            footer,
+            &render::Chrome {
+                title: &title,
+                keys: if navigation.is_some() {
+                    render::NAV_KEYS
+                } else {
+                    render::KEYS
+                },
+                message: footer,
+            },
             terminal.color,
         )?;
         match event::read()? {
-            Event::Paste(text) if !confirm_discard => {
+            Event::Paste(text) if confirmation.is_none() => {
                 message = paste(&mut draft, &text)
                     .err()
                     .map_or_else(String::new, |error| format!("{error:#}"));
             }
             Event::Key(key) if key.kind != KeyEventKind::Release => {
                 let control = key.modifiers.contains(KeyModifiers::CONTROL);
-                if confirm_discard {
+                if let Some(pending) = confirmation.take() {
                     if control && key.code == KeyCode::Char('c') {
                         bail!("Editor cancelled; task not saved");
                     }
@@ -104,20 +174,72 @@ pub fn compose(description: &str) -> Result<Composition> {
                         .intersects(KeyModifiers::CONTROL | KeyModifiers::ALT | KeyModifiers::SUPER)
                     {
                         match key.code {
-                            KeyCode::Char('y' | 'Y') => bail!("Editor cancelled; task not saved"),
+                            KeyCode::Char('y' | 'Y') => match pending {
+                                Confirmation::Exit => bail!("Editor cancelled; task not saved"),
+                                Confirmation::Switch(target) => {
+                                    load_target(
+                                        target,
+                                        &mut draft,
+                                        &mut target_id,
+                                        &mut baseline,
+                                        &mut top,
+                                    );
+                                    message.clear();
+                                }
+                            },
                             KeyCode::Char('n' | 'N') | KeyCode::Enter | KeyCode::Esc => {
-                                confirm_discard = false;
                                 message.clear();
                             }
-                            _ => (),
+                            _ => confirmation = Some(pending),
                         }
+                    } else {
+                        confirmation = Some(pending);
                     }
                     continue;
+                }
+                if key.modifiers.contains(KeyModifiers::SHIFT)
+                    && !key
+                        .modifiers
+                        .intersects(KeyModifiers::CONTROL | KeyModifiers::ALT | KeyModifiers::SUPER)
+                    && matches!(key.code, KeyCode::Up | KeyCode::Down)
+                {
+                    if let Some(db) = navigation {
+                        let older = key.code == KeyCode::Up;
+                        match adjacent_target(db, target_id, older) {
+                            Ok(Some(target)) if draft.is_dirty_against(&baseline) => {
+                                confirmation = Some(Confirmation::Switch(target));
+                            }
+                            Ok(Some(target)) => {
+                                load_target(
+                                    target,
+                                    &mut draft,
+                                    &mut target_id,
+                                    &mut baseline,
+                                    &mut top,
+                                );
+                                message.clear();
+                            }
+                            Ok(None) => {
+                                message = if older {
+                                    "No older task".to_owned()
+                                } else {
+                                    "Already at new task".to_owned()
+                                };
+                            }
+                            Err(error) => message = format!("{error:#}"),
+                        }
+                        continue;
+                    }
                 }
                 if control {
                     match key.code {
                         KeyCode::Char('s') => match draft.finish() {
-                            Ok(composition) => return Ok(composition),
+                            Ok(composition) => {
+                                return Ok(Outcome {
+                                    composition,
+                                    target_id,
+                                });
+                            }
                             Err(error) => message = error.to_string(),
                         },
                         KeyCode::Char('c') => bail!("Editor cancelled; task not saved"),
@@ -140,7 +262,7 @@ pub fn compose(description: &str) -> Result<Composition> {
                 message.clear();
                 match key.code {
                     KeyCode::Esc if draft.is_empty() => bail!("Editor cancelled; task not saved"),
-                    KeyCode::Esc => confirm_discard = true,
+                    KeyCode::Esc => confirmation = Some(Confirmation::Exit),
                     KeyCode::Char(character)
                         if !key
                             .modifiers
