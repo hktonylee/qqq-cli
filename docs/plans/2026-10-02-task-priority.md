@@ -31,8 +31,8 @@ PRAGMA user_version=7;
 
 **Files:** `src/main.rs`, `src/db.rs`, `tests/priority.rs`
 
-- [ ] Add failing tests for `add --priority 8`, default 0, negative priority, `edit ID --priority -3`, combined description/priority, priority-only edits on active/completed/error tasks, and unchanged status, claim key, identity, event count. Reject `-101`, `101`, and non-integer values without writes; test `--priority -5` as separate argument. Run focused test; expect unrecognized flag.
-- [ ] Add Clap `--priority` to `Add` (default 0) and `Edit` (optional), using `i64` parser range `-100..=100` and allowing negative values. Add `Db::add_with_priority` and `save_composition_with_priority` for creation while retaining existing zero-priority wrappers for TUI/test callers. Add `Db::edit_with_priority` and thread optional priority into `edit_with_spans`; update priority in existing edit transaction. Priority-only `edit` must bypass editor. Validate bounds in DB methods before writes. Run focused tests; commit.
+- [x] Add failing tests for `add --priority 8`, default 0, negative priority, `edit ID --priority -3`, combined description/priority, priority-only edits on active/completed/error tasks, and unchanged status, claim key, identity, event count. Reject `-101`, `101`, and non-integer values without writes; test `--priority -5` as separate argument. Run focused test; expect unrecognized flag.
+- [x] Add Clap `--priority` to `Add` (default 0) and `Edit` (optional), using `i64` parser range `-100..=100` and allowing negative values. Add `Db::add_with_priority` and `save_composition_with_priority` for creation while retaining existing zero-priority wrappers for TUI/test callers. Add `Db::edit_with_priority` and thread optional priority into `edit_with_spans`; update priority in existing edit transaction. Priority-only `edit` must bypass editor. Validate bounds in DB methods before writes. Run focused tests; commit.
 
 ### Task 3: Claim order and dependency readiness
 

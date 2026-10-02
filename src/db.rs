@@ -32,6 +32,11 @@ pub enum EditTransition<'a> {
         harness_name: Option<&'a str>,
     },
 }
+struct EditChanges<'a> {
+    transition: Option<EditTransition<'a>>,
+    parent: Option<ParentChange>,
+    priority: Option<i64>,
+}
 
 #[derive(Clone, Copy, Debug)]
 pub enum ParentChange {
@@ -91,6 +96,13 @@ fn task_row(r: &rusqlite::Row<'_>) -> rusqlite::Result<Task> {
 }
 pub fn nonempty(value: &str, name: &str) -> Result<()> {
     ensure!(!value.trim().is_empty(), "{name} must not be empty");
+    Ok(())
+}
+pub fn validate_priority(priority: i64) -> Result<()> {
+    ensure!(
+        (-100..=100).contains(&priority),
+        "Priority must be between -100 and 100"
+    );
     Ok(())
 }
 
@@ -307,7 +319,20 @@ impl Db {
         parent_id: Option<i64>,
         images: &[ImageInput],
     ) -> Result<Task> {
-        self.add_with_spans(description, parent_id, images, &[])
+        self.add_with_spans(description, parent_id, images, &[], 0)
+    }
+    pub fn add_with_priority(
+        &mut self,
+        description: &str,
+        parent_id: Option<i64>,
+        images: &[ImageInput],
+        priority: i64,
+    ) -> Result<Task> {
+        if priority == 0 {
+            self.add(description, parent_id, images)
+        } else {
+            self.add_with_spans(description, parent_id, images, &[], priority)
+        }
     }
     fn add_with_spans(
         &mut self,
@@ -315,8 +340,10 @@ impl Db {
         parent_id: Option<i64>,
         images: &[ImageInput],
         image_spans: &[Range<usize>],
+        priority: i64,
     ) -> Result<Task> {
         nonempty(description, "Description")?;
+        validate_priority(priority)?;
         if let Some(id) = parent_id {
             self.task(id)?;
         }
@@ -328,8 +355,8 @@ impl Db {
             .transaction_with_behavior(TransactionBehavior::Immediate)?;
         let mut pending = PendingFiles::new();
         tx.execute(
-            "INSERT INTO tasks(description,parent_id) VALUES (?,?)",
-            params![description, parent_id],
+            "INSERT INTO tasks(description,parent_id,priority) VALUES (?,?,?)",
+            params![description, parent_id, priority],
         )?;
         let id = tx.last_insert_rowid();
         let image_ids = Self::save_images(&tx, &self.image_store, &mut pending, id, images)?;
@@ -350,6 +377,15 @@ impl Db {
         parent: Option<i64>,
         draft: &crate::tui::draft::Composition,
     ) -> Result<Task> {
+        self.save_composition_with_priority(id, parent, draft, 0)
+    }
+    pub fn save_composition_with_priority(
+        &mut self,
+        id: Option<i64>,
+        parent: Option<i64>,
+        draft: &crate::tui::draft::Composition,
+        priority: i64,
+    ) -> Result<Task> {
         match id {
             Some(id) => self.edit_composition(id, draft, None),
             None => self.add_with_spans(
@@ -357,6 +393,7 @@ impl Db {
                 parent,
                 &draft.images,
                 &draft.image_spans,
+                priority,
             ),
         }
     }
@@ -366,13 +403,25 @@ impl Db {
         draft: &crate::tui::draft::Composition,
         parent: Option<ParentChange>,
     ) -> Result<Task> {
+        self.edit_composition_with_priority(id, draft, parent, None)
+    }
+    pub fn edit_composition_with_priority(
+        &mut self,
+        id: i64,
+        draft: &crate::tui::draft::Composition,
+        parent: Option<ParentChange>,
+        priority: Option<i64>,
+    ) -> Result<Task> {
         self.edit_with_spans(
             id,
             Some(&draft.description),
-            None,
             &draft.images,
-            parent,
             &draft.image_spans,
+            EditChanges {
+                transition: None,
+                parent,
+                priority,
+            },
         )
     }
     pub fn image_references(&self, task_id: i64) -> Result<Vec<ImageReference>> {
@@ -413,19 +462,47 @@ impl Db {
         images: &[ImageInput],
         parent: Option<ParentChange>,
     ) -> Result<Task> {
-        self.edit_with_spans(id, description, transition, images, parent, &[])
+        self.edit_with_priority(id, description, transition, images, parent, None)
     }
-    fn edit_with_spans(
+    pub fn edit_with_priority(
         &mut self,
         id: i64,
         description: Option<&str>,
         transition: Option<EditTransition<'_>>,
         images: &[ImageInput],
         parent: Option<ParentChange>,
-        image_spans: &[Range<usize>],
+        priority: Option<i64>,
     ) -> Result<Task> {
+        self.edit_with_spans(
+            id,
+            description,
+            images,
+            &[],
+            EditChanges {
+                transition,
+                parent,
+                priority,
+            },
+        )
+    }
+    fn edit_with_spans(
+        &mut self,
+        id: i64,
+        description: Option<&str>,
+        images: &[ImageInput],
+        image_spans: &[Range<usize>],
+        changes: EditChanges<'_>,
+    ) -> Result<Task> {
+        let EditChanges {
+            transition,
+            parent,
+            priority,
+        } = changes;
         if let Some(description) = description {
             nonempty(description, "Description")?;
+        }
+        if let Some(priority) = priority {
+            validate_priority(priority)?;
         }
         for image in images {
             image.media_type()?;
@@ -531,7 +608,7 @@ impl Db {
             }
             None => {}
         }
-        ensure!(tx.execute("UPDATE tasks SET description=COALESCE(?,description),updated_at=strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE id=?",params![description,id])?==1,"Task {id} not found");
+        ensure!(tx.execute("UPDATE tasks SET description=COALESCE(?,description),priority=COALESCE(?,priority),updated_at=strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE id=?",params![description,priority,id])?==1,"Task {id} not found");
         let image_ids = Self::save_images(&tx, &self.image_store, &mut pending, id, images)?;
         if !image_spans.is_empty() {
             let source = description.context("Image references require description")?;

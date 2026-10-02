@@ -54,6 +54,12 @@ fn v6_project() -> TempDir {
     dir
 }
 
+fn project() -> TempDir {
+    let dir = TempDir::new().unwrap();
+    ok(dir.path(), &["init"]);
+    dir
+}
+
 #[test]
 fn version_six_migration_defaults_priority_and_preserves_fifo() {
     let dir = v6_project();
@@ -95,5 +101,127 @@ fn concurrent_version_six_opens_migrate_once() {
         conn.pragma_query_value(None, "user_version", |row| row.get::<_, i64>(0))
             .unwrap(),
         7
+    );
+}
+
+#[test]
+fn add_and_edit_priority_are_persisted_with_default_and_negative_values() {
+    let dir = project();
+    let path = dir.path();
+    assert_eq!(ok(path, &["add", "High", "--priority", "8"])["priority"], 8);
+    assert_eq!(ok(path, &["add", "Default"])["priority"], 0);
+    assert_eq!(
+        ok(path, &["add", "Low", "--priority", "-5"])["priority"],
+        -5
+    );
+    let edited = ok(
+        path,
+        &["edit", "1", "--description", "Renamed", "--priority", "-3"],
+    );
+    assert_eq!(edited["description"], "Renamed");
+    assert_eq!(edited["priority"], -3);
+    assert_eq!(ok(path, &["show", "1"])["task"]["priority"], -3);
+    assert_eq!(ok(path, &["list"])[2]["priority"], -5);
+}
+
+#[test]
+fn external_editor_creation_and_edit_keep_requested_priority() {
+    let dir = project();
+    let path = dir.path();
+    std::fs::write(path.join("editor.sh"), "printf 'From editor' > \"$1\"\n").unwrap();
+    let add = command(path)
+        .env("EDITOR", "sh ./editor.sh")
+        .args(["add", "--edit", "--priority", "9"])
+        .output()
+        .unwrap();
+    assert!(
+        add.status.success(),
+        "{}",
+        String::from_utf8_lossy(&add.stderr)
+    );
+    let created: Value = serde_json::from_slice(&add.stdout).unwrap();
+    assert_eq!(created["priority"], 9);
+    assert_eq!(created["description"], "From editor");
+
+    let edit = command(path)
+        .env("EDITOR", "sh ./editor.sh")
+        .args(["edit", "1", "--edit", "--priority", "4"])
+        .output()
+        .unwrap();
+    assert!(
+        edit.status.success(),
+        "{}",
+        String::from_utf8_lossy(&edit.stderr)
+    );
+    let updated: Value = serde_json::from_slice(&edit.stdout).unwrap();
+    assert_eq!(updated["priority"], 4);
+}
+
+#[test]
+fn priority_only_edits_preserve_status_owner_and_history() {
+    let dir = project();
+    let path = dir.path();
+    ok(path, &["add", "Active"]);
+    ok(path, &["add", "Failure"]);
+    ok(path, &["add", "Finished"]);
+    ok(path, &["next", "--session", "owner-a"]);
+    let before = ok(path, &["show", "1"]);
+    let active = ok(path, &["edit", "1", "--priority", "20"]);
+    assert_eq!(active["status"], "in_progress");
+    assert_eq!(active["harness_session"], before["task"]["harness_session"]);
+    assert_eq!(active["priority"], 20);
+    assert_eq!(ok(path, &["show", "1"])["events"], before["events"]);
+    assert_eq!(ok(path, &["next", "--session", "owner-a"])["id"], 1);
+
+    ok(path, &["next", "--session", "owner-b"]);
+    ok(
+        path,
+        &[
+            "edit",
+            "2",
+            "--set-status",
+            "error",
+            "--reason",
+            "Failed",
+            "--session",
+            "owner-b",
+        ],
+    );
+    let failed = ok(path, &["edit", "2", "--priority", "-10"]);
+    assert_eq!(failed["status"], "error");
+    assert_eq!(failed["priority"], -10);
+
+    ok(path, &["next", "--session", "owner-c"]);
+    ok(path, &["complete", "3", "--session", "owner-c"]);
+    let completed = ok(path, &["edit", "3", "--priority", "10"]);
+    assert_eq!(completed["status"], "completed");
+    assert_eq!(completed["priority"], 10);
+}
+
+#[test]
+fn priority_rejects_out_of_range_and_non_integer_without_writes() {
+    let dir = project();
+    let path = dir.path();
+    ok(path, &["add", "Keep"]);
+    for value in ["-101", "101", "bad"] {
+        let add = command(path)
+            .args(["add", "Reject", "--priority", value])
+            .output()
+            .unwrap();
+        assert_eq!(add.status.code(), Some(2), "{value}");
+        assert!(add.stdout.is_empty());
+        let edit = command(path)
+            .args(["edit", "1", "--priority", value])
+            .output()
+            .unwrap();
+        assert_eq!(edit.status.code(), Some(2), "{value}");
+        assert!(edit.stdout.is_empty());
+    }
+    assert_eq!(ok(path, &["list"]).as_array().unwrap().len(), 1);
+    assert_eq!(ok(path, &["show", "1"])["task"]["priority"], 0);
+    let conn = Connection::open(path.join(".qqq/qqq.db")).unwrap();
+    assert!(
+        conn.execute("UPDATE tasks SET priority=101 WHERE id=1", [])
+            .is_err()
     );
 }

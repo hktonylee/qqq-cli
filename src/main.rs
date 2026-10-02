@@ -87,6 +87,9 @@ enum Commands {
         /// Existing task that must complete before this task can be claimed.
         #[arg(long)]
         parent: Option<i64>,
+        /// Claim order: -100 through 100, higher first; defaults to 0.
+        #[arg(long, default_value_t = 0, allow_hyphen_values = true, value_parser = clap::value_parser!(i64).range(-100..=100))]
+        priority: i64,
         /// Attach image file bytes. Repeat for multiple images.
         #[arg(long = "image", value_name = "PATH")]
         images: Vec<PathBuf>,
@@ -148,6 +151,9 @@ enum Commands {
         /// Change dependency to a task ID, or use none to clear it. Skips editor unless --edit.
         #[arg(long, value_name = "ID|none")]
         set_parent: Option<db::ParentChange>,
+        /// Claim order: -100 through 100, higher first.
+        #[arg(long, allow_hyphen_values = true, value_parser = clap::value_parser!(i64).range(-100..=100))]
+        priority: Option<i64>,
         /// Append image file bytes without opening editor. Repeat for multiple images.
         #[arg(long = "image", value_name = "PATH")]
         images: Vec<PathBuf>,
@@ -249,6 +255,7 @@ fn execute(cli: Cli, display_limit: Option<i64>) -> Result<Value> {
             description,
             edit,
             parent,
+            priority,
             images,
         } => {
             if let Some(id) = parent {
@@ -259,7 +266,9 @@ fn execute(cli: Cli, display_limit: Option<i64>) -> Result<Value> {
                 .map(|path| images::ImageInput::read(path))
                 .collect::<Result<Vec<_>>>()?;
             match text.or(description) {
-                Some(description) if !edit => json!(db.add(&description, parent, &images)?),
+                Some(description) if !edit => {
+                    json!(db.add_with_priority(&description, parent, &images, priority)?)
+                }
                 None if editor::uses_builtin(edit) => {
                     let mut saved = Vec::new();
                     let mut first_images = images;
@@ -268,8 +277,12 @@ fn execute(cli: Cli, display_limit: Option<i64>) -> Result<Value> {
                             .composition
                             .images
                             .extend(first_images.iter().cloned());
-                        let task =
-                            db.save_composition(outcome.target_id, parent, &outcome.composition)?;
+                        let task = db.save_composition_with_priority(
+                            outcome.target_id,
+                            parent,
+                            &outcome.composition,
+                            priority,
+                        )?;
                         first_images.clear();
                         let id = task.id;
                         saved.push(task);
@@ -281,7 +294,12 @@ fn execute(cli: Cli, display_limit: Option<i64>) -> Result<Value> {
                     let mut outcome =
                         editor::compose(description.as_deref().unwrap_or(""), edit, Some(&db))?;
                     outcome.composition.images.extend(images);
-                    json!(db.save_composition(outcome.target_id, parent, &outcome.composition)?)
+                    json!(db.save_composition_with_priority(
+                        outcome.target_id,
+                        parent,
+                        &outcome.composition,
+                        priority
+                    )?)
                 }
             }
         }
@@ -324,6 +342,7 @@ fn execute(cli: Cli, display_limit: Option<i64>) -> Result<Value> {
             images,
             reason,
             set_parent,
+            priority,
         } => {
             ensure!(
                 !force || matches!(set_status, Some(EditStatus::New)),
@@ -344,12 +363,18 @@ fn execute(cli: Cli, display_limit: Option<i64>) -> Result<Value> {
                 || (description.is_none()
                     && set_status.is_none()
                     && set_parent.is_none()
+                    && priority.is_none()
                     && images.is_empty())
             {
                 let description = description.as_deref().unwrap_or(&task.description);
                 let mut outcome = editor::compose_existing(description, edit, id, &db)?;
                 outcome.composition.images.extend(images);
-                json!(db.edit_composition(id, &outcome.composition, set_parent)?)
+                json!(db.edit_composition_with_priority(
+                    id,
+                    &outcome.composition,
+                    set_parent,
+                    priority
+                )?)
             } else {
                 ensure!(
                     reason.is_none() || matches!(set_status, Some(EditStatus::Error)),
@@ -393,7 +418,14 @@ fn execute(cli: Cli, display_limit: Option<i64>) -> Result<Value> {
                     }),
                     None => None,
                 };
-                json!(db.edit(id, description.as_deref(), transition, &images, set_parent)?)
+                json!(db.edit_with_priority(
+                    id,
+                    description.as_deref(),
+                    transition,
+                    &images,
+                    set_parent,
+                    priority
+                )?)
             }
         }
         Commands::Next { wait, .. } => {
