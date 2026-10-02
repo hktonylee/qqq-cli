@@ -1,5 +1,5 @@
 use crate::images::{ImageInput, ImageStore, PendingFiles};
-use anyhow::{Context, Result, ensure};
+use anyhow::{Context, Result, bail, ensure};
 use rusqlite::{
     Connection, OpenFlags, OptionalExtension, Transaction, TransactionBehavior, params,
 };
@@ -104,9 +104,19 @@ fn commit_with_files(tx: Transaction<'_>, pending: &mut PendingFiles) -> Result<
         }
         Err(error) => {
             // A failed COMMIT can leave the transaction open (for example,
-            // SQLITE_BUSY). Remove files only after a confirmed rollback.
-            if tx.is_autocommit() || tx.rollback().is_err() {
+            // SQLITE_BUSY). Remove files while its write lock still excludes
+            // another writer from reusing rolled-back image IDs.
+            if tx.is_autocommit() {
                 pending.keep();
+                return Err(error.into());
+            }
+            let cleanup_error = pending.discard().err();
+            let rollback_error = tx.rollback().err();
+            if let Some(cleanup_error) = cleanup_error {
+                bail!("Commit failed: {error}; image cleanup failed: {cleanup_error:#}");
+            }
+            if let Some(rollback_error) = rollback_error {
+                bail!("Commit failed: {error}; rollback failed: {rollback_error}");
             }
             Err(error.into())
         }

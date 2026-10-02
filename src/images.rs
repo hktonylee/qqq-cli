@@ -28,14 +28,31 @@ impl PendingFiles {
     pub fn keep(&mut self) {
         self.active = false;
     }
+
+    pub fn discard(&mut self) -> Result<()> {
+        self.active = false;
+        let mut failure = None;
+        for path in self.created.iter().rev() {
+            if let Err(error) = fs::remove_file(path) {
+                if error.kind() != std::io::ErrorKind::NotFound && failure.is_none() {
+                    failure = Some((path.clone(), error));
+                }
+            }
+        }
+        self.created.clear();
+        match failure {
+            Some((path, error)) => {
+                Err(error).with_context(|| format!("Cannot remove {}", path.display()))
+            }
+            None => Ok(()),
+        }
+    }
 }
 
 impl Drop for PendingFiles {
     fn drop(&mut self) {
         if self.active {
-            for path in self.created.iter().rev() {
-                let _ = fs::remove_file(path);
-            }
+            let _ = self.discard();
         }
     }
 }

@@ -50,7 +50,7 @@ ALTER TABLE images_v6 RENAME TO images;
 CREATE INDEX images_task ON images(task_id,id);
 PRAGMA user_version=6;
 ```
-- [x] Extend `Db` with `image_store: ImageStore`, rooted at opened DB's parent plus `images`. Accept versions 1–6. Under existing immediate transaction, run prior migrations then stream old image rows through `ImageStore::write` and `PendingFiles`, execute v6 SQL, foreign-key check, commit with confirmed rollback cleanup, and best-effort `VACUUM` for legacy image rows with warning on failure. Recheck `user_version` after lock so concurrent openers skip repeated copy. Update `tests/tui_db.rs` fixture to retain a temp directory for its store.
+- [x] Extend `Db` with `image_store: ImageStore`, rooted at opened DB's parent plus `images`. Accept versions 1–6. Under existing immediate transaction, run prior migrations then stream old image rows through `ImageStore::write` and `PendingFiles`, execute v6 SQL, foreign-key check, clean files before rollback on failed commit, and best-effort `VACUUM` for legacy image rows with warning on failure. Recheck `user_version` after lock so concurrent openers skip repeated copy. Update `tests/tui_db.rs` fixture to retain a temp directory for its store.
 - [x] Run migration tests, then full suite to locate old blob assertions. Commit schema migration after all migration tests pass.
 
 ### Task 3: New writes, reads, transaction failures
@@ -59,7 +59,7 @@ PRAGMA user_version=6;
 
 - [x] Add failing CLI test: `add --image` writes exact bytes under `.qqq/images/1/1.png` with metadata-only `images`; `edit --image` appends `2.jpg`; deleting original source files does not affect export; deleting stored file causes export error without creating output. Add rollback assertions: trigger failure on second image insertion leaves DB task/edit state and newly written files unchanged. Update in-memory `tui_db` tests for filesystem-backed bytes.
 - [x] Run `cargo test --locked --test images` plus `--test tui_db`; expect failure from old DB-backed behavior.
-- [x] In `Db::save_images`, insert `(task_id,name,media_type,bytes)` inside caller transaction, get inserted ID, write bytes through `ImageStore::write` and a caller-owned `PendingFiles`. In `add`/`edit`, retain guard across all SQL changes; keep files after successful commit or ambiguous failure, clean after confirmed rollback. Change `show` query to select `bytes`; change export query to select `media_type,bytes`, read through store, then create output with `create_new`.
+- [x] In `Db::save_images`, insert `(task_id,name,media_type,bytes)` inside caller transaction, get inserted ID, write bytes through `ImageStore::write` and a caller-owned `PendingFiles`. In `add`/`edit`, retain guard across all SQL changes; keep files after successful commit or ambiguous failure, clean while transaction still holds write lock before rollback. Change `show` query to select `bytes`; change export query to select `media_type,bytes`, read through store, then create output with `create_new`.
 
 ```sql
 INSERT INTO images(task_id,name,media_type,bytes) VALUES (?,?,?,?);
@@ -73,6 +73,6 @@ SELECT media_type,bytes FROM images WHERE id=? AND task_id=?;
 **Files:** Modify `README.md`; update this plan's checkboxes.
 
 - [x] Change README storage/backup text: SQLite holds metadata; `.qqq/images` holds bytes; stop writers and copy whole `.qqq` for backup; schema versions 1–5 migrate to 6; `VACUUM` can reclaim old free pages if automatic compaction failed.
-- [ ] Run `cargo fmt --check`, strict `cargo clippy --locked --all-targets -- -D warnings`, full `cargo test --locked --quiet`, `git diff --check` using `CARGO_TARGET_DIR=/private/tmp/qqq-task53-target` where applicable; require exit 0.
-- [ ] Request read-only code review. Fix verified Critical/Important findings and rerun affected checks.
+- [x] Run `cargo fmt --all -- --check`, strict `cargo clippy --locked --all-targets -- -D warnings`, full `cargo test --locked`, and `git diff --check`; require exit 0.
+- [x] Request read-only code review. Fix verified Critical/Important findings and rerun affected checks.
 - [ ] Rebase onto current local `master`, fast-forward locally, run integrated full suite, remove owned worktree, delete merged branch. Complete task 53 with `qqq --json complete 53`; verify `qqq --json show 53` reports completed. Resume `qqq --json next --wait --local` once.
