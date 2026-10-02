@@ -5,18 +5,18 @@ Local task queue for coding agents. Task metadata lives in each project's
 
 ## Install
 
-Requires Rust 1.85+ and C compiler. Install current source from repo root:
-
-```sh
-cargo install --path . --locked
-```
-
-Command name: `qqq`; crate name: `qqq-cli`. Published crates.io version 0.1.0
-predates `.qqq/` layout and continuous add. After next release, install from
-crates.io with:
+Requires Rust 1.85+ and C compiler. Install latest published crate:
 
 ```sh
 cargo install qqq-cli --locked
+```
+
+Command name: `qqq`; crate name: `qqq-cli`. Published releases can lag this
+README's development features. Install current source from repo root for latest
+behavior:
+
+```sh
+cargo install --path . --locked --force
 ```
 
 ## Quick start
@@ -38,8 +38,7 @@ qqq next --session worker-1
 
 `next` claims highest-priority ready task, oldest ID on ties. `complete` frees
 its dependent tasks. Use IDs returned by `add` and `next`; examples above assume
-fresh DB. See `qqq --help`
-or `qqq <command> --help` for all flags.
+fresh DB. See `qqq --help` or `qqq <command> --help` for all flags.
 
 ## List and show
 
@@ -58,11 +57,11 @@ qqq list --watch --json
 qqq list --include-archived
 ```
 
-`list` shows status, priority, and dependency tree in stable ID order. In a
-terminal with a known width, it shows full descriptions with wrapped, aligned
-continuation lines; piped output keeps first-line previews. `show` adds
-messages, images, ownership history and Herdr link. Negative indexes work with
-`show`, `edit`, `archive`, `unarchive`, and `reopen`; `-1` selects newest task.
+`list` shows status, priority, and dependency tree; roots and siblings follow
+creation ID order. In a terminal with known width, it shows full descriptions
+with wrapped, aligned continuation lines; piped output keeps first-line previews.
+`show` adds messages, images, ownership history and Herdr link. Negative indexes
+work with `show`, `edit`, `archive`, `unarchive`, and `reopen`; `-1` selects newest task.
 
 `--oneline` limits terminal and watch views to each description's first line.
 JSON and search still use full descriptions.
@@ -113,7 +112,7 @@ ID. `list` stays in ID/dependency order. Editing priority on active, completed,
 or error tasks keeps status and ownership metadata; an already-owned task still
 returns to its owner before new claims.
 
-## Archive and restore
+## Archive and unarchive
 
 ```sh
 qqq archive 12
@@ -143,10 +142,12 @@ description, priority, parent, messages, images, creation time, and prior
 history. A task in any other status fails without changes; repeating `reopen`
 also fails. Archived completed tasks require `unarchive` first. A completed
 child under an archived unfinished parent cannot reopen until parent is
-unarchived or completed. Completed descendants stay completed; new descendants
+unarchived or completed. Completed descendants stay completed; new direct children
 wait for reopened parent to complete again. Reopened tasks return to default
 lists, including `--max-completed 0`, and become claimable when dependencies
 permit.
+
+## Built-in editor
 
 On a terminal, `add` without text or `edit` without update flags opens built-in
 editor. Ctrl-S saves, Esc exits blank draft or confirms discard of nonempty
@@ -175,13 +176,14 @@ draft. Header shows selected ID and status. JSON output returns saved tasks as
 array on exit. Exit without any save returns error.
 
 Switching from changed draft asks before discard; N, Enter, or Esc keeps it.
-Navigation includes completed and active tasks; deleted IDs are skipped.
-`--parent` applies to each new task. `--image` files attach only to first
-successful save, including when updating existing task. Inline add, external
-editor and `qqq edit` save once.
+Navigation includes all unarchived tasks, regardless of status; deleted IDs are
+skipped. `--parent` and `--priority` apply to each new task. `--image` files attach
+only to first successful save, including when updating existing task. Inline add,
+external editor and `qqq edit` save once.
 
-Use `--edit` (`-e`) to force `$EDITOR`; nonterminal interactive calls also need
-it. Editor command must wait until editing finishes.
+Use `--edit` (`-e`) to force `$EDITOR`. Without terminal input and stderr,
+interactive add/edit uses `$EDITOR` automatically. Editor command must wait
+until editing finishes.
 
 ```sh
 export EDITOR='vim'
@@ -199,15 +201,15 @@ attachments.
 qqq tui
 ```
 
-Upper panel lists all tasks; lower panel edits current task. Shift-Up/Down
-selects tasks in displayed tree order, then blank draft. Ctrl-S updates selected
-task or creates new task, keeping saved task open for further edits or task
-actions. Shift-Down past last displayed task opens blank draft. Esc/Ctrl-C in
+Upper panel lists unarchived tasks by default; lower panel edits current task.
+Shift-Up/Down selects tasks in displayed tree order, then blank draft. Ctrl-S
+updates selected task or creates new task, keeping saved task open for further
+edits or task actions. Shift-Down past last displayed task opens blank draft. Esc/Ctrl-C in
 selected task returns to blank draft; Esc asks before discarding unsaved edits.
 Press again in blank draft to exit. Esc in nonempty new draft asks before discard;
-Ctrl-C exits from new draft. Ctrl-V or terminal
-paste inserts text; pasting image file path attaches image. Saves commit
-immediately. TUI needs terminal and writes no stdout, including with `--json`.
+Ctrl-C exits from new draft. Ctrl-V or terminal paste inserts text; pasting
+image file path attaches image. Saves commit immediately. TUI needs terminal
+and writes no stdout, including with `--json`.
 
 Mouse wheel scrolls task list or editor under pointer. Both panes keep separate
 scroll positions; scrolling editor never edits or saves text. Shift-Up/Down
@@ -384,8 +386,9 @@ identity fails before claim. Without agent-session hooks, terminal ID plus agent
 kind supplies identity. Active claims retain identity as hooks change.
 
 `link` stores association without changing owner; `find` searches live panes for
-saved link identity. Both require Herdr CLI and server. Explicit `--session`
-claims do not auto-link.
+saved link identity. Both require Herdr CLI and server. Local explicit `--session`
+claims do not auto-link; new-agent dispatch links spawned agent even when caller
+uses explicit session.
 
 To dispatch ready work into new Codex agent tab:
 
@@ -453,15 +456,17 @@ qqq doctor
 qqq --json doctor
 ```
 
-Doctor checks SQLite integrity, foreign keys, schema, image paths, byte counts,
+Doctor checks SQLite integrity, foreign keys, schema version, image paths, byte counts,
 signatures, and orphan files/directories. Healthy project exits 0. Issues print recovery
 actions and exit 1; JSON includes `ok`, counts, and `issues` with code, path,
 message, and action. Doctor never migrates DB. If SQLite journal/WAL sidecars
 exist, stop writers and recover or checkpoint SQLite before rerunning doctor.
 For damaged DB or images, restore verified snapshot into new directory first;
 inspect recovered data before replacing damaged project files. Keep damaged
-copy until recovery is verified. `DELETE_RECOVERY_PENDING` means staged deletion
-needs a normal qqq command to recover, followed by another doctor check.
+copy until recovery is verified. For `DELETE_RECOVERY_PENDING`, follow returned
+action: fix unsafe staging paths or access errors first. Valid interrupted
+deletions recover through normal DB-backed command, such as `qqq list`;
+rerun doctor afterward.
 
 To move old root-level `qqq.db`, stop DB writers. Before `qqq init`, check that
 `.qqq/qqq.db` does not exist. From project root:
@@ -485,6 +490,8 @@ before conversion.
 
 ## Development
 
+Tests require Python 3 for real-terminal coverage on macOS and Linux.
+
 ```sh
 cargo test --locked
 cargo fmt --check
@@ -503,12 +510,12 @@ binary, uploads `qqq-<OS>-<ARCH>` archives (14-day retention).
 1. Sign in to crates.io, verify email, create token allowed to publish `qqq-cli`.
 2. Add GitHub Actions repo secret `CARGO_REGISTRY_TOKEN`.
 3. Choose unused version, update `Cargo.toml` and `Cargo.lock`, commit changes.
-4. Push commit and matching tag. Example after bumping to `0.1.1`:
+4. Push commit and matching tag. Example after bumping to unused version `0.1.2`:
 
 ```sh
 git push origin master
-git tag v0.1.1
-git push origin v0.1.1
+git tag v0.1.2
+git push origin v0.1.2
 ```
 
 For manual validation, run **Publish to crates.io** with existing `tag` and
