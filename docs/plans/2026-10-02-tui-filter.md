@@ -23,5 +23,5 @@
 
 ### Task 4: Verify and integrate
 
-- [ ] Run full `cargo test --locked`, strict Clippy, fmt check, diff check. Request read-only code review; fix Important/Critical findings.
+- [x] Run full `cargo test --locked`, strict Clippy, fmt check, diff check. Request read-only code review; fix Important/Critical findings.
 - [ ] Rebase local master, fast-forward, run integrated full suite, remove owned worktree/branch, install CLI, complete task 59, verify status, resume one blocking `qqq --json next --wait --local` call.

@@ -185,7 +185,13 @@ with tempfile.TemporaryDirectory(prefix="qqq-dashboard-test-") as folder:
             read_until(b"Second")
             assert "First" in visible.text() and "Second" in visible.text(), visible.text()
         assert not select.select([child.stdout], [], [], 0)[0], "TUI wrote stdout while open"
-        if scenario in ("filter", "filter_no_color"):
+        if scenario == "slash_edit":
+            send(b"\x1b/")
+            wait_visible(lambda: visible.text().splitlines()[9].startswith("/"))
+            send(b"path\x13")
+            read_until(b"Saved #3. New task")
+            assert cli("show", "3")["task"]["description"] == "/path"
+        elif scenario in ("filter", "filter_no_color"):
             initial_tasks = cli("list")
             send(b"Unsaved")
             clear_capture()

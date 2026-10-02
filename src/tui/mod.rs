@@ -451,7 +451,13 @@ fn compose_inner(
                         continue;
                     }
                 }
-                if dashboard && !control && !filter_focused && key.code == KeyCode::Char('/') {
+                if dashboard
+                    && !filter_focused
+                    && key.code == KeyCode::Char('/')
+                    && !key
+                        .modifiers
+                        .intersects(KeyModifiers::CONTROL | KeyModifiers::ALT | KeyModifiers::SUPER)
+                {
                     filter_focused = true;
                     continue;
                 }
@@ -552,7 +558,10 @@ fn compose_inner(
                     KeyCode::Char(character)
                         if !key
                             .modifiers
-                            .intersects(KeyModifiers::ALT | KeyModifiers::SUPER) =>
+                            .intersects(KeyModifiers::ALT | KeyModifiers::SUPER)
+                            || (character == '/'
+                                && key.modifiers.contains(KeyModifiers::ALT)
+                                && !key.modifiers.contains(KeyModifiers::SUPER)) =>
                     {
                         draft.insert(&character.to_string())
                     }

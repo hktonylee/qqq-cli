@@ -102,6 +102,42 @@ fn small_dashboard_keeps_filter_row_and_plain_style() {
 }
 
 #[test]
+fn minimum_dashboard_height_still_shows_selected_task() {
+    let rows = panel::rows("ID     STATUS       TASK\n1      New          First");
+    let layout = render::Layout::new(&["Draft".into()], &[], 12);
+    let chrome = render::Chrome {
+        title: "Editor",
+        keys: render::KEYS,
+        message: "",
+    };
+    let mut terminal = Terminal::new(TestBackend::new(12, 8)).unwrap();
+    terminal
+        .draw(|frame| {
+            dashboard::draw(
+                frame,
+                &rows,
+                &HashMap::from([(1, "new")]),
+                Some(1),
+                dashboard::ListView {
+                    query: "",
+                    focused: false,
+                    top: &mut 0,
+                },
+                render::DashboardEditor {
+                    layout: &layout,
+                    cursor: 0,
+                    top: &mut 0,
+                    chrome: &chrome,
+                    message_is_error: false,
+                },
+                false,
+            );
+        })
+        .unwrap();
+    assert!(line(terminal.backend().buffer(), 2).starts_with("> 1"));
+}
+
+#[test]
 fn split_dashboard_keeps_list_above_editor() {
     let rows = panel::rows("ID     STATUS       TASK\n1      New          First");
     let layout = render::Layout::new(&["Draft".into()], &[], 72);

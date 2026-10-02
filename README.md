@@ -141,8 +141,9 @@ Filter bar stays visible above task list. `/` focuses it; type to match any
 part of full description, ignoring case. Matching tasks retain parent chain;
 no matches shows `No matching tasks.`. Backspace edits query. Esc clears
 nonempty query, then exits filter focus on next press. Tab or Enter returns to
-editor. Shift-Up/Down navigates visible tasks while filter is active. Query
-changes do not change selected task, unsaved draft, or DB.
+editor. Alt+/ inserts literal `/` into editor. Shift-Up/Down navigates visible
+tasks while filter is active. Query changes do not change selected task, unsaved
+draft, or DB.
 
 ## Dependencies and images
 

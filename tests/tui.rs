@@ -93,6 +93,11 @@ fn tui_dashboard_filter_keeps_draft_and_navigates_visible_tasks() {
 }
 
 #[test]
+fn tui_dashboard_alt_slash_inserts_literal_slash() {
+    dashboard_scenario("slash_edit");
+}
+
+#[test]
 fn tui_dashboard_pasteboard_round_trip_and_plain_mode() {
     dashboard_scenario("pasteboard");
     dashboard_scenario("pasteboard_no_color");
