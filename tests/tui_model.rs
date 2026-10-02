@@ -143,6 +143,51 @@ fn ctrl_w_deletes_previous_word_and_spaces_without_crossing_line() {
 }
 
 #[test]
+fn word_motion_skips_whitespace_and_moves_across_lines() {
+    let mut draft = Draft::new("alpha  beta\n🦀world  ");
+    draft.previous_word();
+    assert_eq!(draft.cursor(), 12); // Start of 🦀world.
+    draft.previous_word();
+    assert_eq!(draft.cursor(), 7); // Start of beta.
+    draft.previous_word();
+    assert_eq!(draft.cursor(), 0);
+    draft.previous_word();
+    assert_eq!(draft.cursor(), 0);
+    draft.next_word();
+    assert_eq!(draft.cursor(), 5); // End of alpha.
+    draft.next_word();
+    assert_eq!(draft.cursor(), 11); // End of beta.
+    draft.next_word();
+    assert_eq!(draft.cursor(), 18); // End of 🦀world.
+    draft.next_word();
+    assert_eq!(draft.cursor(), 20); // End of trailing spaces.
+    draft.next_word();
+    assert_eq!(draft.cursor(), 20);
+}
+
+#[test]
+fn word_motion_keeps_paste_and_image_atoms_whole() {
+    let mut draft = Draft::new("One ");
+    draft.paste(&"x".repeat(1001));
+    draft.insert(" ");
+    draft
+        .image(ImageInput {
+            name: "icon.png".into(),
+            data: b"\x89PNG\r\n\x1a\nimage".to_vec(),
+        })
+        .unwrap();
+    assert_eq!(draft.cursor(), 7);
+    draft.previous_word();
+    assert_eq!(draft.cursor(), 6); // Before image.
+    draft.previous_word();
+    assert_eq!(draft.cursor(), 4); // Before pasted text.
+    draft.next_word();
+    assert_eq!(draft.cursor(), 5); // After pasted text.
+    draft.next_word();
+    assert_eq!(draft.cursor(), 7); // After image.
+}
+
+#[test]
 fn ctrl_w_deletes_unicode_prefix_at_cursor() {
     let mut draft = Draft::new("école 🦀world");
     draft.set_cursor(9); // After "🦀wo".

@@ -19,6 +19,10 @@ enum Atom {
     },
 }
 impl Atom {
+    fn is_whitespace(&self) -> bool {
+        matches!(self, Self::Text(text) if text.chars().all(char::is_whitespace))
+    }
+
     fn label(&self) -> String {
         match self {
             Self::Text(text) => text.clone(),
@@ -131,6 +135,22 @@ impl Draft {
     }
     pub fn right(&mut self) {
         self.cursor = (self.cursor + 1).min(self.atoms.len());
+    }
+    pub fn previous_word(&mut self) {
+        while self.cursor > 0 && self.atoms[self.cursor - 1].is_whitespace() {
+            self.cursor -= 1;
+        }
+        while self.cursor > 0 && !self.atoms[self.cursor - 1].is_whitespace() {
+            self.cursor -= 1;
+        }
+    }
+    pub fn next_word(&mut self) {
+        while self.cursor < self.atoms.len() && self.atoms[self.cursor].is_whitespace() {
+            self.cursor += 1;
+        }
+        while self.cursor < self.atoms.len() && !self.atoms[self.cursor].is_whitespace() {
+            self.cursor += 1;
+        }
     }
     pub fn home(&mut self) {
         while self.cursor > 0

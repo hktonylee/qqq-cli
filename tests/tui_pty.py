@@ -133,6 +133,8 @@ with tempfile.TemporaryDirectory(prefix="qqq-tui-test-") as folder:
             send(b" \r")
         elif scenario == "ctrl_w":
             send(b"alpha beta\x17")
+        elif scenario == "alt_words":
+            send(b"alpha beta\x1b[1;3DX\x1b[1;3CY")
         elif scenario == "continuous":
             send(b"First\x13")
             read_until(b"Saved #1. New task")
@@ -289,6 +291,8 @@ with tempfile.TemporaryDirectory(prefix="qqq-tui-test-") as folder:
                 assert task["description"] == "Recovered"
             elif scenario == "ctrl_w":
                 assert task["description"] == "alpha "
+            elif scenario == "alt_words":
+                assert task["description"] == "alpha XbetaY"
             elif scenario not in ("continuous", "continuous_flags", "continuous_discard"):
                 assert task["id"] == 1
                 assert task["description"] == "Original\n\nDetails amended"

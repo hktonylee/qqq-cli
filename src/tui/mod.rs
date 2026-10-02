@@ -325,6 +325,12 @@ fn compose_inner(description: &str, mut mode: Mode<'_, '_>) -> Result<Option<Out
                     KeyCode::Tab => draft.insert("\t"),
                     KeyCode::Backspace => draft.backspace(),
                     KeyCode::Delete => draft.delete(),
+                    KeyCode::Left if key.modifiers.contains(KeyModifiers::ALT) => {
+                        draft.previous_word()
+                    }
+                    KeyCode::Right if key.modifiers.contains(KeyModifiers::ALT) => {
+                        draft.next_word()
+                    }
                     KeyCode::Left => draft.left(),
                     KeyCode::Right => draft.right(),
                     KeyCode::Home => draft.home(),

@@ -97,6 +97,10 @@ fn tui_ctrl_w_deletes_previous_word() {
     scenario("ctrl_w");
 }
 #[test]
+fn tui_alt_arrows_move_by_word() {
+    scenario("alt_words");
+}
+#[test]
 fn tui_add_saves_multiple_tasks_without_leaving_editor() {
     scenario("continuous");
 }
