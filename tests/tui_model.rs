@@ -169,22 +169,26 @@ fn word_motion_skips_whitespace_and_moves_across_lines() {
 fn word_motion_keeps_paste_and_image_atoms_whole() {
     let mut draft = Draft::new("One ");
     draft.paste(&"x".repeat(1001));
-    draft.insert(" ");
     draft
         .image(ImageInput {
             name: "icon.png".into(),
             data: b"\x89PNG\r\n\x1a\nimage".to_vec(),
         })
         .unwrap();
-    assert_eq!(draft.cursor(), 7);
+    draft.insert("suffix");
+    assert_eq!(draft.cursor(), 12);
     draft.previous_word();
-    assert_eq!(draft.cursor(), 6); // Before image.
+    assert_eq!(draft.cursor(), 6); // Before typed suffix.
+    draft.previous_word();
+    assert_eq!(draft.cursor(), 5); // Before image.
     draft.previous_word();
     assert_eq!(draft.cursor(), 4); // Before pasted text.
     draft.next_word();
     assert_eq!(draft.cursor(), 5); // After pasted text.
     draft.next_word();
-    assert_eq!(draft.cursor(), 7); // After image.
+    assert_eq!(draft.cursor(), 6); // After image.
+    draft.next_word();
+    assert_eq!(draft.cursor(), 12); // After typed suffix.
 }
 
 #[test]

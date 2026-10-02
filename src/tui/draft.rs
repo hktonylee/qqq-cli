@@ -23,6 +23,10 @@ impl Atom {
         matches!(self, Self::Text(text) if text.chars().all(char::is_whitespace))
     }
 
+    fn is_word_text(&self) -> bool {
+        matches!(self, Self::Text(text) if !text.chars().all(char::is_whitespace))
+    }
+
     fn label(&self) -> String {
         match self {
             Self::Text(text) => text.clone(),
@@ -140,7 +144,11 @@ impl Draft {
         while self.cursor > 0 && self.atoms[self.cursor - 1].is_whitespace() {
             self.cursor -= 1;
         }
-        while self.cursor > 0 && !self.atoms[self.cursor - 1].is_whitespace() {
+        if self.cursor > 0 && !self.atoms[self.cursor - 1].is_word_text() {
+            self.cursor -= 1;
+            return;
+        }
+        while self.cursor > 0 && self.atoms[self.cursor - 1].is_word_text() {
             self.cursor -= 1;
         }
     }
@@ -148,7 +156,11 @@ impl Draft {
         while self.cursor < self.atoms.len() && self.atoms[self.cursor].is_whitespace() {
             self.cursor += 1;
         }
-        while self.cursor < self.atoms.len() && !self.atoms[self.cursor].is_whitespace() {
+        if self.cursor < self.atoms.len() && !self.atoms[self.cursor].is_word_text() {
+            self.cursor += 1;
+            return;
+        }
+        while self.cursor < self.atoms.len() && self.atoms[self.cursor].is_word_text() {
             self.cursor += 1;
         }
     }

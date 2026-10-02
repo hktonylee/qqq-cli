@@ -83,7 +83,8 @@ Descriptions preserve whitespace and newlines; blank-only text fails. On a
 terminal, `add` without text or `edit` without update flags opens built-in
 editor. Ctrl-S saves, Esc exits blank draft or confirms discard of nonempty
 draft, Ctrl-C exits, Ctrl-W deletes previous word on same line, Ctrl-V pastes
-clipboard text or image. Clipboard paste needs desktop clipboard support.
+clipboard text or image. Option+Left/Right moves cursor by word. Clipboard paste
+needs desktop clipboard support.
 
 In built-in `qqq add`, Ctrl-S creates or updates task, clears editor, then waits
 for next task. Saves commit immediately; exit keeps prior saves. Shift+Up loads
