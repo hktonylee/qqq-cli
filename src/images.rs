@@ -82,7 +82,9 @@ impl ImageStore {
                 Ok(())
             }
             Err(error) if error.error.kind() == std::io::ErrorKind::AlreadyExists => {
-                let existing = self.read(task_id, image_id, media_type, data.len() as i64)?;
+                let existing = self
+                    .read(task_id, image_id, media_type, data.len() as i64)
+                    .context("Stored image path conflicts with existing bytes")?;
                 ensure!(
                     existing == data,
                     "Stored image path conflicts with existing bytes"

@@ -59,6 +59,101 @@ fn project() -> TempDir {
     dir
 }
 
+fn legacy_v5_project() -> TempDir {
+    let dir = TempDir::new().unwrap();
+    fs::create_dir(dir.path().join(".qqq")).unwrap();
+    let conn = Connection::open(dir.path().join(".qqq/qqq.db")).unwrap();
+    for migration in [
+        include_str!("../src/schema.sql"),
+        include_str!("../src/migrate_v2.sql"),
+        include_str!("../src/migrate_v3.sql"),
+        include_str!("../src/migrate_v4.sql"),
+        include_str!("../src/migrate_v5.sql"),
+    ] {
+        conn.execute_batch(migration).unwrap();
+    }
+    conn.execute("INSERT INTO tasks(description) VALUES ('Legacy')", [])
+        .unwrap();
+    conn.execute(
+        "INSERT INTO images(id,task_id,name,media_type,data) VALUES (3,1,'old.png','image/png',?1)",
+        [PNG],
+    )
+    .unwrap();
+    conn.execute(
+        "INSERT INTO images(id,task_id,name,media_type,data) VALUES (7,1,'old.jpg','image/jpeg',?1)",
+        [JPEG],
+    )
+    .unwrap();
+    conn.execute(
+        "INSERT INTO images(id,task_id,name,media_type,data) VALUES (20,1,'deleted.gif','image/gif',X'474946383961')",
+        [],
+    )
+    .unwrap();
+    conn.execute("DELETE FROM images WHERE id=20", []).unwrap();
+    dir
+}
+
+#[test]
+fn v5_migration_copies_images_to_files_and_preserves_ids_and_sequence() {
+    let dir = legacy_v5_project();
+    let p = dir.path();
+    let first = p.join(".qqq/images/1/3.png");
+    fs::create_dir_all(first.parent().unwrap()).unwrap();
+    fs::write(&first, PNG).unwrap(); // Matching file left by interrupted migration.
+    let detail = ok(p, &["show", "1"]);
+    assert_eq!(detail["images"][0]["id"], 3);
+    assert_eq!(detail["images"][0]["bytes"], PNG.len());
+    assert_eq!(detail["images"][1]["id"], 7);
+    assert_eq!(fs::read(first).unwrap(), PNG);
+    assert_eq!(fs::read(p.join(".qqq/images/1/7.jpg")).unwrap(), JPEG);
+    let conn = Connection::open(p.join(".qqq/qqq.db")).unwrap();
+    assert_eq!(
+        conn.pragma_query_value(None, "user_version", |r| r.get::<_, i64>(0))
+            .unwrap(),
+        6
+    );
+    let has_data: bool = conn
+        .query_row(
+            "SELECT EXISTS(SELECT 1 FROM pragma_table_info('images') WHERE name='data')",
+            [],
+            |r| r.get(0),
+        )
+        .unwrap();
+    assert!(!has_data);
+    conn.execute(
+        "INSERT INTO images(task_id,name,media_type,bytes) VALUES (1,'new.gif','image/gif',3)",
+        [],
+    )
+    .unwrap();
+    assert!(conn.last_insert_rowid() > 20);
+    assert_eq!(ok(p, &["show", "1"])["images"].as_array().unwrap().len(), 3);
+}
+
+#[test]
+fn v5_migration_conflict_keeps_blob_rows_and_succeeds_after_retry() {
+    let dir = legacy_v5_project();
+    let p = dir.path();
+    let conflict = p.join(".qqq/images/1/7.jpg");
+    fs::create_dir_all(conflict.parent().unwrap()).unwrap();
+    fs::write(&conflict, b"different").unwrap();
+    error(p, &["show", "1"], 1, "Stored image path conflicts");
+    let conn = Connection::open(p.join(".qqq/qqq.db")).unwrap();
+    assert_eq!(
+        conn.pragma_query_value(None, "user_version", |r| r.get::<_, i64>(0))
+            .unwrap(),
+        5
+    );
+    let old: Vec<u8> = conn
+        .query_row("SELECT data FROM images WHERE id=7", [], |r| r.get(0))
+        .unwrap();
+    assert_eq!(old, JPEG);
+    assert!(!p.join(".qqq/images/1/3.png").exists());
+    assert_eq!(fs::read(&conflict).unwrap(), b"different");
+    fs::remove_file(conflict).unwrap();
+    ok(p, &["show", "1"]);
+    assert_eq!(fs::read(p.join(".qqq/images/1/7.jpg")).unwrap(), JPEG);
+}
+
 #[test]
 fn add_copies_repeated_images_and_show_exports_scoped_bytes() {
     let dir = project();

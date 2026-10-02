@@ -332,7 +332,7 @@ fn v3_migration_preserves_data_sequences_constraints_and_foreign_keys() {
     assert_eq!(
         conn.pragma_query_value(None, "user_version", |r| r.get::<_, i64>(0))
             .unwrap(),
-        5
+        6
     );
     assert_eq!(ok(&d, &["add", "After deleted ID"])["id"], 100);
     fail(&d, "1", "legacy");
@@ -361,8 +361,7 @@ fn v3_migration_preserves_data_sequences_constraints_and_foreign_keys() {
         assert!(conn.execute(sql, []).is_err(), "{sql}");
     }
     assert_eq!(
-        conn.query_row("SELECT data FROM images", [], |r| r.get::<_, Vec<u8>>(0))
-            .unwrap(),
+        std::fs::read(d.path().join(".qqq/images/1/1.png")).unwrap(),
         vec![1, 2, 3]
     );
     ok(&d, &["edit", "1", "--set-status", "new"]);

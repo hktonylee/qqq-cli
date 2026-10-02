@@ -115,7 +115,7 @@ fn v2_upgrade_preserves_data_and_enforces_renamed_constraints() {
     assert_eq!(
         conn.pragma_query_value(None, "user_version", |r| r.get::<_, i64>(0))
             .unwrap(),
-        5
+        6
     );
     assert!(
         conn.query_row("SELECT owner_session FROM tasks", [], |r| r
@@ -138,8 +138,7 @@ fn v2_upgrade_preserves_data_and_enforces_renamed_constraints() {
             .is_err()
     );
     assert_eq!(
-        conn.query_row("SELECT data FROM images", [], |r| r.get::<_, Vec<u8>>(0))
-            .unwrap(),
+        std::fs::read(d.path().join(".qqq/images/1/1.png")).unwrap(),
         vec![1, 2, 3]
     );
     assert!(

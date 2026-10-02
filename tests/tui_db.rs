@@ -19,10 +19,11 @@ mod tui {
 
 use db::Db;
 use draft::Composition;
-use images::ImageInput;
+use images::{ImageInput, ImageStore};
 
-fn database() -> Db {
-    let conn = rusqlite::Connection::open_in_memory().unwrap();
+fn database() -> (Db, tempfile::TempDir) {
+    let dir = tempfile::TempDir::new().unwrap();
+    let conn = rusqlite::Connection::open(dir.path().join("qqq.db")).unwrap();
     conn.execute_batch(include_str!("../src/schema.sql"))
         .unwrap();
     conn.execute_batch(include_str!("../src/migrate_v2.sql"))
@@ -33,7 +34,15 @@ fn database() -> Db {
         .unwrap();
     conn.execute_batch(include_str!("../src/migrate_v5.sql"))
         .unwrap();
-    Db { conn }
+    conn.execute_batch(include_str!("../src/migrate_v6.sql"))
+        .unwrap();
+    (
+        Db {
+            conn,
+            image_store: ImageStore::new(dir.path().join("images")),
+        },
+        dir,
+    )
 }
 fn composition() -> Composition {
     Composition {
@@ -46,19 +55,16 @@ fn composition() -> Composition {
 }
 #[test]
 fn composition_saves_task_and_image_bytes_together() {
-    let mut db = database();
+    let (mut db, dir) = database();
     let task = db.save_composition(None, None, &composition()).unwrap();
     assert_eq!(task.description, "Details");
     assert_eq!(db.show(task.id).unwrap()["images"][0]["name"], "ok.png");
-    let bytes: Vec<u8> = db
-        .conn
-        .query_row("SELECT data FROM images", [], |r| r.get(0))
-        .unwrap();
+    let bytes = std::fs::read(dir.path().join("images/1/1.png")).unwrap();
     assert_eq!(bytes, b"\x89PNG\r\n\x1a\n");
 }
 #[test]
 fn failed_image_insert_rolls_back_new_and_edited_drafts() {
-    let mut db = database();
+    let (mut db, _dir) = database();
     db.conn.execute_batch("CREATE TRIGGER reject_image BEFORE INSERT ON images WHEN NEW.name='fail.png' BEGIN SELECT RAISE(ABORT,'image rejected'); END;").unwrap();
     let mut draft = composition();
     draft.images.push(ImageInput {
@@ -77,7 +83,7 @@ fn failed_image_insert_rolls_back_new_and_edited_drafts() {
 }
 #[test]
 fn draft_edit_preserves_ownership_dependencies_and_existing_attachments() {
-    let mut db = database();
+    let (mut db, _dir) = database();
     let parent = db.add("Parent", None, &[]).unwrap();
     db.next("parent", None).unwrap();
     db.complete(parent.id, "parent", None).unwrap();

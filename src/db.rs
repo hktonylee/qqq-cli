@@ -1,4 +1,4 @@
-use crate::images::ImageInput;
+use crate::images::{ImageInput, ImageStore, PendingFiles};
 use anyhow::{Context, Result, ensure};
 use rusqlite::{Connection, OpenFlags, OptionalExtension, TransactionBehavior, params};
 use serde::Serialize;
@@ -12,6 +12,7 @@ pub const DB_NAME: &str = "qqq.db";
 const PROJECT_DIR_NAME: &str = ".qqq";
 pub struct Db {
     pub conn: Connection,
+    pub image_store: ImageStore,
 }
 #[derive(Clone, Copy)]
 pub enum EditTransition<'a> {
@@ -119,24 +120,31 @@ impl Db {
             } else {
                 OpenFlags::empty()
             };
+        let image_store = ImageStore::new(
+            path.parent()
+                .context("Missing database directory")?
+                .join("images"),
+        );
         let mut conn = Connection::open_with_flags(&path, flags)?;
         conn.busy_timeout(Duration::from_secs(10))?;
         conn.pragma_update(None, "foreign_keys", "ON")?;
         let version: i64 = conn.pragma_query_value(None, "user_version", |r| r.get(0))?;
         ensure!(
-            (1..=5).contains(&version) || (init && version == 0),
+            (1..=6).contains(&version) || (init && version == 0),
             "Unsupported database schema version {version}"
         );
         ensure_description_schema(&conn)?;
-        if version < 5 {
+        if version < 6 {
             // Rebuild CHECK constraints without changing references to tasks.
             // SQLite requires foreign_keys to change outside a transaction.
             conn.pragma_update(None, "foreign_keys", "OFF")?;
             let tx = conn.transaction_with_behavior(TransactionBehavior::Immediate)?;
+            let mut pending = PendingFiles::new();
+            let mut had_images = false;
             // Another CLI may have migrated while we waited for the write lock.
             let version: i64 = tx.pragma_query_value(None, "user_version", |r| r.get(0))?;
             ensure!(
-                (1..=5).contains(&version) || (init && version == 0),
+                (1..=6).contains(&version) || (init && version == 0),
                 "Unsupported database schema version {version}"
             );
             ensure_description_schema(&tx)?;
@@ -159,15 +167,46 @@ impl Db {
             if version < 5 {
                 tx.execute_batch(include_str!("migrate_v5.sql"))?;
             }
+            if version < 6 {
+                {
+                    let mut statement =
+                        tx.prepare("SELECT id,task_id,media_type,data FROM images ORDER BY id")?;
+                    let rows = statement.query_map([], |row| {
+                        Ok((
+                            row.get::<_, i64>(0)?,
+                            row.get::<_, i64>(1)?,
+                            row.get::<_, String>(2)?,
+                            row.get::<_, Vec<u8>>(3)?,
+                        ))
+                    })?;
+                    for row in rows {
+                        let (image_id, task_id, media_type, data) = row?;
+                        image_store.write(&mut pending, task_id, image_id, &media_type, &data)?;
+                        had_images = true;
+                    }
+                }
+                tx.execute_batch(include_str!("migrate_v6.sql"))?;
+                ensure!(
+                    !tx.prepare("PRAGMA foreign_key_check")?.exists([])?,
+                    "Database migration found invalid foreign key references"
+                );
+            }
+            // An uncertain SQLite commit can leave orphan files; keep bytes safe.
+            pending.keep();
             tx.commit()?;
             conn.pragma_update(None, "foreign_keys", "ON")?;
+            if had_images {
+                if let Err(error) = conn.execute_batch("VACUUM") {
+                    eprintln!("Warning: migrated image bytes; SQLite compaction failed: {error}");
+                }
+            }
         }
         let version: i64 = conn.pragma_query_value(None, "user_version", |r| r.get(0))?;
         ensure!(
-            version == 5,
+            version == 6,
             "Unsupported database schema version {version}"
         );
-        Ok((Self { conn }, path))
+        Ok((Self { conn, image_store }, path))
     }
     pub fn task(&self, id: i64) -> Result<Task> {
         self.conn.query_row("SELECT id,description,status,claim_key,created_at,updated_at,parent_id,harness_name,harness_session,orchestrator_name,orchestrator_session FROM tasks WHERE id=?",[id],task_row).optional()?.with_context(||format!("Task {id} not found"))
@@ -616,7 +655,7 @@ impl Db {
     pub fn show(&self, id: i64) -> Result<Value> {
         let task = self.task(id)?;
         let messages=self.conn.prepare("SELECT id,body,session,created_at FROM messages WHERE task_id=? ORDER BY id")?.query_map([id],|r|Ok(json!({"id":r.get::<_,i64>(0)?,"body":r.get::<_,String>(1)?,"session":r.get::<_,Option<String>>(2)?,"created_at":r.get::<_,String>(3)?})))?.collect::<rusqlite::Result<Vec<_>>>()?;
-        let images=self.conn.prepare("SELECT id,name,media_type,length(data) FROM images WHERE task_id=? ORDER BY id")?.query_map([id],|r|Ok(json!({"id":r.get::<_,i64>(0)?,"name":r.get::<_,String>(1)?,"media_type":r.get::<_,String>(2)?,"bytes":r.get::<_,i64>(3)?})))?.collect::<rusqlite::Result<Vec<_>>>()?;
+        let images=self.conn.prepare("SELECT id,name,media_type,bytes FROM images WHERE task_id=? ORDER BY id")?.query_map([id],|r|Ok(json!({"id":r.get::<_,i64>(0)?,"name":r.get::<_,String>(1)?,"media_type":r.get::<_,String>(2)?,"bytes":r.get::<_,i64>(3)?})))?.collect::<rusqlite::Result<Vec<_>>>()?;
         let events=self.conn.prepare("SELECT session,action,created_at FROM events WHERE task_id=? ORDER BY id")?.query_map([id],|r|Ok(json!({"session":r.get::<_,String>(0)?,"action":r.get::<_,String>(1)?,"created_at":r.get::<_,String>(2)?})))?.collect::<rusqlite::Result<Vec<_>>>()?;
         Ok(
             json!({"task":task,"messages":messages,"images":images,"events":events,"herdr":self.link(id)?}),

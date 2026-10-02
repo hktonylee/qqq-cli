@@ -203,11 +203,11 @@ fn version_one_migration_preserves_data_and_is_repeatable() {
     let version: i64 = conn
         .pragma_query_value(None, "user_version", |r| r.get(0))
         .unwrap();
-    assert_eq!(version, 5);
-    let image: Vec<u8> = conn
-        .query_row("SELECT data FROM images", [], |r| r.get(0))
-        .unwrap();
-    assert_eq!(image, vec![1, 2, 3]);
+    assert_eq!(version, 6);
+    assert_eq!(
+        std::fs::read(p.join(".qqq/images/1/1.png")).unwrap(),
+        vec![1, 2, 3]
+    );
     assert_eq!(ok(p, &["next", "--session", "owner"])["id"], 1);
     assert_eq!(ok(p, &["add", "Child", "--parent", "1"])["parent_id"], 1);
     assert!(
@@ -248,17 +248,17 @@ fn concurrent_legacy_opens_migrate_once() {
 fn unknown_schema_is_rejected_without_modification() {
     let d = legacy_project();
     let conn = Connection::open(d.path().join(".qqq/qqq.db")).unwrap();
-    conn.pragma_update(None, "user_version", 6).unwrap();
+    conn.pragma_update(None, "user_version", 7).unwrap();
     for command in ["init", "list"] {
         let out = run(d.path(), &[command]);
         assert!(!out.status.success());
         assert!(
-            String::from_utf8_lossy(&out.stderr).contains("Unsupported database schema version 6")
+            String::from_utf8_lossy(&out.stderr).contains("Unsupported database schema version 7")
         );
     }
     let version: i64 = conn
         .pragma_query_value(None, "user_version", |r| r.get(0))
         .unwrap();
-    assert_eq!(version, 6);
+    assert_eq!(version, 7);
     assert!(conn.prepare("SELECT parent_id FROM tasks").is_err());
 }
