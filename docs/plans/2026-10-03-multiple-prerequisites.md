@@ -26,7 +26,7 @@ Backup/restore accept schema 9 through 11. Current-schema snapshots validate the
 - [x] Extend src/import.rs validation, deterministic topology, preview results and transactional edge insertion.
 - [x] Update src/delete.rs, src/doctor.rs, src/snapshot/backup.rs; verify migrations and snapshot/doctor round trips and corruption handling.
 - [x] Update CLI and dependency docs, fmt, focused tests, full locked suite and strict Clippy; obtain independent review.
-- [ ] Rebase on current master, rerun relevant checks, fast-forward locally, install CLI, verify installed behavior, complete #150 and resume persistent waiter.
+- [x] Rebase on current master, rerun relevant checks, fast-forward locally, install CLI, verify installed behavior, complete #150 and resume persistent waiter.
 
 ## Validation before integration
 
@@ -34,3 +34,11 @@ Backup/restore accept schema 9 through 11. Current-schema snapshots validate the
 - Twelve prerequisite CLI checks pass, including edge-trigger rollback, 12 claim/edit races, combined cycles and wait readiness. Herdr dispatch gating and color/no-color PTY refresh preserve dirty text.
 - Full locked suite: 556 passed. Strict all-target Clippy, fmt and diff checks passed. Existing reviewer approved after restoring Messages immediately below Description and fixing a test qualifier typo.
 - Concurrent task #148 landed structured JSON errors on master; integration must retain typed errors and rerun combined checks.
+
+## Integration evidence
+
+- Rebased onto task #148 master `b17f59a`, resolving DB projections, row indices, parent errors, importer refs, delete checks and queue filter annotations while preserving structured error codes/details.
+- New prerequisite validation returns typed task-not-found/argument/transition errors. Trigger rollback assertion respects sanitized DATABASE_ERROR output. Thirteen prerequisite CLI checks pass; combined full locked suite: 576 passed, strict all-target Clippy and fmt passed.
+- Integration reviewer approved. Fast-forwarded local master to `e5fbadb`; installed optimized CLI from verified worktree.
+- Installed CLI smoke passed gating, active-owner preservation, reopen, edits, cycles, typed failures, stdin, import preview/commit, snapshot restore, doctor, schema 11 and detail order. Installed color/no-color PTY status refresh passed with unsaved description retained.
+- No remote push or release publication performed. Resume persistent queue waiter after task completion.
