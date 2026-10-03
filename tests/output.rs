@@ -60,7 +60,7 @@ fn next_dry_run_reports_stored_task_and_empty_queue() {
     let preview = text(p, &["next", "--dry-run"]);
     assert!(preview.contains("#1"));
     assert!(preview.contains("Status: New"));
-    assert!(preview.contains("Harness session: -"));
+    assert!(!preview.contains("Harness session:"));
     assert!(!preview.contains('\u{1b}'));
     assert_eq!(text(p, &["next", "--dry-run"]), preview);
     text(p, &["next", "--local", "--session", "owner"]);
@@ -68,6 +68,81 @@ fn next_dry_run_reports_stored_task_and_empty_queue() {
         text(p, &["next", "--dry-run", "--session", "owner"]),
         "No ready tasks.\n"
     );
+}
+
+#[test]
+fn human_next_omits_assignment_while_json_and_show_retain_it() {
+    let dir = project();
+    let p = dir.path();
+    text(
+        p,
+        &[
+            "add",
+            "Build API\nKeep full task context",
+            "--priority",
+            "8",
+        ],
+    );
+    let claim = text(
+        p,
+        &[
+            "next",
+            "--local",
+            "--session",
+            "worker",
+            "--harness-name",
+            "codex",
+            "--harness-session",
+            "visible",
+            "--orchestrator-name",
+            "herdr",
+            "--orchestrator-session",
+            "work",
+        ],
+    );
+    for part in [
+        "#1",
+        "Status: In progress",
+        "Priority: 8",
+        "Parent: -",
+        "Created:",
+        "Updated:",
+        "Build API\n  Keep full task context",
+    ] {
+        assert!(claim.contains(part), "{part}: {claim}");
+    }
+    let repeated = text(p, &["next", "--local", "--session", "worker"]);
+    for output in [&claim, &repeated] {
+        for label in [
+            "Harness name:",
+            "Harness session:",
+            "Orchestrator name:",
+            "Orchestrator session:",
+        ] {
+            assert!(!output.contains(label), "{label}: {output}");
+        }
+    }
+    let json: Value = serde_json::from_str(&text(
+        p,
+        &["next", "--local", "--session", "worker", "--json"],
+    ))
+    .unwrap();
+    let shown = text(p, &["show", "1"]);
+    for (key, label, expected) in [
+        ("harness_name", "Harness name:", "codex"),
+        ("harness_session", "Harness session:", "visible"),
+        ("orchestrator_name", "Orchestrator name:", "herdr"),
+        ("orchestrator_session", "Orchestrator session:", "work"),
+    ] {
+        assert_eq!(json[key], expected);
+        assert!(
+            shown
+                .lines()
+                .any(|line| line.trim_start().starts_with(label)
+                    && line.trim_end().ends_with(expected)),
+            "{label}: {shown}"
+        );
+    }
 }
 
 #[test]
@@ -108,7 +183,7 @@ fn human_tasks_show_descriptions_dependencies_and_ownership() {
     assert!(!list.contains("PARENT"));
     let next = text(p, &["next", "--session", "a"]);
     assert!(next.contains("Status: In progress"));
-    assert!(next.contains("Harness session: a"));
+    assert!(!next.contains("Harness session:"));
     let child = text(p, &["show", "2"]);
     assert!(
         child

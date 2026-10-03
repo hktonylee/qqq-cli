@@ -258,7 +258,14 @@ fn wait_returns_released_task_in_human_output() {
     assert!(output.contains("#1"));
     assert!(output.contains("Retry"));
     assert!(output.contains("Status: In progress"));
-    assert!(output.contains("Harness session: worker"));
+    for label in [
+        "Harness name:",
+        "Harness session:",
+        "Orchestrator name:",
+        "Orchestrator session:",
+    ] {
+        assert!(!output.contains(label), "{label}: {output}");
+    }
     assert!(!output.contains("No ready tasks."));
     assert_eq!(ok(p, &["show", "1"])["task"]["harness_session"], "worker");
 }

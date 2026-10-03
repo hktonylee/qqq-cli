@@ -374,6 +374,9 @@ or uniquely matching displayed `harness_session`; add `--harness-name` when
 public sessions overlap. JSON assignment fields: `harness_name`,
 `harness_session`, `orchestrator_name`, `orchestrator_session`.
 
+Human `next` output omits these four assignment fields. JSON and `show` retain
+them for ownership inspection.
+
 ### Return or retry work
 
 Return active task owned by `worker-1`:

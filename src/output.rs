@@ -14,6 +14,7 @@ pub enum Format {
     Database,
     AddedTask,
     Task,
+    NextTask,
     Tasks,
     CompactTasks,
     PriorityTasks,
@@ -50,10 +51,10 @@ impl From<&Commands> for Format {
             Commands::Doctor => Self::Doctor,
             Commands::Delete { .. } => Self::Delete,
             Commands::Tui { .. } => Self::Task,
+            Commands::Next { .. } => Self::NextTask,
             Commands::Edit { .. }
             | Commands::Archive { .. }
             | Commands::Unarchive { .. }
-            | Commands::Next { .. }
             | Commands::Complete { .. }
             | Commands::Reopen { .. } => Self::Task,
         }
@@ -470,7 +471,7 @@ pub fn render(format: Format, value: &Value, color: bool, columns: Option<usize>
             }
             lines.join("\n")
         }
-        Format::Task if value.is_null() => "No ready tasks.".to_owned(),
+        Format::Task | Format::NextTask if value.is_null() => "No ready tasks.".to_owned(),
         Format::AddedTask => match value.as_array() {
             Some(tasks) => tasks
                 .iter()
@@ -480,6 +481,7 @@ pub fn render(format: Format, value: &Value, color: bool, columns: Option<usize>
             None => task(value, false, false),
         },
         Format::Task => task(value, false, true),
+        Format::NextTask => task(value, false, false),
         Format::Tasks => task_tree(
             value.as_array().expect("task list is an array"),
             color,
