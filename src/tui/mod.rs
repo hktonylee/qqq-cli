@@ -1,3 +1,4 @@
+mod buffers;
 mod clipboard;
 mod dashboard;
 mod details;
@@ -8,6 +9,7 @@ mod render;
 
 use crate::config::AfterSaveNew;
 use anyhow::{Result, bail, ensure};
+use buffers::{DraftBuffers, DraftKey, ParkedDraft};
 #[cfg(unix)]
 use crossterm::event::{
     KeyboardEnhancementFlags, PopKeyboardEnhancementFlags, PushKeyboardEnhancementFlags,
@@ -45,6 +47,11 @@ enum Target {
         description: String,
         status: String,
         draft: Draft,
+    },
+    Retained {
+        key: DraftKey,
+        status: Option<String>,
+        saved: ParkedDraft,
     },
 }
 
@@ -314,6 +321,23 @@ fn adjacent_target(
     })
 }
 
+fn restore_target(target: Target, buffers: &mut DraftBuffers) -> Target {
+    let key = match &target {
+        Target::New { parent_id } => DraftKey::New(*parent_id),
+        Target::Task { id, .. } => DraftKey::Task(*id),
+        Target::Retained { .. } => return target,
+    };
+    let Some(saved) = buffers.take(key) else {
+        return target;
+    };
+    let status = match target {
+        Target::Task { status, .. } => Some(status),
+        Target::New { .. } => None,
+        Target::Retained { .. } => unreachable!("retained target returned above"),
+    };
+    Target::Retained { key, status, saved }
+}
+
 fn load_target(
     target: Target,
     draft: &mut Draft,
@@ -322,7 +346,7 @@ fn load_target(
     draft_parent_id: &mut Option<i64>,
     baseline: &mut String,
     top: &mut usize,
-) {
+) -> bool {
     match target {
         Target::New { parent_id } => {
             *target_id = None;
@@ -343,8 +367,24 @@ fn load_target(
             *baseline = description;
             *draft = loaded;
         }
+        Target::Retained { key, status, saved } => {
+            *target_id = match key {
+                DraftKey::Task(id) => Some(id),
+                DraftKey::New(_) => None,
+            };
+            *draft_parent_id = match key {
+                DraftKey::Task(_) => None,
+                DraftKey::New(parent) => parent,
+            };
+            *target_status = status;
+            *baseline = saved.baseline;
+            *draft = saved.draft;
+            *top = saved.top;
+            return saved.follow_cursor;
+        }
     }
     *top = 0;
+    true
 }
 
 struct TerminalGuard {
@@ -551,6 +591,7 @@ fn compose_inner(
     let mut confirmation: Option<Confirmation> = None;
     let mut action_ui: Option<ActionUi> = None;
     let mut saved_any = false;
+    let mut buffers = DraftBuffers::default();
     loop {
         let size = terminal::size()?;
         if details_id != target_id {
@@ -937,8 +978,8 @@ fn compose_inner(
                                 });
                             }
                             Ok(target) => {
-                                load_target(
-                                    target,
+                                editor_follow_cursor = load_target(
+                                    restore_target(target, &mut buffers),
                                     &mut draft,
                                     &mut target_id,
                                     &mut target_status,
@@ -947,7 +988,6 @@ fn compose_inner(
                                     &mut top,
                                 );
                                 list_follow_selected = true;
-                                editor_follow_cursor = true;
                                 filter_focused = false;
                                 message.clear();
                                 message_is_error = false;
@@ -1000,8 +1040,8 @@ fn compose_inner(
                         action_ui = None;
                         filter_focused = false;
                     } else {
-                        load_target(
-                            Target::New { parent_id: None },
+                        editor_follow_cursor = load_target(
+                            restore_target(Target::New { parent_id: None }, &mut buffers),
                             &mut draft,
                             &mut target_id,
                             &mut target_status,
@@ -1013,7 +1053,6 @@ fn compose_inner(
                         action_ui = None;
                         filter_focused = false;
                         list_follow_selected = true;
-                        editor_follow_cursor = true;
                         message.clear();
                         message_is_error = false;
                     }
@@ -1034,8 +1073,8 @@ fn compose_inner(
                                     target,
                                     focus_editor,
                                 } => {
-                                    load_target(
-                                        target,
+                                    editor_follow_cursor = load_target(
+                                        restore_target(target, &mut buffers),
                                         &mut draft,
                                         &mut target_id,
                                         &mut target_status,
@@ -1044,7 +1083,6 @@ fn compose_inner(
                                         &mut top,
                                     );
                                     list_follow_selected = true;
-                                    editor_follow_cursor = true;
                                     if focus_editor {
                                         filter_focused = false;
                                     }
@@ -1054,8 +1092,8 @@ fn compose_inner(
                                 Confirmation::Action { action, .. } => {
                                     match run_action(&mut mode, action, include_archived) {
                                         Ok(target) => {
-                                            load_target(
-                                                target,
+                                            editor_follow_cursor = load_target(
+                                                restore_target(target, &mut buffers),
                                                 &mut draft,
                                                 &mut target_id,
                                                 &mut target_status,
@@ -1064,7 +1102,6 @@ fn compose_inner(
                                                 &mut top,
                                             );
                                             list_follow_selected = true;
-                                            editor_follow_cursor = true;
                                             message = action.success();
                                             message_is_error = false;
                                         }
@@ -1241,8 +1278,8 @@ fn compose_inner(
                                 Ok(action) => match run_action(&mut mode, action, include_archived)
                                 {
                                     Ok(target) => {
-                                        load_target(
-                                            target,
+                                        editor_follow_cursor = load_target(
+                                            restore_target(target, &mut buffers),
                                             &mut draft,
                                             &mut target_id,
                                             &mut target_status,
@@ -1251,7 +1288,6 @@ fn compose_inner(
                                             &mut top,
                                         );
                                         list_follow_selected = true;
-                                        editor_follow_cursor = true;
                                         message = action.success();
                                         message_is_error = false;
                                     }
@@ -1315,8 +1351,8 @@ fn compose_inner(
                                 focus_editor: true,
                             });
                         } else {
-                            load_target(
-                                target,
+                            editor_follow_cursor = load_target(
+                                restore_target(target, &mut buffers),
                                 &mut draft,
                                 &mut target_id,
                                 &mut target_status,
@@ -1326,7 +1362,6 @@ fn compose_inner(
                             );
                             filter_focused = false;
                             list_follow_selected = true;
-                            editor_follow_cursor = true;
                             message.clear();
                             message_is_error = false;
                         }
@@ -1383,8 +1418,8 @@ fn compose_inner(
                                 });
                             }
                             Ok(Some(target)) => {
-                                load_target(
-                                    target,
+                                editor_follow_cursor = load_target(
+                                    restore_target(target, &mut buffers),
                                     &mut draft,
                                     &mut target_id,
                                     &mut target_status,
@@ -1393,7 +1428,6 @@ fn compose_inner(
                                     &mut top,
                                 );
                                 list_follow_selected = true;
-                                editor_follow_cursor = true;
                                 message.clear();
                                 message_is_error = false;
                             }
@@ -1503,8 +1537,8 @@ fn compose_inner(
                                         }) {
                                         Ok((id, target)) => {
                                             saved_any = true;
-                                            load_target(
-                                                target,
+                                            editor_follow_cursor = load_target(
+                                                restore_target(target, &mut buffers),
                                                 &mut draft,
                                                 &mut target_id,
                                                 &mut target_status,
@@ -1513,7 +1547,6 @@ fn compose_inner(
                                                 &mut top,
                                             );
                                             list_follow_selected = true;
-                                            editor_follow_cursor = true;
                                             message = if keep_saved {
                                                 format!("Saved #{id}")
                                             } else {

@@ -1,6 +1,6 @@
 # Retained Dirty Drafts Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task inline. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task inline. Steps use checkbox (`- [x]`) syntax for tracking.
 
 **Goal:** Keep dashboard drafts across navigation, show dirty task markers, confirm every pending draft before exit.
 
@@ -15,8 +15,8 @@
 **Files:** Create `src/tui/buffers.rs`; modify `src/tui/mod.rs`, `src/tui/draft.rs`.
 
 - [x] Baseline: `cargo test --locked` passed 491 tests on `91697f1`.
-- [ ] Add failing cache tests before methods: park task #2 with changed text and caret/scroll, restore and compare original baseline and caret; park task #1 plus general and child drafts, assert ordered independent keys; park image and 1001-character paste, restore and compare composition/image bytes and masks; clean/reverted draft is not parked.
-- [ ] Use this storage API:
+- [x] Add failing cache tests before methods: park task #2 with changed text and caret/scroll, restore and compare original baseline and caret; park task #1 plus general and child drafts, assert ordered independent keys; park image and 1001-character paste, restore and compare composition/image bytes and masks; clean/reverted draft is not parked.
+- [x] Use this storage API:
 
   ```rust
   use super::draft::Draft;
@@ -85,9 +85,9 @@
       }
   }
   ```
-- [ ] Register `mod buffers`. Add `Target::Retained { key: DraftKey, status: Option<String>, saved: ParkedDraft }` and `restore_target(target, &mut buffers)`: derive key from fresh target, take matching parked state, carry fresh task status. Extend `load_target` to restore retained baseline/draft/parent/top; return cursor-follow mode (`true` for fresh targets). Assign that return at every call site instead of overriding with `true`.
-- [ ] Avoid cloning pending image bytes during per-frame dirty checks: return `true` immediately when `Draft.atoms` contains `Atom::Image`; otherwise compare serialized description with baseline. Run existing `cargo test --locked --test tui_model dirty_check`.
-- [ ] Run `cargo test --locked --bin qqq buffers::tests`; require all storage regressions pass. Commit verified storage checkpoint.
+- [x] Register `mod buffers`. Add `Target::Retained { key: DraftKey, status: Option<String>, saved: ParkedDraft }` and `restore_target(target, &mut buffers)`: derive key from fresh target, take matching parked state, carry fresh task status. Extend `load_target` to restore retained baseline/draft/parent/top; return cursor-follow mode (`true` for fresh targets). Assign that return at every call site instead of overriding with `true`.
+- [x] Avoid cloning pending image bytes during per-frame dirty checks: return `true` immediately when `Draft.atoms` contains `Atom::Image`; otherwise compare serialized description with baseline. Run existing `cargo test --locked --test tui_model dirty_check`.
+- [x] Run `cargo test --locked --bin qqq buffers::tests`; require all storage regressions pass. Commit verified storage checkpoint.
 
 ### Task 2: Navigation and Dirty Rendering
 
@@ -150,3 +150,5 @@
 - [ ] Run `cargo fmt --check`, `cargo test --locked`, `cargo clippy --locked --all-targets -- -D warnings`, `git diff --check`. Request read-only review through existing reviewer; resolve findings, repeat affected checks.
 - [ ] Record focused/full/review evidence. Rebase task branch onto current master; resolve conflicts and verify combined code when changed. Fast-forward master, install `cargo install --path . --locked --offline --force`.
 - [ ] Exercise installed CLI retention/independent-save/exit-cancel/NO_COLOR paths, remove merged worktree/branch, `qqq complete 144 --json`, resume persistent `qqq next --wait --local --json`.
+
+Storage checkpoint: five cache/restoration tests and two existing dirty-check tests pass. New API tests failed before storage/restoration implementation. Navigation and exit wiring remain next.

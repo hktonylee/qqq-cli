@@ -416,8 +416,10 @@ impl Draft {
             .collect()
     }
     pub fn is_dirty_against(&self, baseline: &str) -> bool {
-        let contents = self.contents(false);
-        contents.description != baseline || !contents.images.is_empty()
+        self.atoms
+            .iter()
+            .any(|atom| matches!(atom, Atom::Image { .. }))
+            || self.contents(false).description != baseline
     }
     fn contents(&self, normalize_legacy: bool) -> Composition {
         let mut text = String::new();
