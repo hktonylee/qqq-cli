@@ -13,23 +13,31 @@ pub struct Owner {
     pub metadata: Option<Identity>,
 }
 
+fn env_session(name: &str) -> Result<Option<String>> {
+    let value = match env::var(name) {
+        Ok(value) => value,
+        Err(env::VarError::NotPresent) => return Ok(None),
+        Err(error) => return Err(error).with_context(|| format!("{name} must be UTF-8")),
+    };
+    nonempty(&value, name)?;
+    Ok(Some(value))
+}
+
 fn native() -> Result<Option<Owner>> {
     if herdr::has_context() {
         return Ok(None);
     }
     for name in ["CODEX_THREAD_ID", "CODEX_SESSION_ID"] {
-        let value = match env::var(name) {
-            Ok(value) => value,
-            Err(env::VarError::NotPresent) => continue,
-            Err(error) => return Err(error).with_context(|| format!("{name} must be UTF-8")),
+        let Some(value) = env_session(name)? else {
+            continue;
         };
-        nonempty(&value, name)?;
+        let display = env_session("CODEX_SESSION_ID")?.unwrap_or_else(|| value.clone());
         return Ok(Some(Owner {
             key: serde_json::to_string(&("codex", "id", &value))?,
             link: None,
             metadata: Some(Identity {
                 harness_name: Some("codex".into()),
-                harness_session: Some(value),
+                harness_session: Some(display),
                 ..Identity::default()
             }),
         }));
@@ -44,10 +52,22 @@ pub fn owner(explicit: Option<&str>, project_dir: &Path, db: &Db) -> Result<Owne
         }
     }
     let (key, link) = herdr::owner(explicit, project_dir, db)?;
+    let metadata = if link
+        .as_ref()
+        .is_some_and(|link| link.identity.agent == "codex")
+    {
+        env_session("CODEX_SESSION_ID")?.map(|display| {
+            let mut identity = Identity::for_claim(&key, link.as_ref());
+            identity.harness_session = Some(display);
+            identity
+        })
+    } else {
+        None
+    };
     Ok(Owner {
         key,
         link,
-        metadata: None,
+        metadata,
     })
 }
 

@@ -123,6 +123,112 @@ fn reported_session_identity_takes_priority_over_terminal_fallback() {
 }
 
 #[test]
+fn herdr_codex_claims_display_native_session_without_changing_owner() {
+    for reported in [false, true] {
+        for explicit_display in [false, true] {
+            let dir = project();
+            let p = dir.path();
+            let mut caller = pane(p);
+            if reported {
+                caller["agent_session"] =
+                    json!({"agent":"codex","kind":"id","value":"hook-session"});
+            }
+            let response = json!({"result":{"pane":caller.clone()}});
+            let mut claim = herdr(p, response.clone(), true);
+            claim
+                .env("CODEX_THREAD_ID", "native-thread")
+                .env("CODEX_SESSION_ID", "native-session")
+                .args(["next", "--local"]);
+            if explicit_display {
+                claim.args(["--harness-session", "display"]);
+            }
+            let task = ok(&mut claim);
+            assert_eq!(task["harness_name"], "codex");
+            assert_eq!(
+                task["harness_session"],
+                if explicit_display {
+                    "display"
+                } else {
+                    "native-session"
+                }
+            );
+            assert_eq!(task["orchestrator_name"], "herdr");
+            assert_eq!(task["orchestrator_session"], "default");
+            let identity = json!({
+                "agent":"codex",
+                "kind":if reported { "id" } else { "terminal" },
+                "value":if reported { "hook-session" } else { "terminal-1" },
+            });
+            let detail = ok(command(p).args(["show", "1"]));
+            assert_eq!(detail["herdr"]["identity"], identity);
+            let owner: Value =
+                serde_json::from_str(detail["events"][0]["session"].as_str().unwrap()).unwrap();
+            assert_eq!(owner, json!(["codex", identity["kind"], identity["value"]]));
+            assert_eq!(
+                ok(herdr(p, response.clone(), true)
+                    .env("CODEX_SESSION_ID", "native-session")
+                    .args(["next", "--wait", "--local"])),
+                task
+            );
+            let found =
+                ok(herdr(p, json!({"result":{"agents":[caller]}}), false)
+                    .args(["herdr", "find", "1"]));
+            assert_eq!(found["pane_id"], "w1:p1");
+            assert_eq!(
+                ok(herdr(p, response, true)
+                    .env("CODEX_SESSION_ID", "native-session")
+                    .args(["complete", "1"]))["status"],
+                "completed"
+            );
+        }
+    }
+}
+
+#[test]
+fn other_herdr_harness_ignores_codex_session_env() {
+    let dir = project();
+    let p = dir.path();
+    let mut caller = pane(p);
+    caller["agent"] = json!("claude");
+    let task = ok(herdr(p, json!({"result":{"pane":caller}}), true)
+        .env("CODEX_SESSION_ID", " ")
+        .arg("next"));
+    assert_eq!(task["harness_name"], "claude");
+    assert_eq!(task["harness_session"], "terminal-1");
+}
+
+#[test]
+fn invalid_codex_session_env_fails_before_native_or_herdr_claim() {
+    use std::os::unix::ffi::OsStringExt;
+    for value in [
+        std::ffi::OsString::from(""),
+        std::ffi::OsString::from(" \t"),
+        std::ffi::OsString::from_vec(vec![0xff]),
+    ] {
+        for exact_herdr in [false, true] {
+            let dir = project();
+            let p = dir.path();
+            let mut claim = if exact_herdr {
+                herdr(p, json!({"result":{"pane":pane(p)}}), true)
+            } else {
+                native(p, "valid-thread")
+            };
+            let output = claim
+                .env("CODEX_SESSION_ID", &value)
+                .arg("next")
+                .output()
+                .unwrap();
+            assert_eq!(output.status.code(), Some(1));
+            assert!(String::from_utf8_lossy(&output.stderr).contains("CODEX_SESSION_ID"));
+            let detail = ok(command(p).args(["show", "1"]));
+            assert_eq!(detail["task"]["status"], "new");
+            assert_eq!(detail["events"], json!([]));
+            assert!(detail["herdr"].is_null());
+        }
+    }
+}
+
+#[test]
 fn invalid_reported_session_does_not_fall_back_or_claim_task() {
     for field in ["agent", "kind", "value"] {
         let dir = project();
@@ -351,13 +457,13 @@ fn native_codex_thread_claims_waits_releases_and_completes_without_herdr() {
 }
 
 #[test]
-fn native_codex_prefers_thread_and_accepts_session_fallback_with_same_key() {
+fn native_codex_keeps_thread_owner_and_displays_session_env() {
     let dir = project();
     let p = dir.path();
     let task = ok(native(p, "preferred")
         .env("CODEX_SESSION_ID", "legacy")
         .arg("next"));
-    assert_eq!(task["harness_session"], "preferred");
+    assert_eq!(task["harness_session"], "legacy");
     assert_eq!(
         ok(command(p)
             .env("PATH", p)
@@ -383,6 +489,27 @@ fn native_codex_prefers_thread_and_accepts_session_fallback_with_same_key() {
     assert_eq!(
         ok(command(p).args(["show", "2"]))["task"]["status"],
         "error"
+    );
+}
+
+#[test]
+fn native_codex_session_env_supports_public_completion_without_granting_wrong_owner() {
+    let dir = project();
+    let p = dir.path();
+    let task = ok(native(p, "native-thread")
+        .env("CODEX_SESSION_ID", "native-session")
+        .arg("next"));
+    assert_eq!(task["harness_session"], "native-session");
+    let wrong = native(p, "wrong-thread")
+        .env("CODEX_SESSION_ID", "native-session")
+        .args(["complete", "1"])
+        .output()
+        .unwrap();
+    assert_eq!(wrong.status.code(), Some(1));
+    assert_eq!(ok(command(p).args(["show", "1"]))["task"], task);
+    assert_eq!(
+        ok(command(p).args(["complete", "1", "--harness-session", "native-session"]))["status"],
+        "completed"
     );
 }
 

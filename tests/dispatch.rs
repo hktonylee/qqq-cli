@@ -220,6 +220,30 @@ fn dispatch_claims_for_new_agent_links_before_prompt_and_can_find_session() {
 }
 
 #[test]
+fn dispatched_codex_assignment_uses_child_session_not_callers_environment() {
+    let p = Project::new();
+    p.ok(&["add", "Task"]);
+    let output = p
+        .command()
+        .env("CODEX_SESSION_ID", "parent-codex-session")
+        .args(["next", "--session", "caller"])
+        .output()
+        .unwrap();
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let task: Value = serde_json::from_slice(&output.stdout).unwrap();
+    let detail = p.ok(&["show", "1"]);
+    assert_eq!(
+        task["harness_session"],
+        detail["herdr"]["identity"]["value"]
+    );
+    assert_ne!(task["harness_session"], "parent-codex-session");
+}
+
+#[test]
 fn caller_existing_claim_wins_and_local_bypasses_dispatch() {
     let p = Project::new();
     p.ok(&["add", "First"]);

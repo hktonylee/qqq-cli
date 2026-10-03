@@ -369,6 +369,12 @@ Explicit session IDs and native Codex ownership work without Herdr when dispatch
 disabled or `next --local` is used. Exact Herdr context takes precedence.
 `next --local` skips dispatch, still resolves owner.
 
+For automatic Codex claims, displayed `harness_session` uses `CODEX_SESSION_ID`
+when set, including inside Herdr. Without it, resolved owner ID supplies display.
+Claim keys and Herdr links keep resolved identity; `--harness-session` overrides
+display. Repeated claims retain saved metadata unless explicit assignment flags
+override it.
+
 Completion, release and error marking require owner. Use original session token
 or uniquely matching displayed `harness_session`; add `--harness-name` when
 public sessions overlap. JSON assignment fields: `harness_name`,
