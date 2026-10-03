@@ -421,6 +421,8 @@ mode keeps marker. Letter shortcuts activate actions directly. Press `c` to comp
 unarchive, `p` to set priority (-100..100), or `d` to set parent by positive
 task ID or `none`. Retry appears only for error tasks; non-error tasks ignore `r`.
 Arrows skip hidden actions; Enter activates displayed selection.
+Open menu refreshes Retry availability after external status changes, keeping
+selected action when available.
 After filter clears, Esc closes menu or prompt. State changes ask for `y` before
 running; priority and parent changes ask when draft has unsaved edits. Successful
 action refreshes task and list; rejected action keeps draft and shows DB error.

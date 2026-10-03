@@ -576,6 +576,26 @@ fn compose_inner(
             };
             if let Some(task) = tasks.iter().find(|task| Some(task.id) == target_id) {
                 target_status = Some(task.status.clone());
+                if let Some(ActionUi::Menu {
+                    can_retry,
+                    selected,
+                    ..
+                }) = &mut action_ui
+                {
+                    let retry = task.status == "error";
+                    if *can_retry != retry {
+                        let key = action_menu_items(*can_retry)
+                            .nth(*selected)
+                            .expect("menu selection is valid")
+                            .0;
+                        *can_retry = retry;
+                        *selected = action_menu_items(retry)
+                            .position(|(candidate, _)| candidate == key)
+                            .unwrap_or_else(|| {
+                                (*selected).min(action_menu_items(retry).count() - 1)
+                            });
+                    }
+                }
             }
             let details_area =
                 dashboard::panes(ratatui::layout::Rect::new(0, 0, size.0, size.1)).details;

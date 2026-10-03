@@ -298,6 +298,7 @@ fn tui_dashboard_retry_menu_action_requires_error_status() {
         "menu_retry_in_progress",
         "menu_retry_completed",
         "menu_retry_error",
+        "menu_retry_live",
         "menu_retry_new_no_color",
         "menu_retry_error_no_color",
     ] {

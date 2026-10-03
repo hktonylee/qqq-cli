@@ -1389,6 +1389,8 @@ print(json.dumps({"result": result}))
                 assert b"\x1b[38;" not in screen and b"\x1b[48;" not in screen, screen[-2000:]
         elif scenario.startswith("menu_retry_"):
             status = scenario.removeprefix("menu_retry_").removesuffix("_no_color")
+            if status == "live":
+                status = "error"
             label, task_id = {
                 "new": ("Fresh item", 4),
                 "in_progress": ("Owned item", 1),
@@ -1413,15 +1415,34 @@ print(json.dumps({"result": result}))
             open_menu()
             settle()
             assert ("r Retry error" in visible.text()) == (status == "error"), visible.text()
-            if status != "error":
+            if scenario == "menu_retry_live":
+                send(b"\x1b[B")
+                wait_visible(lambda: selected_action("r"))
+                cli("edit", str(task_id), "--set-status", "new")
+                wait_visible(lambda: "r Retry error" not in visible.text()
+                             and selected_action("o"))
+                send(b"r")
+                settle()
+                assert f"Task actions #{task_id}" in visible.text(), visible.text()
+                assert selected_action("o"), visible.text()
+                assert cli("next", "--local", "--session", "external")["id"] == task_id
+                cli("edit", str(task_id), "--set-status", "error",
+                    "--reason", "Failed again", "--session", "external")
+                wait_visible(lambda: "r Retry error" in visible.text()
+                             and selected_action("o"))
+                send(b"\x1b[A")
+            elif status != "error":
                 send(b"r")
                 settle()
                 assert f"Task actions #{task_id}" in visible.text(), visible.text()
                 assert "Retry task" not in visible.text(), visible.text()
                 assert selected_action("c"), visible.text()
-            send(b"\x1b[B")
+                send(b"\x1b[B")
+            else:
+                send(b"\x1b[B")
             wait_visible(lambda: selected_action("r" if status == "error" else "o"))
-            assert cli("list") == initial_tasks
+            if scenario != "menu_retry_live":
+                assert cli("list") == initial_tasks
             send(b"\r")
             wait_visible(lambda: f"{'Retry' if status == 'error' else 'Reopen'} task #{task_id}?" in visible.text())
             send(b"y" if status == "error" else b"n")
