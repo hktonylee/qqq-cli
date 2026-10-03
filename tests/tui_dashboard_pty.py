@@ -94,7 +94,7 @@ CTRL_P = b"\x10"
 with tempfile.TemporaryDirectory(prefix="qqq-dashboard-test-") as folder:
     env = dict(os.environ, HOME=folder, TERM="xterm-256color")
     env.pop("NO_COLOR", None)
-    if scenario in ("no_color", "pasteboard_no_color", "filter_no_color", "details_no_color", "actions_popup_no_color", "wide_layout_no_color"):
+    if scenario in ("no_color", "pasteboard_no_color", "filter_no_color", "details_no_color", "actions_popup_no_color", "wide_layout_no_color", "menu_arrows_no_color"):
         env["NO_COLOR"] = "1"
     elif scenario == "dumb":
         env["TERM"] = "dumb"
@@ -1274,7 +1274,7 @@ print(json.dumps({"result": result}))
             wait_visible(lambda: visible.text().splitlines()[10][21] == "┌"
                          and "Task actions #2" in visible.text().splitlines()[11]
                          and visible.text().splitlines()[19][68] == "┘"
-                         and (visible.x, visible.y) == (22, 11))
+                         and (visible.x, visible.y) == (22, 12))
             settle()
             send(b"p")
             wait_visible(lambda: "Priority task #2" in visible.text()
@@ -1294,6 +1294,79 @@ print(json.dumps({"result": result}))
                          and "Priority task #2" not in visible.text())
             assert cli("list") == initial_tasks
             if scenario == "actions_popup_no_color":
+                assert b"\x1b[38;" not in screen and b"\x1b[48;" not in screen, screen[-2000:]
+        elif scenario.startswith("menu_arrows"):
+            send(b"\x1b[1;2A")
+            wait_visible(lambda: "task #2 (New)" in editor_title())
+            if scenario == "menu_arrows_narrow":
+                fcntl.ioctl(slave, termios.TIOCSWINSZ, struct.pack("HHHH", 8, 12, 0, 0))
+                visible.resize(12, 8)
+                os.kill(child.pid, signal.SIGWINCH)
+                wait_visible(lambda: editor_row() is not None and editor_line().startswith("Second"))
+            initial_tasks = cli("list")
+
+            def selected_action(key):
+                return any(part.strip().startswith(f"> {key} ")
+                           for line in visible.text().splitlines() for part in line.split("│"))
+
+            def open_menu():
+                send(b"\x07")
+                wait_visible(lambda: selected_action("c"))
+
+            def close_menu():
+                send(b"\x1b")
+                wait_visible(lambda: editor_row() is not None and editor_line().startswith("Second")
+                             and (visible.x, visible.y) == (len("Second"), editor_row() + 1))
+
+            def prompt_visible(prompt):
+                return prompt[:visible.width] in visible.text()
+
+            open_menu()
+            send(b"\x1b[A")
+            wait_visible(lambda: selected_action("d"))
+            send(b"\x1b[B")
+            wait_visible(lambda: selected_action("c"))
+            for key in "roapd":
+                send(b"\x1b[B")
+                wait_visible(lambda key=key: selected_action(key))
+            assert cli("list") == initial_tasks
+            send(b"\r")
+            wait_visible(lambda: prompt_visible("Parent task"))
+            close_menu()
+            for index, (key, prompt) in enumerate([
+                ("c", "Complete task"), ("r", "Retry task"),
+                ("o", "Reopen task"), ("a", "Archive task"),
+                ("p", "Priority task"),
+            ]):
+                open_menu()
+                if index:
+                    send(b"\x1b[B" * index)
+                    wait_visible(lambda key=key: selected_action(key))
+                send(b"\r")
+                wait_visible(lambda prompt=prompt: prompt_visible(prompt))
+                close_menu()
+                assert cli("list") == initial_tasks
+            open_menu()
+            send(b"\x1b[A\x1b[A")
+            wait_visible(lambda: selected_action("p"))
+            send(b"\r")
+            wait_visible(lambda: prompt_visible("Priority task"))
+            send(b"9\r")
+            wait_visible(lambda: visible.text().splitlines()[-1].startswith("Priority #2:"))
+            assert cli("show", "2")["task"]["priority"] == 9
+            assert cli("show", "2")["task"]["description"] == "Second"
+            send(b"\x01X")
+            wait_visible(lambda: editor_line().startswith("XSecond"))
+            open_menu()
+            send(b"\x1b[A\x1b[A\r")
+            wait_visible(lambda: prompt_visible("Priority task"))
+            send(b"8\r")
+            wait_visible(lambda: "Lose draft?" in visible.text())
+            send(b"n")
+            wait_visible(lambda: editor_line().startswith("XSecond"))
+            assert cli("show", "2")["task"]["priority"] == 9
+            assert cli("show", "2")["task"]["description"] == "Second"
+            if scenario == "menu_arrows_no_color":
                 assert b"\x1b[38;" not in screen and b"\x1b[48;" not in screen, screen[-2000:]
         elif scenario == "actions_basic":
             wait_visible(lambda: "Owned item" in visible.text() and "Hidden item" in visible.text())
@@ -1455,7 +1528,7 @@ print(json.dumps({"result": result}))
                          and (visible.x, visible.y) == (len("First"), editor_row() + 1))
             send(b"\x07")
             wait_visible(lambda: "c Complete" in visible.text() and
-                         "d Parent" in visible.text() and "Esc cancel" in visible.text())
+                         "d Parent" in visible.text() and "Up/Dn Enter" in visible.text())
             send(b"p")
             wait_visible(lambda: "Enter -100" in visible.text())
             send(b"5\r")

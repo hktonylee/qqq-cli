@@ -55,7 +55,7 @@ fn action_popup_preserves_background_and_clears_overlaid_styles() {
         keys: render::KEYS,
         message: "",
     };
-    let modal = [
+    let mut modal = [
         "Task actions #1",
         "c Complete",
         "r Retry error",
@@ -81,7 +81,15 @@ fn action_popup_preserves_background_and_clears_overlaid_styles() {
     for color in [true, false] {
         let mut terminal = Terminal::new(TestBackend::new(72, 24)).unwrap();
         let mut background = None;
-        for modal_lines in [None, Some(modal.as_slice())] {
+        for selection in [None, Some(1), Some(2)] {
+            for (index, row) in modal.iter_mut().enumerate().skip(1).take(6) {
+                row.kind = if Some(index) == selection {
+                    render::PopupKind::SelectedAction
+                } else {
+                    render::PopupKind::Action
+                };
+            }
+            let modal_lines = selection.map(|_| modal.as_slice());
             terminal
                 .draw(|frame| {
                     dashboard::draw(
@@ -111,6 +119,32 @@ fn action_popup_preserves_background_and_clears_overlaid_styles() {
                 .unwrap();
             if modal_lines.is_none() {
                 background = Some(terminal.backend().buffer().clone());
+            } else {
+                let buffer = terminal.backend().buffer();
+                for index in 1..=6 {
+                    assert_eq!(
+                        buffer[(55, 8 + index)].bg,
+                        if !color {
+                            Color::Reset
+                        } else if Some(usize::from(index)) == selection {
+                            Color::Rgb(15, 51, 62)
+                        } else {
+                            Color::Indexed(236)
+                        }
+                    );
+                    assert_eq!(
+                        buffer[(13, 8 + index)].symbol(),
+                        if Some(usize::from(index)) == selection {
+                            ">"
+                        } else {
+                            " "
+                        }
+                    );
+                }
+                assert_eq!(
+                    terminal.get_cursor_position().unwrap(),
+                    Position::new(13, 8 + selection.unwrap() as u16)
+                );
             }
         }
         let buffer = terminal.backend().buffer();
@@ -120,8 +154,8 @@ fn action_popup_preserves_background_and_clears_overlaid_styles() {
         assert!(line(buffer, 8).contains("│Task actions #1"));
         for (x, y, foreground, modifier) in [
             (13, 8, Color::Indexed(81), Modifier::BOLD),
-            (13, 9, Color::Indexed(81), Modifier::BOLD),
-            (15, 9, Color::Indexed(252), Modifier::empty()),
+            (15, 9, Color::Indexed(81), Modifier::BOLD),
+            (17, 9, Color::Indexed(252), Modifier::empty()),
             (13, 15, Color::Indexed(81), Modifier::BOLD),
             (17, 15, Color::Gray, Modifier::empty()),
             (12, 7, Color::DarkGray, Modifier::empty()),
@@ -162,7 +196,7 @@ fn action_popup_preserves_background_and_clears_overlaid_styles() {
         }
         assert_eq!(
             terminal.get_cursor_position().unwrap(),
-            Position::new(13, 8)
+            Position::new(13, 10)
         );
     }
 }
@@ -235,9 +269,10 @@ fn action_popup_input_errors_and_warnings_keep_roles_and_plain_styles() {
                 let y = content.y + index as u16;
                 assert!(line(buffer, y).contains(&row.text));
                 let (foreground, bold) = match row.kind {
-                    PopupKind::Heading | PopupKind::Action | PopupKind::Hint => {
-                        (Color::Indexed(81), true)
-                    }
+                    PopupKind::Heading
+                    | PopupKind::Action
+                    | PopupKind::SelectedAction
+                    | PopupKind::Hint => (Color::Indexed(81), true),
                     PopupKind::Input | PopupKind::Warning => (Color::Indexed(222), false),
                     PopupKind::Error => (Color::Indexed(210), index == 0),
                 };

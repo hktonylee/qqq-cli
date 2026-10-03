@@ -110,10 +110,13 @@ enum ActionInputKind {
     Parent,
 }
 
+const ACTION_MENU_KEYS: [char; 6] = ['c', 'r', 'o', 'a', 'p', 'd'];
+
 enum ActionUi {
     Menu {
         id: i64,
         archived: bool,
+        selected: usize,
     },
     Input {
         id: i64,
@@ -159,19 +162,34 @@ fn wrap_modal(text: &str, width: usize) -> Vec<String> {
 fn action_lines(ui: &ActionUi, width: usize, height: usize) -> Vec<render::PopupRow> {
     use render::{PopupKind, PopupRow};
     match ui {
-        ActionUi::Menu { id, archived } => vec![
-            PopupRow::new(format!("Task actions #{id}"), PopupKind::Heading),
-            PopupRow::new("c Complete", PopupKind::Action),
-            PopupRow::new("r Retry error", PopupKind::Action),
-            PopupRow::new("o Reopen", PopupKind::Action),
-            PopupRow::new(
-                format!("a {}", if *archived { "Unarchive" } else { "Archive" }),
-                PopupKind::Action,
-            ),
-            PopupRow::new("p Priority", PopupKind::Action),
-            PopupRow::new("d Parent", PopupKind::Action),
-            PopupRow::new("Esc cancel", PopupKind::Hint),
-        ],
+        ActionUi::Menu {
+            id,
+            archived,
+            selected,
+        } => {
+            let mut lines = vec![
+                PopupRow::new(format!("Task actions #{id}"), PopupKind::Heading),
+                PopupRow::new("c Complete", PopupKind::Action),
+                PopupRow::new("r Retry error", PopupKind::Action),
+                PopupRow::new("o Reopen", PopupKind::Action),
+                PopupRow::new(
+                    format!("a {}", if *archived { "Unarchive" } else { "Archive" }),
+                    PopupKind::Action,
+                ),
+                PopupRow::new("p Priority", PopupKind::Action),
+                PopupRow::new("d Parent", PopupKind::Action),
+                PopupRow::new(
+                    if width >= "Up/Down Select  Enter Apply  Esc Cancel".len() {
+                        "Up/Down Select  Enter Apply  Esc Cancel"
+                    } else {
+                        "Up/Dn Enter"
+                    },
+                    PopupKind::Hint,
+                ),
+            ];
+            lines[1 + selected].kind = PopupKind::SelectedAction;
+            lines
+        }
         ActionUi::Input {
             id,
             kind,
@@ -1067,8 +1085,30 @@ fn compose_inner(
                         continue;
                     }
                     match ui {
-                        ActionUi::Menu { id, archived } => {
-                            let chosen = match key.code {
+                        ActionUi::Menu {
+                            id,
+                            archived,
+                            mut selected,
+                        } => {
+                            if matches!(key.code, KeyCode::Up | KeyCode::Down) {
+                                selected = if key.code == KeyCode::Up {
+                                    (selected + ACTION_MENU_KEYS.len() - 1) % ACTION_MENU_KEYS.len()
+                                } else {
+                                    (selected + 1) % ACTION_MENU_KEYS.len()
+                                };
+                                action_ui = Some(ActionUi::Menu {
+                                    id,
+                                    archived,
+                                    selected,
+                                });
+                                continue;
+                            }
+                            let activation = if key.code == KeyCode::Enter {
+                                KeyCode::Char(ACTION_MENU_KEYS[selected])
+                            } else {
+                                key.code
+                            };
+                            let chosen = match activation {
                                 KeyCode::Char('c') => Some(TaskAction::Complete(id)),
                                 KeyCode::Char('r') => Some(TaskAction::Retry(id)),
                                 KeyCode::Char('o') => Some(TaskAction::Reopen(id)),
@@ -1093,7 +1133,11 @@ fn compose_inner(
                                 }
                                 KeyCode::Esc => None,
                                 _ => {
-                                    action_ui = Some(ActionUi::Menu { id, archived });
+                                    action_ui = Some(ActionUi::Menu {
+                                        id,
+                                        archived,
+                                        selected,
+                                    });
                                     None
                                 }
                             };
@@ -1247,6 +1291,7 @@ fn compose_inner(
                                 action_ui = Some(ActionUi::Menu {
                                     id,
                                     archived: task.archived,
+                                    selected: 0,
                                 });
                                 message.clear();
                                 message_is_error = false;

@@ -263,6 +263,13 @@ fn tui_dashboard_workflow_states_and_cleanup() {
 }
 
 #[test]
+fn tui_dashboard_menu_arrows() {
+    dashboard_scenario("menu_arrows");
+    dashboard_scenario("menu_arrows_no_color");
+    dashboard_scenario("menu_arrows_narrow");
+}
+
+#[test]
 fn tui_dashboard_task_actions() {
     dashboard_scenario("actions_basic");
     dashboard_scenario("actions_rejected");

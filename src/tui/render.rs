@@ -95,6 +95,7 @@ impl DetailRow {
 pub enum PopupKind {
     Heading,
     Action,
+    SelectedAction,
     Hint,
     Input,
     Error,

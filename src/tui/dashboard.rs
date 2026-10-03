@@ -104,23 +104,33 @@ fn popup_row_style(kind: render::PopupKind, title: bool, color: bool) -> Style {
             }
         }
         PopupKind::Action | PopupKind::Input => body,
+        PopupKind::SelectedAction => body.bg(SELECTION_BG),
     }
 }
 
 fn popup_row_line(text: String, kind: render::PopupKind, color: bool) -> Line<'static> {
     use render::PopupKind;
+    let marker = match kind {
+        PopupKind::SelectedAction => "> ",
+        PopupKind::Action => "  ",
+        _ => "",
+    };
     if !color {
-        return Line::from(text);
+        return Line::from(format!("{marker}{text}"));
     }
     match kind {
-        PopupKind::Action => {
+        PopupKind::Action | PopupKind::SelectedAction => {
             let key_style = Style::default().fg(ACCENT).add_modifier(Modifier::BOLD);
             match text.split_once(' ') {
                 Some((key, label)) => Line::from(vec![
+                    Span::raw(marker.to_owned()),
                     Span::styled(key.to_owned(), key_style),
                     Span::raw(format!(" {label}")),
                 ]),
-                None => Line::from(Span::styled(text, key_style)),
+                None => Line::from(vec![
+                    Span::raw(marker.to_owned()),
+                    Span::styled(text, key_style),
+                ]),
             }
         }
         PopupKind::Hint => hotkey_line(&text, true),
@@ -165,13 +175,19 @@ fn popup(frame: &mut Frame<'_>, lines: &[render::PopupRow], color: bool) {
             let (tail, _) = text_tail(&safe, width.saturating_sub(3));
             render::clipped(&format!("> {tail}"), width)
         } else {
-            render::clipped(&row.text, width)
+            let marker_width = usize::from(matches!(
+                row.kind,
+                PopupKind::Action | PopupKind::SelectedAction
+            )) * 2;
+            render::clipped(&row.text, width.saturating_sub(marker_width))
         };
         if row.kind == PopupKind::Input {
             cursor = (
                 content.x + (text.width() as u16).min(content.width.saturating_sub(1)),
                 content.y + index as u16,
             );
+        } else if row.kind == PopupKind::SelectedAction {
+            cursor = (content.x, content.y + index as u16);
         }
         let style = popup_row_style(row.kind, index == 0, color);
         let line = popup_row_line(text, row.kind, color);
@@ -394,6 +410,7 @@ fn hotkey_line(keys: &str, color: bool) -> Line<'static> {
                     | "Tab/Enter"
                     | "Enter"
                     | "Up/Down"
+                    | "Up/Dn"
                     | "y"
                     | "n/Esc"
             );
