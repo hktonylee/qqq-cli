@@ -59,10 +59,6 @@ pub fn rows(task: &Task, messages: &[TaskMessage], width: usize) -> Vec<DetailRo
     if messages.is_empty() {
         content.push(DetailRow::new("No messages yet.", DetailKind::Muted));
     } else {
-        content.push(DetailRow::new(
-            format!("Messages ({}) | PgUp/PgDn scroll", messages.len()),
-            DetailKind::Heading,
-        ));
         for message in messages.iter().rev() {
             content.push(DetailRow::new(
                 format!(
@@ -193,7 +189,6 @@ mod tests {
             "In progress",
             "Priority 8",
             "Parent #2",
-            "Messages (2) | PgUp/PgDn scroll",
             "reviewer",
             "2026-10-02T14:00",
             "Created ",
@@ -219,11 +214,13 @@ mod tests {
             ))
         );
         assert!(!rendered.contains("Full editable description"));
+        assert!(!rendered.contains("Messages ("));
+        assert!(!rendered.contains("PgUp/PgDn scroll"));
         assert_eq!(detail_rows[0].kind, DetailKind::Heading);
-        assert_eq!(detail_rows[1].kind, DetailKind::Heading);
-        assert_eq!(detail_rows[2].kind, DetailKind::MessageHeader);
+        assert_eq!(detail_rows[1].kind, DetailKind::MessageHeader);
+        assert_eq!(detail_rows[2].kind, DetailKind::Body);
         assert_eq!(detail_rows[3].kind, DetailKind::Body);
-        assert_eq!(detail_rows[4].kind, DetailKind::Body);
+        assert_eq!(detail_rows[4].kind, DetailKind::MessageHeader);
         assert!(
             detail_rows
                 .iter()

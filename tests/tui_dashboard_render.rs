@@ -346,12 +346,6 @@ fn selected_task_renders_details_between_list_and_editor() {
             Modifier::BOLD,
         ),
         (
-            "Messages (1)",
-            render::DetailKind::Heading,
-            Color::Indexed(81),
-            Modifier::BOLD,
-        ),
-        (
             "#1 reviewer",
             render::DetailKind::MessageHeader,
             Color::Indexed(222),
@@ -389,7 +383,7 @@ fn selected_task_renders_details_between_list_and_editor() {
     };
     let mut terminal = Terminal::new(TestBackend::new(72, 24)).unwrap();
     for color in [true, false] {
-        for requested_top in [0, 1, 2, 3] {
+        for requested_top in [0, 1, 2] {
             let mut details_top = requested_top;
             terminal
                 .draw(|frame| {
