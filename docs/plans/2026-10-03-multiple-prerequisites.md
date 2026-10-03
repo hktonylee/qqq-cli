@@ -20,10 +20,17 @@ Backup/restore accept schema 9 through 11. Current-schema snapshots validate the
 
 ## Plan
 
-- [ ] Add CLI regressions in tests/cli/prerequisites.rs for mixed readiness, editing, ownership, archive/reopen, queue output, graph validation, concurrency and import; confirm failures.
-- [ ] Add src/sql/migrate_v11.sql and shared src/dependencies.rs graph/edge operations; update src/db.rs readiness and atomic add/edit/archive/reopen paths.
-- [ ] Add typed prerequisite metadata to Task projections; update src/main.rs flags, src/queue.rs explanations and src/output/detail.rs shared human/TUI details.
-- [ ] Extend src/import.rs validation, deterministic topology, preview results and transactional edge insertion.
-- [ ] Update src/delete.rs, src/doctor.rs, src/snapshot/backup.rs; verify migrations and snapshot/doctor round trips and corruption handling.
-- [ ] Update CLI and dependency docs, fmt, focused tests, full locked suite and strict Clippy; obtain independent review.
+- [x] Add CLI regressions in tests/cli/prerequisites.rs for mixed readiness, editing, ownership, archive/reopen, queue output, graph validation, concurrency and import; confirm failures.
+- [x] Add src/sql/migrate_v11.sql and shared src/dependencies.rs graph/edge operations; update src/db.rs readiness and atomic add/edit/archive/reopen paths.
+- [x] Add typed prerequisite metadata to Task projections; update src/main.rs flags, src/queue.rs explanations and src/output/detail.rs shared human/TUI details.
+- [x] Extend src/import.rs validation, deterministic topology, preview results and transactional edge insertion.
+- [x] Update src/delete.rs, src/doctor.rs, src/snapshot/backup.rs; verify migrations and snapshot/doctor round trips and corruption handling.
+- [x] Update CLI and dependency docs, fmt, focused tests, full locked suite and strict Clippy; obtain independent review.
 - [ ] Rebase on current master, rerun relevant checks, fast-forward locally, install CLI, verify installed behavior, complete #150 and resume persistent waiter.
+
+## Validation before integration
+
+- Four original CLI regressions failed on missing flags; import forward-ref regression failed on missing field; archived-prerequisite reopen regression exposed missing validation, then passed after shared validation fix.
+- Twelve prerequisite CLI checks pass, including edge-trigger rollback, 12 claim/edit races, combined cycles and wait readiness. Herdr dispatch gating and color/no-color PTY refresh preserve dirty text.
+- Full locked suite: 556 passed. Strict all-target Clippy, fmt and diff checks passed. Existing reviewer approved after restoring Messages immediately below Description and fixing a test qualifier typo.
+- Concurrent task #148 landed structured JSON errors on master; integration must retain typed errors and rerun combined checks.

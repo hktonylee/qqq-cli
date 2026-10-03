@@ -68,7 +68,7 @@ fn stdin_add_preserves_full_literal_description_parent_priority_and_images() {
         &[
             "add",
             "--stdin",
-            "--parent",
+            "--depends-on",
             "1",
             "--priority",
             "-5",
@@ -78,7 +78,7 @@ fn stdin_add_preserves_full_literal_description_parent_priority_and_images() {
         text.as_bytes(),
     );
     assert_eq!(task["description"], text);
-    assert_eq!(task["parent_id"], 1);
+    assert_eq!(task["prerequisites"][0]["id"], 1);
     assert_eq!(task["priority"], -5);
     let detail = ok(p, &["show", "2"]);
     assert_eq!(detail["task"], task);

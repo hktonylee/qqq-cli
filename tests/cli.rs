@@ -848,3 +848,6 @@ mod queue;
 
 #[path = "cli/import.rs"]
 mod import;
+
+#[path = "cli/prerequisites.rs"]
+mod prerequisites;

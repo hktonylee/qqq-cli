@@ -203,7 +203,7 @@ qqq add --stdin --parent 12 --image screenshot.png < description.txt
 
 `--stdin` reads UTF-8 to EOF and preserves whitespace, line endings and literal
 shell-looking text. Invalid UTF-8 and blank-only descriptions fail. It conflicts
-with positional text, `--description` and `--edit`; parent, priority and image
+with positional text, `--description` and `--edit`; parent, prerequisite, priority and image
 options keep their usual direct-add behavior. Existing add/editor modes stay
 available without `--stdin`.
 
@@ -239,13 +239,16 @@ Version-1 batch schema:
 Each task requires a nonblank unique `key` and nonblank `description`. Keys and
 descriptions retain exact whitespace; references match exact keys. Priority
 defaults to 0 and accepts integer -100 through 100. Omitted/null parent means
-no dependency. `{"key":"feature"}` references a task in the same batch,
+no tree parent. Omitted `depends_on` defaults to `[]`. Each prerequisite uses
+the same reference shape as parent; for example `"depends_on": [{"key":"api"},
+{"id":12}]`. `{"key":"feature"}` references a task in the same batch,
 including one listed later. `{"id":12}` references an existing positive DB task
-ID. Parent objects require exactly one reference type. Existing archived
-unfinished parents are rejected; archived completed parents are allowed, as
+ID. Reference objects require exactly one reference type. Existing archived
+unfinished parents/prerequisites are rejected; archived completed references are allowed, as
 with ordinary add.
 
-Missing refs, cycles, duplicate/blank keys, invalid priorities/descriptions,
+Missing refs, cycles across parent and prerequisite links, duplicate prerequisites,
+parent/prerequisite overlap, duplicate/blank keys, invalid priorities/descriptions,
 unknown or duplicate fields, malformed JSON and unsupported versions fail.
 An empty `tasks` array is valid and imports nothing. Version 1 has no image
 attachment fields; use single-task add's image options for attachments.
@@ -257,12 +260,12 @@ and pending deletion recovery still follow normal command behavior before the
 import transaction. Imported tasks start new and unarchived, with ordinary
 timestamps/content revisions and no assignment metadata.
 
-Parents are inserted before their children. At each step, the lowest original
+Parents and batch-local prerequisites are inserted before their dependents. At each step, the lowest original
 input index among available tasks is chosen. This keeps order deterministic for
 forward refs and independent tasks. Other writers cannot interleave ID allocation
-inside a batch or change an existing parent's state before its commit.
+inside a batch or change an existing dependency's state before its commit.
 
-`--dry-run` validates schema, local links and existing parents through a read-only
+`--dry-run` validates schema, local links and existing dependencies through a read-only
 DB snapshot. It does not create a project, migrate schema, run deletion recovery,
 write tasks or allocate/reserve IDs. Older supported DB schemas need a normal
 command such as `qqq list` first. Parent state can change after preview; real
@@ -281,9 +284,10 @@ details. JSON returns:
 | `tasks` | Normalized entries in original input order |
 
 Each result entry has `key`, `description`, defaulted `priority`, original
-`parent` reference (or null), `id` and resolved `parent_id`. Dry-run task IDs
-are null; existing parent IDs are known, batch parent IDs remain null. After
-commit, both allocated task IDs and resolved parent IDs are returned. For the
+`parent` reference (or null), `depends_on` references (default `[]`), `id`,
+resolved `parent_id` and `prerequisite_ids` in source reference order. Dry-run task IDs
+are null; existing dependency IDs are known, batch-local dependency IDs remain null. After
+commit, allocated task IDs and every resolved dependency ID are returned. For the
 example above in an empty project, mapping is `{"feature":1,"tests":2}` and
 creation order is `["feature","tests"]`.
 
@@ -300,10 +304,10 @@ Archive keeps task status, description, priority, messages, images, ownership
 history, and dependencies. `show`, `edit`, messages, and image export still work
 by ID. Archive/unarchive add history events; repeated commands change nothing.
 Events record supplied `--session` or `cli` when absent. In-progress tasks
-cannot be archived. An unfinished parent cannot be archived while a visible
-unfinished child depends on it; adding or reparenting an unfinished child, or
-unarchiving one, under an archived unfinished parent also fails. Archived
-completed parents still release dependent tasks.
+cannot be archived. An unfinished parent or prerequisite cannot be archived
+while a visible unfinished task depends on it. Adding links or unarchiving
+unfinished dependents under archived unfinished dependencies also fails.
+Archived completed dependencies still release tasks.
 
 ## Reopen completed work
 
@@ -313,12 +317,12 @@ qqq reopen -1 --session reviewer
 ```
 
 `reopen` returns a completed task to `new` and records a reopen event. It keeps
-description, priority, parent, messages, images, creation time, and prior
+description, priority, parent, prerequisites, messages, images, creation time, and prior
 history. A task in any other status fails without changes; repeating `reopen`
 also fails. Archived completed tasks require `unarchive` first. A completed
-child under an archived unfinished parent cannot reopen until parent is
-unarchived or completed. Completed descendants stay completed; new direct children
-wait for reopened parent to complete again. Reopened tasks return to default
+task with an archived unfinished parent or prerequisite cannot reopen until
+dependency is unarchived or completed, or its link removed. Completed descendants
+stay completed; new dependents wait for reopened prerequisite to complete again. Reopened tasks return to default
 lists, including `--max-completed 0`, and become claimable when dependencies
 permit.
 
@@ -355,7 +359,7 @@ save returns error.
 
 Switching from changed draft asks before discard; N, Enter, or Esc keeps it.
 Navigation includes all unarchived tasks, regardless of status; deleted IDs are
-skipped. `--parent` and `--priority` apply to each new task. `--image` files attach
+skipped. `--parent`, `--depends-on` and `--priority` apply to each new task. `--image` files attach
 only to first successful save, including when updating existing task. Inline add,
 external editor and `qqq edit` save once.
 
@@ -515,15 +519,42 @@ Error view wraps long messages; Up/Down scrolls, Esc closes it.
 
 ## Dependencies and images
 
-Each task has at most one parent. Child becomes ready when parent completes.
-Parent must exist; self-parenting and cycles fail. Parent changes affect future
-claims without removing active ownership.
+Each task has at most one tree parent and any number of extra prerequisites.
+A new, unarchived task becomes ready only when its parent (if set) and every
+extra prerequisite are completed. `next`, filtered/waiting next, dry-run,
+Herdr dispatch and queue diagnostics use the same readiness rule. Extra edges
+do not change tree placement or duplicate task rows.
 
 ```sh
-qqq add "Build client" --parent 1
-qqq edit 2 --set-parent 1
-qqq edit 2 --set-parent none         # clear dependency
+qqq add "Integrate" --parent 1 --depends-on 2 --depends-on 3
+qqq edit 4 --depends-on 5                 # add prerequisite
+qqq edit 4 --remove-depends-on 2          # remove one; repeat flag to remove more
+qqq edit 4 --clear-depends-on             # clear extras, retain tree parent
+qqq edit 4 --clear-depends-on --depends-on 6  # replace extras atomically
+qqq edit 4 --set-parent none              # clear tree parent, retain extras
 ```
+
+IDs must exist. Self links, duplicate additions (including an existing edge),
+missing removals, parent/prerequisite overlap, and cycles across both link types
+fail atomically. Add/remove of the same ID and clear/remove together fail.
+Clear is idempotent. Edits validate the final graph: remove an extra while
+making it the parent, or clear the parent while making it an extra, in one
+command. Dependency edit flags skip the editor and conflict with `--edit`.
+Direct description/status/priority/parent/image changes can share the operation.
+
+Dependency edits and reopening prerequisites affect future claims; active owners
+remain assigned, completed descendants keep their status/history, and content
+revisions remain unchanged. Completed archived prerequisites satisfy readiness.
+Archived unfinished prerequisites follow parent safety: unfinished tasks cannot
+link to them, unarchive/reopen validates them, and an unfinished prerequisite
+cannot be archived with visible unfinished dependents. Remove such edges before
+unarchiving/reopening, or unarchive and finish the prerequisite first.
+
+`show`, Task JSON and TUI details include ordered `prerequisites` entries:
+`{"id":2,"status":"new","archived":false}`. Corrupt missing references have
+null status/archive values. Human/TUI details mark unfinished entries with
+`blocks claim`. Queue explanations include their IDs, status and archived state.
+TUI details refresh when prerequisite status changes, retaining unsaved text.
 
 Attach files through `add` or `edit`; repeat `--image` for multiple files:
 
@@ -542,7 +573,7 @@ description, such as `![before.png](.qqq/images/2/4.png)`. Reloading a task
 shows each linked image as one editable item; deleting that item removes its
 description link while keeping the attachment available through `show`.
 
-Description, status, parent and image updates save atomically.
+Description, status, parent, prerequisites, priority and image updates save atomically.
 
 ## Queue diagnostics
 
@@ -555,7 +586,7 @@ qqq next --explain --session worker-1
 ```
 
 `status` summarizes ready, blocked, in-progress, error and completed counts,
-then shows unfinished tasks with active owners, immediate parent blockers and
+then shows unfinished tasks with active owners, immediate parent/prerequisite blockers and
 latest activity. JSON includes every task in scope, including completed tasks.
 Archived tasks are excluded by default; `--include-archived` includes their rows
 and counts. Archived tasks never become ready.
@@ -565,7 +596,7 @@ claiming, dispatching an agent or changing assignment metadata. It distinguishes
 an empty queue, blocked/error/owned queues, mixed unavailable work and ready tasks
 excluded by filters. Candidates use priority descending, then ID ascending on
 ties. Readiness uses exactly the same rules as real next: new, unarchived, with
-no parent or a completed parent.
+a completed parent if set and all extra prerequisites completed.
 
 Global explanation needs no session. Native Codex/Herdr identity discovery and
 dispatch config are ignored. Supply `--session`, `QQQ_SESSION` or
@@ -617,16 +648,16 @@ Each row contains the normal `task` object plus:
 | `queue_rank` | One-based rank among all ready tasks by priority/ID; null otherwise |
 | `reasons` | Zero or more eligibility/exclusion codes |
 | `owner` | Recorded claim key for an active task; null otherwise |
-| `blockers` | Immediate unfinished/missing parent: ID, status and archived flag; missing parent has null status/flag |
+| `blockers` | Unfinished/missing parent and extra prerequisites: ID, status and archived flag; missing refs have null status/flag |
 | `latest_activity` | Latest task update, message or event: `at`, `source`, `id`, `session`, `action` |
 
-Reason codes: `archived`, `parent_not_completed`, `in_progress`, `error`,
+Reason codes: `archived`, `parent_not_completed`, `prerequisite_not_completed`, `in_progress`, `error`,
 `completed`, `filter_excluded`. A ready matching task has no reasons.
 Latest activity compares task `updated_at` with message/event `created_at`.
 Timestamp ties prefer message, then event, then task; higher IDs break ties
 within one source. Task activity has null ID/session/action; messages have null
 action; events include their action. Updates cover creation and edits as well as
-other task changes. Blocker resolution includes archived parents regardless of
+other task changes. Blocker resolution includes archived dependencies regardless of
 output scope.
 
 Explanation contains `owner_input`, `resolved_owner` (both null without explicit
@@ -847,8 +878,8 @@ events, Herdr link, stored images, and paths without changing project data;
 `--json` returns same counts with `deleted:false`. `--yes` removes task and
 dependent data permanently, including stored image files, then returns
 `deleted:true`. Release or complete an active task before archiving it; delete
-or reparent every child before deleting parent. IDs remain reserved after
-deletion. Preview refuses legacy DB versions and pending recovery without
+or reparent every child and remove all prerequisite references before deleting
+a task. IDs remain reserved after deletion. Preview refuses legacy DB versions and pending recovery without
 changing files; run `qqq list` to migrate or recover before previewing again.
 If deletion stops while images are staged, next DB-backed qqq command recovers
 them according to committed DB state. Keep backup until recovered project
@@ -861,7 +892,8 @@ qqq doctor
 qqq --json doctor
 ```
 
-Doctor checks SQLite integrity, foreign keys, schema version, image paths, byte counts,
+Doctor checks SQLite integrity, foreign keys, schema version, combined dependency
+graph cycles/duplicate edges/missing refs, image paths, byte counts,
 signatures, and orphan files/directories. Healthy project exits 0. Issues print recovery
 actions and exit 1; JSON includes `ok`, counts, and `issues` with code, path,
 message, and action. Doctor never migrates DB. If SQLite journal/WAL sidecars
@@ -885,13 +917,14 @@ qqq list # run updated CLI
 Check task data before removing old DB. New CLI does not discover root-level
 `qqq.db`; `qqq init` without migration creates separate empty DB.
 
-Compatible DBs at schema versions 1–9 migrate to version 10. Version 10 adds
-content revisions; released schema-9 backups still restore, then migrate on
-next normal DB open. Version 6 moves
+Compatible DBs at schema versions 1–10 migrate to version 11. Version 11 adds
+extra prerequisite edges without changing old IDs, ownership, history, content
+revisions or readiness. Version 10 added content revisions. Schema-9/10 backups
+still restore, then migrate on next normal DB open. Version 6 moves
 existing image blobs to `.qqq/images/` before SQLite drops its `data` column.
 Migration tries `VACUUM` to reclaim old blob pages. If compaction warns, stop
 writers and run `sqlite3 .qqq/qqq.db 'VACUUM;'` later. Upgrade other qqq workers
-before migration; older binaries cannot open version 10. Legacy `title` or
+before migration; older binaries cannot open version 11. Legacy `title` or
 `pending` schemas need manual conversion; newer unknown schemas fail. Back up
 before conversion.
 

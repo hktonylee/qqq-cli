@@ -4,6 +4,7 @@ mod config;
 mod config_cli;
 mod db;
 mod delete;
+mod dependencies;
 mod dispatch;
 mod doctor;
 mod editor;
@@ -103,6 +104,9 @@ enum Commands {
         /// Existing task that must complete before this task can be claimed.
         #[arg(long)]
         parent: Option<i64>,
+        /// Additional prerequisite task ID; repeat for multiple prerequisites.
+        #[arg(long, value_name = "ID", value_parser = clap::value_parser!(i64).range(1..))]
+        depends_on: Vec<i64>,
         /// Claim order: -100 through 100, higher first; defaults to 0.
         #[arg(long, default_value_t = 0, allow_hyphen_values = true, value_parser = clap::value_parser!(i64).range(-100..=100))]
         priority: i64,
@@ -190,6 +194,15 @@ enum Commands {
         /// Change dependency to a task ID, or use none to clear it. Skips editor unless --edit.
         #[arg(long, value_name = "ID|none")]
         set_parent: Option<db::ParentChange>,
+        /// Add prerequisite task ID. Repeating an existing edge is an error.
+        #[arg(long, value_name = "ID", conflicts_with = "edit", value_parser = clap::value_parser!(i64).range(1..))]
+        depends_on: Vec<i64>,
+        /// Remove prerequisite task ID; repeat for multiple removals.
+        #[arg(long, value_name = "ID", conflicts_with_all = ["edit", "clear_depends_on"], value_parser = clap::value_parser!(i64).range(1..))]
+        remove_depends_on: Vec<i64>,
+        /// Remove all extra prerequisites; combine with --depends-on to replace.
+        #[arg(long, conflicts_with = "edit")]
+        clear_depends_on: bool,
         /// Claim order: -100 through 100, higher first.
         #[arg(long, allow_hyphen_values = true, value_parser = clap::value_parser!(i64).range(-100..=100))]
         priority: Option<i64>,
@@ -430,17 +443,25 @@ fn execute(
             priority,
             images,
             stdin: _,
+            depends_on,
         } => {
             if let Some(id) = parent {
                 db.task(id)?;
             }
+            dependencies::validate_add(&db.conn, parent, &depends_on, true)?;
             let images = images
                 .iter()
                 .map(|path| images::ImageInput::read(path).map_err(cli_error::image_error))
                 .collect::<Result<Vec<_>>>()?;
             match stdin_description.or(text).or(description) {
                 Some(description) if !edit => {
-                    json!(db.add_with_priority(&description, parent, &images, priority)?)
+                    json!(db.add_with_dependencies(
+                        &description,
+                        parent,
+                        &images,
+                        priority,
+                        &depends_on
+                    )?)
                 }
                 None if editor::uses_builtin(edit) => {
                     let mut saved = Vec::new();
@@ -458,11 +479,12 @@ fn execute(
                                 None,
                                 outcome.expected_revision,
                             ),
-                            None => db.save_composition_with_priority(
+                            None => db.save_composition_with_dependencies(
                                 None,
                                 parent,
                                 &outcome.composition,
                                 priority,
+                                &depends_on,
                             ),
                         }?;
                         first_images.clear();
@@ -484,11 +506,12 @@ fn execute(
                             None,
                             outcome.expected_revision
                         )?,
-                        None => db.save_composition_with_priority(
+                        None => db.save_composition_with_dependencies(
                             None,
                             parent,
                             &outcome.composition,
-                            priority
+                            priority,
+                            &depends_on
                         )?,
                     })
                 }
@@ -582,6 +605,9 @@ fn execute(
             reason,
             set_parent,
             priority,
+            depends_on,
+            remove_depends_on,
+            clear_depends_on,
         } => {
             ensure!(
                 !force || matches!(set_status, Some(EditStatus::New)),
@@ -606,6 +632,9 @@ fn execute(
                     && set_status.is_none()
                     && set_parent.is_none()
                     && priority.is_none()
+                    && depends_on.is_empty()
+                    && remove_depends_on.is_empty()
+                    && !clear_depends_on
                     && images.is_empty())
             {
                 let snapshot = db.content_snapshot(id)?;
@@ -711,6 +740,11 @@ fn execute(
                         parent: set_parent,
                         priority,
                         expected_revision,
+                        dependencies: dependencies::Changes {
+                            add: &depends_on,
+                            remove: &remove_depends_on,
+                            clear: clear_depends_on
+                        },
                     }
                 )?)
             }

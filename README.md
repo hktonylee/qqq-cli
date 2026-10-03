@@ -71,6 +71,11 @@ Commands also work from subdirectories. Add `.qqq/` to your `.gitignore`.
 
 Pipe multiline descriptions with `qqq add --stdin`, or load a complete plan with
 `qqq import plan.json --dry-run` followed by `qqq import plan.json`.
+Independent prerequisites can gate integration work while keeping its tree parent:
+`qqq add "Integrate API and UI" --parent 1 --depends-on 2 --depends-on 3`.
+Manage extras with edit's `--depends-on`, `--remove-depends-on`, and
+`--clear-depends-on`; all prerequisites must complete before a new claim.
+
 See [batch schema and piping examples](docs/reference.md#atomic-batch-import).
 
 Inspect readiness, owners and blockers with `qqq status`. Preview selection reasons

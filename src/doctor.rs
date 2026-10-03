@@ -168,7 +168,7 @@ pub fn run() -> Result<Value> {
             return finish_report(report, &db_path);
         }
     };
-    if report.schema_version != Some(10) {
+    if report.schema_version != Some(crate::db::SCHEMA_VERSION) {
         report.issue(
             "DB_SCHEMA",
             &db_path,
@@ -176,6 +176,14 @@ pub fn run() -> Result<Value> {
             "Use a compatible qqq version or restore a verified backup.",
         );
         return finish_report(report, &db_path);
+    }
+    if let Err(error) = crate::dependencies::validate_graph(&conn) {
+        report.issue(
+            "DB_DEPENDENCIES",
+            &db_path,
+            format!("Invalid dependency graph: {error}"),
+            "Restore a verified backup or repair dependency edges manually.",
+        );
     }
     match conn.query_row("SELECT count(*) FROM tasks", [], |row| row.get(0)) {
         Ok(count) => report.tasks = Some(count),

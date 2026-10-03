@@ -27,8 +27,25 @@ pub(super) fn render(value: &Value) -> String {
             } else {
                 "none".to_owned()
             };
+            let prerequisites = task["depends_on"]
+                .as_array()
+                .into_iter()
+                .flatten()
+                .map(|reference| {
+                    if reference["id"].is_null() {
+                        format!("key {}", field(reference, "key"))
+                    } else {
+                        format!("#{}", field(reference, "id"))
+                    }
+                })
+                .collect::<Vec<_>>();
+            let extras = if prerequisites.is_empty() {
+                String::new()
+            } else {
+                format!("  Prerequisites: {}", prerequisites.join(", "))
+            };
             lines.push(format!(
-                "{}  Priority: {}  Parent: {}  {}",
+                "{}  Priority: {}  Parent: {}{extras}  {}",
                 field(task, "key"),
                 field(task, "priority"),
                 parent,

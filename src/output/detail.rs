@@ -112,6 +112,33 @@ pub(super) fn render(value: &Value, color: bool) -> String {
             .expect("detail section is an array"),
         color,
     ));
+    if let Some(prerequisites) = task["prerequisites"]
+        .as_array()
+        .filter(|items| !items.is_empty())
+    {
+        let rows = prerequisites
+            .iter()
+            .map(|prerequisite| {
+                let state = prerequisite["status"].as_str().unwrap_or("missing");
+                let archived = if prerequisite["archived"].as_bool() == Some(true) {
+                    " · archived"
+                } else {
+                    ""
+                };
+                let blocked = if state == "completed" {
+                    ""
+                } else {
+                    " · blocks claim"
+                };
+                format!(
+                    "  #{} · {state}{archived}{blocked}",
+                    field(prerequisite, "id")
+                )
+            })
+            .collect::<Vec<_>>()
+            .join("\n");
+        sections.push(format!("{}\n{rows}", heading("Prerequisites", color)));
+    }
     sections.push(format!(
         "{}\n{}\n{}\n{}\n{}\n{}",
         heading("Details", color),

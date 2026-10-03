@@ -2,6 +2,9 @@
 #[path = "../src/db.rs"]
 mod db;
 #[allow(dead_code)]
+#[path = "../src/dependencies.rs"]
+mod dependencies;
+#[allow(dead_code)]
 #[path = "../src/tui/draft.rs"]
 pub mod draft;
 #[allow(dead_code)]
@@ -50,6 +53,8 @@ fn database() -> (Db, tempfile::TempDir) {
     conn.execute_batch(include_str!("../src/sql/migrate_v9.sql"))
         .unwrap();
     conn.execute_batch(include_str!("../src/sql/migrate_v10.sql"))
+        .unwrap();
+    conn.execute_batch(include_str!("../src/sql/migrate_v11.sql"))
         .unwrap();
     (
         Db {

@@ -573,3 +573,37 @@ fn dispatch_cleanup_never_releases_alias_of_vanished_generated_token() {
             .any(|call| call.get(1).map(String::as_str) == Some("prompt"))
     );
 }
+
+#[test]
+fn dispatch_prerequisites_gate_preflight_and_atomic_selection() {
+    let p = Project::new();
+    p.ok(&["add", "API"]);
+    p.ok(&["add", "UI"]);
+    p.ok(&["add", "Join", "--depends-on", "1", "--depends-on", "2"]);
+    assert!(
+        p.ok(&["next", "--session", "caller", "--filter", "id == 3"])
+            .is_null()
+    );
+    assert!(p.calls().is_empty());
+    for (id, owner) in [("1", "api"), ("2", "ui")] {
+        p.ok(&[
+            "next",
+            "--local",
+            "--session",
+            owner,
+            "--filter",
+            &format!("id == {id}"),
+        ]);
+        p.ok(&["complete", id, "--session", owner]);
+    }
+    assert_eq!(
+        p.ok(&["next", "--session", "caller", "--filter", "id == 3"])["id"],
+        3
+    );
+    assert!(
+        p.calls()
+            .iter()
+            .any(|c| c.first().map(String::as_str) == Some("agent")
+                && c.get(1).map(String::as_str) == Some("prompt"))
+    );
+}

@@ -98,7 +98,7 @@ with tempfile.TemporaryDirectory(prefix="qqq-dashboard-test-") as folder:
         env["NO_COLOR"] = "1"
     elif scenario == "dumb":
         env["TERM"] = "dumb"
-    if scenario.startswith(("buffers_", "long_description_")) and scenario.endswith("no_color"):
+    if scenario.startswith(("buffers_", "long_description_", "prerequisites")) and scenario.endswith("no_color"):
         env["NO_COLOR"] = "1"
     for name in ("EDITOR", "QQQ_SESSION", "HERDR_ENV", "HERDR_PANE_ID", "CODEX_THREAD_ID", "CODEX_SESSION_ID"):
         env.pop(name, None)
@@ -195,6 +195,8 @@ with tempfile.TemporaryDirectory(prefix="qqq-dashboard-test-") as folder:
             cli("add", description)
     if scenario == "click_editor_scroll":
         cli("add", "\n".join(f"Line{index:02}" for index in range(1, 13)))
+    if scenario in ("prerequisites", "prerequisites_no_color"):
+        cli("edit", "2", "--depends-on", "1")
     if scenario.startswith("content_conflict"):
         stored_image = Path(folder) / "stored.png"
         stored_image.write_bytes(b"\x89PNG\r\n\x1a\nstored")
@@ -783,6 +785,21 @@ print(json.dumps({"result": result}))
             wait_visible(lambda: "Task #3 (New)" in editor_title())
             wait_end("<New text")
             assert cli("show", "3")["task"]["description"] == "<New text"
+        elif scenario in ("prerequisites", "prerequisites_no_color"):
+            send(b"\x1b[1;2A")
+            wait_visible(lambda: "Task #2 (New)" in editor_title())
+            send(b"!")
+            wait_visible(lambda: editor_line().startswith("Second!"))
+            scroll_details_to(lambda text: "#1 · new · blocks claim" in text)
+            cli("next", "--local", "--session", "prereq", "--filter", "id == 1")
+            cli("complete", "1", "--session", "prereq")
+            wait_visible(lambda: "#1 · completed" in details_text())
+            assert editor_line().startswith("Second!"), visible.text()
+            assert cli("show", "2")["task"]["description"] == "Second"
+            cli("reopen", "1")
+            wait_visible(lambda: "#1 · new · blocks claim" in details_text())
+            if scenario == "prerequisites_no_color":
+                assert b"\x1b[38;" not in screen
         elif scenario in ("details", "details_no_color"):
             assert editor_row() == 13, visible.text()
             assert "Select task to view details." in details_text(), visible.text()

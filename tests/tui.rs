@@ -134,6 +134,12 @@ fn tui_dashboard_wide_layout_resizes_and_preserves_editor() {
 }
 
 #[test]
+fn tui_dashboard_prerequisites_refresh_while_retaining_dirty_description() {
+    dashboard_scenario("prerequisites");
+    dashboard_scenario("prerequisites_no_color");
+}
+
+#[test]
 fn tui_dashboard_details_scroll_independently() {
     dashboard_scenario("details_scroll");
 }

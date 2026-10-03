@@ -1,5 +1,5 @@
 use crate::{
-    db::{Db, Task, task_row},
+    db::{Db, SCHEMA_VERSION, TASK_COLUMNS, Task, task_row},
     errors::{Code, Info},
     images::ImageStore,
 };
@@ -14,7 +14,6 @@ use std::{
 };
 
 const STAGING_DIR: &str = ".delete-staging";
-const TASK_COLUMNS: &str = "id,description,status,claim_key,created_at,updated_at,parent_id,harness_name,harness_session,orchestrator_name,orchestrator_session,priority,archived,content_revision";
 
 #[derive(Serialize)]
 pub struct DeleteReport {
@@ -86,7 +85,7 @@ pub fn preview_cli(id: i64) -> Result<DeleteReport> {
     conn.pragma_update(None, "query_only", "ON")?;
     let version: i64 = conn.pragma_query_value(None, "user_version", |row| row.get(0))?;
     ensure!(
-        version == 10,
+        version == SCHEMA_VERSION,
         Info::new(
             Code::DatabaseError,
             format!(
@@ -94,7 +93,7 @@ pub fn preview_cli(id: i64) -> Result<DeleteReport> {
             )
         )
         .detail("schema_version", version)
-        .detail("expected_schema_version", 10)
+        .detail("expected_schema_version", SCHEMA_VERSION)
         .detail("reason", "migration_required")
     );
     Ok(plan(&conn, &db_path, id)?.report)
@@ -180,6 +179,21 @@ fn plan(conn: &Connection, db_path: &Path, id: i64) -> Result<Plan> {
         )
         .detail("reason", "dependent_child")
         .detail("blocking_child_id", child)
+    );
+    let dependent = conn.query_row("SELECT task_id FROM task_dependencies WHERE prerequisite_id=? ORDER BY task_id LIMIT 1",[id],|row|row.get::<_,i64>(0)).optional()?;
+    ensure!(
+        dependent.is_none(),
+        Info::transition(
+            id,
+            &task.status,
+            &["new", "error", "completed"],
+            format!(
+                "Task {id} is a prerequisite of task #{}; remove prerequisite edge first",
+                dependent.unwrap_or_default()
+            )
+        )
+        .detail("reason", "dependent_prerequisite")
+        .detail("blocking_task_id", dependent)
     );
     let project = db_path
         .parent()

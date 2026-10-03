@@ -1,12 +1,9 @@
-use crate::db::{Db, READY_TASK_PREDICATE, Task, filter_evaluation_error, task_row};
+use crate::db::{Db, READY_TASK_PREDICATE, TASK_COLUMNS, Task, filter_evaluation_error, task_row};
 use crate::sql_filter::CompiledFilter;
 use anyhow::{Context, Result};
 use rusqlite::{Connection, OptionalExtension, TransactionBehavior, params_from_iter};
 use serde::Serialize;
 use std::collections::BTreeMap;
-
-const TASK_COLUMNS: &str = "id,description,status,claim_key,created_at,updated_at,parent_id,
-    harness_name,harness_session,orchestrator_name,orchestrator_session,priority,archived,content_revision";
 
 #[derive(Default, Serialize)]
 pub struct Counts {
@@ -53,6 +50,7 @@ impl Counts {
 enum Reason {
     Archived,
     ParentNotCompleted,
+    PrerequisiteNotCompleted,
     InProgress,
     Error,
     Completed,
@@ -210,8 +208,8 @@ fn report_with_activity(
                 Ok((
                     task_row(row)?,
                     row.get::<_, Option<String>>(3)?,
-                    row.get::<_, bool>(14)?,
                     row.get::<_, bool>(15)?,
+                    row.get::<_, bool>(16)?,
                 ))
             },
         )?;
@@ -265,6 +263,20 @@ fn report_with_activity(
                         archived: parent.map(|(_, archived)| *archived),
                     });
                 }
+            }
+            let mut extra_blocked = false;
+            for prerequisite in &task.prerequisites {
+                if prerequisite.status.as_deref() != Some("completed") {
+                    extra_blocked = true;
+                    blockers.push(Blocker {
+                        id: prerequisite.id,
+                        status: prerequisite.status.clone(),
+                        archived: prerequisite.archived,
+                    });
+                }
+            }
+            if extra_blocked {
+                reasons.push(Reason::PrerequisiteNotCompleted);
             }
             counts.new += 1;
             counts.ready += usize::from(ready);
@@ -386,6 +398,7 @@ mod tests {
             include_str!("sql/migrate_v8.sql"),
             include_str!("sql/migrate_v9.sql"),
             include_str!("sql/migrate_v10.sql"),
+            include_str!("sql/migrate_v11.sql"),
         ] {
             conn.execute_batch(sql).unwrap();
         }

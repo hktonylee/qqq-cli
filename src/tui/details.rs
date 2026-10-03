@@ -150,6 +150,7 @@ mod tests {
             status: "in_progress".into(),
             priority: 8,
             parent_id: Some(2),
+            prerequisites: Vec::new(),
             archived: false,
             context_only: false,
             created_at: "2026-10-02T12:00:00.000Z".into(),
@@ -265,6 +266,29 @@ mod tests {
                 styled_text(&rows(&value, 12), kind).contains(crate::output::status_label(status))
             );
         }
+    }
+
+    #[test]
+    fn prerequisite_sections_wrap_and_refresh_blockers() {
+        let mut value = value(&[]);
+        value["task"]["prerequisites"] = serde_json::json!([
+            {"id":12345,"status":"error","archived":false},
+            {"id":2,"status":"completed","archived":true}
+        ]);
+        let rendered = crate::output::detail_text(&value, false);
+        assert!(rendered.contains(
+            "Prerequisites:\n  #12345 · error · blocks claim\n  #2 · completed · archived"
+        ));
+        assert!(rendered.contains("Full editable description\n\nMessages: None\n\nPrerequisites:"));
+        let narrow = rows(&value, 12);
+        assert!(
+            narrow
+                .iter()
+                .all(|row| unicode_width::UnicodeWidthStr::width(row.text.as_str()) <= 12)
+        );
+        assert!(text(&narrow, "").contains("blocks claim"));
+        value["task"]["prerequisites"][0]["status"] = "completed".into();
+        assert!(!text(&rows(&value, 72), "\n").contains("blocks claim"));
     }
 
     #[test]

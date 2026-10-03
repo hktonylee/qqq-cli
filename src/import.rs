@@ -25,6 +25,8 @@ struct InputTask {
     #[serde(default)]
     priority: i64,
     parent: Option<Parent>,
+    #[serde(default)]
+    depends_on: Vec<Parent>,
 }
 
 #[derive(Clone, Deserialize, Serialize)]
@@ -50,6 +52,7 @@ pub struct ValidatedBatch {
     tasks: Vec<InputTask>,
     order: Vec<usize>,
     existing_parents: BTreeSet<i64>,
+    existing_prerequisites: BTreeSet<i64>,
 }
 
 #[derive(Serialize)]
@@ -60,6 +63,8 @@ struct ResultTask {
     parent: Option<Parent>,
     id: Option<i64>,
     parent_id: Option<i64>,
+    depends_on: Vec<Parent>,
+    prerequisite_ids: Vec<Option<i64>>,
 }
 
 #[derive(Serialize)]
@@ -119,44 +124,99 @@ fn validate(batch: Batch) -> Result<ValidatedBatch> {
         validate_priority(task.priority).with_context(|| format!("Batch task {:?}", task.key))?;
     }
     let mut existing_parents = BTreeSet::new();
+    let mut existing_prerequisites = BTreeSet::new();
     let mut children = vec![Vec::new(); batch.tasks.len()];
+    let mut degrees = vec![0_usize; batch.tasks.len()];
     let mut ready = BinaryHeap::new();
     for (index, task) in batch.tasks.iter().enumerate() {
-        match &task.parent {
-            Some(Parent::Local(parent)) => {
-                nonempty(&parent.key, "Batch parent key")?;
-                let parent_index = keys.get(parent.key.as_str()).with_context(|| {
-                    Info::invalid_argument("parent", "Batch task references missing parent key")
-                        .detail("reason", "missing_batch_parent")
+        let mut seen = BTreeSet::new();
+        for (reference, is_parent) in task
+            .parent
+            .iter()
+            .map(|p| (p, true))
+            .chain(task.depends_on.iter().map(|p| (p, false)))
+        {
+            let argument = if is_parent { "parent" } else { "depends_on" };
+            match reference {
+                Parent::Local(parent) => {
+                    nonempty(&parent.key, "Batch dependency key")?;
+                    ensure!(
+                        seen.insert((None, Some(parent.key.as_str()))),
+                        Info::invalid_argument(
+                            argument,
+                            "Duplicate dependency or parent/prerequisite overlap"
+                        )
                         .detail("batch_key", task.key.clone())
-                        .detail("parent_key", parent.key.clone())
+                    );
+                    let parent_index = keys.get(parent.key.as_str()).with_context(|| {
+                        let label = if is_parent { "parent" } else { "prerequisite" };
+                        Info::invalid_argument(
+                            argument,
+                            format!("Batch task references missing {label} key"),
+                        )
+                        .detail(
+                            "reason",
+                            if is_parent {
+                                "missing_batch_parent"
+                            } else {
+                                "missing_batch_prerequisite"
+                            },
+                        )
+                        .detail("batch_key", task.key.clone())
+                        .detail(
+                            if is_parent {
+                                "parent_key"
+                            } else {
+                                "prerequisite_key"
+                            },
+                            parent.key.clone(),
+                        )
                         .human(format!(
-                            "Batch task {:?} references missing parent key {:?}",
+                            "Batch task {:?} references missing {label} key {:?}",
                             task.key, parent.key
                         ))
-                })?;
-                children[*parent_index].push(index);
-            }
-            parent => {
-                if let Some(Parent::Existing(parent)) = parent {
+                    })?;
+                    children[*parent_index].push(index);
+                    degrees[index] += 1;
+                }
+                Parent::Existing(parent) => {
                     ensure!(
                         parent.id > 0,
                         Info::invalid_argument(
-                            "parent",
-                            "Existing parent must be a positive task ID"
+                            argument,
+                            "Existing dependency must be a positive task ID"
                         )
                         .detail("task_id", parent.id)
                     );
-                    existing_parents.insert(parent.id);
+                    ensure!(
+                        seen.insert((Some(parent.id), None)),
+                        Info::invalid_argument(
+                            argument,
+                            "Duplicate dependency or parent/prerequisite overlap"
+                        )
+                        .detail("batch_key", task.key.clone())
+                    );
+                    if is_parent {
+                        existing_parents.insert(parent.id);
+                    } else {
+                        existing_prerequisites.insert(parent.id);
+                    }
                 }
-                ready.push(Reverse(index));
             }
+        }
+        if degrees[index] == 0 {
+            ready.push(Reverse(index));
         }
     }
     let mut order = Vec::with_capacity(batch.tasks.len());
     while let Some(Reverse(index)) = ready.pop() {
         order.push(index);
-        ready.extend(children[index].iter().copied().map(Reverse));
+        for child in &children[index] {
+            degrees[*child] -= 1;
+            if degrees[*child] == 0 {
+                ready.push(Reverse(*child));
+            }
+        }
     }
     ensure!(
         order.len() == batch.tasks.len(),
@@ -167,6 +227,7 @@ fn validate(batch: Batch) -> Result<ValidatedBatch> {
         tasks: batch.tasks,
         order,
         existing_parents,
+        existing_prerequisites,
     })
 }
 
@@ -188,22 +249,35 @@ pub fn run(conn: &mut Connection, batch: &ValidatedBatch, dry_run: bool) -> Resu
     for id in &batch.existing_parents {
         ensure_parent_available(&tx, *id, true)?;
     }
+    for id in &batch.existing_prerequisites {
+        crate::dependencies::ensure_available(&tx, *id, true)?;
+    }
+    crate::dependencies::validate_graph(&tx)?;
     let mut mapping = BTreeMap::new();
     if !dry_run {
         let mut insert =
             tx.prepare("INSERT INTO tasks(description,parent_id,priority) VALUES (?,?,?)")?;
         for index in &batch.order {
             let task = &batch.tasks[*index];
-            let parent_id = parent_id(task.parent.as_ref(), &mapping);
+            let resolved_parent = parent_id(task.parent.as_ref(), &mapping);
             ensure!(
-                task.parent.is_none() || parent_id.is_some(),
+                task.parent.is_none() || resolved_parent.is_some(),
                 "Unresolved batch parent for {:?}",
                 task.key
             );
             insert
-                .execute(params![task.description, parent_id, task.priority])
+                .execute(params![task.description, resolved_parent, task.priority])
                 .with_context(|| format!("Failed to import task {:?}", task.key))?;
-            mapping.insert(task.key.clone(), tx.last_insert_rowid());
+            let id = tx.last_insert_rowid();
+            mapping.insert(task.key.clone(), id);
+            for reference in &task.depends_on {
+                let prerequisite = parent_id(Some(reference), &mapping)
+                    .context("Unresolved batch prerequisite")?;
+                tx.execute(
+                    "INSERT INTO task_dependencies(task_id,prerequisite_id) VALUES (?,?)",
+                    params![id, prerequisite],
+                )?;
+            }
         }
     }
     let tasks = batch
@@ -216,6 +290,12 @@ pub fn run(conn: &mut Connection, batch: &ValidatedBatch, dry_run: bool) -> Resu
             parent: task.parent.clone(),
             id: mapping.get(&task.key).copied(),
             parent_id: parent_id(task.parent.as_ref(), &mapping),
+            depends_on: task.depends_on.clone(),
+            prerequisite_ids: task
+                .depends_on
+                .iter()
+                .map(|reference| parent_id(Some(reference), &mapping))
+                .collect(),
         })
         .collect();
     let creation_order = batch
