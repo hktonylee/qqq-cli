@@ -219,25 +219,34 @@ Each task preview shows at most three wrapped lines; clipped previews end with
 `...`. Editor loads full description, including hidden lines.
 Selection fills whole row with muted blue background, including wrapped lines;
 light text stays readable. Plain mode uses `>` marker.
-Shift-Up/Down selects tasks in displayed tree order, then blank draft. Ctrl-S
-updates selected task or creates new task. By default, saved task stays open for
-further edits or task actions. Loaded and saved tasks place cursor at description
+Shift-Up/Down selects tasks in displayed tree order, then new-task draft.
+Switching retains unsaved drafts in memory for this TUI session. Returning restores
+text, image/paste items, caret and manual editor scroll. Dirty task rows show gold
+`[*]` marker (text marker in plain mode); dirty new/child drafts show `[*]` in title.
+Reverting edits clears marker. Task list/filter still use saved DB descriptions.
+Ctrl-S saves only selected draft; failed save keeps draft and marker. By default, saved task stays open for
+further edits or task actions. Freshly loaded and saved tasks place cursor at description
 end; editor scrolls to keep cursor visible. Set `tui.after_save_new` to `open_new`
 to clear editor after creating task; existing-task edits stay open. Shift-Down past last
-displayed task opens blank draft. Esc closes focused filter and clears query,
+displayed task restores general new draft, or opens blank draft when none exists. Esc closes focused filter and clears query,
 returning focus to editor while preserving draft. From editor, Esc clears editor
 before exiting on next press. Selected tasks and dirty new drafts ask before
 discarding unsaved content; `y` clears editor, `n` keeps draft for editing or Ctrl-S save.
 Ctrl-C returns selected task to blank draft, asking before discarding edits.
-Ctrl-C in dirty new draft asks before exit; `y` exits without saving, `n` keeps draft.
-Esc in blank draft with editor focused exits; Ctrl-C in blank draft exits.
+Ctrl-C in dirty new draft asks before exit. After active new draft is approved,
+Ctrl-C or Esc exit prompts for every retained dirty draft, including hidden,
+archived or deleted tasks and child drafts. Prompts identify draft and preview it;
+`y` advances, `n`, Enter or Esc cancels whole exit and preserves all drafts,
+including earlier approvals. App exits after every draft is approved. Blank draft
+exits immediately only when no retained dirty drafts remain.
 Repeated Ctrl-C keeps confirmation open. Ctrl-V or terminal paste inserts text; pasting
 image file path attaches image. Saves commit immediately. TUI needs terminal
 and writes no stdout, including with `--json`.
 
-Ctrl+P opens blank child draft under selected task; header shows parent ID.
-Changed drafts ask before switching. Ctrl-S creates child with dependency;
-Enter or Shift+Enter inserts newline. Navigating away clears draft's parent context.
+Ctrl+P opens or restores child draft under selected task; header shows parent ID.
+Current edits stay retained. Each parent has separate child draft; return to parent
+and press Ctrl+P to continue it. Ctrl-S creates child with dependency;
+Enter or Shift+Enter inserts newline. Navigating away retains child parent context.
 
 Ctrl-H focuses selected task's live Herdr agent and opens Herdr client using
 task's linked server. `Ctrl-H Herdr` appears in the shortcut bar only when the
@@ -257,7 +266,8 @@ task details while editor has focus. Selection changes reset details scroll.
 Details clicks leave editor caret and draft unchanged. Shift-Up/Down
 returns list to selected task. Editor keys reveal caret after manual scroll.
 Left-click task row to load it in editor, including indented or wrapped rows.
-Left-click editor text to place caret; dirty drafts ask before switching tasks.
+Left-click editor text to place caret. Task-row clicks retain unsaved drafts,
+using same restoration behavior as Shift-Up/Down.
 
 Ctrl+/ focuses filter and shows `Filter:` with editable caret, even when empty.
 Filter bar stays visible while focused or query is nonempty. Empty unfocused query

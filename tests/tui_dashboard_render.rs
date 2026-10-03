@@ -1973,3 +1973,89 @@ fn failed_save_footer_uses_error_color() {
         .unwrap();
     assert_eq!(terminal.backend().buffer()[(0, 23)].fg, Color::Red);
 }
+
+#[test]
+fn dirty_marker_is_distinct_aligned_and_keeps_task_hit_targets() {
+    let mut rows = panel::rows("1 New First\n  continuation\n2 New Literal [*]", 66);
+    for row in &mut rows {
+        row.dirty = row.task_id == Some(1);
+    }
+    let layout = render::Layout::new(&["Draft".into()], &[], 72);
+    let chrome = render::Chrome {
+        title: "Task Editor",
+        title_status_color: None,
+        keys: render::KEYS,
+        message: "",
+    };
+    for width in [12, 50, 72, 150] {
+        for color in [true, false] {
+            for selected in [None, Some(1)] {
+                let mut terminal = Terminal::new(TestBackend::new(width, 24)).unwrap();
+                terminal
+                    .draw(|frame| {
+                        dashboard::draw(
+                            frame,
+                            &rows,
+                            &HashMap::new(),
+                            selected,
+                            dashboard::View {
+                                query: "",
+                                focused: false,
+                                top: &mut 0,
+                                follow_selected: true,
+                                modal_lines: None,
+                                details: None,
+                            },
+                            render::DashboardEditor {
+                                layout: &layout,
+                                cursor: 0,
+                                top: &mut 0,
+                                chrome: &chrome,
+                                message_is_error: false,
+                                follow_cursor: true,
+                            },
+                            color,
+                        );
+                    })
+                    .unwrap();
+                let buffer = terminal.backend().buffer();
+                assert_eq!(&line(buffer, 0)[2..6], "[*] ");
+                assert_eq!(&line(buffer, 1)[2..6], "[*] ");
+                let clean = "      2 New Literal [*]";
+                assert!(line(buffer, 2).starts_with(&clean[..usize::from(width).min(clean.len())]));
+                assert_eq!(buffer[(2, 2)].bg, Color::Reset);
+                assert_eq!(buffer[(2, 2)].fg, Color::Reset);
+                let marker = &buffer[(2, 0)];
+                assert_eq!(
+                    marker.fg,
+                    if color {
+                        Color::Indexed(222)
+                    } else {
+                        Color::Reset
+                    }
+                );
+                assert_eq!(
+                    marker.bg,
+                    if !color {
+                        Color::Reset
+                    } else if selected.is_some() {
+                        Color::Rgb(15, 51, 62)
+                    } else {
+                        Color::Indexed(236)
+                    }
+                );
+                if width > 20 {
+                    assert_ne!(buffer[(20, 2)].fg, Color::Indexed(222));
+                }
+                assert_eq!(
+                    click((width, 24), 2, 1, &rows, 0, 0, &layout),
+                    Some(dashboard::ClickTarget::Task(1))
+                );
+                assert_eq!(
+                    click((width, 24), 6, 2, &rows, 0, 0, &layout),
+                    Some(dashboard::ClickTarget::Task(2))
+                );
+            }
+        }
+    }
+}

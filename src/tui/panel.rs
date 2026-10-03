@@ -51,6 +51,7 @@ pub fn adjacent_visible_id(ids: &[i64], current: Option<i64>, older: bool) -> Op
 pub struct ListRow {
     pub text: String,
     pub task_id: Option<i64>,
+    pub dirty: bool,
 }
 
 pub fn visible_ids(rows: &[ListRow]) -> Vec<i64> {
@@ -103,6 +104,7 @@ pub fn rows(tree: &str, width: usize) -> Vec<ListRow> {
         rows.push(ListRow {
             text: line.to_owned(),
             task_id,
+            dirty: false,
         });
     }
     rows

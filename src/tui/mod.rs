@@ -26,7 +26,7 @@ use crossterm::{
 };
 use draft::{Composition, Draft};
 use ratatui::{Terminal, backend::CrosstermBackend};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::io::{self, IsTerminal};
 use std::time::{Duration, Instant};
 use unicode_segmentation::UnicodeSegmentation;
@@ -57,8 +57,35 @@ enum Target {
 
 enum Confirmation {
     Exit,
+    ExitBuffers { keys: Vec<DraftKey>, index: usize },
     Switch { target: Target, focus_editor: bool },
     Action { action: TaskAction, dirty: bool },
+}
+
+fn confirm_buffers_exit(buffers: &DraftBuffers) -> Option<Confirmation> {
+    let keys = buffers.keys();
+    (!keys.is_empty()).then_some(Confirmation::ExitBuffers { keys, index: 0 })
+}
+
+fn buffer_exit_lines(key: DraftKey, buffers: &DraftBuffers, width: usize) -> Vec<render::PopupRow> {
+    use render::{PopupKind, PopupRow};
+    let mut rows = vec![PopupRow::new(
+        format!("Discard {}?", key.label()),
+        PopupKind::Heading,
+    )];
+    if let Some(saved) = buffers.get(key) {
+        rows.extend(
+            wrap_modal(&saved.draft.fragments().concat(), width)
+                .into_iter()
+                .take(3)
+                .map(|line| PopupRow::new(line, PopupKind::Warning)),
+        );
+    }
+    rows.push(PopupRow::new(
+        "y continue  n/Esc cancel exit",
+        PopupKind::Hint,
+    ));
+    rows
 }
 
 #[derive(Clone, Copy)]
@@ -659,7 +686,24 @@ fn compose_inner(
         } else {
             (None, None, Vec::new(), false)
         };
+        let buffer_footer = match &confirmation {
+            Some(Confirmation::ExitBuffers { keys, index }) => {
+                let key = keys[*index];
+                let full = format!("Discard {}? (y/N)", key.label());
+                if full.len() <= usize::from(size.0) {
+                    full
+                } else {
+                    match key {
+                        DraftKey::Task(id) => format!("Drop #{id}? y/N"),
+                        DraftKey::New(None) => "Drop new? y/N".into(),
+                        DraftKey::New(Some(id)) => format!("Drop P{id}? y/N"),
+                    }
+                }
+            }
+            _ => String::new(),
+        };
         let footer = match &confirmation {
+            Some(Confirmation::ExitBuffers { .. }) => &buffer_footer,
             Some(Confirmation::Exit) if usize::from(size.0) < "Discard draft? (y/N)".len() => {
                 "Discard? y/N"
             }
@@ -673,7 +717,8 @@ fn compose_inner(
             Some(Confirmation::Action { .. }) => "Confirm action? (y/N)",
             None => &message,
         };
-        let (title, status_start) = match (mode.db().is_some(), target_id) {
+        let active_dirty = draft.is_dirty_against(&baseline);
+        let (mut title, status_start) = match (mode.db().is_some(), target_id) {
             (true, Some(id)) => {
                 let prefix = format!("Task Editor - Task #{id} ");
                 let label = crate::output::status_label(
@@ -690,6 +735,9 @@ fn compose_inner(
             ),
             (false, _) => ("Task Editor".to_owned(), None),
         };
+        if dashboard && target_id.is_none() && active_dirty {
+            title.push_str(" [*]");
+        }
         let chrome = render::Chrome {
             title: &title,
             title_status_color: if dashboard {
@@ -742,6 +790,11 @@ fn compose_inner(
                 .iter()
                 .map(|task| (task.id, task.status.as_str()))
                 .collect();
+            let mut dirty_ids: HashSet<_> = buffers.task_ids().collect();
+            if let Some(id) = target_id.filter(|_| active_dirty) {
+                dirty_ids.insert(id);
+            }
+            let dirty_column = displayed.iter().any(|task| dirty_ids.contains(&task.id));
             rows = if !filter_query.is_empty() && displayed.is_empty() {
                 Vec::new()
             } else {
@@ -750,7 +803,7 @@ fn compose_inner(
                         .list
                         .width,
                 )
-                .saturating_sub(2);
+                .saturating_sub(2 + if dirty_column { 4 } else { 0 });
                 let tree = crate::output::render(
                     if size.0 < dashboard::COMPACT_COLUMNS {
                         crate::output::Format::CompactTasks
@@ -763,6 +816,9 @@ fn compose_inner(
                 );
                 panel::rows(&tree, list_width)
             };
+            for row in &mut rows {
+                row.dirty = row.task_id.is_some_and(|id| dirty_ids.contains(&id));
+            }
             list_row_count = rows.len();
             visible_ids = Some(panel::visible_ids(&rows));
             let popup_content = dashboard::popup_layout(
@@ -780,6 +836,11 @@ fn compose_inner(
                     )
                 })
                 .or_else(|| match &confirmation {
+                    Some(Confirmation::ExitBuffers { keys, index }) => Some(buffer_exit_lines(
+                        keys[*index],
+                        &buffers,
+                        usize::from(popup_content.width),
+                    )),
                     Some(Confirmation::Action { action, dirty }) => Some(vec![
                         render::PopupRow::new(
                             format!("{} task #{}?", action.label(), action.id()),
@@ -971,13 +1032,14 @@ fn compose_inner(
                             task_target(db, task.id, task.description, task.status)
                         });
                         match target {
-                            Ok(target) if draft.is_dirty_against(&baseline) => {
-                                confirmation = Some(Confirmation::Switch {
-                                    target,
-                                    focus_editor: true,
-                                });
-                            }
                             Ok(target) => {
+                                buffers.park(
+                                    DraftKey::current(target_id, draft_parent_id),
+                                    &mut draft,
+                                    &baseline,
+                                    top,
+                                    editor_follow_cursor,
+                                );
                                 editor_follow_cursor = load_target(
                                     restore_target(target, &mut buffers),
                                     &mut draft,
@@ -1017,6 +1079,12 @@ fn compose_inner(
                     continue;
                 }
                 if dashboard
+                    && cancel_key
+                    && matches!(confirmation, Some(Confirmation::ExitBuffers { .. }))
+                {
+                    continue;
+                }
+                if dashboard
                     && target_id.is_none()
                     && cancel_key
                     && draft.is_dirty_against(&baseline)
@@ -1030,6 +1098,11 @@ fn compose_inner(
                     key.code == KeyCode::Esc && confirmation.is_none() && action_ui.is_none();
                 if dashboard && (editor_escape || (target_id.is_some() && cancel_key)) {
                     if target_id.is_none() && draft.is_empty() && draft_parent_id.is_none() {
+                        if let Some(pending) = confirm_buffers_exit(&buffers) {
+                            confirmation = Some(pending);
+                            action_ui = None;
+                            continue;
+                        }
                         return cancel(saved_any, dashboard);
                     }
                     if draft.is_dirty_against(&baseline) {
@@ -1060,6 +1133,10 @@ fn compose_inner(
                 }
                 if let Some(pending) = confirmation.take() {
                     if control && key.code == KeyCode::Char('c') {
+                        if dashboard {
+                            confirmation = Some(pending);
+                            continue;
+                        }
                         return cancel(saved_any, dashboard);
                     }
                     if !key
@@ -1068,7 +1145,22 @@ fn compose_inner(
                     {
                         match key.code {
                             KeyCode::Char('y' | 'Y') => match pending {
-                                Confirmation::Exit => return cancel(saved_any, dashboard),
+                                Confirmation::Exit => {
+                                    if let Some(pending) = confirm_buffers_exit(&buffers) {
+                                        confirmation = Some(pending);
+                                    } else {
+                                        return cancel(saved_any, dashboard);
+                                    }
+                                }
+                                Confirmation::ExitBuffers { keys, index } => {
+                                    if index + 1 == keys.len() {
+                                        return cancel(saved_any, dashboard);
+                                    }
+                                    confirmation = Some(Confirmation::ExitBuffers {
+                                        keys,
+                                        index: index + 1,
+                                    });
+                                }
                                 Confirmation::Switch {
                                     target,
                                     focus_editor,
@@ -1155,6 +1247,10 @@ fn compose_inner(
                 }
                 if let Some(ui) = action_ui.take() {
                     if control && key.code == KeyCode::Char('c') {
+                        if let Some(pending) = confirm_buffers_exit(&buffers) {
+                            confirmation = Some(pending);
+                            continue;
+                        }
                         return cancel(saved_any, dashboard);
                     }
                     if key
@@ -1345,26 +1441,26 @@ fn compose_inner(
                         let target = Target::New {
                             parent_id: Some(parent),
                         };
-                        if draft.is_dirty_against(&baseline) {
-                            confirmation = Some(Confirmation::Switch {
-                                target,
-                                focus_editor: true,
-                            });
-                        } else {
-                            editor_follow_cursor = load_target(
-                                restore_target(target, &mut buffers),
-                                &mut draft,
-                                &mut target_id,
-                                &mut target_status,
-                                &mut draft_parent_id,
-                                &mut baseline,
-                                &mut top,
-                            );
-                            filter_focused = false;
-                            list_follow_selected = true;
-                            message.clear();
-                            message_is_error = false;
-                        }
+                        buffers.park(
+                            DraftKey::current(target_id, draft_parent_id),
+                            &mut draft,
+                            &baseline,
+                            top,
+                            editor_follow_cursor,
+                        );
+                        editor_follow_cursor = load_target(
+                            restore_target(target, &mut buffers),
+                            &mut draft,
+                            &mut target_id,
+                            &mut target_status,
+                            &mut draft_parent_id,
+                            &mut baseline,
+                            &mut top,
+                        );
+                        filter_focused = false;
+                        list_follow_selected = true;
+                        message.clear();
+                        message_is_error = false;
                     } else {
                         message = "Select parent task first".to_owned();
                         message_is_error = true;
@@ -1411,13 +1507,22 @@ fn compose_inner(
                             include_archived,
                             visible_ids.as_deref(),
                         ) {
-                            Ok(Some(target)) if draft.is_dirty_against(&baseline) => {
+                            Ok(Some(target)) if !dashboard && draft.is_dirty_against(&baseline) => {
                                 confirmation = Some(Confirmation::Switch {
                                     target,
                                     focus_editor: false,
                                 });
                             }
                             Ok(Some(target)) => {
+                                if dashboard {
+                                    buffers.park(
+                                        DraftKey::current(target_id, draft_parent_id),
+                                        &mut draft,
+                                        &baseline,
+                                        top,
+                                        editor_follow_cursor,
+                                    );
+                                }
                                 editor_follow_cursor = load_target(
                                     restore_target(target, &mut buffers),
                                     &mut draft,
@@ -1566,7 +1671,14 @@ fn compose_inner(
                                 message_is_error = true;
                             }
                         },
-                        KeyCode::Char('c') => return cancel(saved_any, dashboard),
+                        KeyCode::Char('c') => {
+                            if let Some(pending) = confirm_buffers_exit(&buffers) {
+                                confirmation = Some(pending);
+                                action_ui = None;
+                            } else {
+                                return cancel(saved_any, dashboard);
+                            }
+                        }
                         KeyCode::Char('v') => {
                             editor_follow_cursor = true;
                             let result = clipboard::read().and_then(|value| match value {

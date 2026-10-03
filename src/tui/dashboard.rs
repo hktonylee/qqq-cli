@@ -615,6 +615,7 @@ pub fn draw(
             Rect::new(content.x, content.y, content.width, 1),
         );
     }
+    let dirty_column = rows.iter().any(|row| row.dirty);
     for (offset, row) in rows
         .iter()
         .skip(*list_view.top)
@@ -628,8 +629,26 @@ pub fn draw(
             is_selected,
             color,
         );
+        let mut spans = vec![Span::raw(marker)];
+        if dirty_column {
+            let dirty_style = if color && row.dirty {
+                Style::default().fg(POPUP_PROMPT_FG).bg(if is_selected {
+                    SELECTION_BG
+                } else {
+                    BODY_BG
+                })
+            } else {
+                Style::default()
+            };
+            spans.push(Span::styled(
+                if row.dirty { "[*]" } else { "   " },
+                dirty_style,
+            ));
+            spans.push(Span::raw(" "));
+        }
+        spans.push(Span::raw(row.text.clone()));
         frame.render_widget(
-            Paragraph::new(format!("{marker}{}", row.text)).style(style),
+            Paragraph::new(Line::from(spans)).style(style),
             Rect::new(content.x, content.y + offset as u16, content.width, 1),
         );
     }

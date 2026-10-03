@@ -169,6 +169,43 @@ fn tui_dashboard_child_save_error_preserves_parent_and_draft() {
 }
 
 #[test]
+fn tui_dashboard_buffers_exit_confirmation_preserves_every_draft_on_cancel() {
+    for name in [
+        "buffers_exit_n",
+        "buffers_exit_enter",
+        "buffers_exit_escape",
+        "buffers_exit_active_new",
+        "buffers_exit_deleted",
+        "buffers_exit_mouse",
+        "buffers_exit_filter",
+        "buffers_exit_no_color",
+        "buffers_exit_resize",
+    ] {
+        dashboard_scenario(name);
+    }
+}
+
+#[test]
+fn tui_dashboard_buffers_preserve_manual_scroll_and_pending_atoms() {
+    dashboard_scenario("buffers_scroll");
+    dashboard_scenario("buffers_atoms");
+}
+
+#[test]
+fn tui_dashboard_buffers_retain_navigation_and_independent_saves() {
+    for name in [
+        "buffers_navigation",
+        "buffers_navigation_no_color",
+        "buffers_navigation_compact",
+    ] {
+        dashboard_scenario(name);
+    }
+    dashboard_scenario("buffers_mouse_revert");
+    dashboard_scenario("buffers_new_child");
+    dashboard_scenario("buffers_child_exit");
+}
+
+#[test]
 fn tui_dashboard_escape_and_ctrl_c_return_to_new_before_exit() {
     dashboard_scenario("escape_selected");
     dashboard_scenario("ctrl_c_selected");

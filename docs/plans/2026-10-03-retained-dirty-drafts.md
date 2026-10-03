@@ -93,11 +93,11 @@
 
 **Files:** Modify `src/tui/mod.rs`, `src/tui/panel.rs`, `src/tui/dashboard.rs`, `tests/tui.rs`, `tests/tui_dashboard_pty.py`, `tests/tui_dashboard_render.rs`.
 
-- [ ] Add failing PTY `buffers_navigation`: edit #2, Shift-Up to #1 without confirmation, edit #1, Shift-Down restore #2, save #2 only, return #1 and verify draft remains and DB #1 stays original. Capture caret before switching, verify restored caret. Assert `[*]` while active/background dirty and removal after independent save/revert.
-- [ ] Add PTY `buffers_new_child`: dirty general new draft -> #2 -> child draft -> #1 -> #2 -> Ctrl-P restores child; Shift-Down restores general new draft; save child and general independently, verify saved child parent ID.
-- [ ] Park active dirty state only after validated mouse/keyboard target resolves. Dashboard Shift-Up/Down, task-row clicks and Ctrl-P retain without switch confirmation. Non-dashboard navigation retains existing confirmation branch. Decorate every `load_target` input with `restore_target` so explicit return-to-new and successful actions/saves can restore distinct parked new drafts without duplicate keys.
-- [ ] Add `dirty: bool` to `panel::ListRow`, initialized `false`. In compose loop, collect parked task IDs plus active dirty task ID. Determine whether displayed tasks include dirty ID; subtract four extra columns from list width when needed before calling existing formatter/`panel::rows`. Set each row's flag by task ID.
-- [ ] Render marker column between selection marker and row text:
+- [x] Add failing PTY `buffers_navigation`: edit #2, Shift-Up to #1 without confirmation, edit #1, Shift-Down restore #2, save #2 only, return #1 and verify draft remains and DB #1 stays original. Capture caret before switching, verify restored caret. Assert `[*]` while active/background dirty and removal after independent save/revert.
+- [x] Add PTY `buffers_new_child`: dirty general new draft -> #2 -> child draft -> #1 -> #2 -> Ctrl-P restores child; Shift-Down restores general new draft; save child and general independently, verify saved child parent ID.
+- [x] Park active dirty state only after validated mouse/keyboard target resolves. Dashboard Shift-Up/Down, task-row clicks and Ctrl-P retain without switch confirmation. Non-dashboard navigation retains existing confirmation branch. Decorate every `load_target` input with `restore_target` so explicit return-to-new and successful actions/saves can restore distinct parked new drafts without duplicate keys.
+- [x] Add `dirty: bool` to `panel::ListRow`, initialized `false`. In compose loop, collect parked task IDs plus active dirty task ID. Determine whether displayed tasks include dirty ID; subtract four extra columns from list width when needed before calling existing formatter/`panel::rows`. Set each row's flag by task ID.
+- [x] Render marker column between selection marker and row text:
 
   ```rust
   let dirty_column = rows.iter().any(|row| row.dirty);
@@ -116,18 +116,18 @@
   ```
 
   Use `Paragraph::new(Line::from(spans)).style(style)`. Append textual `[*]` to dirty new/child draft title. Stored task content/filter matching remains unchanged.
-- [ ] Add renderer regressions for dirty/clean/selected/wrapped rows, gold marker backing, NO_COLOR style resets, literal `[*]` in user text, width clipping and click mapping. Gold index 222 against explicit dark backing must meet 4.5:1 contrast.
-- [ ] Update existing dashboard dirty-navigation tests (`dirty`, `child_dirty`, `click_filter`, `wheel`, filtered confirmation setup, `workflow`) to retention behavior; keep explicit Ctrl-C/Esc/action discard assertions. Replace blind cleanup keystroke batches with state-aware Ctrl-C/confirmation handling so any number of retained drafts can exit without typing accidental text into blank editor.
-- [ ] Run focused storage/model/render tests and new PTY navigation scenarios. Commit navigation/markers only after checks pass.
+- [x] Add renderer regressions for dirty/clean/selected/wrapped rows, gold marker backing, NO_COLOR style resets, literal `[*]` in user text, width clipping and click mapping. Gold index 222 against explicit dark backing must meet 4.5:1 contrast.
+- [x] Update existing dashboard dirty-navigation tests (`dirty`, `child_dirty`, `click_filter`, `wheel`, filtered confirmation setup, `workflow`) to retention behavior; keep explicit Ctrl-C/Esc/action discard assertions. Replace blind cleanup keystroke batches with state-aware Ctrl-C/confirmation handling so any number of retained drafts can exit without typing accidental text into blank editor.
+- [x] Run focused storage/model/render tests and new PTY navigation scenarios. Commit navigation/markers only after checks pass.
 
 ### Task 3: Exit Approval Queue
 
 **Files:** Modify `src/tui/mod.rs`, `tests/tui.rs`, `tests/tui_dashboard_pty.py`.
 
-- [ ] Add failing `buffers_exit`: retain dirty #2 and #1, reach clean new draft, Ctrl-C prompts #1 then #2. `y` on #1, `n` on #2 cancels exit; navigate back and verify both drafts preserved. Repeat exit with active dirty new draft; approve active draft, iterate retained keys, repeated Ctrl-C keeps current prompt, Esc/Enter cancel. Final approvals exit and DB remains unchanged.
-- [ ] Add `Confirmation::ExitBuffers { keys: Vec<DraftKey>, index: usize }`. Create pending queue from `buffers.keys()` only when nonempty. Footer identifies current key; compact footer abbreviates while retaining key context. Popup identifies draft and previews text/image/paste labels with existing escaping/styling.
-- [ ] On `Confirmation::Exit` approval, enter parked queue instead of exiting when dashboard cache is nonempty. Clean-new Ctrl-C and blank-editor Esc enter same queue before exit. Repeated Ctrl-C on queue must `continue` before active-draft guards or generic confirmation Ctrl-C exit.
-- [ ] Approval transition:
+- [x] Add failing `buffers_exit`: retain dirty #2 and #1, reach clean new draft, Ctrl-C prompts #1 then #2. `y` on #1, `n` on #2 cancels exit; navigate back and verify both drafts preserved. Repeat exit with active dirty new draft; approve active draft, iterate retained keys, repeated Ctrl-C keeps current prompt, Esc/Enter cancel. Final approvals exit and DB remains unchanged.
+- [x] Add `Confirmation::ExitBuffers { keys: Vec<DraftKey>, index: usize }`. Create pending queue from `buffers.keys()` only when nonempty. Footer identifies current key; compact footer abbreviates while retaining key context. Popup identifies draft and previews text/image/paste labels with existing escaping/styling.
+- [x] On `Confirmation::Exit` approval, enter parked queue instead of exiting when dashboard cache is nonempty. Clean-new Ctrl-C and blank-editor Esc enter same queue before exit. Repeated Ctrl-C on queue must `continue` before active-draft guards or generic confirmation Ctrl-C exit.
+- [x] Approval transition:
 
   ```rust
   Confirmation::ExitBuffers { keys, index } => {
@@ -139,16 +139,25 @@
   ```
 
   Do not remove/cache-discard anything while advancing. Existing `n`/Enter/Esc cancellation clears confirmation only, preserving active and parked drafts. Clear action popup when starting exit queue.
-- [ ] Add deleted-background-task scenario, image/paste retention through declined exit, and NO_COLOR/minimum-width/wide resize coverage. Verify current #143 clear-query/close-filter/active-task/new-task sequence still precedes background prompts.
-- [ ] Run `cargo test --locked --test tui buffers -- --nocapture`, existing Ctrl-C/Esc/action scenarios, then full suite. Commit exit behavior after all regression updates pass.
+- [x] Add deleted-background-task scenario, image/paste retention through declined exit, and NO_COLOR/minimum-width/wide resize coverage. Verify current #143 clear-query/close-filter/active-task/new-task sequence still precedes background prompts.
+- [x] Run `cargo test --locked --test tui buffers -- --nocapture`, existing Ctrl-C/Esc/action scenarios, then full suite. Commit exit behavior after all regression updates pass.
 
 ### Task 4: Documentation and Integration
 
 **Files:** Modify `docs/reference.md`, this plan; keep CLI/DB schema unchanged.
 
-- [ ] Replace dashboard discard-on-navigation docs with retained keyboard/mouse/child behavior, dirty marker, independent save, new/child entry points, per-buffer exit approval and cancellation preserving all drafts. Keep single-editor docs unchanged.
-- [ ] Run `cargo fmt --check`, `cargo test --locked`, `cargo clippy --locked --all-targets -- -D warnings`, `git diff --check`. Request read-only review through existing reviewer; resolve findings, repeat affected checks.
+- [x] Replace dashboard discard-on-navigation docs with retained keyboard/mouse/child behavior, dirty marker, independent save, new/child entry points, per-buffer exit approval and cancellation preserving all drafts. Keep single-editor docs unchanged.
+- [x] Run `cargo fmt --check`, `cargo test --locked`, `cargo clippy --locked --all-targets -- -D warnings`, `git diff --check`. Request read-only review through existing reviewer; resolve findings, repeat affected checks.
 - [ ] Record focused/full/review evidence. Rebase task branch onto current master; resolve conflicts and verify combined code when changed. Fast-forward master, install `cargo install --path . --locked --offline --force`.
 - [ ] Exercise installed CLI retention/independent-save/exit-cancel/NO_COLOR paths, remove merged worktree/branch, `qqq complete 144 --json`, resume persistent `qqq next --wait --local --json`.
 
-Storage checkpoint: five cache/restoration tests and two existing dirty-check tests pass. New API tests failed before storage/restoration implementation. Navigation and exit wiring remain next.
+Verification checkpoint: all 500 tests pass, including five cache/restoration unit tests,
+31 dashboard renderer tests and 79 TUI tests. New buffer PTY cases cover keyboard/mouse,
+independent saves/revert, new/child drafts, caret/manual scroll, image export bytes,
+paste atoms, exit approval cancellation, deleted tasks, filter priority, plain mode,
+and resizing through 12x8, 150x36 and 72x24. Focused atom/scroll checks also pass
+after extending declined-exit coverage. Formatting, Clippy with warnings denied,
+and diff whitespace checks pass. Read-only review approved after replacing let-chain
+syntax incompatible with declared Rust 1.85 and inheriting row style for clean marker
+spacing. Navigation/storage/marker/exit tests observed expected failures before fixes.
+Navigation and exit changes share final feature commit.
