@@ -413,6 +413,18 @@ fn tui_dashboard_ctrl_slash_accepts_legacy_and_extended_keys() {
 }
 
 #[test]
+fn tui_dashboard_only_explicit_pasteboard_fences_collapse_loaded_descriptions() {
+    for name in [
+        "long_description_plain",
+        "long_description_no_color",
+        "long_description_text_fence",
+        "long_description_pasteboard",
+    ] {
+        dashboard_scenario(name);
+    }
+}
+
+#[test]
 fn tui_dashboard_pasteboard_round_trip_and_plain_mode() {
     dashboard_scenario("pasteboard");
     dashboard_scenario("pasteboard_no_color");

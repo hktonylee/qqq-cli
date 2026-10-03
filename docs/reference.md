@@ -163,7 +163,9 @@ pasted text
 Shift-Up/Down and `qqq edit` restore complete fences as one editable item;
 Backspace or Delete removes entire item. Payload containing backticks gets a
 longer fence. `NO_COLOR=1` and `TERM=dumb` keep label plain. Existing task text
-outside `pasteboard` fences remains unchanged on save.
+outside complete `pasteboard` fences stays visible and editable character by
+character, regardless of length. Other code fences remain ordinary text. Loading
+or saving unchanged text preserves original bytes.
 
 In built-in `qqq add`, Ctrl-S creates or updates task, clears editor, then waits
 for next task. Saves commit immediately; exit keeps prior saves. Shift+Up loads

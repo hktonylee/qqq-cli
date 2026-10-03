@@ -98,7 +98,7 @@ with tempfile.TemporaryDirectory(prefix="qqq-dashboard-test-") as folder:
         env["NO_COLOR"] = "1"
     elif scenario == "dumb":
         env["TERM"] = "dumb"
-    if scenario.startswith("buffers_") and scenario.endswith("no_color"):
+    if scenario.startswith(("buffers_", "long_description_")) and scenario.endswith("no_color"):
         env["NO_COLOR"] = "1"
     for name in ("EDITOR", "QQQ_SESSION", "HERDR_ENV", "HERDR_PANE_ID", "CODEX_THREAD_ID", "CODEX_SESSION_ID"):
         env.pop(name, None)
@@ -204,6 +204,12 @@ with tempfile.TemporaryDirectory(prefix="qqq-dashboard-test-") as folder:
             if scenario in ("details", "details_no_color"):
                 message += "\n" + "W" * 66 + "TAIL"
             cli("message", "2", message, "--session", "reviewer")
+
+    if scenario.startswith("long_description_"):
+        long_body = "Start marker\n" + "Ordinary row with visible editable text\n" * 60 + "End marker"
+        stored_description = (f"```text\n{long_body}\n```" if scenario.endswith("text_fence") else
+                              f"```pasteboard\n{long_body}\n```" if scenario.endswith("pasteboard") else long_body)
+        cli("edit", "2", "--description", stored_description)
 
     if scenario == "buffers_scroll":
         cli("edit", "2", "--description", "\n".join(f"Line{index:02}" for index in range(1, 21)))
@@ -431,7 +437,7 @@ print(json.dumps({"result": result}))
                              and editor_line().startswith("Second"))
                 settle()
                 assert b"\x1b[38;" not in screen and b"\x1b[48;" not in screen, screen[-2000:]
-        if not scenario.startswith(("wide_layout", "menu_retry_")) and scenario not in ("buffers_scroll", "handoff_scroll", "ctrl_c_new_scroll", "live_refresh_scroll", "tree_navigation", "scroll", "wheel", "click", "click_filter", "workflow", "workflow_empty", "workflow_status", "filter", "filter_no_color", "archive_hidden", "archive_included", "actions_basic", "actions_rejected", "actions_hidden"):
+        if not scenario.startswith(("wide_layout", "menu_retry_", "long_description_")) and scenario not in ("buffers_scroll", "handoff_scroll", "ctrl_c_new_scroll", "live_refresh_scroll", "tree_navigation", "scroll", "wheel", "click", "click_filter", "workflow", "workflow_empty", "workflow_status", "filter", "filter_no_color", "archive_hidden", "archive_included", "actions_basic", "actions_rejected", "actions_hidden"):
             read_until(b"Second")
             assert "First" in visible.text() and "Second" in visible.text(), visible.text()
         assert not select.select([child.stdout], [], [], 0)[0], "TUI wrote stdout while open"
@@ -736,7 +742,25 @@ print(json.dumps({"result": result}))
                 assert "Hidden" not in visible.text(), visible.text()
             else:
                 assert "[archived] Hidden" in visible.text(), visible.text()
-        if scenario.startswith("buffers_exit_"):
+        if scenario.startswith("long_description_"):
+            send(b"\x1b[1;2A")
+            wait_visible(lambda: "Task #2 (" in editor_title())
+            if scenario.endswith("pasteboard"):
+                wait_visible(lambda: f"[Pasted Content {len(long_body)} chars]" in editor_line())
+                expected = stored_description
+            else:
+                wait_visible(lambda: "End marker" in "\n".join(visible.text().splitlines()[editor_row() + 1:-1]))
+                assert "[Pasted Content" not in visible.text(), visible.text()
+                assert cli("show", "2")["task"]["description"] == stored_description
+                send(b"\x01" + (b"\x1b[A" if scenario.endswith("text_fence") else b"") + b"X")
+                wait_visible(lambda: "XEnd marker" in visible.text())
+                expected = stored_description.replace("End marker", "XEnd marker")
+            send(b"\x13")
+            wait_visible(lambda: visible.text().splitlines()[-1].startswith("Saved #2"))
+            assert cli("show", "2")["task"]["description"] == expected
+            if scenario.endswith("no_color"):
+                assert b"\x1b[38;" not in screen and b"\x1b[48;" not in screen, screen[-1000:]
+        elif scenario.startswith("buffers_exit_"):
             initial_tasks = cli("list")
             send(b"\x1b[1;2A")
             wait_visible(lambda: "Task #2 (" in editor_title())

@@ -28,7 +28,6 @@ enum Atom {
 }
 enum PasteSource {
     New,
-    SeededPlain,
     StoredFence(String),
 }
 
@@ -132,12 +131,7 @@ impl Atom {
 
     fn starts_with_line_break(&self) -> bool {
         let text = match self {
-            Self::Text(text)
-            | Self::Paste {
-                text,
-                source: PasteSource::SeededPlain,
-                ..
-            } => text,
+            Self::Text(text) => text,
             Self::Paste {
                 source: PasteSource::StoredFence(original),
                 ..
@@ -168,7 +162,7 @@ impl Draft {
             cursor: 0,
             next_image: 1,
         };
-        draft.seed(description);
+        draft.insert(description);
         draft
     }
 
@@ -223,7 +217,7 @@ impl Draft {
             if let Some(block) = next_block
                 .filter(|block| found_image.is_none_or(|(position, _, _)| block.start <= position))
             {
-                draft.seed(&description[cursor..block.start]);
+                draft.insert(&description[cursor..block.start]);
                 draft.atoms.push(Atom::Paste {
                     text: block.payload.to_owned(),
                     chars: block.payload.chars().count(),
@@ -236,10 +230,10 @@ impl Draft {
                 continue;
             }
             let Some((position, index, is_legacy)) = found_image else {
-                draft.seed(remaining);
+                draft.insert(remaining);
                 break;
             };
-            draft.seed(&description[cursor..position]);
+            draft.insert(&description[cursor..position]);
             let original = if is_legacy {
                 used_legacy[index] = true;
                 &legacy[index]
@@ -277,12 +271,6 @@ impl Draft {
         }
     }
     pub fn paste(&mut self, text: &str) {
-        self.append_text(text, PasteSource::New);
-    }
-    fn seed(&mut self, text: &str) {
-        self.append_text(text, PasteSource::SeededPlain);
-    }
-    fn append_text(&mut self, text: &str, source: PasteSource) {
         let chars = text.chars().count();
         if chars > 1000 {
             self.atoms.insert(
@@ -290,7 +278,7 @@ impl Draft {
                 Atom::Paste {
                     text: text.to_owned(),
                     chars,
-                    source,
+                    source: PasteSource::New,
                 },
             );
             self.cursor += 1;
@@ -446,7 +434,6 @@ impl Draft {
                             text.push('\n');
                         }
                     }
-                    PasteSource::SeededPlain => text.push_str(value),
                     PasteSource::StoredFence(original) => {
                         if !text.is_empty() && !text.ends_with('\n') {
                             text.push('\n');

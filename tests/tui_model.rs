@@ -63,12 +63,8 @@ fn new_large_paste_uses_fence_while_seeded_long_text_stays_raw() {
     let seeded = Draft::new(&payload);
     assert!(!seeded.is_dirty_against(&payload));
     assert_eq!(seeded.finish().unwrap().description, payload);
-    assert!(
-        seeded
-            .fragments()
-            .concat()
-            .contains("[Pasted Content 1001 chars]")
-    );
+    assert_eq!(seeded.fragments().concat(), payload);
+    assert!(seeded.paste_mask().iter().all(|pasted| !pasted));
 
     let mut draft = Draft::new("Before ");
     draft.paste(&payload);
@@ -203,11 +199,25 @@ fn home_and_end_respect_preserved_crlf_line_boundary() {
 }
 
 #[test]
-fn existing_large_description_starts_collapsed_and_saves_unchanged() {
+fn existing_large_description_stays_literal_and_edits_one_character() {
     let text = "Large existing body\n".repeat(100);
-    let draft = Draft::new(&text);
-    assert!(draft.fragments().concat().contains("[Pasted Content "));
-    assert_eq!(draft.finish().unwrap().description, text);
+    for mut draft in [Draft::new(&text), Draft::from_saved(&text, 1, &[]).unwrap()] {
+        assert_eq!(draft.fragments().concat(), text);
+        assert!(draft.paste_mask().iter().all(|pasted| !pasted));
+        assert!(!draft.is_dirty_against(&text));
+        assert_eq!(draft.finish().unwrap().description, text);
+        draft.backspace();
+        assert_eq!(
+            draft.finish().unwrap().description,
+            text.trim_end_matches('\n')
+        );
+        draft.insert("!");
+        assert!(draft.is_dirty_against(&text));
+        assert_eq!(
+            draft.finish().unwrap().description,
+            text.trim_end_matches('\n').to_owned() + "!"
+        );
+    }
 }
 
 #[test]
@@ -591,4 +601,52 @@ fn image_inputs_enforce_existing_signature_and_size_limits() {
         .media_type()
         .is_err()
     );
+}
+
+#[test]
+fn long_non_pasteboard_and_incomplete_fences_stay_literal() {
+    let body = "Visible ordinary text 🦀\r\n".repeat(80);
+    for description in [
+        body.clone(),
+        format!("```text\n{body}\n```"),
+        format!("```pasteboard\n{body}"),
+        format!("```text\n```pasteboard\n{body}\n```\n```"),
+    ] {
+        let draft = Draft::from_saved(&description, 1, &[]).unwrap();
+        assert_eq!(draft.fragments().concat(), description);
+        assert!(draft.paste_mask().iter().all(|pasted| !pasted));
+        assert_eq!(draft.finish().unwrap().description, description);
+        assert!(!draft.is_dirty_against(&description));
+    }
+}
+
+#[test]
+fn saved_long_text_around_pasteboard_and_image_only_collapses_explicit_fence() {
+    let prefix = "Visible prefix 🦀\n".repeat(80);
+    let suffix = "Visible suffix 界\n".repeat(80);
+    let payload = "Payload".repeat(160);
+    let image = ImageReference {
+        id: 1,
+        name: "example.png".into(),
+        media_type: "image/png".into(),
+    };
+    let description = format!(
+        "{prefix}```pasteboard\n{payload}\n```\n![example.png](.qqq/images/1/1.png)\n{suffix}"
+    );
+    let draft = Draft::from_saved(&description, 1, &[image]).unwrap();
+    let visible = draft.fragments().concat();
+    assert!(visible.starts_with(&prefix));
+    assert!(visible.ends_with(&suffix));
+    assert_eq!(
+        draft.paste_mask().iter().filter(|pasted| **pasted).count(),
+        1
+    );
+    assert_eq!(draft.image_mask().iter().filter(|image| **image).count(), 1);
+    assert!(visible.contains(&format!(
+        "[Pasted Content {} chars]",
+        payload.chars().count()
+    )));
+    assert!(visible.contains("[Image #1: example.png]"));
+    assert_eq!(draft.finish().unwrap().description, description);
+    assert!(!draft.is_dirty_against(&description));
 }
