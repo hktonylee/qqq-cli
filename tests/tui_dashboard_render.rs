@@ -36,6 +36,7 @@ fn click(
         column,
         row,
         dashboard::HitState {
+            query: "",
             rows,
             list_top,
             editor_top,
@@ -443,7 +444,7 @@ fn selected_task_renders_details_between_list_and_editor() {
                 .unwrap();
             assert_eq!(details_top, requested_top);
             let buffer = terminal.backend().buffer();
-            assert!(line(buffer, 1).contains("Selected"));
+            assert!(line(buffer, 0).contains("Selected"));
             for (offset, (text, _, foreground, modifier)) in
                 expected.iter().skip(details_top).take(3).enumerate()
             {
@@ -575,16 +576,16 @@ fn selected_task_geometry_and_details_hit_test_share_rectangles() {
             }
         }
         assert_eq!(
-            dashboard::wheel_area((72, height), 5, content.y),
+            dashboard::wheel_area((72, height), 5, content.y, ""),
             Some(dashboard::WheelArea::Details(dashboard::details_height(
                 details
             )))
         );
         assert!(content.height >= 1);
         assert_eq!(content.width, if details.height >= 3 { 66 } else { 68 });
-        assert_eq!(dashboard::wheel_area((72, height), 1, content.y), None);
+        assert_eq!(dashboard::wheel_area((72, height), 1, content.y, ""), None);
         if details.height >= 3 {
-            assert_eq!(dashboard::wheel_area((72, height), 5, details.y), None);
+            assert_eq!(dashboard::wheel_area((72, height), 5, details.y, ""), None);
         }
         let fragments: Vec<_> = "Editable".chars().map(|ch| ch.to_string()).collect();
         let layout = render::Layout::new(&fragments, &[], 72);
@@ -594,6 +595,7 @@ fn selected_task_geometry_and_details_hit_test_share_rectangles() {
                 5,
                 details.y,
                 dashboard::HitState {
+                    query: "",
                     rows: &[],
                     list_top: 0,
                     editor_top: 0,
@@ -608,6 +610,7 @@ fn selected_task_geometry_and_details_hit_test_share_rectangles() {
                 2,
                 panes.editor.y + 1,
                 dashboard::HitState {
+                    query: "",
                     rows: &[],
                     list_top: 0,
                     editor_top: 0,
@@ -622,15 +625,15 @@ fn selected_task_geometry_and_details_hit_test_share_rectangles() {
 #[test]
 fn new_draft_hit_test_keeps_three_panes() {
     assert_eq!(
-        dashboard::wheel_area((72, 18), 5, 3),
-        Some(dashboard::WheelArea::List(5))
+        dashboard::wheel_area((72, 18), 5, 3, ""),
+        Some(dashboard::WheelArea::List(6))
     );
     assert_eq!(
-        dashboard::wheel_area((72, 18), 5, 7),
+        dashboard::wheel_area((72, 18), 5, 7, ""),
         Some(dashboard::WheelArea::Details(2))
     );
     assert_eq!(
-        dashboard::wheel_area((72, 18), 5, 11),
+        dashboard::wheel_area((72, 18), 5, 11, ""),
         Some(dashboard::WheelArea::Editor(6))
     );
 }
@@ -638,33 +641,33 @@ fn new_draft_hit_test_keeps_three_panes() {
 #[test]
 fn wheel_hit_test_uses_list_editor_and_excludes_edges() {
     assert_eq!(
-        dashboard::wheel_area((72, 24), 5, 3),
-        Some(dashboard::WheelArea::List(7))
+        dashboard::wheel_area((72, 24), 5, 3, ""),
+        Some(dashboard::WheelArea::List(8))
     );
     assert_eq!(
-        dashboard::wheel_area((72, 24), 5, 1),
-        Some(dashboard::WheelArea::List(7))
+        dashboard::wheel_area((72, 24), 5, 1, ""),
+        Some(dashboard::WheelArea::List(8))
     );
     assert_eq!(
-        dashboard::wheel_area((72, 24), 5, 7),
-        Some(dashboard::WheelArea::List(7))
+        dashboard::wheel_area((72, 24), 5, 7, ""),
+        Some(dashboard::WheelArea::List(8))
     );
     assert_eq!(
-        dashboard::wheel_area((72, 24), 5, 10),
+        dashboard::wheel_area((72, 24), 5, 10, ""),
         Some(dashboard::WheelArea::Details(3))
     );
-    assert_eq!(dashboard::wheel_area((72, 24), 5, 8), None);
-    assert_eq!(dashboard::wheel_area((72, 24), 0, 10), None);
-    assert_eq!(dashboard::wheel_area((72, 24), 2, 10), None);
-    assert_eq!(dashboard::wheel_area((72, 24), 69, 10), None);
-    assert_eq!(dashboard::wheel_area((72, 24), 5, 12), None);
+    assert_eq!(dashboard::wheel_area((72, 24), 5, 8, ""), None);
+    assert_eq!(dashboard::wheel_area((72, 24), 0, 10, ""), None);
+    assert_eq!(dashboard::wheel_area((72, 24), 2, 10, ""), None);
+    assert_eq!(dashboard::wheel_area((72, 24), 69, 10, ""), None);
+    assert_eq!(dashboard::wheel_area((72, 24), 5, 12, ""), None);
     assert_eq!(
-        dashboard::wheel_area((72, 24), 5, 14),
+        dashboard::wheel_area((72, 24), 5, 14, ""),
         Some(dashboard::WheelArea::Editor(9))
     );
-    assert_eq!(dashboard::wheel_area((72, 24), 5, 23), None);
-    assert_eq!(dashboard::wheel_area((72, 24), 72, 3), None);
-    assert_eq!(dashboard::wheel_area((10, 7), 5, 3), None);
+    assert_eq!(dashboard::wheel_area((72, 24), 5, 23, ""), None);
+    assert_eq!(dashboard::wheel_area((72, 24), 72, 3, ""), None);
+    assert_eq!(dashboard::wheel_area((10, 7), 5, 3, ""), None);
 }
 
 #[test]
@@ -681,11 +684,11 @@ fn click_target_maps_rendered_task_rows_and_editor_caret() {
     let hit = |column, row, list_top, editor_top| {
         click((72, 24), column, row, &rows, list_top, editor_top, &layout)
     };
+    assert_eq!(hit(5, 0, 0, 0), Some(dashboard::ClickTarget::Task(1)));
     assert_eq!(hit(5, 1, 0, 0), Some(dashboard::ClickTarget::Task(1)));
-    assert_eq!(hit(5, 2, 0, 0), Some(dashboard::ClickTarget::Task(1)));
-    assert_eq!(hit(70, 3, 0, 0), Some(dashboard::ClickTarget::Task(2)));
-    assert_eq!(hit(5, 1, 1, 0), Some(dashboard::ClickTarget::Task(1)));
-    assert_eq!(hit(5, 2, 1, 0), Some(dashboard::ClickTarget::Task(2)));
+    assert_eq!(hit(70, 2, 0, 0), Some(dashboard::ClickTarget::Task(2)));
+    assert_eq!(hit(5, 0, 1, 0), Some(dashboard::ClickTarget::Task(1)));
+    assert_eq!(hit(5, 1, 1, 0), Some(dashboard::ClickTarget::Task(2)));
     assert_eq!(hit(2, 14, 0, 0), Some(dashboard::ClickTarget::Editor(2)));
     assert_eq!(hit(10, 14, 0, 0), Some(dashboard::ClickTarget::Editor(3)));
     assert_eq!(hit(1, 14, 0, 1), Some(dashboard::ClickTarget::Editor(5)));
@@ -696,7 +699,7 @@ fn click_target_ignores_non_content_and_out_of_bounds() {
     let rows = panel::rows("ID     STATUS       TASK\n1      New          First", 70);
     let layout = render::Layout::new(&["abc".into()], &[], 72);
     for (column, row) in [
-        (5, 0),
+        (5, 1),
         (5, 2),
         (5, 3),
         (5, 4),
@@ -762,7 +765,7 @@ fn manual_list_scroll_does_not_snap_to_selected_task() {
         })
         .unwrap();
     assert_eq!(top, 0);
-    assert!(line(terminal.backend().buffer(), 1).contains("Task 1"));
+    assert!(line(terminal.backend().buffer(), 0).contains("Task 1"));
     terminal
         .draw(|frame| {
             dashboard::draw(
@@ -790,15 +793,15 @@ fn manual_list_scroll_does_not_snap_to_selected_task() {
             )
         })
         .unwrap();
-    assert_eq!(top, 3);
+    assert_eq!(top, 2);
     assert!(line(terminal.backend().buffer(), 7).contains("Task 10"));
     assert_eq!(
         click((72, 24), 5, 7, &rows, top, 0, &layout),
         Some(dashboard::ClickTarget::Task(10))
     );
     assert_eq!(
-        dashboard::wheel_area((72, 24), 5, 7),
-        Some(dashboard::WheelArea::List(7))
+        dashboard::wheel_area((72, 24), 5, 7, ""),
+        Some(dashboard::WheelArea::List(8))
     );
     assert_eq!(
         line(terminal.backend().buffer(), 8),
@@ -935,8 +938,102 @@ fn manual_offsets_clamp_after_resize() {
         .unwrap();
     assert_eq!(list_top, 0);
     assert_eq!(editor_top, 0);
-    assert!(line(terminal.backend().buffer(), 1).contains("Task 1"));
+    assert!(line(terminal.backend().buffer(), 0).contains("Task 1"));
     assert!(line(terminal.backend().buffer(), 21).starts_with("A"));
+}
+
+#[test]
+fn list_mouse_geometry_tracks_filter_visibility() {
+    let rows = panel::rows("1 New First\n2 New Second", 70);
+    let layout = render::Layout::new(&["Draft".into()], &[], 72);
+    for query in ["", "first"] {
+        let hit = |row| {
+            dashboard::click_target(
+                (72, 24),
+                5,
+                row,
+                dashboard::HitState {
+                    rows: &rows,
+                    query,
+                    list_top: 0,
+                    editor_top: 0,
+                    layout: &layout,
+                },
+            )
+        };
+        assert_eq!(
+            hit(0),
+            query.is_empty().then_some(dashboard::ClickTarget::Task(1))
+        );
+        assert_eq!(
+            hit(1),
+            Some(dashboard::ClickTarget::Task(if query.is_empty() {
+                2
+            } else {
+                1
+            }))
+        );
+        assert_eq!(
+            dashboard::wheel_area((72, 24), 5, 0, query),
+            Some(dashboard::WheelArea::List(if query.is_empty() {
+                8
+            } else {
+                7
+            }))
+        );
+    }
+}
+
+#[test]
+fn empty_filter_reclaims_list_row_regardless_of_focus() {
+    let rows = panel::rows(
+        &(1..=8)
+            .map(|id| format!("{id} New Task {id}"))
+            .collect::<Vec<_>>()
+            .join("\n"),
+        70,
+    );
+    let layout = render::Layout::new(&["Draft".into()], &[], 72);
+    let chrome = render::Chrome {
+        title: "Editor",
+        title_status_color: None,
+        keys: render::KEYS,
+        message: "",
+    };
+    for focused in [false, true] {
+        let mut terminal = Terminal::new(TestBackend::new(72, 24)).unwrap();
+        let mut top = 0;
+        terminal
+            .draw(|frame| {
+                dashboard::draw(
+                    frame,
+                    &rows,
+                    &HashMap::new(),
+                    Some(8),
+                    dashboard::View {
+                        query: "",
+                        focused,
+                        top: &mut top,
+                        follow_selected: true,
+                        modal_lines: None,
+                        details: None,
+                    },
+                    render::DashboardEditor {
+                        layout: &layout,
+                        cursor: 0,
+                        top: &mut 0,
+                        chrome: &chrome,
+                        message_is_error: false,
+                        follow_cursor: true,
+                    },
+                    false,
+                );
+            })
+            .unwrap();
+        assert_eq!(top, 0);
+        assert!(line(terminal.backend().buffer(), 0).contains("Task 1"));
+        assert!(line(terminal.backend().buffer(), 7).contains("Task 8"));
+    }
 }
 
 #[test]
@@ -981,8 +1078,8 @@ fn filter_bar_shows_empty_result_and_takes_cursor_only_while_focused() {
                     .unwrap();
                 let buffer = terminal.backend().buffer();
                 let editable_start = if query.is_empty() {
-                    assert!(line(buffer, 0).trim().is_empty());
-                    0
+                    assert!(line(buffer, 0).starts_with("No matching tasks."));
+                    72
                 } else {
                     assert!(line(buffer, 0).starts_with("Filter: absent"));
                     for x in 0..8 {
@@ -1032,16 +1129,20 @@ fn filter_bar_shows_empty_result_and_takes_cursor_only_while_focused() {
                     );
                     assert_eq!(buffer[(x, 0)].modifier, Modifier::empty());
                 }
-                assert!(line(buffer, 1).starts_with("No matching tasks."));
-                assert!(line(buffer, 13).starts_with("Task Editor"));
-                assert_eq!(
-                    terminal.get_cursor_position().unwrap(),
-                    if focused {
-                        Position::new(if query.is_empty() { 0 } else { 14 }, 0)
-                    } else {
-                        Position::new(0, 14)
-                    }
+                assert!(
+                    line(buffer, u16::from(!query.is_empty())).starts_with("No matching tasks.")
                 );
+                assert!(line(buffer, 13).starts_with("Task Editor"));
+                if !focused || !query.is_empty() {
+                    assert_eq!(
+                        terminal.get_cursor_position().unwrap(),
+                        if focused {
+                            Position::new(14, 0)
+                        } else {
+                            Position::new(0, 14)
+                        }
+                    );
+                }
             }
         }
     }
@@ -1133,7 +1234,7 @@ fn minimum_dashboard_height_still_shows_selected_task() {
             );
         })
         .unwrap();
-    assert!(line(terminal.backend().buffer(), 1).starts_with("> 1"));
+    assert!(line(terminal.backend().buffer(), 0).starts_with("> 1"));
 }
 
 #[test]
@@ -1180,13 +1281,12 @@ fn split_dashboard_keeps_list_above_editor() {
         })
         .unwrap();
     let buffer = terminal.backend().buffer();
-    assert!(line(buffer, 0).trim().is_empty());
-    assert!(line(buffer, 1).starts_with("> 1      New"));
-    assert!(line(buffer, 2).contains("Second"));
+    assert!(line(buffer, 0).starts_with("> 1      New"));
+    assert!(line(buffer, 1).contains("Second"));
     assert!(!line(buffer, 0).contains("qqq tasks"));
-    assert!(line(buffer, 5).contains("Fifth"));
-    assert!(line(buffer, 6).trim().is_empty());
-    assert!(!(1..7).any(|y| line(buffer, y).contains("ID     STATUS")));
+    assert!(line(buffer, 4).contains("Fifth"));
+    assert!(line(buffer, 5).trim().is_empty());
+    assert!(!(0..8).any(|y| line(buffer, y).contains("ID     STATUS")));
     assert!(line(buffer, 13).starts_with("Task Editor"));
     assert!(line(buffer, 14).starts_with("Draft"));
     assert!(line(buffer, 23).starts_with("Ctrl-S"));
@@ -1340,12 +1440,12 @@ fn status_selection_and_editor_images_use_distinct_colors() {
             .unwrap();
         let buffer = terminal.backend().buffer();
         for (y, id, foreground) in [
+            (0, 1, Color::Reset),
             (1, 1, Color::Reset),
             (2, 1, Color::Reset),
-            (3, 1, Color::Reset),
-            (4, 2, Color::Indexed(81)),
-            (5, 3, Color::DarkGray),
-            (6, 4, Color::Red),
+            (3, 2, Color::Indexed(81)),
+            (4, 3, Color::DarkGray),
+            (5, 4, Color::Red),
         ] {
             let is_selected = selected == Some(id);
             for x in 0..72 {
@@ -1369,8 +1469,7 @@ fn status_selection_and_editor_images_use_distinct_colors() {
                 }
             );
         }
-        assert_eq!(buffer[(71, 0)].bg, Color::Indexed(236));
-        for y in [7, 9] {
+        for y in [6, 9] {
             assert_eq!(buffer[(71, y)].bg, Color::Reset);
         }
         let body_y = 18;

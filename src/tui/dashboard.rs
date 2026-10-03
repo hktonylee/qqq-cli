@@ -220,7 +220,17 @@ pub fn details_height(area: Rect) -> usize {
     usize::from(details_content(area).height)
 }
 
-pub fn wheel_area(size: (u16, u16), column: u16, row: u16) -> Option<WheelArea> {
+fn list_content(area: Rect, query: &str) -> Rect {
+    let filter_height = u16::from(!query.is_empty());
+    Rect::new(
+        area.x,
+        area.y + filter_height,
+        area.width,
+        area.height.saturating_sub(filter_height),
+    )
+}
+
+pub fn wheel_area(size: (u16, u16), column: u16, row: u16, query: &str) -> Option<WheelArea> {
     if size.0 < 12 || size.1 < 8 || column >= size.0 || row >= size.1 {
         return None;
     }
@@ -230,7 +240,9 @@ pub fn wheel_area(size: (u16, u16), column: u16, row: u16) -> Option<WheelArea> 
         editor,
     } = panes(Rect::new(0, 0, size.0, size.1));
     if row < list.y + list.height {
-        Some(WheelArea::List(usize::from(list.height.saturating_sub(1))))
+        Some(WheelArea::List(usize::from(
+            list_content(list, query).height,
+        )))
     } else if details_content(details).contains(Position::new(column, row)) {
         Some(WheelArea::Details(details_height(details)))
     } else if row >= editor.y && row < editor.y + editor.height - 1 {
@@ -244,6 +256,7 @@ pub fn wheel_area(size: (u16, u16), column: u16, row: u16) -> Option<WheelArea> 
 
 pub struct HitState<'a> {
     pub rows: &'a [panel::ListRow],
+    pub query: &'a str,
     pub list_top: usize,
     pub editor_top: usize,
     pub layout: &'a render::Layout,
@@ -259,8 +272,9 @@ pub fn click_target(
         return None;
     }
     let Panes { list, editor, .. } = panes(Rect::new(0, 0, size.0, size.1));
-    if row > list.y && row < list.y + list.height {
-        let index = hit.list_top + usize::from(row - list.y - 1);
+    let content = list_content(list, hit.query);
+    if content.contains(Position::new(column, row)) {
+        let index = hit.list_top + usize::from(row - content.y);
         return hit.rows.get(index)?.task_id.map(ClickTarget::Task);
     }
     if row > editor.y && row < editor.y + editor.height - 1 {
@@ -381,7 +395,12 @@ fn hotkey_line(keys: &str, color: bool) -> Line<'static> {
     Line::from(spans)
 }
 
-fn editor(frame: &mut Frame<'_>, area: Rect, editor: render::DashboardEditor<'_>, color: bool) {
+fn editor(
+    frame: &mut Frame<'_>,
+    area: Rect,
+    editor: render::DashboardEditor<'_>,
+    color: bool,
+) -> Option<Position> {
     let body = Rect::new(area.x, area.y + 1, area.width, area.height - 2);
     let (row, column) = editor.layout.positions[editor.cursor];
     let body_height = usize::from(body.height);
@@ -435,10 +454,12 @@ fn editor(frame: &mut Frame<'_>, area: Rect, editor: render::DashboardEditor<'_>
         Rect::new(area.x, area.y + area.height - 1, area.width, 1),
     );
     if row >= *editor.top && row < editor.top.saturating_add(body_height) {
-        frame.set_cursor_position((
+        Some(Position::new(
             body.x.saturating_add(column as u16),
             body.y.saturating_add((row - *editor.top) as u16),
-        ));
+        ))
+    } else {
+        None
     }
 }
 
@@ -515,31 +536,37 @@ pub fn draw(
         details: details_area,
         editor: editor_area,
     } = panes(area);
-    let list_height = usize::from(list.height.saturating_sub(1));
+    let content = list_content(list, list_view.query);
+    let list_height = usize::from(content.height);
     *list_view.top = if list_view.follow_selected {
         panel::scroll_to(rows, selected, *list_view.top, list_height)
     } else {
         (*list_view.top).min(rows.len().saturating_sub(list_height))
     };
-    let (filter, filter_cursor) = filter_line(
-        list_view.query,
-        usize::from(list.width),
-        list_view.focused,
-        color,
-    );
-    let filter_style = if color {
-        Style::default().fg(BODY_FG).bg(BODY_BG)
-    } else {
-        Style::default()
-    };
-    frame.render_widget(
-        Paragraph::new(filter).style(filter_style),
-        Rect::new(list.x, list.y, list.width, 1),
-    );
+    if !list_view.query.is_empty() {
+        let (filter, filter_cursor) = filter_line(
+            list_view.query,
+            usize::from(list.width),
+            list_view.focused,
+            color,
+        );
+        let filter_style = if color {
+            Style::default().fg(BODY_FG).bg(BODY_BG)
+        } else {
+            Style::default()
+        };
+        frame.render_widget(
+            Paragraph::new(filter).style(filter_style),
+            Rect::new(list.x, list.y, list.width, 1),
+        );
+        if list_view.focused {
+            frame.set_cursor_position((list.x + filter_cursor, list.y));
+        }
+    }
     if rows.is_empty() {
         frame.render_widget(
             Paragraph::new("No matching tasks."),
-            Rect::new(list.x, list.y + 1, list.width, 1),
+            Rect::new(content.x, content.y, content.width, 1),
         );
     }
     for (offset, row) in rows
@@ -557,7 +584,7 @@ pub fn draw(
         );
         frame.render_widget(
             Paragraph::new(format!("{marker}{}", row.text)).style(style),
-            Rect::new(list.x, list.y + 1 + offset as u16, list.width, 1),
+            Rect::new(content.x, content.y + offset as u16, content.width, 1),
         );
     }
     let empty_details = [render::DetailRow::new(
@@ -570,9 +597,11 @@ pub fn draw(
         top: &mut empty_top,
     });
     details(frame, details_area, details_view, color);
-    editor(frame, editor_area, editor_state, color);
-    if list_view.focused {
-        frame.set_cursor_position((list.x + filter_cursor, list.y));
+    let editor_cursor = editor(frame, editor_area, editor_state, color);
+    if !list_view.focused
+        && let Some(cursor) = editor_cursor
+    {
+        frame.set_cursor_position(cursor);
     }
     if let Some(lines) = list_view.modal_lines {
         popup(frame, lines, color);

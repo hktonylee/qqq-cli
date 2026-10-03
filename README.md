@@ -261,7 +261,9 @@ returns list to selected task. Editor keys reveal caret after manual scroll.
 Left-click task row to load it in editor, including indented or wrapped rows.
 Left-click editor text to place caret; dirty drafts ask before switching tasks.
 
-Filter bar stays visible above task list. Ctrl+/ focuses it; type to match any
+Filter bar appears above task list only while query is nonempty. Empty query
+reserves no row or editable caret, including while focused. Ctrl+/ focuses filter;
+type to match any
 part of full description, ignoring case. Matching tasks retain parent chain;
 no matches shows `No matching tasks.`. Backspace edits query. Esc clears
 nonempty query, then exits filter focus on next press. Tab or Enter returns to
