@@ -20,13 +20,27 @@ fn dashboard_rows_keep_task_identity_across_continuations() {
         "ID     STATUS       TASK\n1      New          One\n                    detail\n2      New          Two",
         80,
     );
-    assert_eq!(rows[0].task_id, None);
+    assert_eq!(rows.len(), 3);
+    assert_eq!(rows[0].task_id, Some(1));
     assert_eq!(rows[1].task_id, Some(1));
-    assert_eq!(rows[2].task_id, Some(1));
-    assert_eq!(rows[3].task_id, Some(2));
-    assert_eq!(panel::scroll_to(&rows, Some(1), 2, 2), 1);
-    assert_eq!(panel::scroll_to(&rows, Some(2), 0, 2), 2);
-    assert_eq!(panel::scroll_to(&rows, None, 0, 2), 2);
+    assert_eq!(rows[2].task_id, Some(2));
+    assert_eq!(panel::scroll_to(&rows, Some(1), 2, 2), 0);
+    assert_eq!(panel::scroll_to(&rows, Some(2), 0, 2), 1);
+    assert_eq!(panel::scroll_to(&rows, None, 0, 2), 1);
+}
+
+#[test]
+fn dashboard_rows_preserve_empty_message_and_header_like_task_text() {
+    let rows = panel::rows("No tasks yet.", 80);
+    assert_eq!(rows.len(), 1);
+    assert_eq!(rows[0].text, "No tasks yet.");
+    assert_eq!(rows[0].task_id, None);
+
+    let rows = panel::rows("ID STATUS TASK\n1 New ID STATUS TASK\nID STATUS TASK", 80);
+    assert_eq!(rows.len(), 2);
+    assert_eq!(rows[0].text, "1 New ID STATUS TASK");
+    assert_eq!(rows[1].text, "ID STATUS TASK");
+    assert!(rows.iter().all(|row| row.task_id == Some(1)));
 }
 
 #[test]
@@ -35,14 +49,14 @@ fn dashboard_task_preview_caps_each_task_at_three_rows() {
         "ID STATUS TASK\n1 New Parent\n  second\n  third\n  hidden\n4 New Child\n  child second\n  child third\n  child hidden\n2 New Other",
         80,
     );
-    assert_eq!(rows.len(), 8);
-    assert_eq!(rows[3].text, "  third...");
-    assert_eq!(rows[6].text, "  child third...");
+    assert_eq!(rows.len(), 7);
+    assert_eq!(rows[2].text, "  third...");
+    assert_eq!(rows[5].text, "  child third...");
     assert!(!rows.iter().any(|row| row.text.contains("hidden")));
     assert_eq!(panel::visible_ids(&rows), vec![1, 4, 2]);
-    assert_eq!(rows[3].task_id, Some(1));
-    assert_eq!(rows[6].task_id, Some(4));
-    assert_eq!(panel::scroll_to(&rows, Some(2), 0, 3), 5);
+    assert_eq!(rows[2].task_id, Some(1));
+    assert_eq!(rows[5].task_id, Some(4));
+    assert_eq!(panel::scroll_to(&rows, Some(2), 0, 3), 4);
 }
 
 #[test]
@@ -51,7 +65,7 @@ fn dashboard_task_preview_keeps_exactly_three_rows_without_ellipsis() {
     let rows = panel::rows(tree, 80);
     assert_eq!(
         rows.iter().map(|row| row.text.as_str()).collect::<Vec<_>>(),
-        tree.lines().collect::<Vec<_>>()
+        tree.lines().skip(1).collect::<Vec<_>>()
     );
 }
 
@@ -67,8 +81,8 @@ fn dashboard_task_preview_ellipsis_fits_without_splitting_graphemes() {
     ] {
         let tree = format!("ID STATUS TASK\n1 New First\n  second\n{third}\n  hidden");
         let rows = panel::rows(&tree, 14);
-        assert_eq!(rows[3].text, expected);
-        assert!(unicode_width::UnicodeWidthStr::width(rows[3].text.as_str()) <= 14);
+        assert_eq!(rows[2].text, expected);
+        assert!(unicode_width::UnicodeWidthStr::width(rows[2].text.as_str()) <= 14);
     }
     for width in 0..=3 {
         let rows = panel::rows("1 New First\n  second\n  third\n  hidden", width);
@@ -82,7 +96,7 @@ fn dashboard_new_draft_follows_newest_child_not_last_tree_row() {
         "ID     STATUS       TASK\n1      New          Parent\n21     New          New child\n2      New          Older root\n20     New          Last root",
         80,
     );
-    assert_eq!(panel::scroll_to(&rows, None, 0, 2), 1);
+    assert_eq!(panel::scroll_to(&rows, None, 0, 2), 0);
 }
 
 #[test]

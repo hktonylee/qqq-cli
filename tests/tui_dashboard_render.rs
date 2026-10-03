@@ -423,7 +423,7 @@ fn selected_task_renders_details_between_list_and_editor() {
                 .unwrap();
             assert_eq!(details_top, requested_top);
             let buffer = terminal.backend().buffer();
-            assert!(line(buffer, 2).contains("Selected"));
+            assert!(line(buffer, 1).contains("Selected"));
             for (offset, (text, _, foreground, modifier)) in
                 expected.iter().skip(details_top).take(3).enumerate()
             {
@@ -648,11 +648,11 @@ fn click_target_maps_rendered_task_rows_and_editor_caret() {
     let hit = |column, row, list_top, editor_top| {
         click((72, 24), column, row, &rows, list_top, editor_top, &layout)
     };
+    assert_eq!(hit(5, 1, 0, 0), Some(dashboard::ClickTarget::Task(1)));
     assert_eq!(hit(5, 2, 0, 0), Some(dashboard::ClickTarget::Task(1)));
-    assert_eq!(hit(5, 3, 0, 0), Some(dashboard::ClickTarget::Task(1)));
-    assert_eq!(hit(70, 4, 0, 0), Some(dashboard::ClickTarget::Task(2)));
-    assert_eq!(hit(5, 1, 2, 0), Some(dashboard::ClickTarget::Task(1)));
-    assert_eq!(hit(5, 2, 2, 0), Some(dashboard::ClickTarget::Task(2)));
+    assert_eq!(hit(70, 3, 0, 0), Some(dashboard::ClickTarget::Task(2)));
+    assert_eq!(hit(5, 1, 1, 0), Some(dashboard::ClickTarget::Task(1)));
+    assert_eq!(hit(5, 2, 1, 0), Some(dashboard::ClickTarget::Task(2)));
     assert_eq!(hit(2, 14, 0, 0), Some(dashboard::ClickTarget::Editor(2)));
     assert_eq!(hit(10, 14, 0, 0), Some(dashboard::ClickTarget::Editor(3)));
     assert_eq!(hit(1, 14, 0, 1), Some(dashboard::ClickTarget::Editor(5)));
@@ -664,7 +664,7 @@ fn click_target_ignores_non_content_and_out_of_bounds() {
     let layout = render::Layout::new(&["abc".into()], &[], 72);
     for (column, row) in [
         (5, 0),
-        (5, 1),
+        (5, 2),
         (5, 3),
         (5, 4),
         (5, 7),
@@ -729,7 +729,7 @@ fn manual_list_scroll_does_not_snap_to_selected_task() {
         })
         .unwrap();
     assert_eq!(top, 0);
-    assert!(line(terminal.backend().buffer(), 1).contains("ID"));
+    assert!(line(terminal.backend().buffer(), 1).contains("Task 1"));
     terminal
         .draw(|frame| {
             dashboard::draw(
@@ -757,7 +757,7 @@ fn manual_list_scroll_does_not_snap_to_selected_task() {
             )
         })
         .unwrap();
-    assert_eq!(top, 5);
+    assert_eq!(top, 4);
     assert!(line(terminal.backend().buffer(), 6).contains("Task 10"));
 }
 
@@ -889,7 +889,7 @@ fn manual_offsets_clamp_after_resize() {
         .unwrap();
     assert_eq!(list_top, 0);
     assert_eq!(editor_top, 0);
-    assert!(line(terminal.backend().buffer(), 2).contains("Task 1"));
+    assert!(line(terminal.backend().buffer(), 1).contains("Task 1"));
     assert!(line(terminal.backend().buffer(), 21).starts_with("A"));
 }
 
@@ -1087,7 +1087,7 @@ fn minimum_dashboard_height_still_shows_selected_task() {
             );
         })
         .unwrap();
-    assert!(line(terminal.backend().buffer(), 2).starts_with("> 1"));
+    assert!(line(terminal.backend().buffer(), 1).starts_with("> 1"));
 }
 
 #[test]
@@ -1135,10 +1135,12 @@ fn split_dashboard_keeps_list_above_editor() {
         .unwrap();
     let buffer = terminal.backend().buffer();
     assert!(line(buffer, 0).trim().is_empty());
-    assert!(line(buffer, 1).starts_with("  ID     STATUS"));
-    assert!(line(buffer, 2).starts_with("> 1      New"));
+    assert!(line(buffer, 1).starts_with("> 1      New"));
+    assert!(line(buffer, 2).contains("Second"));
     assert!(!line(buffer, 0).contains("qqq tasks"));
-    assert!(line(buffer, 6).contains("Fifth"));
+    assert!(line(buffer, 5).contains("Fifth"));
+    assert!(line(buffer, 6).trim().is_empty());
+    assert!(!(1..7).any(|y| line(buffer, y).contains("ID     STATUS")));
     assert!(line(buffer, 13).starts_with("Task Editor"));
     assert!(line(buffer, 14).starts_with("Draft"));
     assert!(line(buffer, 23).starts_with("Ctrl-S"));
@@ -1292,12 +1294,12 @@ fn status_selection_and_editor_images_use_distinct_colors() {
             .unwrap();
         let buffer = terminal.backend().buffer();
         for (y, id, foreground) in [
+            (1, 1, Color::Reset),
             (2, 1, Color::Reset),
             (3, 1, Color::Reset),
-            (4, 1, Color::Reset),
-            (5, 2, Color::Indexed(81)),
-            (6, 3, Color::DarkGray),
-            (7, 4, Color::Red),
+            (4, 2, Color::Indexed(81)),
+            (5, 3, Color::DarkGray),
+            (6, 4, Color::Red),
         ] {
             let is_selected = selected == Some(id);
             for x in 0..72 {
@@ -1322,7 +1324,7 @@ fn status_selection_and_editor_images_use_distinct_colors() {
             );
         }
         assert_eq!(buffer[(71, 0)].bg, Color::Indexed(236));
-        for y in [1, 9] {
+        for y in [7, 9] {
             assert_eq!(buffer[(71, y)].bg, Color::Reset);
         }
         let body_y = 18;
