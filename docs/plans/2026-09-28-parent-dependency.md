@@ -9,12 +9,12 @@
 ## Task 1: Behavioral Tests
 
 - [x] Add tests in `tests/dependencies.rs` using the real binary in temporary projects. Assert `add Child --parent 1` returns `parent_id: 1`, then `next --session a` claims parent, `next --session b` skips child for unrelated task, parent completion unlocks child. Verify chain order, release, empty ready queue, rejected unknown/self IDs, editor mode, and concurrent claims.
-- [x] Build version 1 fixtures with `include_str!("../src/schema.sql")`; populate task/message/image/event/link rows with rusqlite, open via CLI and assert data preserved, parent null, `PRAGMA user_version` equals 2. Repeat and race migration; version 3 must fail unchanged.
+- [x] Build version 1 fixtures with `include_str!("../src/sql/schema.sql")`; populate task/message/image/event/link rows with rusqlite, open via CLI and assert data preserved, parent null, `PRAGMA user_version` equals 2. Repeat and race migration; version 3 must fail unchanged.
 - [x] Run `cargo test --locked --test dependencies`; expect failures from missing `--parent` and unchanged version 1.
 
 ## Task 2: Implement
 
-- [x] Create `src/migrate_v2.sql`:
+- [x] Create `src/sql/migrate_v2.sql`:
   ```sql
   ALTER TABLE tasks ADD COLUMN parent_id INTEGER REFERENCES tasks(id);
   PRAGMA user_version=2;

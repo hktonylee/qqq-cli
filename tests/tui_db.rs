@@ -28,23 +28,23 @@ use std::process::{Command, Stdio};
 fn database() -> (Db, tempfile::TempDir) {
     let dir = tempfile::TempDir::new().unwrap();
     let conn = rusqlite::Connection::open(dir.path().join("qqq.db")).unwrap();
-    conn.execute_batch(include_str!("../src/schema.sql"))
+    conn.execute_batch(include_str!("../src/sql/schema.sql"))
         .unwrap();
-    conn.execute_batch(include_str!("../src/migrate_v2.sql"))
+    conn.execute_batch(include_str!("../src/sql/migrate_v2.sql"))
         .unwrap();
-    conn.execute_batch(include_str!("../src/migrate_v3.sql"))
+    conn.execute_batch(include_str!("../src/sql/migrate_v3.sql"))
         .unwrap();
-    conn.execute_batch(include_str!("../src/migrate_v4.sql"))
+    conn.execute_batch(include_str!("../src/sql/migrate_v4.sql"))
         .unwrap();
-    conn.execute_batch(include_str!("../src/migrate_v5.sql"))
+    conn.execute_batch(include_str!("../src/sql/migrate_v5.sql"))
         .unwrap();
-    conn.execute_batch(include_str!("../src/migrate_v6.sql"))
+    conn.execute_batch(include_str!("../src/sql/migrate_v6.sql"))
         .unwrap();
-    conn.execute_batch(include_str!("../src/migrate_v7.sql"))
+    conn.execute_batch(include_str!("../src/sql/migrate_v7.sql"))
         .unwrap();
-    conn.execute_batch(include_str!("../src/migrate_v8.sql"))
+    conn.execute_batch(include_str!("../src/sql/migrate_v8.sql"))
         .unwrap();
-    conn.execute_batch(include_str!("../src/migrate_v9.sql"))
+    conn.execute_batch(include_str!("../src/sql/migrate_v9.sql"))
         .unwrap();
     (
         Db {
@@ -145,11 +145,11 @@ fn concurrent_legacy_opens_keep_foreign_keys_enabled() {
     std::fs::create_dir(dir.path().join(".qqq")).unwrap();
     let conn = rusqlite::Connection::open(dir.path().join(".qqq/qqq.db")).unwrap();
     for migration in [
-        include_str!("../src/schema.sql"),
-        include_str!("../src/migrate_v2.sql"),
-        include_str!("../src/migrate_v3.sql"),
-        include_str!("../src/migrate_v4.sql"),
-        include_str!("../src/migrate_v5.sql"),
+        include_str!("../src/sql/schema.sql"),
+        include_str!("../src/sql/migrate_v2.sql"),
+        include_str!("../src/sql/migrate_v3.sql"),
+        include_str!("../src/sql/migrate_v4.sql"),
+        include_str!("../src/sql/migrate_v5.sql"),
     ] {
         conn.execute_batch(migration).unwrap();
     }

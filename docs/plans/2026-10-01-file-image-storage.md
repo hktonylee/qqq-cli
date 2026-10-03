@@ -32,7 +32,7 @@ impl ImageStore {
 
 ### Task 2: Schema v6 and legacy migration
 
-**Files:** Create `src/migrate_v6.sql`; modify `src/db.rs`, `tests/dependencies.rs`, `tests/error_status.rs`, `tests/identity.rs`, `tests/tui_db.rs`; add focused migration tests in `tests/images.rs`.
+**Files:** Create `src/sql/migrate_v6.sql`; modify `src/db.rs`, `tests/dependencies.rs`, `tests/error_status.rs`, `tests/identity.rs`, `tests/tui_db.rs`; add focused migration tests in `tests/images.rs`.
 
 - [x] Add failing tests for opening v5 database with multiple image IDs, including deleted high ID. Assert files at `images/<task>/<id>.<ext>` contain exact legacy bytes, `PRAGMA user_version=6`, `pragma_table_info('images')` lacks `data`, JSON byte counts match, image sequence stays above deleted ID, and repeat/concurrent opens preserve results. Add retry test: precreate a conflicting target file, opening fails with v5/data intact; remove conflict, rerun and succeed. Existing legacy v1/v3 tests must expect v6 plus file bytes instead of `SELECT data`.
 - [x] Run focused migration tests; expect old schema/version assertions to fail.

@@ -32,7 +32,7 @@ assert_eq!(ok(&d, &["next", "--local", "--session", "worker"])["id"], 1);
 
 ### Task 2: Persistence And Edit Flow
 
-**Files:** Create `src/migrate_v4.sql`; modify `src/db.rs`, `src/main.rs`, `src/dispatch.rs`.
+**Files:** Create `src/sql/migrate_v4.sql`; modify `src/db.rs`, `src/main.rs`, `src/dispatch.rs`.
 
 - [x] Rebuild `tasks` and `events` using existing column definitions with expanded constraints:
 

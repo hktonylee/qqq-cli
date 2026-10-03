@@ -276,23 +276,23 @@ impl Db {
             );
             ensure_description_schema(&tx)?;
             if version == 0 {
-                tx.execute_batch(include_str!("schema.sql"))?;
+                tx.execute_batch(include_str!("sql/schema.sql"))?;
             }
             if version < 2 {
-                tx.execute_batch(include_str!("migrate_v2.sql"))?;
+                tx.execute_batch(include_str!("sql/migrate_v2.sql"))?;
             }
             if version < 3 {
-                tx.execute_batch(include_str!("migrate_v3.sql"))?;
+                tx.execute_batch(include_str!("sql/migrate_v3.sql"))?;
             }
             if version < 4 {
-                tx.execute_batch(include_str!("migrate_v4.sql"))?;
+                tx.execute_batch(include_str!("sql/migrate_v4.sql"))?;
                 ensure!(
                     !tx.prepare("PRAGMA foreign_key_check")?.exists([])?,
                     "Database migration found invalid foreign key references"
                 );
             }
             if version < 5 {
-                tx.execute_batch(include_str!("migrate_v5.sql"))?;
+                tx.execute_batch(include_str!("sql/migrate_v5.sql"))?;
             }
             if version < 6 {
                 {
@@ -312,20 +312,20 @@ impl Db {
                         had_images = true;
                     }
                 }
-                tx.execute_batch(include_str!("migrate_v6.sql"))?;
+                tx.execute_batch(include_str!("sql/migrate_v6.sql"))?;
                 ensure!(
                     !tx.prepare("PRAGMA foreign_key_check")?.exists([])?,
                     "Database migration found invalid foreign key references"
                 );
             }
             if version < 7 {
-                tx.execute_batch(include_str!("migrate_v7.sql"))?;
+                tx.execute_batch(include_str!("sql/migrate_v7.sql"))?;
             }
             if version < 8 {
-                tx.execute_batch(include_str!("migrate_v8.sql"))?;
+                tx.execute_batch(include_str!("sql/migrate_v8.sql"))?;
             }
             if version < 9 {
-                tx.execute_batch(include_str!("migrate_v9.sql"))?;
+                tx.execute_batch(include_str!("sql/migrate_v9.sql"))?;
             }
             commit_with_files(tx, &mut pending)?;
             if disable_foreign_keys {

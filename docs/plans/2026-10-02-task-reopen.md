@@ -12,7 +12,7 @@
 
 ### Task 1: Schema version 9 and event history
 
-**Files:** `src/migrate_v9.sql`, `src/db.rs`, `tests/reopen.rs`, `tests/tui_db.rs`, existing schema-version tests.
+**Files:** `src/sql/migrate_v9.sql`, `src/db.rs`, `tests/reopen.rs`, `tests/tui_db.rs`, existing schema-version tests.
 
 - [x] Write v8 fixture test: apply `schema.sql` and migrations 2–8, insert a completed task with event ID 8, insert/delete event ID 20, run CLI `show`; assert version 9, preserved task/event rows, and next `reopen` event ID 21. Run `cargo test --locked --test reopen`; expect missing version/action failure.
 - [x] Add `migrate_v9.sql` with event-table rebuild. New action CHECK includes `claim`, `release`, `complete`, `error`, `archive`, `unarchive`, `reopen`; copy IDs and timestamps, preserve `sqlite_sequence`, recreate `events_task`, set `PRAGMA user_version=9`.

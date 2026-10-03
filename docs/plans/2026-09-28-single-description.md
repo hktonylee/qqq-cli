@@ -27,7 +27,7 @@ assert!(task.get("title").is_none());
 
 ### Task 2: One Description Through Model and Editors
 
-**Files:** Modify `src/schema.sql`, `src/db.rs`, `src/main.rs`, `src/editor.rs`, `src/tui/draft.rs`, `src/tui/mod.rs`, `src/tui/render.rs`, `src/output.rs`, `src/dispatch.rs`.
+**Files:** Modify `src/sql/schema.sql`, `src/db.rs`, `src/main.rs`, `src/editor.rs`, `src/tui/draft.rs`, `src/tui/mod.rs`, `src/tui/render.rs`, `src/output.rs`, `src/dispatch.rs`.
 
 - [x] Task schema: `description TEXT NOT NULL CHECK(length(trim(description))>0)`; remove title. Task row mapping selects seven remaining columns.
 - [x] Reject legacy titled databases before transactions:

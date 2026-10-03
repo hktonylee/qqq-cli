@@ -287,11 +287,11 @@ fn legacy_project() -> TempDir {
     let d = TempDir::new().unwrap();
     std::fs::create_dir(d.path().join(".qqq")).unwrap();
     let conn = Connection::open(d.path().join(".qqq/qqq.db")).unwrap();
-    conn.execute_batch(include_str!("../src/schema.sql"))
+    conn.execute_batch(include_str!("../src/sql/schema.sql"))
         .unwrap();
-    conn.execute_batch(include_str!("../src/migrate_v2.sql"))
+    conn.execute_batch(include_str!("../src/sql/migrate_v2.sql"))
         .unwrap();
-    conn.execute_batch(include_str!("../src/migrate_v3.sql"))
+    conn.execute_batch(include_str!("../src/sql/migrate_v3.sql"))
         .unwrap();
     conn.execute_batch(
         "INSERT INTO tasks(description,status,assignee) VALUES ('Parent','in_progress','legacy');

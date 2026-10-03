@@ -50,12 +50,12 @@ fn v6_project() -> TempDir {
     std::fs::create_dir(dir.path().join(".qqq")).unwrap();
     let conn = Connection::open(dir.path().join(".qqq/qqq.db")).unwrap();
     for migration in [
-        include_str!("../src/schema.sql"),
-        include_str!("../src/migrate_v2.sql"),
-        include_str!("../src/migrate_v3.sql"),
-        include_str!("../src/migrate_v4.sql"),
-        include_str!("../src/migrate_v5.sql"),
-        include_str!("../src/migrate_v6.sql"),
+        include_str!("../src/sql/schema.sql"),
+        include_str!("../src/sql/migrate_v2.sql"),
+        include_str!("../src/sql/migrate_v3.sql"),
+        include_str!("../src/sql/migrate_v4.sql"),
+        include_str!("../src/sql/migrate_v5.sql"),
+        include_str!("../src/sql/migrate_v6.sql"),
     ] {
         conn.execute_batch(migration).unwrap();
     }

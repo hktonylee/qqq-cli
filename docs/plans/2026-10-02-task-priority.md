@@ -12,7 +12,7 @@
 
 ### Task 1: Schema migration and task model
 
-**Files:** `src/migrate_v7.sql`, `src/db.rs`, `tests/priority.rs`, `tests/dependencies.rs`
+**Files:** `src/sql/migrate_v7.sql`, `src/db.rs`, `tests/priority.rs`, `tests/dependencies.rs`
 
 - [x] Add failing migration test. Build version-6 fixture by applying `schema.sql` then `migrate_v2.sql` through `migrate_v6.sql`, seed two new tasks, record timestamps and IDs. Run new CLI `list`; assert numeric priority 0, schema version 7, unchanged IDs/timestamps, first `next` claims oldest ID. Also open same version-6 DB through two CLI processes to verify lock/recheck. Run `cargo test --locked --test priority -- --nocapture`; expect failure from missing priority/version 7.
 - [x] Add migration SQL:

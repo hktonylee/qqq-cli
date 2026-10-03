@@ -39,9 +39,9 @@ fn version_two() -> TempDir {
     let dir = TempDir::new().unwrap();
     std::fs::create_dir(dir.path().join(".qqq")).unwrap();
     let conn = Connection::open(dir.path().join(".qqq/qqq.db")).unwrap();
-    conn.execute_batch(include_str!("../src/schema.sql"))
+    conn.execute_batch(include_str!("../src/sql/schema.sql"))
         .unwrap();
-    conn.execute_batch(include_str!("../src/migrate_v2.sql"))
+    conn.execute_batch(include_str!("../src/sql/migrate_v2.sql"))
         .unwrap();
     conn.execute_batch(
         "INSERT INTO tasks(description,status,owner_session) VALUES ('Parent','in_progress','legacy');
@@ -358,10 +358,10 @@ fn blank_overrides_fail_without_claiming() {
 fn v4_migration_preserves_error_rows_and_named_dispatched_claims() {
     let d = version_two();
     let conn = Connection::open(d.path().join(".qqq/qqq.db")).unwrap();
-    conn.execute_batch(include_str!("../src/migrate_v3.sql"))
+    conn.execute_batch(include_str!("../src/sql/migrate_v3.sql"))
         .unwrap();
     conn.pragma_update(None, "foreign_keys", "OFF").unwrap();
-    conn.execute_batch(include_str!("../src/migrate_v4.sql"))
+    conn.execute_batch(include_str!("../src/sql/migrate_v4.sql"))
         .unwrap();
     conn.pragma_update(None, "foreign_keys", "ON").unwrap();
     conn.execute(

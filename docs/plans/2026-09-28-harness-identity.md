@@ -12,7 +12,7 @@
 
 ### Task 1: Schema and public contract
 
-Files: create `src/migrate_v5.sql`, `src/identity.rs`; modify `src/db.rs`, `src/output.rs`; replace `tests/assignee.rs` with `tests/identity.rs`, update existing contract assertions.
+Files: create `src/sql/migrate_v5.sql`, `src/identity.rs`; modify `src/db.rs`, `src/output.rs`; replace `tests/assignee.rs` with `tests/identity.rs`, update existing contract assertions.
 
 - [x] Write failing integration assertions:
 ```rust
