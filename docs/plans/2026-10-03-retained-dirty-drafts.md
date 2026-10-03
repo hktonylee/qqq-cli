@@ -148,8 +148,8 @@
 
 - [x] Replace dashboard discard-on-navigation docs with retained keyboard/mouse/child behavior, dirty marker, independent save, new/child entry points, per-buffer exit approval and cancellation preserving all drafts. Keep single-editor docs unchanged.
 - [x] Run `cargo fmt --check`, `cargo test --locked`, `cargo clippy --locked --all-targets -- -D warnings`, `git diff --check`. Request read-only review through existing reviewer; resolve findings, repeat affected checks.
-- [ ] Record focused/full/review evidence. Rebase task branch onto current master; resolve conflicts and verify combined code when changed. Fast-forward master, install `cargo install --path . --locked --offline --force`.
-- [ ] Exercise installed CLI retention/independent-save/exit-cancel/NO_COLOR paths, remove merged worktree/branch, `qqq complete 144 --json`, resume persistent `qqq next --wait --local --json`.
+- [x] Record focused/full/review evidence. Rebase task branch onto current master; resolve conflicts and verify combined code when changed. Fast-forward master, install `cargo install --path . --locked --offline --force`.
+- [x] Exercise installed CLI retention/independent-save/exit-cancel/NO_COLOR paths, remove merged worktree/branch, `qqq complete 144 --json`, resume persistent `qqq next --wait --local --json`.
 
 Verification checkpoint: all 500 tests pass, including five cache/restoration unit tests,
 31 dashboard renderer tests and 79 TUI tests. New buffer PTY cases cover keyboard/mouse,
@@ -161,3 +161,12 @@ and diff whitespace checks pass. Read-only review approved after replacing let-c
 syntax incompatible with declared Rust 1.85 and inheriting row style for clean marker
 spacing. Navigation/storage/marker/exit tests observed expected failures before fixes.
 Navigation and exit changes share final feature commit.
+
+
+Integration checkpoint: master fast-forwarded to `2aa9050` without conflicts or
+additional source changes. Installed qqq 0.3.0 from reviewed branch with locked,
+offline release build. Seven installed CLI PTY scenarios passed: task navigation
+and independent saves, new/child restoration, image/paste atoms through declined
+exit, sequential exit cancellation, minimum/wide resize, plain mode, child exit.
+Root working tree clean before integration; cleanup and queue completion follow
+this documentation checkpoint.
