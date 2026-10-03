@@ -690,11 +690,15 @@ print(json.dumps({"result": result}))
                 os.kill(child.pid, signal.SIGWINCH)
                 split = width - (width * 40 + 50) // 100 if width >= 150 else 0
                 border_row = 0 if width >= 150 else 8
+                final_cursor = f"\x1b[15;{9 if selected else 1}H".encode()
                 wait_visible(lambda: editor_row() == 13
                              and visible.text().splitlines()[border_row][split] == "╔"
                              and (width < 150 or not visible.text().splitlines()[12][:split].strip())
                              and (not selected or editor_line().startswith("Changed Second"))
-                             and (visible.x, visible.y) == (8 if selected else 0, 14))
+                             and visible.text().splitlines()[-1].rstrip() ==
+                             "Ctrl-S Save  Ctrl-P Create Child  Ctrl-G Menu  Shift-Up/Dn Switch Tasks  Ctrl+/ Filter"
+                             and (visible.x, visible.y) == (8 if selected else 0, 14)
+                             and not visible.pending and screen.endswith(final_cursor))
                 settle()
 
             resize_layout(149)
@@ -705,7 +709,10 @@ print(json.dumps({"result": result}))
             click(6, 13)
             send(b"\x1b[<65;6;13M")
             settle()
-            assert visible.text() == before_padding, visible.text()
+            assert visible.text() == before_padding, (
+                f"Before padding input:\n{before_padding}\nAfter padding input:\n{visible.text()}\n"
+                f"Cursor={visible.x},{visible.y}, pending={visible.pending!r}, bytes={screen[-1600:]!r}"
+            )
             send(b"\x1b[<64;6;2M" * 20)
             wait_visible(lambda: "First" in visible.text().splitlines()[0][:90]
                          and "TAIL" in "\n".join(line[:90] for line in visible.text().splitlines()[:4]))
