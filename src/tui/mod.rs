@@ -647,13 +647,19 @@ fn compose_inner(
             rows = if !filter_query.is_empty() && displayed.is_empty() {
                 Vec::new()
             } else {
+                let list_width = usize::from(
+                    dashboard::panes(ratatui::layout::Rect::new(0, 0, size.0, size.1))
+                        .list
+                        .width,
+                )
+                .saturating_sub(2);
                 let tree = crate::output::render(
                     crate::output::Format::Tasks,
                     &serde_json::json!(displayed),
                     false,
-                    Some(usize::from(size.0).saturating_sub(2)),
+                    Some(list_width),
                 );
-                panel::rows(&tree, usize::from(size.0).saturating_sub(2))
+                panel::rows(&tree, list_width)
             };
             list_row_count = rows.len();
             visible_ids = Some(panel::visible_ids(&rows));

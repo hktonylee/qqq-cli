@@ -1644,6 +1644,146 @@ fn hotkey_footer_colors_shortcuts_and_clears_styles_for_messages() {
 }
 
 #[test]
+fn wide_dashboard_places_details_beside_list_at_150_columns() {
+    use ratatui::layout::Rect;
+    for height in [8, 18, 24, 40, 100] {
+        let stacked = dashboard::panes(Rect::new(0, 0, 149, height));
+        assert_eq!(stacked.list.width, 149);
+        assert_eq!(stacked.details.y, stacked.list.height);
+        for width in [150, 151, 180, 200] {
+            let area = Rect::new(2, 3, width, height);
+            let panes = dashboard::panes(area);
+            let details_width = ((u32::from(width) * 40 + 50) / 100) as u16;
+            assert_eq!(panes.list.x, area.x);
+            assert_eq!(panes.list.y, area.y);
+            assert_eq!(panes.details.y, area.y);
+            assert_eq!(panes.details.width, details_width);
+            assert_eq!(panes.list.width + panes.details.width, width);
+            assert_eq!(panes.details.x, panes.list.x + panes.list.width);
+            assert_eq!(panes.details.height, panes.list.height);
+            assert_eq!(panes.editor.y, area.y + stacked.editor.y);
+            assert_eq!(panes.editor.width, width);
+            assert_eq!(panes.editor.height, stacked.editor.height);
+            assert_eq!(panes.list.height + panes.editor.height, height);
+        }
+    }
+}
+
+#[test]
+fn wide_dashboard_mouse_routes_list_and_details_by_column() {
+    let rows = panel::rows("ID STATUS TASK\n1 New First\n2 New Second", 88);
+    let fragments: Vec<_> = "Draft".chars().map(|ch| ch.to_string()).collect();
+    let layout = render::Layout::new(&fragments, &[], 150);
+    assert_eq!(
+        dashboard::wheel_area((150, 24), 89, 1, ""),
+        Some(dashboard::WheelArea::List(13))
+    );
+    assert_eq!(
+        dashboard::wheel_area((150, 24), 89, 1, "first"),
+        Some(dashboard::WheelArea::List(12))
+    );
+    assert_eq!(
+        dashboard::wheel_area((150, 24), 93, 1, ""),
+        Some(dashboard::WheelArea::Details(11))
+    );
+    for (column, row) in [
+        (90, 1),
+        (91, 1),
+        (92, 1),
+        (147, 1),
+        (149, 1),
+        (93, 0),
+        (93, 12),
+    ] {
+        assert_eq!(dashboard::wheel_area((150, 24), column, row, ""), None);
+        assert_eq!(click((150, 24), column, row, &rows, 0, 0, &layout), None);
+    }
+    assert_eq!(
+        click((150, 24), 5, 1, &rows, 0, 0, &layout),
+        Some(dashboard::ClickTarget::Task(2))
+    );
+    assert_eq!(click((150, 24), 93, 1, &rows, 0, 0, &layout), None);
+    assert_eq!(
+        click((150, 24), 2, 14, &rows, 0, 0, &layout),
+        Some(dashboard::ClickTarget::Editor(2))
+    );
+    assert_eq!(
+        dashboard::wheel_area((150, 24), 149, 14, ""),
+        Some(dashboard::WheelArea::Editor(9))
+    );
+}
+
+#[test]
+fn wide_dashboard_renders_both_upper_panes_and_full_width_editor() {
+    for color in [true, false] {
+        let mut terminal = Terminal::new(TestBackend::new(150, 24)).unwrap();
+        let rows = panel::rows("ID STATUS TASK\n1 New Selected", 88);
+        let layout = render::Layout::new(&["Draft".into()], &[], 150);
+        let chrome = render::Chrome {
+            title: "Task Editor",
+            title_status_color: None,
+            keys: render::DASHBOARD_KEYS,
+            message: "",
+        };
+        let detail_rows = [render::DetailRow::new(
+            "Right pane",
+            render::DetailKind::Heading,
+        )];
+        terminal
+            .draw(|frame| {
+                dashboard::draw(
+                    frame,
+                    &rows,
+                    &HashMap::from([(1, "new")]),
+                    Some(1),
+                    dashboard::View {
+                        query: "Selected",
+                        focused: true,
+                        top: &mut 0,
+                        follow_selected: true,
+                        modal_lines: None,
+                        details: Some(dashboard::DetailsView {
+                            rows: &detail_rows,
+                            top: &mut 0,
+                        }),
+                    },
+                    render::DashboardEditor {
+                        layout: &layout,
+                        cursor: 0,
+                        top: &mut 0,
+                        chrome: &chrome,
+                        message_is_error: false,
+                        follow_cursor: true,
+                    },
+                    color,
+                );
+            })
+            .unwrap();
+        assert_eq!(
+            terminal.get_cursor_position().unwrap(),
+            Position::new(16, 0)
+        );
+        let buffer = terminal.backend().buffer();
+        assert!(line(buffer, 0).starts_with("Filter: Selected"));
+        assert_eq!(buffer[(90, 0)].symbol(), "╔");
+        assert_eq!(buffer[(149, 0)].symbol(), "╗");
+        assert!(line(buffer, 1).starts_with("> 1 New Selected"));
+        assert!(line(buffer, 1).contains("║  Right pane"));
+        assert_eq!(buffer[(90, 12)].symbol(), "╚");
+        assert_eq!(buffer[(149, 12)].symbol(), "╝");
+        assert!(line(buffer, 13).starts_with("Task Editor"));
+        assert!(line(buffer, 14).starts_with("Draft"));
+        if !color {
+            for cell in buffer.content() {
+                assert_eq!(cell.fg, Color::Reset);
+                assert_eq!(cell.bg, Color::Reset);
+                assert_eq!(cell.modifier, Modifier::empty());
+            }
+        }
+    }
+}
+
+#[test]
 fn failed_save_footer_uses_error_color() {
     let layout = render::Layout::new(&["Draft".into()], &[], 72);
     let chrome = render::Chrome {

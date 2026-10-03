@@ -94,7 +94,7 @@ CTRL_P = b"\x10"
 with tempfile.TemporaryDirectory(prefix="qqq-dashboard-test-") as folder:
     env = dict(os.environ, HOME=folder, TERM="xterm-256color")
     env.pop("NO_COLOR", None)
-    if scenario in ("no_color", "pasteboard_no_color", "filter_no_color", "details_no_color", "actions_popup_no_color"):
+    if scenario in ("no_color", "pasteboard_no_color", "filter_no_color", "details_no_color", "actions_popup_no_color", "wide_layout_no_color"):
         env["NO_COLOR"] = "1"
     elif scenario == "dumb":
         env["TERM"] = "dumb"
@@ -144,6 +144,12 @@ with tempfile.TemporaryDirectory(prefix="qqq-dashboard-test-") as folder:
         image_path.write_bytes(base64.b64decode(
             "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aGD8AAAAASUVORK5CYII="
         ))
+    elif scenario.startswith("wide_layout"):
+        cli("add", "First")
+        cli("add", "Second " + "word " * 24 + "TAIL")
+        cli("message", "2", "\n".join(f"Message line {index:02}" for index in range(1, 31)))
+        for index in range(3, 21):
+            cli("add", f"Task {index}")
     elif scenario == "tree_navigation":
         cli("add", "Parent")
         cli("add", "Other root")
@@ -323,6 +329,9 @@ print(json.dumps({"result": result}))
         send(f"\x1b[<0;{column};{row}M\x1b[<0;{column};{row}m".encode())
 
     def list_bottom():
+        if visible.width >= 150:
+            row = editor_row()
+            return row - 1 if row is not None else 3
         # Details box starts immediately after final task-list row.
         # Compact panes lack borders; minimum layout retains four list rows.
         return next((index - 1 for index, row in enumerate(visible.text().splitlines())
@@ -346,6 +355,10 @@ print(json.dumps({"result": result}))
         row = editor_row()
         if row is None:
             return ""
+        if visible.width >= 150:
+            start = visible.width - (visible.width * 40 + 50) // 100
+            return "\n".join(line[start + 3:-3].rstrip()
+                             for line in visible.text().splitlines()[1:row - 1])
         lines = visible.text().splitlines()[list_bottom() + 1:row]
         return "\n".join(line[3:-3].rstrip() if line.startswith("║") else line[2:].rstrip()
                          for line in lines if not line.startswith(("╔", "╚")))
@@ -413,11 +426,71 @@ print(json.dumps({"result": result}))
                              and editor_line().startswith("Second"))
                 settle()
                 assert b"\x1b[38;" not in screen and b"\x1b[48;" not in screen, screen[-2000:]
-        if scenario not in ("handoff_scroll", "ctrl_c_new_scroll", "live_refresh_scroll", "tree_navigation", "scroll", "wheel", "click", "click_filter", "workflow", "workflow_empty", "workflow_status", "filter", "filter_no_color", "archive_hidden", "archive_included", "actions_basic", "actions_rejected", "actions_hidden"):
+        if not scenario.startswith("wide_layout") and scenario not in ("handoff_scroll", "ctrl_c_new_scroll", "live_refresh_scroll", "tree_navigation", "scroll", "wheel", "click", "click_filter", "workflow", "workflow_empty", "workflow_status", "filter", "filter_no_color", "archive_hidden", "archive_included", "actions_basic", "actions_rejected", "actions_hidden"):
             read_until(b"Second")
             assert "First" in visible.text() and "Second" in visible.text(), visible.text()
         assert not select.select([child.stdout], [], [], 0)[0], "TUI wrote stdout while open"
-        if scenario == "cursor_end":
+        if scenario.startswith("wide_layout"):
+            initial_tasks = cli("list")
+
+            def resize_layout(width, selected=False):
+                fcntl.ioctl(slave, termios.TIOCSWINSZ, struct.pack("HHHH", 24, width, 0, 0))
+                visible.resize(width, 24)
+                os.kill(child.pid, signal.SIGWINCH)
+                split = width - (width * 40 + 50) // 100 if width >= 150 else 0
+                border_row = 0 if width >= 150 else 8
+                wait_visible(lambda: editor_row() == 13
+                             and visible.text().splitlines()[border_row][split] == "╔"
+                             and (not selected or editor_line().startswith("Changed Second"))
+                             and (visible.x, visible.y) == (8 if selected else 0, 14))
+                settle()
+
+            resize_layout(149)
+            assert "Select task to view details." in details_text(), visible.text()
+            resize_layout(150)
+            assert "Select task to view details." in details_text(), visible.text()
+            send(b"\x1b[<64;6;2M" * 20)
+            wait_visible(lambda: "First" in visible.text().splitlines()[0][:90]
+                         and "TAIL" in "\n".join(line[:90] for line in visible.text().splitlines()[:4]))
+            settle()
+            click(6, 2)
+            wait_visible(lambda: "task #2 (New)" in editor_title()
+                         and editor_line().startswith("Second ") and details_text().startswith("#2 · New"))
+            send(b"\x01Changed ")
+            expected_draft = "Changed " + cli("show", "2")["task"]["description"]
+            wait_visible(lambda: editor_line().rstrip() == expected_draft
+                         and (visible.x, visible.y) == (8, 14))
+            settle()
+            saved_draft = editor_line()
+            before_details = details_text()
+            send(b"\x1b[<65;95;2M")
+            wait_visible(lambda: details_text() != before_details
+                         and (visible.x, visible.y) == (8, 14))
+            settle()
+            assert editor_line() == saved_draft and (visible.x, visible.y) == (8, 14), visible.text()
+            before_details = details_text()
+            click(95, 2)
+            send(b"\x1b[<65;91;2M")
+            settle()
+            assert details_text() == before_details and editor_line() == saved_draft, visible.text()
+            send(CTRL_SLASH + b"Second")
+            wait_visible(lambda: visible.text().splitlines()[0].startswith("Filter: Second")
+                         and visible.text().splitlines()[0][90] == "╔"
+                         and (visible.x, visible.y) == (14, 0))
+            send(b"\x1b")
+            wait_visible(lambda: not visible.text().splitlines()[0].startswith("Filter:")
+                         and not visible.cursor_visible)
+            send(b"\t")
+            wait_visible(lambda: not visible.text().splitlines()[0].startswith("Filter:")
+                         and (visible.x, visible.y) == (8, 14))
+            resize_layout(151, selected=True)
+            resize_layout(200, selected=True)
+            resize_layout(149, selected=True)
+            resize_layout(150, selected=True)
+            assert cli("list") == initial_tasks
+            if scenario.endswith("no_color"):
+                assert b"\x1b[38;" not in screen and b"\x1b[48;" not in screen, screen[-2000:]
+        elif scenario == "cursor_end":
             def wait_end(tail):
                 def at_end():
                     start = editor_row()

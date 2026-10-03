@@ -89,6 +89,12 @@ fn tui_dashboard_keeps_details_and_editor_layout_stable() {
 }
 
 #[test]
+fn tui_dashboard_wide_layout_resizes_and_preserves_editor() {
+    dashboard_scenario("wide_layout");
+    dashboard_scenario("wide_layout_no_color");
+}
+
+#[test]
 fn tui_dashboard_details_scroll_independently() {
     dashboard_scenario("details_scroll");
 }

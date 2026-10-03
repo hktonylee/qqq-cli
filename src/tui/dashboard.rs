@@ -191,6 +191,16 @@ pub fn panes(area: Rect) -> Panes {
         .max(1)
         .min(area.height.saturating_sub(list_height + 3));
     let editor_y = area.y + list_height + details_height;
+    if area.width >= 150 {
+        let details_width = ((u32::from(area.width) * 40 + 50) / 100) as u16;
+        let list_width = area.width - details_width;
+        let upper_height = list_height + details_height;
+        return Panes {
+            list: Rect::new(area.x, area.y, list_width, upper_height),
+            details: Rect::new(area.x + list_width, area.y, details_width, upper_height),
+            editor: Rect::new(area.x, editor_y, area.width, area.height - upper_height),
+        };
+    }
     Panes {
         list: Rect::new(area.x, area.y, area.width, list_height),
         details: Rect::new(area.x, area.y + list_height, area.width, details_height),
@@ -239,7 +249,7 @@ pub fn wheel_area(size: (u16, u16), column: u16, row: u16, query: &str) -> Optio
         details,
         editor,
     } = panes(Rect::new(0, 0, size.0, size.1));
-    if row < list.y + list.height {
+    if list.contains(Position::new(column, row)) {
         Some(WheelArea::List(usize::from(
             list_content(list, query).height,
         )))
