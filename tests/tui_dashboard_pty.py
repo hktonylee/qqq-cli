@@ -1115,7 +1115,7 @@ print(json.dumps({"result": result}))
                          and editor_line().strip() == ""
                          and (visible.x, visible.y) == (0, editor_row() + 1))
             assert len(cli("list")) == 2
-            assert "Ctrl-P Child" in visible.text().splitlines()[-1], visible.text()
+            assert "Ctrl-P Create Child" in visible.text().splitlines()[-1], visible.text()
             if scenario == "child_no_selection":
                 send(b"\x1b[1;2A")
                 wait_visible(lambda: "task #2 (New)" in editor_title())
@@ -1751,7 +1751,7 @@ print(json.dumps({"result": result}))
                 send(b"\t")
                 wait_visible(lambda: visible.text().splitlines()[-1].startswith("Ctrl-S Save")
                              and "Shift-Up/Dn Switch Tasks" in visible.text().splitlines()[-1]
-                             and "Ctrl+/" in visible.text().splitlines()[-1])
+                             and "Ctrl-P Create Child" in visible.text().splitlines()[-1])
             send(b"\x13")
             read_until(b"Saved #3")
             assert cli("show", "3")["task"]["description"] == "Draft/path"
