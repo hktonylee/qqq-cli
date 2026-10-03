@@ -1322,7 +1322,7 @@ fn status_selection_and_editor_images_use_distinct_colors() {
                 assert_eq!(
                     buffer[(x, y)].bg,
                     if is_selected {
-                        Color::Indexed(17)
+                        Color::Rgb(15, 51, 62)
                     } else {
                         Color::Reset
                     },

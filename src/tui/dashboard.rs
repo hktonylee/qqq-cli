@@ -11,7 +11,8 @@ use unicode_segmentation::UnicodeSegmentation;
 use unicode_width::UnicodeWidthStr;
 
 const ACCENT: Color = Color::Indexed(81);
-const SELECTION_BG: Color = Color::Indexed(17);
+// Accent hue with lower lightness/chroma: OKLCH(30% 0.045 223.18).
+const SELECTION_BG: Color = Color::Rgb(15, 51, 62);
 const BODY_FG: Color = Color::Indexed(252);
 const BODY_BG: Color = Color::Indexed(236);
 const POPUP_ERROR_FG: Color = Color::Indexed(210);
