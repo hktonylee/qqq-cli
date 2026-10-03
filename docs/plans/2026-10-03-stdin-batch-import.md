@@ -52,10 +52,11 @@ new `src/output/import.rs`, new `tests/cli/import.rs`, `tests/cli.rs`.
   forward refs/order, dry-run/current-schema behavior, atomic commit and JSON result.
 - [x] Run fmt/full tests/Clippy/diff checks; request existing reviewer read-only,
   fix findings and repeat affected checks. Record validation evidence.
-- [ ] Commit, rebase/resolve concurrent master updates, verify combined changes,
+- [x] Commit, rebase/resolve concurrent master updates, verify combined changes,
   fast-forward, install locked/offline release and smoke installed stdin/import.
-- [ ] Record integration before cleanup; remove merged worktree/branch, complete
-  #149 and resume persistent `qqq next --wait --local --json` without polling.
+- [x] Record integration evidence below. After record commit, remove merged
+  worktree/branch, complete #149 and resume persistent
+  `qqq next --wait --local --json` without polling.
 
 
 ## Verification Checkpoints
@@ -76,3 +77,18 @@ new `src/output/import.rs`, new `tests/cli/import.rs`, `tests/cli.rs`.
 - Final focused suite: 12 tests passed; full locked suite: 541 tests passed.
   Formatting, Clippy with denied warnings and diff check passed again.
 - Local integration and installed CLI smoke follow.
+
+
+## Local Integration
+
+- Rebase onto unchanged master confirmed up to date; feature `e879cc0`
+  fast-forwarded to clean master.
+- Locked offline release installed as `qqq 0.3.0`.
+- Installed CLI smoke passed: UTF-8/CRLF/literal stdin with valid NUL suffix,
+  image attachment and priority, blank/NUL/encoding/conflict rejection, forward
+  and existing batch parent refs, stable key mapping, read-only preview bytes,
+  injected write rollback and retry IDs, human output, legacy schema/staging
+  preservation and old-schema dry-run refusal.
+- Final validation: 12 focused tests, 541 full tests, fmt/Clippy/diff checks,
+  reviewed with no remaining findings. No push performed.
+- Worktree cleanup and queue completion follow this evidence commit.
