@@ -65,11 +65,12 @@ new `tests/cli/queue.rs`, `src/output/queue.rs`.
 - [x] Run fmt, full locked tests, Clippy warnings denied, diff whitespace check.
   Request read-only review through existing reviewer; resolve findings and repeat
   affected checks. Record focused/full evidence.
-- [ ] Commit, rebase onto current master, verify combined code if changed,
+- [x] Commit, rebase onto current master, verify combined code if changed,
   fast-forward, install locked/offline release and exercise installed diagnostics,
   queued-only dry-run, ordinary owned reuse, scope/filter and no mutation.
-- [ ] Record integration, remove merged worktree/branch, complete #147, resume
-  persistent `qqq next --wait --local --json` without model polling.
+- [x] Record integration evidence below. After record commit, remove merged
+  worktree/branch, complete #147 and resume persistent
+  `qqq next --wait --local --json` without model polling.
 
 
 ## Verification Checkpoints
@@ -97,3 +98,16 @@ new `tests/cli/queue.rs`, `src/output/queue.rs`.
 - `cargo fmt --all --check`, `cargo clippy --locked --all-targets -- -D warnings`
   and `git diff --check` passed. Review approved both diagnostics fix and TUI
   harness synchronization, with no remaining findings.
+
+
+## Local Integration
+
+- Rebased onto task #146's `d056f4d`; schema 10 and guarded content edits preserved.
+- Feature `2f1fea2`, reviewed correction `9154a8b`, fast-forwarded to clean master.
+- Locked offline release installed as `qqq 0.3.0`.
+- Installed CLI smoke passed: empty/missing project, readiness and parent blockers,
+  priority/ties, filters, owner reuse, queued-only dry-run, archive scope, message
+  activity, diagnostic DB byte preservation, schema-9 migration refusal and human
+  output. Two installed Escape/Ctrl-C filter/menu PTY scenarios passed.
+- Live project status reads successfully; no diagnostic claim or mutation needed.
+- Cleanup and queue completion follow this evidence commit. No push performed.
