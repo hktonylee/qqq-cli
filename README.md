@@ -1,54 +1,45 @@
 # qqq
 
-**A local task queue for coding agents.**
+**Give your coding agents a shared queue.**
 
-Turn a backlog into the next thing an agent can work on. Add tasks, set dependencies,
-and let each agent claim ready work. Follow progress, edit descriptions, and leave
-updates from your terminal.
+You write the tasks. Agents claim the next ready one, report progress, and mark it
+done. qqq keeps the queue in your project, with a terminal dashboard for the work
+you want to inspect or change yourself.
 
-Everything stays in your project: SQLite stores tasks in `.qqq/qqq.db`, attachments
-live in `.qqq/images/`. No server setup or account required.
+![qqq terminal dashboard showing a task tree, task details, and editor](docs/images/dashboard.png)
 
-[Install](#install) · [Quick start](#quick-start) · [Terminal dashboard](#terminal-dashboard) ·
-[Agent workflow](#agent-workflow) · [Command reference](#command-reference)
+[Get started](#try-it) · [Agent setup](#give-your-agent-the-queue) · [Docs](docs/reference.md)
 
-- **Give each worker its own task.** Atomic claims and stable session IDs coordinate
-  multiple agents working in the same local project.
-- **Keep work in order.** A child waits for its parent to finish; higher-priority
-  ready tasks go first.
-- **Keep context with the task.** Full descriptions, messages, images, and ownership
-  history survive handoffs and retries.
-- **Use the interface that fits.** Browse and edit in the TUI, run individual
-  commands, or read structured JSON from scripts and agents.
+## Why a queue?
+
+- **Multiple agents, clear ownership.** Workers sharing the same local
+  project claim separate tasks.
+- **Dependencies that mean something.** “Build the client” waits until “Build the
+  API” is complete. Priorities choose which ready task comes next.
+- **Context that survives a session.** Descriptions, updates, screenshots, and
+  history stay with the task when you return, retry, or hand off work.
+
+SQLite stores tasks in `.qqq/qqq.db`; images live in `.qqq/images/`. No server or
+account needed. Your agent runs the code and checks; qqq tracks the work.
 
 ## Install
 
-Requires Rust 1.85+ and a C compiler. Install the published crate:
-
 ```sh
 cargo install qqq-cli --locked
-qqq --help
 ```
 
-The executable is **`qqq`**; the crate is **`qqq-cli`**.
+Requires Rust 1.85+ and a C compiler. The command is `qqq`.
+[Install from source](docs/reference.md#install-from-source) for development features.
 
-This README follows the development branch. Published releases may lag features
-shown here. To install the current source, run this from the repo root:
+## Try it
 
-```sh
-cargo install --path . --locked --force
-```
-
-## Quick start
-
-### 1. Add two tasks
-
-Try this in a new directory. The first task gets ID `1`; the second depends on it.
+Start in an empty directory so the example task IDs match:
 
 ```sh
 mkdir qqq-demo
 cd qqq-demo
 qqq init
+
 qqq add "Build API"
 qqq add "Build client" --parent 1
 qqq list
@@ -60,687 +51,73 @@ ID     STATUS        PRI TASK
 2      New             0 └── Build client
 ```
 
-For an existing project, run `qqq init` at its root and use the IDs returned by
-`add`. Task commands find the nearest `.qqq` directory, so they also work from
-project subdirectories. Keep `.qqq/` out of Git.
-
-### 2. Claim work and record progress
-
-Use one stable session ID per worker. `next` claims the API task; the client task
-stays blocked until the API is complete.
+Claim the API task. Once your work is done, record an update and complete it:
 
 ```sh
-qqq next --local --session worker-1
-# Do the work, then record an update:
-qqq message 1 "API ready" --session worker-1
-qqq complete 1 --session worker-1
+qqq next --local --session agent-1
+# Do the work, then:
+qqq message 1 "API ready" --session agent-1
+qqq complete 1 --session agent-1
+qqq next --local --session agent-1
 ```
 
-### 3. Pick up the dependent task
+The last command claims **Build client**. Completing its parent made it ready.
+Repeated `next` calls return your active task until you complete or release it.
 
-```sh
-qqq next --local --session worker-1
-qqq list
-```
+For your own project, run `qqq init` at its root and use the IDs returned by `add`.
+Commands also work from subdirectories. Add `.qqq/` to your `.gitignore`.
 
-```text
-ID     STATUS        PRI TASK
-1      Completed       0 Build API
-2      In progress     0 └── Build client
-```
-
-`next` returns the worker's current task until it is completed or released. For a
-new claim, it chooses the highest-priority ready task, then the oldest ID on ties.
-`--local` keeps the claim local even if optional Herdr dispatch is configured.
-
-## Terminal dashboard
+## See and edit the work
 
 ```sh
 qqq tui
 ```
 
-Browse the task tree, read details and messages, and edit without leaving the
-terminal. The layout adapts to narrow and wide windows; clicking a task loads its
-full description, and each pane scrolls separately.
+Browse the tree, read task details, and edit descriptions in one window. Click a
+task to load it, scroll each pane, or use the keyboard:
 
 | Key | Action |
 | --- | --- |
-| Shift+Up / Shift+Down | Select a task, or move to a blank draft |
-| Ctrl+S | Save the draft or update the selected task |
-| Ctrl+P | Create a child draft under the selected task |
-| Ctrl+/ | Focus the task filter |
-| Ctrl+G | Open task actions: complete, retry, reopen, archive, priority, parent |
-| Esc | Close the filter, then clear the editor, then exit; changed drafts ask before discard |
+| Shift+Up / Shift+Down | Move between tasks and a blank draft |
+| Ctrl+S | Save |
+| Ctrl+P | Create a child of the selected task |
+| Ctrl+/ | Filter tasks |
+| Ctrl+G | Open task actions |
+| Esc | Close the filter, clear the editor, then exit; changed drafts ask before discard |
 
-The built-in editor also opens with `qqq add` or `qqq edit <id>`. Prefer your own
-editor? Set `EDITOR` and use `--edit`. See [editor details](#built-in-editor) and
-[TUI behavior](#task-tui) for paste, navigation, mouse, and discard rules.
+`qqq add` opens the built-in editor too. Prefer Vim or another editor? Set
+`EDITOR` and use `qqq add --edit`.
 
-## Agent workflow
+## Give your agent the queue
 
-Your coding agent runs the implementation and checks. qqq keeps track of what it
-claimed, what it reported, and what becomes ready next.
-
-Give each worker a different session ID and run its commands from the same
-project. JSON exposes the full task description and metadata. Replace `<id>`
-with the returned task ID before running the update and completion commands:
-
-```sh
-qqq next --wait --local --json --session worker-1
-qqq message <id> "Checks passed; ready to review" --session worker-1
-qqq complete <id> --session worker-1
-```
-
-`--wait` blocks until work is ready.
-Claims do not expire; a restarted worker using the same session gets its active
-task back.
-
-A starting instruction for your agent:
+Give each worker a unique, stable session ID. Add instructions like these to
+your agent prompt or `AGENTS.md`, replacing `agent-1` for each worker:
 
 ```text
-Use qqq for this project's task queue. Use session worker-1 for every command.
-Run qqq next --wait --local --json --session worker-1 to claim work.
+Use qqq to get work for this project.
+Run qqq next --wait --local --json --session agent-1.
 Read the returned task, do the work, and run relevant checks.
-Record useful progress with qqq message <id> "update" --session worker-1.
-When finished, run qqq complete <id> --session worker-1, then claim the next task.
-If blocked, record the reason and return control instead of marking it complete.
+Record progress with qqq message <id> "update" --session agent-1.
+Finish with qqq complete <id> --session agent-1, then get the next task.
+If blocked, record the reason and return control without marking it complete.
 ```
 
-Preview work with `qqq next --dry-run --json`. Return, retry, and abandoned-claim
-commands are covered in [agents and recovery](#agents-and-recovery). Native Codex
-session discovery and optional [Herdr integration](#herdr) can supply identity or
-open new agent tabs.
-
-## Command reference
-
-Use `qqq --help` or `qqq <command> --help` for all flags.
-
-| Need | Read |
-| --- | --- |
-| Browse, search, watch, or export JSON | [List and show](#list-and-show) |
-| Write descriptions or set priority | [Add and edit](#add-and-edit), [built-in editor](#built-in-editor) |
-| Hide finished work or reopen it | [Archive and unarchive](#archive-and-unarchive), [reopen completed work](#reopen-completed-work) |
-| Learn dashboard behavior | [TUI behavior](#task-tui) |
-| Sequence tasks or attach screenshots | [Dependencies and images](#dependencies-and-images) |
-| Manage ownership, release work, or retry failures | [Agents and recovery](#agents-and-recovery) |
-| Set defaults and command shortcuts | [Config and aliases](#config-and-aliases) |
-| Link or launch Herdr agents | [Herdr](#herdr) |
-| Back up, restore, delete, or check project health | [Data](#data) |
-| Build and test from source | [Development](#development) |
-
-### List and show
-
-```sh
-qqq list
-qqq list --oneline
-qqq show 1
-qqq show -1                         # newest task; -2 is second newest
-qqq list --max-completed 10
-qqq list --all                      # bypass configured completion limit
-qqq list --query "parser error"     # search full descriptions, ignoring case
-qqq list --status new --status error
-qqq list --query "parser" --status in_progress --all
-qqq list --filter 'like(task_name, "%auth%") and priority > 0'
-qqq list --watch
-qqq list --watch --json
-qqq list --include-archived
-```
-
-`list` shows status, priority, and dependency tree; roots and siblings follow
-creation ID order. In a terminal with known width, it shows full descriptions
-with wrapped, aligned continuation lines; piped output keeps first-line previews.
-`show` adds messages, images, ownership history and Herdr link. Negative indexes
-work with `show`, `edit`, `archive`, `unarchive`, and `reopen`; `-1` selects newest task.
-
-`--oneline` limits terminal and watch views to each description's first line.
-JSON and search still use full descriptions.
-
-`--max-completed N` keeps N most recent completions plus unfinished tasks;
-`0` hides completed tasks. Hidden parents display children as roots. `--all`
-bypasses configured limit; it conflicts with `--max-completed`.
-
-`--query TEXT` matches any part of a full description, including later lines,
-using Unicode lowercase comparison. Repeat `--status` to match any listed
-status: `new`, `in_progress`, `completed`, or `error`. Query and statuses combine
-with AND. Search runs after completed-display limit; use `--all` to search all
-completed tasks. Visible ancestors of matches appear as `[context]` rows even
-when they do not match filters. JSON stays flat and marks those ancestors with
-`context_only: true`; direct matches keep existing task fields. Empty filtered
-results return `[]` in JSON or `No matching tasks.` in human output.
-
-`list --filter EXPR` and `next --filter EXPR` compile a typed Luau expression
-to SQLite with bound values. List filters combine with query/status and retain
-visible ancestor context. See [filter guide](docs/filter.md),
-[default variables](docs/filter-variables.md),
-[SQLite functions](docs/filter-functions.md).
-
-`--watch` prints initial list, then refreshes after DB commits. Terminal output
-redraws; pipes, `TERM=dumb` and JSON append snapshots. Ctrl-C stops watching.
-
-Default list, watch, TUI, and claim queue hide archived tasks. Use
-`list --include-archived`, `list --watch --include-archived`, or
-`tui --include-archived` to browse them. Human lists label archived rows
-`[archived]`; JSON includes `archived: true` without changing description.
-`--all` changes completed-task limit only; hidden archived completions do not
-consume that limit.
-
-Global `--json` works before or after commands. JSON lists stay flat, preserve
-full descriptions and `parent_id`; watch prints one array per line. Empty lists
-return `[]`; no ready task returns `null`. Errors use stderr (exit 1 for runtime,
-2 for arguments). `NO_COLOR=1` or `TERM=dumb` disables color.
-
-### Add and edit
-
-```sh
-qqq add "Fix login"
-qqq add "Fix urgent login" --priority 8
-qqq add --description "Fix login"   # same input, alternative flag
-qqq edit 1 --description "Updated details"
-qqq edit 1 --priority -5             # lower future claim order
-qqq edit -1                         # edit newest task interactively
-```
-
-Descriptions preserve whitespace and newlines; blank-only text fails.
-Priority defaults to `0` and accepts integers from `-100` through `100`.
-Higher priority claims first among ready new tasks; equal priority uses oldest
-ID. `list` stays in ID/dependency order. Editing priority on active, completed,
-or error tasks keeps status and ownership metadata; an already-owned task still
-returns to its owner before new claims.
-
-### Archive and unarchive
-
-```sh
-qqq archive 12
-qqq list --include-archived
-qqq show 12
-qqq unarchive 12
-```
-
-Archive keeps task status, description, priority, messages, images, ownership
-history, and dependencies. `show`, `edit`, messages, and image export still work
-by ID. Archive/unarchive add history events; repeated commands change nothing.
-Events record supplied `--session` or `cli` when absent. In-progress tasks
-cannot be archived. An unfinished parent cannot be archived while a visible
-unfinished child depends on it; adding or reparenting an unfinished child, or
-unarchiving one, under an archived unfinished parent also fails. Archived
-completed parents still release dependent tasks.
-
-### Reopen completed work
-
-```sh
-qqq reopen 12
-qqq reopen -1 --session reviewer
-```
-
-`reopen` returns a completed task to `new` and records a reopen event. It keeps
-description, priority, parent, messages, images, creation time, and prior
-history. A task in any other status fails without changes; repeating `reopen`
-also fails. Archived completed tasks require `unarchive` first. A completed
-child under an archived unfinished parent cannot reopen until parent is
-unarchived or completed. Completed descendants stay completed; new direct children
-wait for reopened parent to complete again. Reopened tasks return to default
-lists, including `--max-completed 0`, and become claimable when dependencies
-permit.
-
-### Built-in editor
-
-On a terminal, `add` without text or `edit` without update flags opens built-in
-editor. Ctrl-S saves, Esc exits blank draft or confirms discard of nonempty
-draft, Ctrl-C exits, Ctrl-W deletes previous word on same line, Ctrl-V pastes
-clipboard text or image. Option+Left/Right moves cursor by word. Clipboard paste
-needs desktop clipboard support.
-
-Built-in editors collapse pastes over 1,000 characters into one gold
-`[Pasted Content N chars]` item. Saving stores full payload in Markdown:
-
-````markdown
-```pasteboard
-pasted text
-```
-````
-
-Shift-Up/Down and `qqq edit` restore complete fences as one editable item;
-Backspace or Delete removes entire item. Payload containing backticks gets a
-longer fence. `NO_COLOR=1` and `TERM=dumb` keep label plain. Existing task text
-outside `pasteboard` fences remains unchanged on save.
-
-In built-in `qqq add`, Ctrl-S creates or updates task, clears editor, then waits
-for next task. Saves commit immediately; exit keeps prior saves. Shift+Up loads
-newest task, then older tasks; Shift+Down moves toward newer tasks, then blank
-draft. Loaded task places cursor at description end. Header shows selected ID
-and status. JSON output returns saved tasks as array on exit. Exit without any
-save returns error.
-
-Switching from changed draft asks before discard; N, Enter, or Esc keeps it.
-Navigation includes all unarchived tasks, regardless of status; deleted IDs are
-skipped. `--parent` and `--priority` apply to each new task. `--image` files attach
-only to first successful save, including when updating existing task. Inline add,
-external editor and `qqq edit` save once.
-
-Use `--edit` (`-e`) to force `$EDITOR`. Without terminal input and stderr,
-interactive add/edit uses `$EDITOR` automatically. Editor command must wait
-until editing finishes.
-
-```sh
-export EDITOR='vim'
-qqq add --edit
-qqq edit 1 --edit --description "Prefilled draft"
-```
-
-Built-in add/edit editor uses stderr; stdout holds result on exit. Cancelling
-draft keeps earlier saves. Direct edits preserve omitted fields, ownership and
-attachments.
-
-### Task TUI
-
-```sh
-qqq tui
-```
-
-Below 50 columns, compact layout hides task status labels and details/messages.
-Task list and editor each use half terminal height, rounded to rows.
-From 50 through 149 columns, task list, details/messages and editor stay visible at 35%,
-20% and 45% of terminal height, rounded to rows. At 150 columns or wider, list
-and details share upper rows: list uses 60% of width, details 40%. Editor spans
-full width below them, retaining its height and position between stacked and wide layouts.
-Task list shows unarchived tasks by default.
-Visible details pane shows `Select task to view details.` for blank drafts; selecting or
-saving task keeps pane positions fixed. Small terminals retain usable list and
-editor rows.
-Details use a double-line box with two spaces inside each side; short panes
-retain padding without borders. Text wraps to the inner width.
-Details share `show` header and layout: `#ID · Status`, Description, Details,
-Assignment, Messages, Images, History and Herdr sections. Fields align their
-values; Created/Updated occupy separate rows. Messages follow creation order,
-with indented headers and bodies; empty collections show `None`. IDs are bold,
-statuses colored, labels/timestamps dim. Styles survive wrapping and scroll.
-Each task preview shows at most three wrapped lines; clipped previews end with
-`...`. Editor loads full description, including hidden lines.
-Selection fills whole row with muted blue background, including wrapped lines;
-light text stays readable. Plain mode uses `>` marker.
-Shift-Up/Down selects tasks in displayed tree order, then blank draft. Ctrl-S
-updates selected task or creates new task. By default, saved task stays open for
-further edits or task actions. Loaded and saved tasks place cursor at description
-end; editor scrolls to keep cursor visible. Set `tui.after_save_new` to `open_new`
-to clear editor after creating task; existing-task edits stay open. Shift-Down past last
-displayed task opens blank draft. Esc closes focused filter and clears query,
-returning focus to editor while preserving draft. From editor, Esc clears editor
-before exiting on next press. Selected tasks and dirty new drafts ask before
-discarding unsaved content; `y` clears editor, `n` keeps draft for editing or Ctrl-S save.
-Ctrl-C returns selected task to blank draft, asking before discarding edits.
-Ctrl-C in dirty new draft asks before exit; `y` exits without saving, `n` keeps draft.
-Esc in blank draft with editor focused exits; Ctrl-C in blank draft exits.
-Repeated Ctrl-C keeps confirmation open. Ctrl-V or terminal paste inserts text; pasting
-image file path attaches image. Saves commit immediately. TUI needs terminal
-and writes no stdout, including with `--json`.
-
-Ctrl+P opens blank child draft under selected task; header shows parent ID.
-Changed drafts ask before switching. Ctrl-S creates child with dependency;
-Enter or Shift+Enter inserts newline. Navigating away clears draft's parent context.
-
-Ctrl-H focuses selected task's live Herdr agent and opens Herdr client using
-task's linked server. Detach from client to return to TUI with draft, selection,
-filter, cursor and scroll positions preserved. No task is saved or changed.
-Missing links, unavailable agents and client errors appear in status bar.
-Link task with `qqq herdr link` first if needed. Backspace still edits text.
-
-Task list opens scrolled to bottom. List and details refresh after external DB
-commits without keyboard input. Refresh keeps current editor draft, filter query,
-and manual scroll positions. Selected task status updates in editor title; task
-text stays in editor until reloaded or saved.
-
-Mouse wheel scrolls list, details or editor under pointer. Panes keep separate
-scroll positions; scrolling never edits or saves text. PgUp/PgDn scroll selected
-task details while editor has focus. Selection changes reset details scroll.
-Details clicks leave editor caret and draft unchanged. Shift-Up/Down
-returns list to selected task. Editor keys reveal caret after manual scroll.
-Left-click task row to load it in editor, including indented or wrapped rows.
-Left-click editor text to place caret; dirty drafts ask before switching tasks.
-
-Ctrl+/ focuses filter and shows `Filter:` with editable caret, even when empty.
-Filter bar stays visible while focused or query is nonempty. Empty unfocused query
-reserves no row. Type to match any part of full description, ignoring case.
-Matching tasks retain parent chain;
-no matches shows `No matching tasks.`. Backspace edits query. Tab or Enter returns to
-editor. `/` or Alt+/ inserts literal `/` into editor. Shift-Up/Down navigates visible
-tasks while filter is active. Query changes do not change selected task, unsaved
-draft, or DB.
-While filter is visible, Esc clears query and closes filter focus. Ctrl-C clears
-nonempty query, preserving current focus. Selected task and editor draft stay intact, including while
-popup or confirmation is open. Next Esc follows
-editor clearing flow; next Ctrl-C follows editor cancel flow. Dirty drafts ask
-before discard.
-
-Ctrl-G opens centered actions popup for selected task; dashboard stays visible
-around it. Prompts, confirmations and errors share popup; small terminals use
-compact view. Cyan titles/shortcuts, muted help, gold prompts/warnings and soft-red
-errors distinguish popup states. Up/Down selects action, wrapping at ends;
-Enter activates selected row. Dark accent tint and `>` mark selection; plain
-mode keeps marker. Letter shortcuts activate actions directly. Press `c` to complete owned task,
-`r` to retry error task, `o` to reopen completed task, `a` to archive or
-unarchive, `p` to set priority (-100..100), or `d` to set parent by positive
-task ID or `none`. Retry appears only for error tasks; non-error tasks ignore `r`.
-Arrows skip hidden actions; Enter activates displayed selection.
-Open menu refreshes Retry availability after external status changes, keeping
-selected action when available.
-After filter clears, Esc closes menu or prompt. State changes ask for `y` before
-running; priority and parent changes ask when draft has unsaved edits. Successful
-action refreshes task and list; rejected action keeps draft and shows DB error.
-Error view wraps long messages; Up/Down scrolls, Esc closes it.
-
-### Dependencies and images
-
-Each task has at most one parent. Child becomes ready when parent completes.
-Parent must exist; self-parenting and cycles fail. Parent changes affect future
-claims without removing active ownership.
-
-```sh
-qqq add "Build client" --parent 1
-qqq edit 2 --set-parent 1
-qqq edit 2 --set-parent none         # clear dependency
-```
-
-Attach files through `add` or `edit`; repeat `--image` for multiple files:
-
-```sh
-qqq edit 2 --image ./before.png --image ./after.jpg
-qqq show 2
-qqq show 2 --export-image 1 --output ./exported.png
-```
-
-Image IDs come from `show`. Export needs selected task's image ID and new output
-path. PNG, JPEG, GIF and WebP signatures supported, up to 20 MiB each; signature
-check does not fully validate file. Bytes copy into
-`.qqq/images/<task_id>/<image_id>.<ext>`. Built-in editor also accepts pasted
-image paths or clipboard images. Pasted images become Markdown links in the
-description, such as `![before.png](.qqq/images/2/4.png)`. Reloading a task
-shows each linked image as one editable item; deleting that item removes its
-description link while keeping the attachment available through `show`.
-
-Description, status, parent and image updates save atomically.
-
-### Agents and recovery
-
-Use stable, unique session ID per worker:
-
-```sh
-export QQQ_SESSION='worker-1'
-qqq next
-qqq message 1 "Running tests"
-qqq complete 1
-qqq next --wait
-```
-
-`--session` overrides `QQQ_SESSION`. Each owner gets one active task; repeated
-`next` returns it. Claims never expire. `--wait` blocks until work is ready;
-without it, empty queue prints `No ready tasks.` and exits successfully. Error
-tasks and blocked children stay out of queue.
-
-`next --dry-run` previews queued candidate without claiming or dispatching an
-agent. Existing claims are skipped; no session or Herdr identity required.
-Preview retains stored `new` status and metadata. Combine with `--filter`,
-`--wait`, `--local`, and `--json`. Preview does not reserve task; another worker
-can claim it afterward.
-
-```sh
-qqq next --dry-run --json
-```
-
-`next --filter 'priority >= 5'` selects matching new candidates using same
-priority/readiness rules. Without `--dry-run`, existing owned task still returns
-regardless of filter.
-Combine with `--wait` or Herdr dispatch; no matching ready candidate yields no claim.
-
-Without `--session` or `QQQ_SESSION`, owner discovery uses:
-
-1. Exact Herdr pane from `HERDR_PANE_ID` or `HERDR_ENV=1` (requires pane ID).
-2. Native Codex `CODEX_THREAD_ID`, then `CODEX_SESSION_ID` fallback.
-3. Unique Herdr agent at project root (`foreground_cwd` before `cwd`).
-
-Explicit session IDs and native Codex ownership work without Herdr when dispatch is
-disabled or `next --local` is used. Exact Herdr context takes precedence.
-`next --local` skips dispatch, still resolves owner.
-
-For automatic Codex claims, displayed `harness_session` uses `CODEX_SESSION_ID`
-when set, including inside Herdr. Without it, resolved owner ID supplies display.
-Claim keys and Herdr links keep resolved identity; `--harness-session` overrides
-display. Repeated claims retain saved metadata unless explicit assignment flags
-override it.
-
-Completion, release and error marking require owner. Use original session token
-or uniquely matching displayed `harness_session`; add `--harness-name` when
-public sessions overlap. JSON assignment fields: `harness_name`,
-`harness_session`, `orchestrator_name`, `orchestrator_session`.
-
-#### Return or retry work
-
-Return active task owned by `worker-1`:
-
-```sh
-qqq edit 1 --set-pending --session worker-1
-```
-
-Alternatively, mark active task failed, then retry:
-
-```sh
-qqq edit 1 --set-status error --reason "Missing credentials" --session worker-1
-qqq edit 1 --set-status new          # retry error task; no session required
-```
-
-`--set-pending` equals `--set-status new`. Active tasks require owner; error
-tasks can be retried without one. Error marking requires nonblank reason,
-clears assignment, records reason as message. Status updates skip editor.
-
-For abandoned active work, inspect task before forcing return:
-
-```sh
-qqq show 1
-qqq edit 1 --set-status new --force
-```
-
-`--force` skips ownership matching and Herdr discovery. It requires literal
-`--set-status new`; cannot combine with `--set-pending` or `--edit`. Return/retry
-preserves content, dependencies, messages, images and Herdr link.
-
-Session IDs coordinate local agents; they do not authenticate users. Any local
-caller can edit task content or append messages regardless of ownership.
-
-### Config and aliases
-
-Config: `~/.config/qqq/config.toml` (under `HOME`).
-
-```sh
-qqq config --list
-qqq config alias.ls 'list --watch'
-qqq config --get alias.ls
-qqq config alias.ls                 # same as --get
-qqq config display.max-completed 10
-qqq config tui.after_save_new open_new
-qqq config --unset alias.ls
-```
-
-Keys use TOML dotted syntax; quote literal dots: `'alias."with.dot"'`.
-Alias values are strings; `herdr.next-to-new-agent` is boolean;
-`display.max-completed` is non-negative integer. `tui.after_save_new` accepts
-`open_saved` (default) or `open_new`, loaded when `qqq tui` starts. Other values
-accept TOML literals, falling back to strings.
-
-Reads do not create files. `--list` shows stored values; `--get` can inspect
-invalid settings. Writes validate known settings, preserve comments and unknown
-keys. `--json` returns typed values; unset restores default.
-
-Completion limit config affects human lists only; explicit `--max-completed`
-affects text and JSON. Missing limit means unlimited.
-
-Example config:
-
-```toml
-[display]
-max-completed = 10
-
-[tui]
-after_save_new = "open_saved"
-
-[alias]
-ls = "list"
-n = "next"
-done = "complete"
-bug = "add"
-```
-
-`qqq bug "Fix login"` expands to `qqq add "Fix login"`. Aliases support quoting
-and chains; built-in commands take precedence. No shell expansion. Cycles,
-invalid quoting and `!` aliases fail.
-
-### Herdr
-
-Optional Herdr integration links tasks to live agent panes:
-
-```sh
-qqq herdr link 1
-qqq herdr find 1
-qqq herdr link 1 --agent codex --agent-session session-123 --server work
-```
-
-Discovery selects exact caller pane or unique agent at project root. Ambiguous
-identity fails before claim. Without agent-session hooks, terminal ID plus agent
-kind supplies identity. Active claims retain identity as hooks change.
-
-`link` stores association without changing owner; `find` searches live panes for
-saved link identity. Both require Herdr CLI and server. Local explicit `--session`
-claims do not auto-link; new-agent dispatch links spawned agent even when caller
-uses explicit session.
-
-To dispatch ready work into new Codex agent tab:
-
-```sh
-qqq config herdr.next-to-new-agent true
-qqq next
-```
-
-Dispatch needs `HERDR_ENV=1` and `HERDR_WORKSPACE_ID`. It reuses caller's active
-task; otherwise reserves ready task, opens sibling tab, starts agent and submits
-prompt. Empty or blocked queues create no tab. `next --local` skips dispatch.
-Default: disabled.
-
-Startup failure releases dispatch reservation; created tabs stay open. Prompt
-errors keep claim and link because delivery may have happened. Inspect agent
-before retry or forced release.
-
-### Data
-
-Keep `.qqq/` out of Git. Create portable snapshot while other local qqq
-writers run:
-
-```sh
-qqq backup ../project-snapshot.tar
-mkdir ../restored-project
-cd ../restored-project
-qqq restore ../project-snapshot.tar
-qqq list
-```
-
-Backup contains consistent SQLite data plus every stored image. Tar archive
-starts with `manifest.json`, then `qqq.db`, then `images/<task-id>/<image-id>.<ext>`.
-Manifest records SHA-256 hashes and sizes; restore checks those, image rows,
-SQLite integrity, and foreign keys before installing `.qqq`. Backup refuses to
-overwrite destination. Restore works only from new project directory or one
-with empty `.qqq`; existing data and nested projects are rejected. Invalid
-archives leave project unchanged. Relative snapshot paths resolve from current
-directory.
-
-Preview permanent deletion before confirming it:
-
-```sh
-qqq backup ../before-delete.tar
-qqq delete 42
-qqq delete 42 --yes
-```
-
-Only archived tasks without children can be deleted. Use positive task ID;
-relative creation indexes can change before confirmation. Preview lists messages,
-events, Herdr link, stored images, and paths without changing project data;
-`--json` returns same counts with `deleted:false`. `--yes` removes task and
-dependent data permanently, including stored image files, then returns
-`deleted:true`. Release or complete an active task before archiving it; delete
-or reparent every child before deleting parent. IDs remain reserved after
-deletion. Preview refuses legacy DB versions and pending recovery without
-changing files; run `qqq list` to migrate or recover before previewing again.
-If deletion stops while images are staged, next DB-backed qqq command recovers
-them according to committed DB state. Keep backup until recovered project
-passes `qqq doctor`.
-
-Check project health without changing DB or attachments:
-
-```sh
-qqq doctor
-qqq --json doctor
-```
-
-Doctor checks SQLite integrity, foreign keys, schema version, image paths, byte counts,
-signatures, and orphan files/directories. Healthy project exits 0. Issues print recovery
-actions and exit 1; JSON includes `ok`, counts, and `issues` with code, path,
-message, and action. Doctor never migrates DB. If SQLite journal/WAL sidecars
-exist, stop writers and recover or checkpoint SQLite before rerunning doctor.
-For damaged DB or images, restore verified snapshot into new directory first;
-inspect recovered data before replacing damaged project files. Keep damaged
-copy until recovery is verified. For `DELETE_RECOVERY_PENDING`, follow returned
-action: fix unsafe staging paths or access errors first. Valid interrupted
-deletions recover through normal DB-backed command, such as `qqq list`;
-rerun doctor afterward.
-
-To move old root-level `qqq.db`, stop DB writers. Before `qqq init`, check that
-`.qqq/qqq.db` does not exist. From project root:
-
-```sh
-mkdir -p .qqq
-sqlite3 qqq.db ".backup '.qqq/qqq.db'"
-qqq list # run updated CLI
-```
-
-Check task data before removing old DB. New CLI does not discover root-level
-`qqq.db`; `qqq init` without migration creates separate empty DB.
-
-Compatible DBs at schema versions 1–8 migrate to version 9. Version 6 moves
-existing image blobs to `.qqq/images/` before SQLite drops its `data` column.
-Migration tries `VACUUM` to reclaim old blob pages. If compaction warns, stop
-writers and run `sqlite3 .qqq/qqq.db 'VACUUM;'` later. Upgrade other qqq workers
-before migration; older binaries cannot open version 9. Legacy `title` or
-`pending` schemas need manual conversion; newer unknown schemas fail. Back up
-before conversion.
-
-## Development
-
-Tests require Python 3 for real-terminal coverage on macOS and Linux.
-
-```sh
-cargo test --locked
-cargo fmt --check
-cargo clippy --locked --all-targets -- -D warnings
-cargo build --locked --release
-```
-
-[CI](.github/workflows/ci.yml) checks Ubuntu 24.04 and macOS 14, builds release
-binary, uploads `qqq-<OS>-<ARCH>` archives (14-day retention).
-
-### Publish to crates.io
-
-[Publish workflow](.github/workflows/publish.yml) checks `v<version>` tag against
-`Cargo.toml`, runs checks and package dry run, then publishes `qqq-cli`. Setup:
-
-1. Sign in to crates.io, verify email, create token allowed to publish `qqq-cli`.
-2. Add GitHub Actions repo secret `CARGO_REGISTRY_TOKEN`.
-3. Choose unused version, update `Cargo.toml` and `Cargo.lock`, commit changes.
-4. Push commit and matching tag. Example for version `0.3.0`:
-
-```sh
-git push origin master
-git tag v0.3.0
-git push origin v0.3.0
-```
-
-For manual validation, run **Publish to crates.io** with existing `tag` and
-default `dry_run=true`. Set `dry_run=false` to publish new version. Published
-versions cannot be overwritten.
-
-License: [MIT](LICENSE).
+`--wait` blocks until work is ready. `--json` returns full task data for the agent.
+A restarted worker using the same session gets its current task back; claims do
+not expire. [Return or retry work](docs/reference.md#return-or-retry-work) when a
+worker gets stuck.
+
+Native Codex session discovery can supply identity automatically. Optional
+[Herdr integration](docs/reference.md#herdr) links live agents or opens new agent
+tabs. Explicit sessions and `--local` work independently.
+
+## Keep going
+
+- [Commands, filters, and JSON](docs/reference.md#list-and-show)
+- [Ownership, failures, and recovery](docs/reference.md#agents-and-recovery)
+- [Images and dependencies](docs/reference.md#dependencies-and-images)
+- [Backups and project health](docs/reference.md#data)
+- [Config and aliases](docs/reference.md#config-and-aliases)
+- [Build, test, and contribute](docs/reference.md#development)
+
+[MIT license](LICENSE).
