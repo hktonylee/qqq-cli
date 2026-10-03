@@ -21,6 +21,11 @@ elif mode == "dumb":
     env["TERM"] = "dumb"
 master, slave = pty.openpty()
 fcntl.ioctl(slave, termios.TIOCSWINSZ, struct.pack("HHHH", 24, 32, 0, 0))
+# Capture CLI bytes unchanged: macOS can duplicate CR at a 1024-byte
+# PTY output boundary while translating LF to CRLF. stdout remains a TTY.
+attributes = termios.tcgetattr(slave)
+attributes[1] &= ~termios.OPOST
+termios.tcsetattr(slave, termios.TCSANOW, attributes)
 args = [binary, "show", "1"]
 if mode == "json":
     args.append("--json")
