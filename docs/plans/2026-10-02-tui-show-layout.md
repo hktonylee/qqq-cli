@@ -97,8 +97,8 @@ Some(task) => details::rows(&db.show_task(task)?, details_width),
 - [x] `cargo fmt --all --check`; `git diff --check`.
 - [x] `cargo test --offline --all-targets`; `cargo clippy --offline --all-targets -- -D warnings`.
 - [x] Request read-only review through requesting-code-review skill; resolve findings.
-- [ ] Rebase onto current master; fast-forward master; verify any changed combined source.
-- [ ] Build/install release; run details, details_no_color, details_scroll, details_refresh, details_deleted, layout_new, dumb, color PTY scenarios.
-- [ ] Record evidence, complete #120, remove owned branch/worktree; return to blocking queue wait.
+- [x] Rebase onto current master; fast-forward master; verify any changed combined source.
+- [x] Build/install release; run details, details_no_color, details_scroll, details_refresh, details_deleted, layout_new, dumb, color PTY scenarios.
+After verification, record task evidence, complete #120, remove owned branch/worktree and return to blocking queue wait.
 
-Final source checks after race fix and rebase: 472 tests across 37 binaries; fmt, diff check and clippy passed. Release build plus 9 PTY scenarios passed, including handoff scroll. Review found no remaining issues.
+Final combined source checks after race fix and rebase: 473 tests across 37 binaries; fmt, diff check and clippy passed. Installed release passed 9 PTY scenarios, including handoff scroll. Review found no remaining issues. Source commit: 174af99; master matched tested source.
