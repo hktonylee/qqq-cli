@@ -553,7 +553,7 @@ fn compose_inner(
             .max(1);
             let details_rows = match target_id {
                 Some(id) => match tasks.iter().find(|task| task.id == id) {
-                    Some(task) => details::rows(task, &db.task_messages(id)?, details_width),
+                    Some(_) => details::rows(&db.show(id)?, details_width),
                     None => details::unavailable(id, details_width),
                 },
                 None => Vec::new(),

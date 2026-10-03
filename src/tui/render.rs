@@ -44,10 +44,11 @@ pub struct DashboardEditor<'a> {
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum DetailKind {
     Heading,
-    MessageHeader,
+    Section,
     InProgress,
     Completed,
     Error,
+    Success,
     Body,
     Muted,
     Warning,
@@ -78,6 +79,9 @@ impl DetailRow {
     }
 
     pub(super) fn push(&mut self, text: &str, kind: DetailKind) {
+        if text.is_empty() {
+            return;
+        }
         let start = self.text.len();
         self.text.push_str(text);
         match self.spans.last_mut() {

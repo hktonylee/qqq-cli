@@ -348,7 +348,7 @@ fn selected_task_renders_details_between_list_and_editor() {
         ),
         (
             "#1 reviewer",
-            render::DetailKind::MessageHeader,
+            render::DetailKind::Heading,
             Color::Reset,
             Modifier::BOLD,
         ),
@@ -382,6 +382,18 @@ fn selected_task_renders_details_between_list_and_editor() {
             Color::DarkGray,
             Modifier::empty(),
         ),
+        (
+            "Description:",
+            render::DetailKind::Section,
+            Color::Cyan,
+            Modifier::BOLD,
+        ),
+        (
+            "Exported",
+            render::DetailKind::Success,
+            Color::Green,
+            Modifier::empty(),
+        ),
     ];
     let detail_rows: Vec<_> = expected
         .iter()
@@ -410,7 +422,7 @@ fn selected_task_renders_details_between_list_and_editor() {
     };
     let mut terminal = Terminal::new(TestBackend::new(72, 24)).unwrap();
     for color in [true, false] {
-        for requested_top in 0..=4 {
+        for requested_top in 0..=detail_rows.len() - 3 {
             let mut details_top = requested_top;
             terminal
                 .draw(|frame| {

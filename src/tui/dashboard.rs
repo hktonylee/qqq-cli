@@ -468,12 +468,14 @@ fn detail_style(kind: render::DetailKind, color: bool) -> Style {
         return Style::default();
     }
     match kind {
-        render::DetailKind::Heading | render::DetailKind::MessageHeader => {
-            Style::default().add_modifier(Modifier::BOLD)
-        }
+        render::DetailKind::Section => Style::default()
+            .fg(Color::Cyan)
+            .add_modifier(Modifier::BOLD),
+        render::DetailKind::Heading => Style::default().add_modifier(Modifier::BOLD),
         render::DetailKind::InProgress => Style::default().fg(Color::Cyan),
         render::DetailKind::Completed => Style::default().fg(Color::DarkGray),
         render::DetailKind::Error => Style::default().fg(Color::Red),
+        render::DetailKind::Success => Style::default().fg(Color::Green),
         render::DetailKind::Muted => Style::default().add_modifier(Modifier::DIM),
         render::DetailKind::Warning => Style::default().fg(Color::Yellow),
         render::DetailKind::Body => Style::default(),

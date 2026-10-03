@@ -165,6 +165,10 @@ fn status_color(value: &Value, color: bool) -> Option<&'static str> {
     }
 }
 
+pub(crate) fn detail_text(value: &Value, color: bool) -> String {
+    detail::render(value, color)
+}
+
 fn styled(text: &str, code: Option<&str>) -> String {
     match code {
         Some(code) => format!("\x1b[{code}m{text}\x1b[0m"),
