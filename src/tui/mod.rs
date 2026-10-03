@@ -768,9 +768,9 @@ fn compose_inner(
         let (mut title, status_start) = match (mode.db().is_some(), target_id) {
             (true, Some(id)) => {
                 let prefix = format!("Task Editor - Task #{id} ");
-                let label = crate::output::status_label(
-                    target_status.as_deref().expect("selected task has status"),
-                );
+                let label = target_status
+                    .as_deref()
+                    .map_or("Removed", crate::output::status_label);
                 (format!("{prefix}({label})"), Some(prefix.len()))
             }
             (true, None) => (
@@ -1158,6 +1158,13 @@ fn compose_inner(
                                     message_is_error = false;
                                 }
                                 Some(Err(error)) => {
+                                    if target_id.is_some_and(|id| {
+                                        mode.db().is_some_and(|db| {
+                                            db.task_exists(id).is_ok_and(|exists| !exists)
+                                        })
+                                    }) {
+                                        ui.mark_removed();
+                                    }
                                     message = format!("{error:#}; local draft kept");
                                     message_is_error = true;
                                     conflict_ui = Some(ui);
@@ -1324,6 +1331,37 @@ fn compose_inner(
                                 }
                             },
                             KeyCode::Char('n' | 'N') | KeyCode::Enter | KeyCode::Esc => {
+                                if let Confirmation::ExitBuffers { keys, index } = pending {
+                                    let key = keys[index];
+                                    let removed = matches!(key, DraftKey::Task(id)
+                                        if mode.db().is_some_and(|db|
+                                            db.task_exists(id).is_ok_and(|exists| !exists)));
+                                    if removed {
+                                        buffers.park(
+                                            DraftKey::current(target_id, draft_parent_id),
+                                            &mut draft,
+                                            &baseline,
+                                            top,
+                                            editor_follow_cursor,
+                                        );
+                                        if let Some(saved) = buffers.take(key) {
+                                            editor_follow_cursor = load_target(
+                                                Target::Retained {
+                                                    key,
+                                                    status: None,
+                                                    saved,
+                                                },
+                                                &mut draft,
+                                                &mut target_id,
+                                                &mut target_status,
+                                                &mut draft_parent_id,
+                                                &mut baseline,
+                                                &mut top,
+                                            );
+                                            list_follow_selected = true;
+                                        }
+                                    }
+                                }
                                 message.clear();
                                 message_is_error = false;
                             }

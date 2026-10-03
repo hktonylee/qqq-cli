@@ -105,7 +105,7 @@ fn popup_row_style(kind: render::PopupKind, title: bool, color: bool) -> Style {
                 style
             }
         }
-        PopupKind::Action | PopupKind::Input => body,
+        PopupKind::Body | PopupKind::Action | PopupKind::Input => body,
         PopupKind::SelectedAction => body.bg(SELECTION_BG),
     }
 }
@@ -143,7 +143,9 @@ fn popup_row_line(text: String, kind: render::PopupKind, color: bool) -> Line<'s
             ),
             Span::raw(text.chars().skip(2).collect::<String>()),
         ]),
-        PopupKind::Heading | PopupKind::Error | PopupKind::Warning => Line::from(text),
+        PopupKind::Body | PopupKind::Heading | PopupKind::Error | PopupKind::Warning => {
+            Line::from(text)
+        }
     }
 }
 

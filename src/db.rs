@@ -391,6 +391,13 @@ impl Db {
     pub fn task(&self, id: i64) -> Result<Task> {
         self.conn.query_row("SELECT id,description,status,claim_key,created_at,updated_at,parent_id,harness_name,harness_session,orchestrator_name,orchestrator_session,priority,archived,content_revision FROM tasks WHERE id=?",[id],task_row).optional()?.with_context(||format!("Task {id} not found"))
     }
+    pub fn task_exists(&self, id: i64) -> Result<bool> {
+        Ok(self.conn.query_row(
+            "SELECT EXISTS(SELECT 1 FROM tasks WHERE id=?)",
+            [id],
+            |row| row.get(0),
+        )?)
+    }
     pub fn content_snapshot(&self, id: i64) -> Result<ContentSnapshot> {
         let tx = self.conn.unchecked_transaction()?;
         let task = tx.query_row(

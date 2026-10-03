@@ -232,7 +232,9 @@ cursor, collapsed paste blocks and pending image bytes.
 then `y` confirms saving local draft against displayed DB revision. `n`, Enter
 or Esc cancels confirmation. Further content changes reject overwrite again.
 Reload reads latest complete content. A removed task offers local text and keep
-only. Message/status updates do not cause content conflicts.
+only. Retained dirty buffers keep their original loaded revision when switching
+tasks; saving or reloading one leaves other drafts intact. Message/status updates
+do not cause content conflicts.
 
 ## Task TUI
 
@@ -281,6 +283,8 @@ archived or deleted tasks and child drafts. Prompts identify draft and preview i
 `y` advances, `n`, Enter or Esc cancels whole exit and preserves all drafts,
 including earlier approvals. App exits after every draft is approved. Blank draft
 exits immediately only when no retained dirty drafts remain.
+Cancelling a deleted task's discard prompt reopens its retained local draft;
+Ctrl-S explains removal and keeps draft without recreating task.
 Repeated Ctrl-C keeps confirmation open. Ctrl-V or terminal paste inserts text; pasting
 image file path attaches image. Saves commit immediately. TUI needs terminal
 and writes no stdout, including with `--json`.

@@ -329,7 +329,7 @@ print(json.dumps({"result": result}))
             assert time.monotonic() < deadline, f"Visible screen stalled, cursor={visible.x},{visible.y}, bytes={screen[-500:]!r}:\n{visible.text()}"
             if select.select([master], [], [], 0.05)[0]:
                 capture(os.read(master, 65536))
-            assert child.poll() is None, "Editor exited before visible state"
+            assert child.poll() is None, f"Editor exited before visible state: {screen[-2000:]!r}\n{visible.text()}"
 
     def send(data):
         remaining = memoryview(data)
@@ -2253,7 +2253,9 @@ print(json.dumps({"result": result}))
             wait_visible(lambda: visible.text().splitlines()[0].startswith("> 1"))
             wait_visible(lambda: editor_row() is not None
                          and editor_line().startswith("First")
-                         and (visible.x, visible.y) == (len("First"), editor_row() + 1))
+                         and (visible.x, visible.y) == (len("First"), editor_row() + 1)
+                         and screen.endswith(b"\x1b[6;6H"))
+            settle()
             send(b"\x07")
             wait_visible(lambda: "c Complete" in visible.text() and
                          "d Parent" in visible.text() and "Up/Dn Enter" in visible.text())

@@ -97,6 +97,7 @@ impl DetailRow {
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum PopupKind {
     Heading,
+    Body,
     Action,
     SelectedAction,
     Hint,

@@ -39,6 +39,13 @@ impl View {
         }
     }
 
+    pub fn mark_removed(&mut self) {
+        self.current = None;
+        self.local_page = false;
+        self.top = 0;
+        self.confirmation = None;
+    }
+
     fn text(&self) -> &str {
         if self.local_page {
             &self.local
@@ -97,7 +104,7 @@ impl View {
                 .into_iter()
                 .skip(start)
                 .take(available)
-                .map(|text| PopupRow::new(text, PopupKind::Action)),
+                .map(|text| PopupRow::new(text, PopupKind::Body)),
         );
         rows.push(PopupRow::new(
             if self.current.is_some() {
@@ -163,5 +170,49 @@ impl View {
             _ => (),
         }
         None
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::View;
+    use crate::db::{ContentConflict, CurrentContent};
+    use crate::tui::dashboard::{popup, popup_layout};
+    use ratatui::{Terminal, backend::TestBackend, layout::Rect};
+
+    #[test]
+    fn current_and_local_wrap_edges_remain_visible_in_popup() {
+        for width in [12, 20, 59, 72] {
+            let area = Rect::new(0, 0, width, 24);
+            let columns = usize::from(popup_layout(area, usize::MAX).content.width);
+            let edge = format!("   {}XY", ".".repeat(columns - 5));
+            let text = format!("{edge}Z\nFull tail");
+            let mut view = View::new(
+                &ContentConflict {
+                    task_id: 2,
+                    expected_revision: 1,
+                    current: Some(CurrentContent {
+                        description: text.clone(),
+                        revision: 2,
+                    }),
+                },
+                text,
+            );
+            for local in [false, true] {
+                view.local_page = local;
+                let lines = view.rows(columns, 18);
+                let content = popup_layout(area, lines.len()).content;
+                for color in [false, true] {
+                    let mut terminal = Terminal::new(TestBackend::new(width, 24)).unwrap();
+                    terminal.draw(|frame| popup(frame, &lines, color)).unwrap();
+                    let buffer = terminal.backend().buffer();
+                    let row: String = (content.x..content.x + content.width)
+                        .map(|x| buffer[(x, content.y + 2)].symbol())
+                        .collect();
+                    assert_eq!(row, edge, "width={width}, local={local}, color={color}");
+                    assert_eq!(buffer[(content.x, content.y + 3)].symbol(), "Z");
+                }
+            }
+        }
     }
 }

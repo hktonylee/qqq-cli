@@ -59,7 +59,7 @@ fn tui_dashboard_content_conflicts_preserve_local_drafts() {
 
 #[test]
 fn tui_single_task_edit_recovers_from_content_conflicts() {
-    for scenario in ["overwrite", "removed"] {
+    for scenario in ["overwrite", "removed", "reload_removed"] {
         let output = Command::new("python3")
             .arg(concat!(
                 env!("CARGO_MANIFEST_DIR"),

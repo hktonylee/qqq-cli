@@ -222,6 +222,12 @@ fn action_popup_input_errors_and_warnings_keep_roles_and_plain_styles() {
             PopupRow::new("Lose draft?", PopupKind::Warning),
             PopupRow::new("y confirm  n/Esc cancel", PopupKind::Hint),
         ],
+        vec![
+            PopupRow::new("Content conflict #1", PopupKind::Error),
+            PopupRow::new("Current DB revision 2", PopupKind::Heading),
+            PopupRow::new("Complete text", PopupKind::Body),
+            PopupRow::new("Tab text  Esc keep", PopupKind::Hint),
+        ],
     ];
     let layout = render::Layout::new(&["Draft".into()], &[], 72);
     let chrome = render::Chrome {
@@ -269,12 +275,14 @@ fn action_popup_input_errors_and_warnings_keep_roles_and_plain_styles() {
                 let y = content.y + index as u16;
                 assert!(line(buffer, y).contains(&row.text));
                 let (foreground, bold) = match row.kind {
+                    PopupKind::Hint if row.text.starts_with("Tab ") => (Color::Gray, false),
                     PopupKind::Heading
                     | PopupKind::Action
                     | PopupKind::SelectedAction
                     | PopupKind::Hint => (Color::Indexed(81), true),
                     PopupKind::Input | PopupKind::Warning => (Color::Indexed(222), false),
                     PopupKind::Error => (Color::Indexed(210), index == 0),
+                    PopupKind::Body => (Color::Indexed(252), false),
                 };
                 assert_eq!(
                     buffer[(content.x, y)].fg,

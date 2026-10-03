@@ -17,7 +17,7 @@
 - [x] Add v10 migration and update migration runner/doctor. Trigger contract:
 
 ```sql
-ALTER TABLE tasks ADD COLUMN content_revision INTEGER NOT NULL DEFAULT 1 CHECK(content_revision>0);
+ALTER TABLE tasks ADD COLUMN content_revision INTEGER NOT NULL DEFAULT 1 CHECK(content_revision>0 AND typeof(content_revision)='integer');
 CREATE TRIGGER task_description_revision AFTER UPDATE OF description ON tasks
 WHEN OLD.description IS NOT NEW.description
 BEGIN
@@ -42,7 +42,7 @@ PRAGMA user_version=10;
 ```
 
 - [x] Include `content_revision` in task row SELECTs/JSON; move filter predicate row index to 14. Add `ContentSnapshot { task: Task, references: Vec<ImageReference> }`, fetched in a read transaction.
-- [x] Add typed `ContentConflict` containing task ID, expected revision, optional current description/revision (none means removed). Add guard to `EditChanges`; retain existing unguarded wrappers. Public guarded methods take optional expected revision. At beginning of write transaction compare revision before parent/status/priority/image mutations.
+- [x] Add typed `ContentConflict` containing task ID, expected revision, optional current description/revision (none means removed). Add guard to `EditOptions`; retain existing unguarded wrappers. Public guarded methods take optional expected revision. At beginning of write transaction compare revision before parent/status/priority/image mutations.
 - [x] Add `edit --expected-revision` positive integer flag, wire direct edit through guarded method. Existing direct edits without flag remain compatible.
 - [x] Add DB tests for two snapshots, successful guarded image/paste composition, stale compound edit rollback, image-only revision change, no-op text save, message/status/priority/dependency changes, deletion while editing, and read-snapshot consistency. Update tests constructing v9 DBs to migrate v10; use 11 for unsupported future-version fixtures.
 - [x] Run `cargo test --locked --test editor --test tui_db --test doctor --test dependencies --test images --test archive --test delete --test reopen --test body --test identity --test priority --test error_status` with shared target. Expect all pass. Commit verified DB/direct CLI checkpoint.
@@ -60,20 +60,24 @@ PRAGMA user_version=10;
 
 **Files:** `src/tui/mod.rs`, new focused `src/tui/conflict.rs`, task 144 buffer module if present, `src/main.rs`, `tests/tui_dashboard_pty.py`, `tests/tui.rs`, `tests/tui_db.rs`.
 
-- [ ] Implement guarded conflict handling on the current editor baseline; rebase onto completed task 144 before final per-task buffer integration. Retain original per-task revision wherever task 144 stores baseline/draft/cursor; switching away/back never refreshes a dirty buffer's baseline.
-- [ ] Add PTY case: load task, edit draft, another CLI replaces text; Ctrl-S opens conflict view, leaves DB/local draft intact. Switch tasks and back, retry still conflicts. Include multiline paste and unsaved PNG data. Run new case; expect old save overwrites.
-- [ ] Carry `expected_revision: Option<i64>` in `Outcome`. Load snapshots for targets, retain revision per buffer, use guarded callbacks from dashboard/continuous edit. Single-task builtin edit must save inside guarded loop rather than returning draft before save.
-- [ ] Conflict view shows full current/local text through scrollable modal. `Esc` keeps draft; `r` opens discard/reload confirmation; `o` opens overwrite confirmation. Confirmed overwrite submits current view revision; a newer save reopens conflict with new revision. Successful save refreshes baseline from DB, clears only saved buffer. Reload replaces only selected buffer after confirmation. Missing task offers close/keep draft; no overwrite.
-- [ ] Extend PTY checks for color/plain, narrow layout, two editors, removal, reload cancel/confirm, overwrite cancel/confirm, further edits during confirmation, status/message-only changes, and cached dirty-buffer preservation. Run focused TUI/DB suites; commit verified TUI checkpoint.
+- [x] Implement guarded conflict handling on the current editor baseline; rebase onto completed task 144 before final per-task buffer integration. Retain original per-task revision wherever task 144 stores baseline/draft/cursor; switching away/back never refreshes a dirty buffer's baseline.
+- [x] Add PTY case: load task, edit draft, another CLI replaces text; Ctrl-S opens conflict view, leaves DB/local draft intact. Switch tasks and back, retry still conflicts. Include multiline paste and unsaved PNG data. Run new case; expect old save overwrites.
+- [x] Carry `expected_revision: Option<i64>` in `Outcome`. Load snapshots for targets, retain revision per buffer, use guarded callbacks from dashboard/continuous edit. Single-task builtin edit must save inside guarded loop rather than returning draft before save.
+- [x] Conflict view shows full current/local text through scrollable modal. `Esc` keeps draft; `r` opens discard/reload confirmation; `o` opens overwrite confirmation. Confirmed overwrite submits current view revision; a newer save reopens conflict with new revision. Successful save refreshes baseline from DB, clears only saved buffer. Reload replaces only selected buffer after confirmation. Missing task offers close/keep draft; no overwrite.
+- [x] Extend PTY checks for color/plain, narrow layout, two editors, removal, reload cancel/confirm, overwrite cancel/confirm, further edits during confirmation, status/message-only changes, and cached dirty-buffer preservation. Run focused TUI/DB suites; commit verified TUI checkpoint.
 
 ## 4. Docs, review, integration
 
 **Files:** `docs/reference.md`, `README.md` only if quick-start behavior needs a concise hint, plan/spec status.
 
-- [ ] Document content_revision, --expected-revision, conflict view keys, explicit confirmations, external recovery files, unguarded compatibility, and removal behavior.
-- [ ] Run full `cargo test --locked`, `cargo fmt --check`, `cargo clippy --locked --all-targets -- -D warnings`; verify actual counts/exit codes. Update plan checkboxes with completed results.
-- [ ] Request read-only review via existing reviewer, address supported findings, run affected checks. Rebase current master; rerun relevant tests if upstream code changes.
+- [x] Document content_revision, --expected-revision, conflict view keys, explicit confirmations, external recovery files, unguarded compatibility, and removal behavior.
+- [x] Run full `cargo test --locked`, `cargo fmt --check`, `cargo clippy --locked --all-targets -- -D warnings`; verify actual counts/exit codes. Update plan checkboxes with completed results.
+- [x] Request read-only review via existing reviewer, address supported findings, run affected checks. Rebase current master; rerun relevant tests if upstream code changes.
 - [ ] With clean root, fast-forward merge. Install via `cargo install --path . --locked --force`. Run installed real CLI revision/image conflict and TUI conflict flows.
 - [ ] After all gates pass, explicitly complete task 146, remove worktree/merged branch, resume one blocking `qqq next --wait --local --json`.
 
-DB/external checkpoint: focused 13-target suite passed; snapshot race check passed; external reload/overwrite PTY flows passed; Clippy all targets passed. TUI conflict recovery remains pending.
+DB/external checkpoint: focused 13-target suite passed; snapshot race check passed; external reload/overwrite PTY flows passed; Clippy all targets passed. TUI checkpoints and retained-draft integration are implemented. Final full checks and installed verification remain pending.
+
+Final pre-integration verification (2026-10-03): `cargo test --locked` passed 516 tests across 37 targets, including 82 TUI tests. `cargo fmt --check`, `cargo clippy --locked --all-targets -- -D warnings`, and `git diff --check` passed. Narrow action resize regression passed 20 additional PTY runs after waiting for the completed frame. Reviewer found no remaining issues after schema-9 restore compatibility, full-width conflict text, and deletion during reload fixes.
+
+Task 144 integration caches original description/revision together with draft atoms, caret and scroll. Real concurrent TUI checks park a dirty paste/image draft while another editor saves, restore it and reject stale save; save/reload preserve another task's dirty draft. Deleted parked drafts reopen on cancelled discard and reject save without recreation. Single-task PTY checks cover removal during reload confirmation. Popup render checks expose every wrap-edge character in color/plain at widths 12, 20, 59 and 72.

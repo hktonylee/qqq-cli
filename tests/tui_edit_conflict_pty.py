@@ -73,12 +73,29 @@ with tempfile.TemporaryDirectory() as directory:
             newer = cli("edit", "1", "-d", "Newer DB text\nComplete DB details")
         send(b"\x13")
         wait(lambda: "Content conflict #1" in visible.text() and "Current DB" in visible.text())
+        if scenario == "reload_removed":
+            send(b"r")
+            wait(lambda: "Reload current DB text?" in visible.text())
+            cli("archive", "1")
+            cli("delete", "1", "--yes")
+            send(b"y")
+            wait(lambda: "Current DB: task removed" in visible.text() and "Content conflict #1" in visible.text()
+                 and (visible.x, visible.y) == (13, 10))
+            send(b"o")
+            # Known deletion offers no overwrite confirmation.
+            deadline = time.monotonic() + 0.2
+            while time.monotonic() < deadline:
+                if select.select([master], [], [], 0.02)[0]:
+                    data = os.read(master, 65536)
+                    output.extend(data)
+                    visible.feed(data)
+            assert "Overwrite DB text?" not in visible.text(), visible.text()
         send(b"\t")
         wait(lambda: "Local draft" in visible.text() and "Full original details local" in visible.text())
         send(b"\x1b")
         wait(lambda: "Content conflict #1" not in visible.text() and "Full original details local" in visible.text()
              and (visible.x, visible.y) == caret)
-        if scenario == "removed":
+        if scenario in ("removed", "reload_removed"):
             assert cli("list") == []
             send(b"\x03")
         else:
@@ -97,7 +114,7 @@ with tempfile.TemporaryDirectory() as directory:
                 except OSError:
                     pass
         stdout, _ = child.communicate(timeout=5)
-        if scenario == "removed":
+        if scenario in ("removed", "reload_removed"):
             assert child.returncode == 1 and stdout == b"", output
             assert cli("list") == []
         else:
