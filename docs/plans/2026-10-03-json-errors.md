@@ -52,8 +52,10 @@
 - [x] Add envelope examples, code/details reference, parser/runtime exits, contention retry and revision-conflict retry. State doctor/help/version/empty-queue exceptions and live terminal stderr behavior.
 - [x] Run full `cargo test --locked`, fmt, Clippy all targets, diff check; record actual results.
 - [x] Request read-only review via existing reviewer, address supported findings, run affected checks.
-- [ ] Rebase current master, rerun relevant checks for upstream code changes, clean-root fast-forward merge, install, verify real installed contract.
-- [ ] Explicitly complete task 148 after installed checks; record evidence, remove worktree/branch, resume one blocking queue wait.
+- [x] Rebase current master, rerun relevant checks for upstream code changes, clean-root fast-forward merge, install, verify real installed contract.
+- [x] Explicitly complete task 148 after installed checks; record evidence.
+
+After documentation integration: remove own worktree/branch; resume one blocking queue wait.
 
 ## Verification evidence
 
@@ -68,3 +70,11 @@
 - Post-review run passed all 17 JSON tests and Clippy, but wide-layout PTY padding assertion failed once under full-suite load. Focused wide-layout test passed both color modes on unchanged source. Final full-suite rerun passed on unchanged production source.
 
 - Final `cargo test --locked --no-fail-fast`: 560 tests passed across 38 targets, 0 failures or ignored; includes 17 JSON contract tests and 82 TUI tests. `/private/tmp/qqq-148-full4.log`. Final Clippy passed (`/private/tmp/qqq-148-clippy3.log`); fmt and diff checks passed.
+
+## Installed integration
+
+- Feature commit `85461df` fast-forwarded into clean master after final rebase onto `6672510`. Source/tests/dependencies matched freshly verified pre-rebase commit `da127c6`; only upstream documentation changed.
+- `cargo install --path . --locked --force` passed; installed `/Users/tonylee/.cargo/bin/qqq` replaced task 149 build with merged master source.
+- Installed CLI passed 12 smoke groups: success/error streams, parser exit 2, missing IDs, invalid filters and explanation, owner/state privacy, guarded stale saves, alias JSON modes, filesystem/config errors, actual DB lock and private trigger text, editor exit isolation, retained editor conflict text/images, import/status, help/version/doctor/empty queue. `/private/tmp/qqq-148-installed-check.log`.
+- Installed real PTY checks passed: single-task overwrite and removal, dashboard content-conflict recovery in color and NO_COLOR. `/private/tmp/qqq-148-installed-pty.log`.
+- Explicit `qqq complete 148 --json` returned `status: completed` at `2026-10-03T19:22:36.861Z`, after all installed gates passed.
