@@ -156,17 +156,21 @@ fn wrap_modal(text: &str, width: usize) -> Vec<String> {
     lines
 }
 
-fn action_lines(ui: &ActionUi, width: usize, height: usize) -> Vec<String> {
+fn action_lines(ui: &ActionUi, width: usize, height: usize) -> Vec<render::PopupRow> {
+    use render::{PopupKind, PopupRow};
     match ui {
         ActionUi::Menu { id, archived } => vec![
-            format!("Task actions #{id}"),
-            "c Complete".to_owned(),
-            "r Retry error".to_owned(),
-            "o Reopen".to_owned(),
-            format!("a {}", if *archived { "Unarchive" } else { "Archive" }),
-            "p Priority".to_owned(),
-            "d Parent".to_owned(),
-            "Esc cancel".to_owned(),
+            PopupRow::new(format!("Task actions #{id}"), PopupKind::Heading),
+            PopupRow::new("c Complete", PopupKind::Action),
+            PopupRow::new("r Retry error", PopupKind::Action),
+            PopupRow::new("o Reopen", PopupKind::Action),
+            PopupRow::new(
+                format!("a {}", if *archived { "Unarchive" } else { "Archive" }),
+                PopupKind::Action,
+            ),
+            PopupRow::new("p Priority", PopupKind::Action),
+            PopupRow::new("d Parent", PopupKind::Action),
+            PopupRow::new("Esc cancel", PopupKind::Hint),
         ],
         ActionUi::Input {
             id,
@@ -176,26 +180,42 @@ fn action_lines(ui: &ActionUi, width: usize, height: usize) -> Vec<String> {
         } => {
             let mut lines = match kind {
                 ActionInputKind::Priority => {
-                    vec![format!("Priority task #{id}"), "Enter -100..100".to_owned()]
+                    vec![
+                        PopupRow::new(format!("Priority task #{id}"), PopupKind::Heading),
+                        PopupRow::new("Enter -100..100", PopupKind::Hint),
+                    ]
                 }
                 ActionInputKind::Parent => {
-                    vec![format!("Parent task #{id}"), "ID / none".to_owned()]
+                    vec![
+                        PopupRow::new(format!("Parent task #{id}"), PopupKind::Heading),
+                        PopupRow::new("ID / none", PopupKind::Hint),
+                    ]
                 }
             };
-            lines.push(format!("> {value}"));
+            lines.push(PopupRow::new(format!("> {value}"), PopupKind::Input));
             if !error.is_empty() {
-                lines.extend(wrap_modal(error, width));
+                lines.extend(
+                    wrap_modal(error, width)
+                        .into_iter()
+                        .map(|text| PopupRow::new(text, PopupKind::Error)),
+                );
             }
-            lines.push("Enter apply  Esc cancel".to_owned());
+            lines.push(PopupRow::new("Enter apply  Esc cancel", PopupKind::Hint));
             lines
         }
         ActionUi::Error { text, top } => {
             let wrapped = wrap_modal(text, width);
             let available = height.saturating_sub(2);
             let start = (*top).min(wrapped.len().saturating_sub(available));
-            let mut lines = vec!["Action error".to_owned()];
-            lines.extend(wrapped.into_iter().skip(start).take(available));
-            lines.push("Up/Down Esc".to_owned());
+            let mut lines = vec![PopupRow::new("Action error", PopupKind::Error)];
+            lines.extend(
+                wrapped
+                    .into_iter()
+                    .skip(start)
+                    .take(available)
+                    .map(|text| PopupRow::new(text, PopupKind::Error)),
+            );
+            lines.push(PopupRow::new("Up/Down Esc", PopupKind::Hint));
             lines
         }
     }
@@ -653,9 +673,15 @@ fn compose_inner(
                 })
                 .or_else(|| match &confirmation {
                     Some(Confirmation::Action { action, dirty }) => Some(vec![
-                        format!("{} task #{}?", action.label(), action.id()),
-                        if *dirty { "Lose draft?" } else { "" }.to_owned(),
-                        "y confirm  n/Esc cancel".to_owned(),
+                        render::PopupRow::new(
+                            format!("{} task #{}?", action.label(), action.id()),
+                            render::PopupKind::Heading,
+                        ),
+                        render::PopupRow::new(
+                            if *dirty { "Lose draft?" } else { "" },
+                            render::PopupKind::Warning,
+                        ),
+                        render::PopupRow::new("y confirm  n/Esc cancel", render::PopupKind::Hint),
                     ]),
                     _ => None,
                 });

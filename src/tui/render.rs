@@ -65,6 +65,31 @@ impl DetailRow {
     }
 }
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum PopupKind {
+    Heading,
+    Action,
+    Hint,
+    Input,
+    Error,
+    Warning,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct PopupRow {
+    pub text: String,
+    pub kind: PopupKind,
+}
+
+impl PopupRow {
+    pub fn new(text: impl Into<String>, kind: PopupKind) -> Self {
+        Self {
+            text: text.into(),
+            kind,
+        }
+    }
+}
+
 pub struct Layout {
     pub rows: Vec<String>,
     pub positions: Vec<(usize, usize)>,

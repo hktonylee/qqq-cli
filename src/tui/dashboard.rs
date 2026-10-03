@@ -14,6 +14,8 @@ const ACCENT: Color = Color::Indexed(81);
 const SELECTION_BG: Color = Color::Indexed(17);
 const BODY_FG: Color = Color::Indexed(252);
 const BODY_BG: Color = Color::Indexed(236);
+const POPUP_ERROR_FG: Color = Color::Indexed(210);
+const POPUP_PROMPT_FG: Color = Color::Indexed(222);
 
 pub struct DetailsView<'a> {
     pub rows: &'a [render::DetailRow],
@@ -25,7 +27,7 @@ pub struct View<'a> {
     pub focused: bool,
     pub top: &'a mut usize,
     pub follow_selected: bool,
-    pub modal_lines: Option<&'a [String]>,
+    pub modal_lines: Option<&'a [render::PopupRow]>,
     pub details: Option<DetailsView<'a>>,
 }
 
@@ -82,52 +84,98 @@ pub fn popup_layout(area: Rect, rows: usize) -> PopupLayout {
     }
 }
 
-fn popup(frame: &mut Frame<'_>, lines: &[String], color: bool) {
+fn popup_row_style(kind: render::PopupKind, title: bool, color: bool) -> Style {
+    use render::PopupKind;
+    if !color {
+        return Style::default();
+    }
+    let body = Style::default().fg(BODY_FG).bg(BODY_BG);
+    match kind {
+        PopupKind::Heading => body.fg(ACCENT).add_modifier(Modifier::BOLD),
+        PopupKind::Hint => body.fg(Color::Gray),
+        PopupKind::Warning => body.fg(POPUP_PROMPT_FG),
+        PopupKind::Error => {
+            let style = body.fg(POPUP_ERROR_FG);
+            if title {
+                style.add_modifier(Modifier::BOLD)
+            } else {
+                style
+            }
+        }
+        PopupKind::Action | PopupKind::Input => body,
+    }
+}
+
+fn popup_row_line(text: String, kind: render::PopupKind, color: bool) -> Line<'static> {
+    use render::PopupKind;
+    if !color {
+        return Line::from(text);
+    }
+    match kind {
+        PopupKind::Action => {
+            let key_style = Style::default().fg(ACCENT).add_modifier(Modifier::BOLD);
+            match text.split_once(' ') {
+                Some((key, label)) => Line::from(vec![
+                    Span::styled(key.to_owned(), key_style),
+                    Span::raw(format!(" {label}")),
+                ]),
+                None => Line::from(Span::styled(text, key_style)),
+            }
+        }
+        PopupKind::Hint => hotkey_line(&text, true),
+        PopupKind::Input => Line::from(vec![
+            Span::styled(
+                text.chars().take(2).collect::<String>(),
+                Style::default().fg(POPUP_PROMPT_FG),
+            ),
+            Span::raw(text.chars().skip(2).collect::<String>()),
+        ]),
+        PopupKind::Heading | PopupKind::Error | PopupKind::Warning => Line::from(text),
+    }
+}
+
+fn popup(frame: &mut Frame<'_>, lines: &[render::PopupRow], color: bool) {
+    use render::PopupKind;
     let PopupLayout {
         outer,
         content,
         bordered,
     } = popup_layout(frame.area(), lines.len());
     frame.render_widget(Clear, outer);
-    let body_style = if color {
-        Style::default().fg(BODY_FG).bg(BODY_BG)
-    } else {
-        Style::default()
-    };
-    let heading_style = if color {
-        body_style.fg(ACCENT).add_modifier(Modifier::BOLD)
+    let body_style = popup_row_style(PopupKind::Action, false, color);
+    let border_style = if color {
+        body_style.fg(Color::DarkGray)
     } else {
         body_style
     };
     let block = Block::default().style(body_style);
     let block = if bordered {
-        block.borders(Borders::ALL).border_style(heading_style)
+        block.borders(Borders::ALL).border_style(border_style)
     } else {
         block
     };
     frame.render_widget(block, outer);
     let mut cursor = (content.x, content.y);
-    for (index, line) in lines.iter().take(usize::from(content.height)).enumerate() {
+    for (index, row) in lines.iter().take(usize::from(content.height)).enumerate() {
         let width = usize::from(content.width);
-        let text = if let Some(value) = line.strip_prefix("> ") {
+        let text = if row.kind == PopupKind::Input {
+            let value = row.text.strip_prefix("> ").unwrap_or(&row.text);
             let safe = render::clipped(value, usize::MAX);
             let (tail, _) = text_tail(&safe, width.saturating_sub(3));
             render::clipped(&format!("> {tail}"), width)
         } else {
-            render::clipped(line, width)
+            render::clipped(&row.text, width)
         };
-        if line.starts_with("> ") {
+        if row.kind == PopupKind::Input {
             cursor = (
                 content.x + (text.width() as u16).min(content.width.saturating_sub(1)),
                 content.y + index as u16,
             );
         }
+        let style = popup_row_style(row.kind, index == 0, color);
+        let line = popup_row_line(text, row.kind, color);
         frame.render_widget(
-            Paragraph::new(text).style(if index == 0 {
-                heading_style
-            } else {
-                body_style
-            }),
+            Paragraph::new(line).style(style),
             Rect::new(content.x, content.y + index as u16, content.width, 1),
         );
     }
@@ -299,7 +347,15 @@ fn hotkey_line(keys: &str, color: bool) -> Line<'static> {
             || key.starts_with("Shift-")
             || matches!(
                 key,
-                "Ctrl+/" | "Esc" | "Esc/Ctrl-C" | "Backspace" | "Tab/Enter"
+                "Ctrl+/"
+                    | "Esc"
+                    | "Esc/Ctrl-C"
+                    | "Backspace"
+                    | "Tab/Enter"
+                    | "Enter"
+                    | "Up/Down"
+                    | "y"
+                    | "n/Esc"
             );
         spans.push(Span::styled(
             key.to_owned(),

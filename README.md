@@ -272,7 +272,8 @@ discarding dirty draft.
 
 Ctrl-G opens centered actions popup for selected task; dashboard stays visible
 around it. Prompts, confirmations and errors share popup; small terminals use
-compact view. Press `c` to complete owned task,
+compact view. Cyan titles/shortcuts, muted help, gold prompts/warnings and soft-red
+errors distinguish popup states. Press `c` to complete owned task,
 `r` to retry error task, `o` to reopen completed task, `a` to archive or
 unarchive, `p` to set priority (-100..100), or `d` to set parent by positive
 task ID or `none`. Esc closes menu or prompt. State changes ask for `y` before

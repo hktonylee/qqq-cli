@@ -64,7 +64,19 @@ fn action_popup_preserves_background_and_clears_overlaid_styles() {
         "d Parent",
         "Esc cancel",
     ]
-    .map(str::to_owned);
+    .into_iter()
+    .enumerate()
+    .map(|(index, text)| {
+        render::PopupRow::new(
+            text,
+            match index {
+                0 => render::PopupKind::Heading,
+                7 => render::PopupKind::Hint,
+                _ => render::PopupKind::Action,
+            },
+        )
+    })
+    .collect::<Vec<_>>();
     for color in [true, false] {
         let mut terminal = Terminal::new(TestBackend::new(72, 24)).unwrap();
         let mut background = None;
@@ -105,6 +117,23 @@ fn action_popup_preserves_background_and_clears_overlaid_styles() {
         assert_eq!(buffer[(12, 7)].symbol(), "┌");
         assert_eq!(buffer[(59, 16)].symbol(), "┘");
         assert!(line(buffer, 8).contains("│Task actions #1"));
+        for (x, y, foreground, modifier) in [
+            (13, 8, Color::Indexed(81), Modifier::BOLD),
+            (13, 9, Color::Indexed(81), Modifier::BOLD),
+            (15, 9, Color::Indexed(252), Modifier::empty()),
+            (13, 15, Color::Indexed(81), Modifier::BOLD),
+            (17, 15, Color::Gray, Modifier::empty()),
+            (12, 7, Color::DarkGray, Modifier::empty()),
+        ] {
+            assert_eq!(
+                buffer[(x, y)].fg,
+                if color { foreground } else { Color::Reset }
+            );
+            assert_eq!(
+                buffer[(x, y)].modifier,
+                if color { modifier } else { Modifier::empty() }
+            );
+        }
         assert_eq!(buffer[(55, 13)].symbol(), " ");
         assert_eq!(buffer[(55, 13)].modifier, Modifier::empty());
         assert_eq!(
@@ -134,6 +163,118 @@ fn action_popup_preserves_background_and_clears_overlaid_styles() {
             terminal.get_cursor_position().unwrap(),
             Position::new(13, 8)
         );
+    }
+}
+
+#[test]
+fn action_popup_input_errors_and_warnings_keep_roles_and_plain_styles() {
+    use render::{PopupKind, PopupRow};
+    let cases = [
+        vec![
+            PopupRow::new("Priority task #1", PopupKind::Heading),
+            PopupRow::new("Enter -100..100", PopupKind::Hint),
+            PopupRow::new("> -9", PopupKind::Input),
+            PopupRow::new("Priority must be -100..100", PopupKind::Error),
+            PopupRow::new("Enter apply  Esc cancel", PopupKind::Hint),
+        ],
+        vec![
+            PopupRow::new("Action error", PopupKind::Error),
+            PopupRow::new("> quoted error", PopupKind::Error),
+            PopupRow::new("Up/Down Esc", PopupKind::Hint),
+        ],
+        vec![
+            PopupRow::new("Archive task #1?", PopupKind::Heading),
+            PopupRow::new("Lose draft?", PopupKind::Warning),
+            PopupRow::new("y confirm  n/Esc cancel", PopupKind::Hint),
+        ],
+    ];
+    let layout = render::Layout::new(&["Draft".into()], &[], 72);
+    let chrome = render::Chrome {
+        title: "Editor",
+        title_status_color: None,
+        keys: render::KEYS,
+        message: "",
+    };
+    for color in [true, false] {
+        for modal in &cases {
+            let mut terminal = Terminal::new(TestBackend::new(72, 24)).unwrap();
+            terminal
+                .draw(|frame| {
+                    dashboard::draw(
+                        frame,
+                        &[],
+                        &HashMap::new(),
+                        None,
+                        dashboard::View {
+                            query: "",
+                            focused: false,
+                            top: &mut 0,
+                            follow_selected: true,
+                            modal_lines: Some(modal),
+                            details: None,
+                        },
+                        render::DashboardEditor {
+                            layout: &layout,
+                            cursor: 0,
+                            top: &mut 0,
+                            chrome: &chrome,
+                            message_is_error: false,
+                            follow_cursor: true,
+                        },
+                        color,
+                    )
+                })
+                .unwrap();
+            let popup =
+                dashboard::popup_layout(ratatui::layout::Rect::new(0, 0, 72, 24), modal.len());
+            let content = popup.content;
+            let buffer = terminal.backend().buffer();
+            let mut cursor = Position::new(content.x, content.y);
+            for (index, row) in modal.iter().enumerate() {
+                let y = content.y + index as u16;
+                assert!(line(buffer, y).contains(&row.text));
+                let (foreground, bold) = match row.kind {
+                    PopupKind::Heading | PopupKind::Action | PopupKind::Hint => {
+                        (Color::Indexed(81), true)
+                    }
+                    PopupKind::Input | PopupKind::Warning => (Color::Indexed(222), false),
+                    PopupKind::Error => (Color::Indexed(210), index == 0),
+                };
+                assert_eq!(
+                    buffer[(content.x, y)].fg,
+                    if color { foreground } else { Color::Reset }
+                );
+                assert_eq!(
+                    buffer[(content.x, y)].modifier,
+                    if color && bold {
+                        Modifier::BOLD
+                    } else {
+                        Modifier::empty()
+                    }
+                );
+                if row.kind == PopupKind::Input {
+                    assert_eq!(
+                        buffer[(content.x + 2, y)].fg,
+                        if color {
+                            Color::Indexed(252)
+                        } else {
+                            Color::Reset
+                        }
+                    );
+                    cursor = Position::new(content.x + row.text.len() as u16, y);
+                }
+            }
+            if !color {
+                for y in popup.outer.y..popup.outer.bottom() {
+                    for x in popup.outer.x..popup.outer.right() {
+                        assert_eq!(buffer[(x, y)].fg, Color::Reset);
+                        assert_eq!(buffer[(x, y)].bg, Color::Reset);
+                        assert_eq!(buffer[(x, y)].modifier, Modifier::empty());
+                    }
+                }
+            }
+            assert_eq!(terminal.get_cursor_position().unwrap(), cursor);
+        }
     }
 }
 
