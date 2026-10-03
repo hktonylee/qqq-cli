@@ -20,17 +20,20 @@ preview, wait, owner discovery, dispatch or transition behavior.
 ## Snapshot and Readiness
 
 Open diagnostic DB with SQLite read-only flag. Reuse existing directory discovery
-without creation, migrations, deletion recovery, image reads or file writes.
+without creation, migrations, deletion recovery, image reads or application file writes.
+SQLite may maintain WAL coordination sidecars even with a read-only DB connection.
 Require current schema; older versions receive migration guidance through normal
 command. No historical ownership lease or activity expiry is introduced.
 
 Use one deferred transaction for rows, readiness/filter evaluation, latest activity,
 owner resolution and selected task. No locks span waits. Shared SQL readiness
-predicate and candidate helper are used by claims, preview, dispatch availability
+predicate is used by claims, preview, dispatch availability
 and diagnostics: `new`, unarchived, no parent or completed parent. Candidate order
 is priority descending then ID ascending. Parent blockers identify immediate
 parent with status/archive state; blocked chains remain visible through each row.
 Missing parent is reported rather than causing readiness to diverge.
+Diagnostic selection reuses evaluated matching ready rows so time-sensitive
+filters cannot drift between eligibility counts and selected candidate.
 
 All tasks are read to resolve blockers, including archived parents. Default output
 rows/counts exclude archived tasks; explicit include exposes them but never makes

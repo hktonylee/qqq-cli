@@ -87,32 +87,48 @@ fn queue_diagnostics_empty_and_missing_project_do_not_create_state() {
 
 #[test]
 fn queue_diagnostics_old_schema_is_not_migrated() {
-    let dir = TempDir::new().unwrap();
-    std::fs::create_dir(dir.path().join(".qqq")).unwrap();
-    let path = dir.path().join(".qqq/qqq.db");
-    let conn = Connection::open(&path).unwrap();
-    conn.execute_batch(include_str!("../../src/sql/schema.sql"))
-        .unwrap();
-    conn.execute("INSERT INTO tasks(description) VALUES ('Old task')", [])
-        .unwrap();
-    drop(conn);
-    let before = std::fs::read(&path).unwrap();
-    for args in [&["status"][..], &["next", "--explain"][..]] {
-        let output = run(dir.path(), args);
-        assert!(!output.status.success());
-        let error = String::from_utf8_lossy(&output.stderr);
-        assert!(
-            error.contains("requires migration") && error.contains("qqq list"),
-            "{error}"
+    for version in [1, 9] {
+        let dir = TempDir::new().unwrap();
+        std::fs::create_dir(dir.path().join(".qqq")).unwrap();
+        let path = dir.path().join(".qqq/qqq.db");
+        let conn = Connection::open(&path).unwrap();
+        conn.execute_batch(include_str!("../../src/sql/schema.sql"))
+            .unwrap();
+        if version == 9 {
+            for sql in [
+                include_str!("../../src/sql/migrate_v2.sql"),
+                include_str!("../../src/sql/migrate_v3.sql"),
+                include_str!("../../src/sql/migrate_v4.sql"),
+                include_str!("../../src/sql/migrate_v5.sql"),
+                include_str!("../../src/sql/migrate_v6.sql"),
+                include_str!("../../src/sql/migrate_v7.sql"),
+                include_str!("../../src/sql/migrate_v8.sql"),
+                include_str!("../../src/sql/migrate_v9.sql"),
+            ] {
+                conn.execute_batch(sql).unwrap();
+            }
+        }
+        conn.execute("INSERT INTO tasks(description) VALUES ('Old task')", [])
+            .unwrap();
+        drop(conn);
+        let before = std::fs::read(&path).unwrap();
+        for args in [&["status"][..], &["next", "--explain"][..]] {
+            let output = run(dir.path(), args);
+            assert!(!output.status.success());
+            let error = String::from_utf8_lossy(&output.stderr);
+            assert!(
+                error.contains("requires migration") && error.contains("qqq list"),
+                "{error}"
+            );
+            assert_eq!(std::fs::read(&path).unwrap(), before);
+        }
+        let conn = Connection::open(&path).unwrap();
+        assert_eq!(
+            conn.pragma_query_value(None, "user_version", |r| r.get::<_, i64>(0))
+                .unwrap(),
+            version
         );
-        assert_eq!(std::fs::read(&path).unwrap(), before);
     }
-    let conn = Connection::open(&path).unwrap();
-    assert_eq!(
-        conn.pragma_query_value(None, "user_version", |r| r.get::<_, i64>(0))
-            .unwrap(),
-        1
-    );
 }
 
 #[test]

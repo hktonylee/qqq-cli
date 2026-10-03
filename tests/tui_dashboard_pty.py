@@ -1670,8 +1670,11 @@ print(json.dumps({"result": result}))
             send(key)
             if "_filter_" in scenario:
                 if scenario.endswith("menu"):
-                    settle()
-                    assert "Task actions" in visible.text(), visible.text()
+                    # Wait for first cancellation to clear filter before sending
+                    # another Escape. Fixed delays can merge inputs under load.
+                    wait_visible(lambda: not visible.text().splitlines()[0].startswith("Filter:")
+                                 and "Task actions" in visible.text()
+                                 and "Second" in "\n".join(visible.text().splitlines()[1:list_bottom() + 1]))
                     send(b"\x1b")
                 expected_draft = "Changed Second" if "dirty_selected" in scenario else "Second"
                 focused_ctrl_c = scenario.startswith("ctrl_c") and scenario.endswith("focused")

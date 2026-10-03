@@ -414,6 +414,8 @@ Diagnostics open the existing DB read-only, without creating a project, migratin
 schema or recovering pending deletion files. Older supported schemas require a
 normal command such as `qqq list` before diagnostics. Counts, task rows, blockers,
 activity, owner lookup and selection share one SQLite transaction snapshot.
+Filter results are evaluated once per task row and reused for counts and selection,
+including date functions whose clock values can change between statements.
 Reports do not reserve work; subsequent claims may see newer state. Activity age
 never expires or reassigns ownership. Owners still explicitly complete or release
 their claims.

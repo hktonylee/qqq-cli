@@ -22,7 +22,7 @@ new `tests/cli/queue.rs`, `src/output/queue.rs`.
   Implement one deferred read transaction. Read task rows with ready predicate and
   bound compiled filter; retain all rows for blockers, then scope output.
   Counts partition task statuses; ready/blocked partition new. Compute ranks with
-  safe comparisons (no priority negation). Candidate helper chooses queued ID.
+  safe comparisons (no priority negation). Diagnostic selection reuses first evaluated eligible ID to keep time-sensitive filters coherent.
 - [x] Read latest activity in same transaction using one combined task/message/event
   query and timestamp/source/ID order. Resolve explicit owner with shared helper,
   never session discovery. Owned lookup precedes queued candidate and ignores filter.
@@ -62,7 +62,7 @@ new `tests/cli/queue.rs`, `src/output/queue.rs`.
 
 - [x] Document flags, snapshot/read-only/schema behavior, JSON fields/reason codes,
   default human scope, owner context, ordering and no ownership expiry.
-- [ ] Run fmt, full locked tests, Clippy warnings denied, diff whitespace check.
+- [x] Run fmt, full locked tests, Clippy warnings denied, diff whitespace check.
   Request read-only review through existing reviewer; resolve findings and repeat
   affected checks. Record focused/full evidence.
 - [ ] Commit, rebase onto current master, verify combined code if changed,
@@ -72,7 +72,7 @@ new `tests/cli/queue.rs`, `src/output/queue.rs`.
   persistent `qqq next --wait --local --json` without model polling.
 
 
-## Verification Checkpoint
+## Verification Checkpoints
 
 - Baseline priority/dependency/CLI/filter suites passed before implementation.
 - Initial diagnostic tests failed on missing `status` / `--explain`, as expected.
@@ -81,3 +81,19 @@ new `tests/cli/queue.rs`, `src/output/queue.rs`.
 - Initial full suite: 515 tests passed across 37 test binaries.
 - Integration must adopt schema 10 and content revision fields from task #146,
   which landed on master during this task. Combined code needs fresh full checks.
+
+- Rebasing onto task #146 retained schema 10 migration and `content_revision` in
+  all diagnostic task objects; readiness/filter column offsets updated.
+- Review found time-sensitive filters reevaluated after activity scan. Added
+  failing regression that crosses a date cutoff, then reused evaluated eligible
+  IDs. Regression passed; reviewer approved with no remaining findings.
+- Old-schema diagnostics test covers versions 1 and 9 without migration or byte changes.
+- First combined full run hit pre-existing TUI Escape/menu input race. Focused
+  replay passed; test used fixed 100 ms pause between staged cancellation keys.
+  Replaced pause with rendered filter-clear/menu-open state before second Escape.
+  Production TUI behavior unchanged. Fresh combined full run required.
+
+- Final combined schema-10 suite: 529 tests passed across 37 test binaries.
+- `cargo fmt --all --check`, `cargo clippy --locked --all-targets -- -D warnings`
+  and `git diff --check` passed. Review approved both diagnostics fix and TUI
+  harness synchronization, with no remaining findings.

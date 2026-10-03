@@ -334,11 +334,13 @@ fn execute(
         let (mut db, _) = db::Db::open_read_only()?;
         return Ok(json!(queue::report(
             &mut db.conn,
-            include_archived,
-            filter,
-            explain,
-            session_input,
-            cli.harness_name.as_deref(),
+            queue::Options {
+                include_archived,
+                filter,
+                explain,
+                owner: session_input,
+                harness_name: cli.harness_name.as_deref(),
+            },
         )?));
     }
     let (mut db, path) = db::Db::open(matches!(cli.command, Commands::Init))?;

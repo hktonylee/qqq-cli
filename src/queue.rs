@@ -173,14 +173,30 @@ fn latest_activity(conn: &Connection) -> Result<BTreeMap<i64, Activity>> {
     Ok(rows.collect::<rusqlite::Result<_>>()?)
 }
 
-pub fn report(
+pub struct Options<'a> {
+    pub include_archived: bool,
+    pub filter: Option<&'a CompiledFilter>,
+    pub explain: bool,
+    pub owner: Option<&'a str>,
+    pub harness_name: Option<&'a str>,
+}
+
+pub fn report(conn: &mut Connection, options: Options<'_>) -> Result<Report> {
+    report_with_activity(conn, options, latest_activity)
+}
+
+fn report_with_activity(
     conn: &mut Connection,
-    include_archived: bool,
-    filter: Option<&CompiledFilter>,
-    explain: bool,
-    owner: Option<&str>,
-    harness_name: Option<&str>,
+    options: Options<'_>,
+    read_activity: impl FnOnce(&Connection) -> Result<BTreeMap<i64, Activity>>,
 ) -> Result<Report> {
+    let Options {
+        include_archived,
+        filter,
+        explain,
+        owner,
+        harness_name,
+    } = options;
     let tx = conn.transaction_with_behavior(TransactionBehavior::Deferred)?;
     let raw_rows = {
         let predicate = filter.map_or("1", CompiledFilter::sql);
@@ -205,7 +221,7 @@ pub fn report(
         .iter()
         .map(|(task, ..)| (task.id, (task.status.clone(), task.archived)))
         .collect();
-    let mut activity = latest_activity(&tx)?;
+    let mut activity = read_activity(&tx)?;
     let mut ready: Vec<_> = raw_rows.iter().filter(|row| row.2).collect();
     ready.sort_by(|a, b| b.0.priority.cmp(&a.0.priority).then(a.0.id.cmp(&b.0.id)));
     let ranks: BTreeMap<_, _> = ready
@@ -213,11 +229,14 @@ pub fn report(
         .enumerate()
         .map(|(index, row)| (row.0.id, index + 1))
         .collect();
-    let eligible_ids = ready
+    let eligible_ids: Vec<i64> = ready
         .iter()
         .filter(|row| row.3)
         .map(|row| row.0.id)
         .collect();
+    // Reuse evaluated filter results: SQLite time functions can change between
+    // statements in the same read transaction.
+    let candidate_id = eligible_ids.first().copied();
     let mut counts = Counts::default();
     let mut tasks = Vec::new();
     for (task, claim_key, ready, matches_filter) in raw_rows {
@@ -298,7 +317,7 @@ pub fn report(
                 kind: SelectionKind::Owned,
                 task,
             }),
-            None => Db::ready_task_id(&tx, filter)?
+            None => candidate_id
                 .map(|id| {
                     tx.query_row(
                         &format!("SELECT {TASK_COLUMNS} FROM tasks WHERE id=?"),
@@ -343,4 +362,67 @@ pub fn report(
         tasks,
         explanation,
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn time_sensitive_filter_selection_reuses_reported_eligibility() {
+        let mut conn = Connection::open_in_memory().unwrap();
+        for sql in [
+            include_str!("sql/schema.sql"),
+            include_str!("sql/migrate_v2.sql"),
+            include_str!("sql/migrate_v3.sql"),
+            include_str!("sql/migrate_v4.sql"),
+            include_str!("sql/migrate_v5.sql"),
+            include_str!("sql/migrate_v6.sql"),
+            include_str!("sql/migrate_v7.sql"),
+            include_str!("sql/migrate_v8.sql"),
+            include_str!("sql/migrate_v9.sql"),
+            include_str!("sql/migrate_v10.sql"),
+        ] {
+            conn.execute_batch(sql).unwrap();
+        }
+        conn.execute(
+            "INSERT INTO tasks(description) VALUES ('Time-sensitive task')",
+            [],
+        )
+        .unwrap();
+        let cutoff: f64 = conn
+            .query_row("SELECT julianday('now','+0.25 seconds')", [], |row| {
+                row.get(0)
+            })
+            .unwrap();
+        let filter =
+            crate::sql_filter::compile(&format!("julianday(\"now\") < {cutoff:.15}")).unwrap();
+        let report = report_with_activity(
+            &mut conn,
+            Options {
+                include_archived: false,
+                filter: Some(&filter),
+                explain: true,
+                owner: None,
+                harness_name: None,
+            },
+            |conn| {
+                // Activity scanning can cross a date-filter cutoff even though the
+                // transaction still sees identical task rows. Advance through it.
+                while conn
+                    .query_row("SELECT julianday('now')", [], |row| row.get::<_, f64>(0))
+                    .unwrap()
+                    <= cutoff
+                {
+                    std::thread::sleep(std::time::Duration::from_millis(1));
+                }
+                latest_activity(conn)
+            },
+        )
+        .unwrap();
+        assert_eq!(report.counts.matching_ready, 1);
+        let explanation = report.explanation.unwrap();
+        assert_eq!(explanation.eligible_ids, vec![1]);
+        assert_eq!(explanation.selection.unwrap().task.id, 1);
+    }
 }
