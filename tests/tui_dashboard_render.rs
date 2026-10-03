@@ -1733,27 +1733,33 @@ fn wide_dashboard_places_details_beside_list_at_150_columns() {
             assert_eq!(panes.details.width, details_width);
             assert_eq!(panes.list.width + panes.details.width, width);
             assert_eq!(panes.details.x, panes.list.x + panes.list.width);
-            assert_eq!(panes.details.height, panes.list.height);
+            assert_eq!(panes.details.height, panes.list.height + 1);
             assert_eq!(panes.editor.y, area.y + stacked.editor.y);
             assert_eq!(panes.editor.width, width);
             assert_eq!(panes.editor.height, stacked.editor.height);
-            assert_eq!(panes.list.height + panes.editor.height, height);
+            assert_eq!(panes.list.height + 1 + panes.editor.height, height);
         }
     }
 }
 
 #[test]
 fn wide_dashboard_mouse_routes_list_and_details_by_column() {
-    let rows = panel::rows("ID STATUS TASK\n1 New First\n2 New Second", 88);
+    let rows = panel::rows(
+        &(1..=20)
+            .map(|id| format!("{id} New Task {id}"))
+            .collect::<Vec<_>>()
+            .join("\n"),
+        88,
+    );
     let fragments: Vec<_> = "Draft".chars().map(|ch| ch.to_string()).collect();
     let layout = render::Layout::new(&fragments, &[], 150);
     assert_eq!(
         dashboard::wheel_area((150, 24), 89, 1, false),
-        Some(dashboard::WheelArea::List(13))
+        Some(dashboard::WheelArea::List(12))
     );
     assert_eq!(
         dashboard::wheel_area((150, 24), 89, 1, true),
-        Some(dashboard::WheelArea::List(12))
+        Some(dashboard::WheelArea::List(11))
     );
     assert_eq!(
         dashboard::wheel_area((150, 24), 93, 1, false),
@@ -1767,6 +1773,8 @@ fn wide_dashboard_mouse_routes_list_and_details_by_column() {
         (149, 1),
         (93, 0),
         (93, 12),
+        (5, 12),
+        (89, 12),
     ] {
         assert_eq!(dashboard::wheel_area((150, 24), column, row, false), None);
         assert_eq!(click((150, 24), column, row, &rows, 0, 0, &layout), None);
@@ -1777,6 +1785,11 @@ fn wide_dashboard_mouse_routes_list_and_details_by_column() {
     );
     assert_eq!(click((150, 24), 93, 1, &rows, 0, 0, &layout), None);
     assert_eq!(
+        click((150, 24), 5, 11, &rows, 0, 0, &layout),
+        Some(dashboard::ClickTarget::Task(12))
+    );
+    assert_eq!(dashboard::wheel_area((150, 24), 5, 12, true), None);
+    assert_eq!(
         click((150, 24), 2, 14, &rows, 0, 0, &layout),
         Some(dashboard::ClickTarget::Editor(2))
     );
@@ -1784,6 +1797,71 @@ fn wide_dashboard_mouse_routes_list_and_details_by_column() {
         dashboard::wheel_area((150, 24), 149, 14, false),
         Some(dashboard::WheelArea::Editor(9))
     );
+}
+
+#[test]
+fn wide_dashboard_keeps_spacer_below_full_selected_list() {
+    let rows = panel::rows(
+        &(1..=20)
+            .map(|id| format!("{id} New Task {id}"))
+            .collect::<Vec<_>>()
+            .join("\n"),
+        88,
+    );
+    let layout = render::Layout::new(&["Draft".into()], &[], 150);
+    let chrome = render::Chrome {
+        title: "Task Editor",
+        title_status_color: None,
+        keys: render::DASHBOARD_KEYS,
+        message: "",
+    };
+    for color in [true, false] {
+        for (query, focused) in [("", false), ("", true), ("Task", false)] {
+            let mut terminal = Terminal::new(TestBackend::new(150, 24)).unwrap();
+            let mut list_top = 0;
+            terminal
+                .draw(|frame| {
+                    dashboard::draw(
+                        frame,
+                        &rows,
+                        &HashMap::from([(20, "new")]),
+                        Some(20),
+                        dashboard::View {
+                            query,
+                            focused,
+                            top: &mut list_top,
+                            follow_selected: true,
+                            modal_lines: None,
+                            details: None,
+                        },
+                        render::DashboardEditor {
+                            layout: &layout,
+                            cursor: 0,
+                            top: &mut 0,
+                            chrome: &chrome,
+                            message_is_error: false,
+                            follow_cursor: true,
+                        },
+                        color,
+                    );
+                })
+                .unwrap();
+            assert_eq!(list_top, 8 + usize::from(focused || !query.is_empty()));
+            let buffer = terminal.backend().buffer();
+            assert!(line(buffer, 11).starts_with("> 20 New Task 20"));
+            for x in 0..90 {
+                let cell = &buffer[(x, 12)];
+                assert_eq!(cell.symbol(), " ");
+                assert_eq!(cell.bg, Color::Reset);
+            }
+            assert_eq!(buffer[(90, 12)].symbol(), "╚");
+            assert!(line(buffer, 13).starts_with("Task Editor"));
+            assert_eq!(
+                terminal.get_cursor_position().unwrap(),
+                Position::new(if focused { 8 } else { 0 }, if focused { 0 } else { 14 })
+            );
+        }
+    }
 }
 
 #[test]

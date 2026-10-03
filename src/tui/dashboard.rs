@@ -221,7 +221,7 @@ pub fn panes(area: Rect) -> Panes {
         let list_width = area.width - details_width;
         let upper_height = list_height + details_height;
         return Panes {
-            list: Rect::new(area.x, area.y, list_width, upper_height),
+            list: Rect::new(area.x, area.y, list_width, upper_height.saturating_sub(1)),
             details: Rect::new(area.x + list_width, area.y, details_width, upper_height),
             editor: Rect::new(area.x, editor_y, area.width, area.height - upper_height),
         };
