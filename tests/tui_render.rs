@@ -91,12 +91,13 @@ fn dashboard_task_preview_ellipsis_fits_without_splitting_graphemes() {
 }
 
 #[test]
-fn dashboard_new_draft_follows_newest_child_not_last_tree_row() {
+fn dashboard_new_draft_scrolls_to_bottom_of_tree_with_multiline_previews() {
     let rows = panel::rows(
-        "ID     STATUS       TASK\n1      New          Parent\n21     New          New child\n2      New          Older root\n20     New          Last root",
+        "ID     STATUS       TASK\n1      New          Parent\n21     New          New child\n  child second\n  child third\n2      New          Older root\n20     New          Last root\n  last second\n  last third",
         80,
     );
-    assert_eq!(panel::scroll_to(&rows, None, 0, 2), 0);
+    assert_eq!(panel::scroll_to(&rows, None, 0, 2), 6);
+    assert_eq!(panel::scroll_to(&rows, Some(21), 6, 2), 1);
 }
 
 #[test]

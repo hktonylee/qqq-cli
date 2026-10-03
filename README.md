@@ -246,10 +246,10 @@ filter, cursor and scroll positions preserved. No task is saved or changed.
 Missing links, unavailable agents and client errors appear in status bar.
 Link task with `qqq herdr link` first if needed. Backspace still edits text.
 
-Task list and details refresh after external DB commits without keyboard input. Refresh
-keeps current editor draft, filter query, and manual scroll positions. Selected
-task status updates in editor title; task text stays in editor until reloaded
-or saved.
+Task list opens scrolled to bottom. List and details refresh after external DB
+commits without keyboard input. Refresh keeps current editor draft, filter query,
+and manual scroll positions. Selected task status updates in editor title; task
+text stays in editor until reloaded or saved.
 
 Mouse wheel scrolls list, details or editor under pointer. Panes keep separate
 scroll positions; scrolling never edits or saves text. PgUp/PgDn scroll selected
