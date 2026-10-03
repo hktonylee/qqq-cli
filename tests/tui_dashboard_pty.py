@@ -94,7 +94,7 @@ CTRL_P = b"\x10"
 with tempfile.TemporaryDirectory(prefix="qqq-dashboard-test-") as folder:
     env = dict(os.environ, HOME=folder, TERM="xterm-256color")
     env.pop("NO_COLOR", None)
-    if scenario in ("no_color", "pasteboard_no_color", "filter_no_color", "details_no_color", "actions_popup_no_color", "wide_layout_no_color", "menu_arrows_no_color"):
+    if scenario in ("no_color", "pasteboard_no_color", "filter_no_color", "details_no_color", "actions_popup_no_color", "wide_layout_no_color", "menu_arrows_no_color", "filter_escape_empty_no_color"):
         env["NO_COLOR"] = "1"
     elif scenario == "dumb":
         env["TERM"] = "dumb"
@@ -682,6 +682,54 @@ print(json.dumps({"result": result}))
             assert editor_line().strip() == "", visible.text()
             assert cli("list") == initial_tasks
             assert child.poll() is None
+        elif scenario.startswith("filter_escape_empty"):
+            initial_tasks = cli("list")
+            if "selected" in scenario or scenario.endswith("child"):
+                send(b"\x1b[1;2A")
+                wait_visible(lambda: "Task #2 (New)" in editor_title()
+                             and editor_line().startswith("Second")
+                             and (visible.x, visible.y) == (6, editor_row() + 1))
+            if scenario.endswith("child"):
+                send(CTRL_P)
+                wait_visible(lambda: "New Task (parent #2)" in editor_title()
+                             and editor_line().strip() == ""
+                             and (visible.x, visible.y) == (0, editor_row() + 1))
+            elif scenario.endswith("dirty"):
+                payload = b" changed" if "selected" in scenario else b"Draft"
+                expected = "Second changed" if "selected" in scenario else "Draft"
+                send(payload)
+                wait_visible(lambda: editor_line().rstrip() == expected
+                             and (visible.x, visible.y) == (len(expected), editor_row() + 1))
+            original_title = editor_title()
+            original_draft = editor_line().rstrip()
+            original_cursor = (visible.x, visible.y)
+            send(CTRL_SLASH)
+            wait_visible(lambda: visible.text().splitlines()[-1].startswith("Type to Filter")
+                         and visible.text().splitlines()[0].strip() == "Filter:"
+                         and visible.cursor_visible and (visible.x, visible.y) == (8, 0))
+            if scenario.endswith(("cleared", "backspace")):
+                send(b"first")
+                wait_visible(lambda: visible.text().splitlines()[0].strip() == "Filter: first")
+                send(b"\x7f" * 5 if scenario.endswith("backspace") else b"\x03")
+                wait_visible(lambda: visible.text().splitlines()[0].strip() == "Filter:"
+                             and visible.text().splitlines()[-1].startswith("Type to Filter")
+                             and visible.cursor_visible and (visible.x, visible.y) == (8, 0))
+            send(b"\x1b")
+            wait_visible(lambda: visible.text().splitlines()[-1].startswith("Ctrl-S Save")
+                         and not visible.text().splitlines()[0].startswith("Filter:")
+                         and editor_title() == original_title
+                         and editor_line().rstrip() == original_draft
+                         and visible.cursor_visible
+                         and (visible.x, visible.y) == original_cursor)
+            assert child.poll() is None and cli("list") == initial_tasks
+            send(b"/")
+            wait_visible(lambda: editor_line().rstrip() == original_draft + "/"
+                         and editor_title() == original_title
+                         and visible.text().splitlines()[-1].startswith("Ctrl-S Save")
+                         and (visible.x, visible.y) == (len(original_draft) + 1, editor_row() + 1))
+            assert cli("list") == initial_tasks
+            if scenario.endswith("no_color"):
+                assert b"38;" not in screen and b"48;" not in screen, screen[-2000:]
         elif scenario.startswith("handoff_"):
             initial_tasks = cli("list")
             if scenario == "handoff_no_selection":

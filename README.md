@@ -233,12 +233,13 @@ updates selected task or creates new task. By default, saved task stays open for
 further edits or task actions. Loaded and saved tasks place cursor at description
 end; editor scrolls to keep cursor visible. Set `tui.after_save_new` to `open_new`
 to clear editor after creating task; existing-task edits stay open. Shift-Down past last
-displayed task opens blank draft. After filter clears, Esc clears editor before
-exiting on next press. Selected tasks and dirty new drafts ask before discarding
-unsaved content; `y` clears editor, `n` keeps draft for editing or Ctrl-S save.
+displayed task opens blank draft. Esc closes focused filter and clears query,
+returning focus to editor while preserving draft. From editor, Esc clears editor
+before exiting on next press. Selected tasks and dirty new drafts ask before
+discarding unsaved content; `y` clears editor, `n` keeps draft for editing or Ctrl-S save.
 Ctrl-C returns selected task to blank draft, asking before discarding edits.
 Ctrl-C in dirty new draft asks before exit; `y` exits without saving, `n` keeps draft.
-Esc/Ctrl-C in blank draft exits.
+Esc in blank draft with editor focused exits; Ctrl-C in blank draft exits.
 Repeated Ctrl-C keeps confirmation open. Ctrl-V or terminal paste inserts text; pasting
 image file path attaches image. Saves commit immediately. TUI needs terminal
 and writes no stdout, including with `--json`.
