@@ -155,6 +155,20 @@ pub fn nonempty(value: &str, name: &str) -> Result<()> {
     ensure!(!value.trim().is_empty(), "{name} must not be empty");
     Ok(())
 }
+pub(crate) fn validate_description(description: &str) -> Result<()> {
+    nonempty(description, "Description")?;
+    // SQLite length() stops at NUL; mirror CHECK(length(trim(description))>0).
+    ensure!(
+        !description
+            .split('\0')
+            .next()
+            .unwrap_or("")
+            .trim_matches(' ')
+            .is_empty(),
+        "Description fails database blank-text validation"
+    );
+    Ok(())
+}
 pub fn validate_priority(priority: i64) -> Result<()> {
     ensure!(
         (-100..=100).contains(&priority),
@@ -162,7 +176,11 @@ pub fn validate_priority(priority: i64) -> Result<()> {
     );
     Ok(())
 }
-fn ensure_parent_available(conn: &Connection, parent_id: i64, unfinished: bool) -> Result<()> {
+pub(crate) fn ensure_parent_available(
+    conn: &Connection,
+    parent_id: i64,
+    unfinished: bool,
+) -> Result<()> {
     let (status, archived): (String, bool) = conn
         .query_row(
             "SELECT status,archived FROM tasks WHERE id=?",
@@ -521,7 +539,7 @@ impl Db {
         image_spans: &[Range<usize>],
         priority: i64,
     ) -> Result<Task> {
-        nonempty(description, "Description")?;
+        validate_description(description)?;
         validate_priority(priority)?;
         for image in images {
             image.media_type()?;

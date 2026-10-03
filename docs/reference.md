@@ -121,6 +121,100 @@ A stale revision rejects the whole edit, including supplied metadata and images.
 Direct edits without `--expected-revision` retain unconditional-save behavior.
 An identical description save leaves content revision unchanged.
 
+Read a full description from stdin without opening an editor:
+
+```sh
+qqq add --stdin < description.txt
+printf '%s\n' 'Fix login' 'Check Unicode: λ' | qqq add --stdin --priority 8
+qqq add --stdin --parent 12 --image screenshot.png < description.txt
+```
+
+`--stdin` reads UTF-8 to EOF and preserves whitespace, line endings and literal
+shell-looking text. Invalid UTF-8 and blank-only descriptions fail. It conflicts
+with positional text, `--description` and `--edit`; parent, priority and image
+options keep their usual direct-add behavior. Existing add/editor modes stay
+available without `--stdin`.
+
+## Atomic batch import
+
+```sh
+qqq import plan.json --dry-run --json
+qqq import plan.json
+cat plan.json | qqq import - --json
+```
+
+Version-1 batch schema:
+
+```json
+{
+  "version": 1,
+  "tasks": [
+    {
+      "key": "tests",
+      "description": "Run regression checks\nInclude Unicode: λ",
+      "priority": 5,
+      "parent": {"key": "feature"}
+    },
+    {
+      "key": "feature",
+      "description": "Build feature",
+      "priority": 10
+    }
+  ]
+}
+```
+
+Each task requires a nonblank unique `key` and nonblank `description`. Keys and
+descriptions retain exact whitespace; references match exact keys. Priority
+defaults to 0 and accepts integer -100 through 100. Omitted/null parent means
+no dependency. `{"key":"feature"}` references a task in the same batch,
+including one listed later. `{"id":12}` references an existing positive DB task
+ID. Parent objects require exactly one reference type. Existing archived
+unfinished parents are rejected; archived completed parents are allowed, as
+with ordinary add.
+
+Missing refs, cycles, duplicate/blank keys, invalid priorities/descriptions,
+unknown or duplicate fields, malformed JSON and unsupported versions fail.
+An empty `tasks` array is valid and imports nothing. Version 1 has no image
+attachment fields; use single-task add's image options for attachments.
+
+Import validates the whole batch before insertion, then commits all tasks in
+one transaction. Failed validation or writes leave no partial imported tasks,
+messages, events, attachments or consumed IDs. Existing project schema migration
+and pending deletion recovery still follow normal command behavior before the
+import transaction. Imported tasks start new and unarchived, with ordinary
+timestamps/content revisions and no assignment metadata.
+
+Parents are inserted before their children. At each step, the lowest original
+input index among available tasks is chosen. This keeps order deterministic for
+forward refs and independent tasks. Other writers cannot interleave ID allocation
+inside a batch or change an existing parent's state before its commit.
+
+`--dry-run` validates schema, local links and existing parents through a read-only
+DB snapshot. It does not create a project, migrate schema, run deletion recovery,
+write tasks or allocate/reserve IDs. Older supported DB schemas need a normal
+command such as `qqq list` first. Parent state can change after preview; real
+import validates it again within its write transaction.
+
+Human output summarizes imported/validated count and keys with IDs or preview
+details. JSON returns:
+
+| Field | Meaning |
+| --- | --- |
+| `version` | Result schema version, currently 1 |
+| `dry_run` | Whether this is a validation preview |
+| `count` | Number of tasks in the batch |
+| `mapping` | Key to committed task ID, in lexicographic key order; empty object for dry-run |
+| `creation_order` | Keys in deterministic insertion order |
+| `tasks` | Normalized entries in original input order |
+
+Each result entry has `key`, `description`, defaulted `priority`, original
+`parent` reference (or null), `id` and resolved `parent_id`. Dry-run task IDs
+are null; existing parent IDs are known, batch parent IDs remain null. After
+commit, both allocated task IDs and resolved parent IDs are returned. For the
+example above in an empty project, mapping is `{"feature":1,"tests":2}` and
+creation order is `["feature","tests"]`.
+
 ## Archive and unarchive
 
 ```sh

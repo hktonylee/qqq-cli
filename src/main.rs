@@ -9,6 +9,7 @@ mod editor;
 mod herdr;
 mod identity;
 mod images;
+mod import;
 mod list_filter;
 mod output;
 mod queue;
@@ -20,7 +21,12 @@ mod watch;
 use anyhow::{Context, Result, ensure};
 use clap::{ArgGroup, Parser, Subcommand, ValueEnum};
 use serde_json::{Value, json};
-use std::{io::IsTerminal, path::PathBuf, thread, time::Duration};
+use std::{
+    io::{IsTerminal, Read},
+    path::PathBuf,
+    thread,
+    time::Duration,
+};
 
 #[derive(Parser)]
 #[command(
@@ -89,6 +95,9 @@ enum Commands {
         /// Use $EDITOR with supplied description prefilled.
         #[arg(short, long)]
         edit: bool,
+        /// Read full UTF-8 description from stdin without opening an editor.
+        #[arg(long, conflicts_with_all = ["text", "description", "edit"])]
+        stdin: bool,
         /// Existing task that must complete before this task can be claimed.
         #[arg(long)]
         parent: Option<i64>,
@@ -98,6 +107,13 @@ enum Commands {
         /// Attach image file bytes. Repeat for multiple images.
         #[arg(long = "image", value_name = "PATH")]
         images: Vec<PathBuf>,
+    },
+    /// Atomically import a versioned JSON task batch; use - for stdin.
+    Import {
+        path: PathBuf,
+        /// Validate and preview without creating tasks or reserving IDs.
+        #[arg(long)]
+        dry_run: bool,
     },
     /// Browse tasks above a continuous interactive editor.
     Tui {
@@ -320,6 +336,28 @@ fn execute(
     if let Commands::Delete { id, yes: false } = &cli.command {
         return Ok(json!(delete::preview_cli(*id)?));
     }
+    let stdin_description = if matches!(&cli.command, Commands::Add { stdin: true, .. }) {
+        let mut description = String::new();
+        std::io::stdin()
+            .read_to_string(&mut description)
+            .context("Failed to read stdin description as UTF-8")?;
+        db::validate_description(&description)?;
+        Some(description)
+    } else {
+        None
+    };
+    let import_batch = match &cli.command {
+        Commands::Import { path, .. } => Some(import::read(path)?),
+        _ => None,
+    };
+    if matches!(&cli.command, Commands::Import { dry_run: true, .. }) {
+        let (mut db, _) = db::Db::open_read_only()?;
+        return Ok(json!(import::run(
+            &mut db.conn,
+            import_batch.as_ref().expect("import input prepared"),
+            true
+        )?));
+    }
     let session_input = cli.session.as_deref().or(cli.harness_session.as_deref());
     let diagnostics = match &cli.command {
         Commands::Status { include_archived } => Some((*include_archived, false)),
@@ -364,6 +402,11 @@ fn execute(
         Commands::Config { .. } => unreachable!("config was handled before database lookup"),
         Commands::Init => json!({"database":path}),
         Commands::Status { .. } => unreachable!("diagnostics handled before database writes"),
+        Commands::Import { .. } => json!(import::run(
+            &mut db.conn,
+            import_batch.as_ref().expect("import input prepared"),
+            false
+        )?),
         Commands::Add {
             text,
             description,
@@ -371,6 +414,7 @@ fn execute(
             parent,
             priority,
             images,
+            stdin: _,
         } => {
             if let Some(id) = parent {
                 db.task(id)?;
@@ -379,7 +423,7 @@ fn execute(
                 .iter()
                 .map(|path| images::ImageInput::read(path))
                 .collect::<Result<Vec<_>>>()?;
-            match text.or(description) {
+            match stdin_description.or(text).or(description) {
                 Some(description) if !edit => {
                     json!(db.add_with_priority(&description, parent, &images, priority)?)
                 }

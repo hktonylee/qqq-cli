@@ -69,6 +69,10 @@ Commands also work from subdirectories. Add `.qqq/` to your `.gitignore`.
 
 ## See and edit the work
 
+Pipe multiline descriptions with `qqq add --stdin`, or load a complete plan with
+`qqq import plan.json --dry-run` followed by `qqq import plan.json`.
+See [batch schema and piping examples](docs/reference.md#atomic-batch-import).
+
 Inspect readiness, owners and blockers with `qqq status`. Preview selection reasons
 with `qqq next --explain`; neither command claims work. Both support `--json`.
 See [queue diagnostics](docs/reference.md#queue-diagnostics) for filters and owner context.

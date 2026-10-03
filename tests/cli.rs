@@ -845,3 +845,6 @@ fn show_recent_invalid_references_leave_export_and_database_unchanged() {
 
 #[path = "cli/queue.rs"]
 mod queue;
+
+#[path = "cli/import.rs"]
+mod import;
