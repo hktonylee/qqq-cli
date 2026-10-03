@@ -25,7 +25,7 @@ incorrect display. Stored bytes are intact.
   image, dirty buffer, single editor and history checks.
 - [x] Run model/focused PTY, full locked suite, fmt, Clippy with warnings denied and
   diff whitespace checks. Request read-only review through existing reviewer.
-- [ ] Commit, rebase onto current master, verify integration if code changes,
+- [x] Commit, rebase onto current master, verify integration if code changes,
   fast-forward, install locked/offline release, run installed ordinary/plain/fence
   scenarios, clean merged worktree/branch, complete #151, resume persistent waiter.
 
@@ -35,3 +35,10 @@ in four cases; new PTY reproduced incorrect 2,423-character collapsed body befor
 fix. After fix, all 32 model tests and four new dashboard PTY scenarios pass.
 Full locked suite: 503 tests passed. Formatting, Clippy with warnings denied and
 whitespace checks pass. Read-only review approved without findings.
+
+
+Integration: master fast-forwarded to `e861d1a` without conflicts or additional
+source changes. Locked/offline release installed as qqq 0.3.0. Five installed CLI
+PTY checks passed: long ordinary text, NO_COLOR, long non-pasteboard code fence,
+explicit pasteboard fence, and fresh large-paste round trip. Root working tree
+clean. Worktree cleanup and queue completion follow this checkpoint.
