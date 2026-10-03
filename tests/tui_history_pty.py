@@ -218,7 +218,7 @@ with tempfile.TemporaryDirectory(prefix="qqq-history-test-") as folder:
             assert [task["id"] for task in cli("list")] == [1, 3]
         elif scenario == "long_task_ends_at_bottom":
             press(UP, b"task #1")
-            read_until(b"Shift-Up/Dn switch tasks")
+            read_until(b"Shift-Up/Dn Switch Tasks")
             read_until(b"Bottom marker")
             assert b"Top marker" not in screen, screen[-2000:]
             send(b" appended")
