@@ -288,12 +288,22 @@ fn text_tail(text: &str, available: usize) -> (String, usize) {
     (suffix.concat(), used)
 }
 
-fn filter_text(query: &str, width: usize) -> (String, u16) {
-    const LABEL: &str = "Filter: ";
-    let (tail, used) = text_tail(query, width.saturating_sub(LABEL.len()));
-    let text = format!("{LABEL}{tail}");
-    let cursor = (LABEL.len() + used).min(width.saturating_sub(1)) as u16;
-    (text, cursor)
+fn filter_line(query: &str, width: usize, focused: bool, color: bool) -> (Line<'static>, u16) {
+    let label = if query.is_empty() { "" } else { "Filter: " };
+    let (tail, used) = text_tail(query, width.saturating_sub(label.len()));
+    let label_style = if color && focused {
+        Style::default()
+            .fg(ACCENT)
+            .bg(Color::Reset)
+            .add_modifier(Modifier::BOLD)
+    } else if color {
+        Style::default().fg(Color::Gray).bg(Color::Reset)
+    } else {
+        Style::default()
+    };
+    let line = Line::from(vec![Span::styled(label, label_style), Span::raw(tail)]);
+    let cursor = (label.len() + used).min(width.saturating_sub(1)) as u16;
+    (line, cursor)
 }
 
 fn row_style(status: Option<&str>, selected: bool, color: bool) -> Style {
@@ -494,16 +504,19 @@ pub fn draw(
     } else {
         (*list_view.top).min(rows.len().saturating_sub(list_height))
     };
-    let (filter_label, filter_cursor) = filter_text(list_view.query, usize::from(list.width));
-    let filter_style = if color && list_view.focused {
-        Style::default().fg(ACCENT).add_modifier(Modifier::BOLD)
-    } else if color {
-        Style::default().fg(Color::Gray)
+    let (filter, filter_cursor) = filter_line(
+        list_view.query,
+        usize::from(list.width),
+        list_view.focused,
+        color,
+    );
+    let filter_style = if color {
+        Style::default().fg(BODY_FG).bg(BODY_BG)
     } else {
         Style::default()
     };
     frame.render_widget(
-        Paragraph::new(filter_label).style(filter_style),
+        Paragraph::new(filter).style(filter_style),
         Rect::new(list.x, list.y, list.width, 1),
     );
     if rows.is_empty() {

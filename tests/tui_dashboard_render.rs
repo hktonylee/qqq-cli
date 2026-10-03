@@ -903,41 +903,102 @@ fn filter_bar_shows_empty_result_and_takes_cursor_only_while_focused() {
         message: "",
     };
     let mut terminal = Terminal::new(TestBackend::new(72, 24)).unwrap();
-    terminal
-        .draw(|frame| {
-            dashboard::draw(
-                frame,
-                &[],
-                &HashMap::new(),
-                Some(99),
-                dashboard::View {
-                    query: "absent",
-                    focused: true,
-                    top: &mut 0,
-                    follow_selected: true,
-                    modal_lines: None,
-                    details: None,
-                },
-                render::DashboardEditor {
-                    layout: &layout,
-                    cursor: 0,
-                    top: &mut 0,
-                    chrome: &chrome,
-                    message_is_error: false,
-                    follow_cursor: true,
-                },
-                true,
-            );
-        })
-        .unwrap();
-    let buffer = terminal.backend().buffer();
-    assert!(line(buffer, 0).starts_with("Filter: absent"));
-    assert!(line(buffer, 1).starts_with("No matching tasks."));
-    assert!(line(buffer, 13).starts_with("Task Editor"));
-    assert_eq!(
-        terminal.get_cursor_position().unwrap(),
-        Position::new(14, 0)
-    );
+    for color in [true, false] {
+        for focused in [true, false] {
+            for query in ["", "absent", ""] {
+                terminal
+                    .draw(|frame| {
+                        dashboard::draw(
+                            frame,
+                            &[],
+                            &HashMap::new(),
+                            Some(99),
+                            dashboard::View {
+                                query,
+                                focused,
+                                top: &mut 0,
+                                follow_selected: true,
+                                modal_lines: None,
+                                details: None,
+                            },
+                            render::DashboardEditor {
+                                layout: &layout,
+                                cursor: 0,
+                                top: &mut 0,
+                                chrome: &chrome,
+                                message_is_error: false,
+                                follow_cursor: true,
+                            },
+                            color,
+                        );
+                    })
+                    .unwrap();
+                let buffer = terminal.backend().buffer();
+                let editable_start = if query.is_empty() {
+                    assert!(line(buffer, 0).trim().is_empty());
+                    0
+                } else {
+                    assert!(line(buffer, 0).starts_with("Filter: absent"));
+                    for x in 0..8 {
+                        assert_eq!(buffer[(x, 0)].bg, Color::Reset);
+                        assert_eq!(
+                            buffer[(x, 0)].fg,
+                            if !color {
+                                Color::Reset
+                            } else if focused {
+                                Color::Indexed(81)
+                            } else {
+                                Color::Gray
+                            }
+                        );
+                        assert_eq!(
+                            buffer[(x, 0)].modifier,
+                            if color && focused {
+                                Modifier::BOLD
+                            } else {
+                                Modifier::empty()
+                            }
+                        );
+                    }
+                    8
+                };
+                for x in editable_start..72 {
+                    assert_eq!(
+                        buffer[(x, 0)].bg,
+                        buffer[(x, 14)].bg,
+                        "query {query:?}, focused {focused}, color {color}, x {x}"
+                    );
+                    assert_eq!(
+                        buffer[(x, 0)].bg,
+                        if color {
+                            Color::Indexed(236)
+                        } else {
+                            Color::Reset
+                        }
+                    );
+                    assert_eq!(
+                        buffer[(x, 0)].fg,
+                        if color {
+                            Color::Indexed(252)
+                        } else {
+                            Color::Reset
+                        }
+                    );
+                    assert_eq!(buffer[(x, 0)].modifier, Modifier::empty());
+                }
+                assert!(line(buffer, 1).starts_with("No matching tasks."));
+                assert!(line(buffer, 13).starts_with("Task Editor"));
+                assert_eq!(
+                    terminal.get_cursor_position().unwrap(),
+                    if focused {
+                        Position::new(if query.is_empty() { 0 } else { 14 }, 0)
+                    } else {
+                        Position::new(0, 14)
+                    }
+                );
+            }
+        }
+    }
 }
 
 #[test]
@@ -1073,7 +1134,7 @@ fn split_dashboard_keeps_list_above_editor() {
         })
         .unwrap();
     let buffer = terminal.backend().buffer();
-    assert!(line(buffer, 0).starts_with("Filter: "));
+    assert!(line(buffer, 0).trim().is_empty());
     assert!(line(buffer, 1).starts_with("  ID     STATUS"));
     assert!(line(buffer, 2).starts_with("> 1      New"));
     assert!(!line(buffer, 0).contains("qqq tasks"));
@@ -1260,7 +1321,8 @@ fn status_selection_and_editor_images_use_distinct_colors() {
                 }
             );
         }
-        for y in [0, 1, 9] {
+        assert_eq!(buffer[(71, 0)].bg, Color::Indexed(236));
+        for y in [1, 9] {
             assert_eq!(buffer[(71, y)].bg, Color::Reset);
         }
         let body_y = 18;

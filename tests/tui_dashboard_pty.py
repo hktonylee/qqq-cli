@@ -368,7 +368,7 @@ print(json.dumps({"result": result}))
         wait_visible(lambda: 'Task Editor - new task' in editor_title())
         wait_visible(lambda: visible.text().splitlines()[-1].startswith("Ctrl-S save")
                      and (visible.x, visible.y) == (0, editor_row() + 1))
-        assert visible.text().splitlines()[0].startswith("Filter:"), visible.text()
+        assert visible.text().splitlines()[0].strip() == "", visible.text()
         assert "qqq tasks" not in visible.text(), visible.text()
         read_until(b"\x1b[?1000h")
         read_until(b"\x1b[?1006h")
@@ -569,9 +569,9 @@ print(json.dumps({"result": result}))
             send(CTRL_SLASH + b"first")
             wait_visible(lambda: visible.text().splitlines()[0].strip() == "Filter: first")
             send(b"\x03")
-            wait_visible(lambda: visible.text().splitlines()[0].strip() == "Filter:"
+            wait_visible(lambda: visible.text().splitlines()[0].strip() == ""
                          and "Second" in "\n".join(visible.text().splitlines()[2:list_bottom()])
-                         and (visible.x, visible.y) == (len("Filter: "), 0))
+                         and (visible.x, visible.y) == (0, 0))
             assert "new task" in editor_title(), visible.text()
             assert editor_line().strip() == "", visible.text()
             assert cli("list") == initial_tasks
@@ -677,13 +677,13 @@ print(json.dumps({"result": result}))
             clear_capture()
             send(b"\x03")
             if scenario == "ctrl_c_new_filter":
-                wait_visible(lambda: visible.text().splitlines()[0].strip() == "Filter:"
+                wait_visible(lambda: visible.text().splitlines()[0].strip() == ""
                              and "Second" in "\n".join(visible.text().splitlines()[2:list_bottom()])
                              and editor_line().startswith("Unsaved draft"))
                 settle()
                 assert "Discard draft?" not in visible.text(), visible.text()
                 assert "new task" in editor_title(), visible.text()
-                assert (visible.x, visible.y) == (len("Filter: "), 0), visible.text()
+                assert (visible.x, visible.y) == (0, 0), visible.text()
                 send(b"\t")
                 wait_visible(lambda: (visible.x, visible.y) == (len("Unsaved draft"), editor_row() + 1))
                 send(b"\x03")
@@ -860,7 +860,7 @@ print(json.dumps({"result": result}))
                     assert "Task actions" in visible.text(), visible.text()
                     send(b"\x1b")
                 expected_draft = "Changed Second" if "dirty_selected" in scenario else "Second"
-                wait_visible(lambda: visible.text().splitlines()[0].strip() == "Filter:"
+                wait_visible(lambda: visible.text().splitlines()[0].strip() == ""
                              and "task #2 (" in editor_title()
                              and editor_line().startswith(expected_draft)
                              and "Second" in "\n".join(visible.text().splitlines()[2:list_bottom()]))
@@ -891,7 +891,7 @@ print(json.dumps({"result": result}))
             wait_visible(lambda: "new task" in editor_title()
                          and editor_line().strip() == ""
                          and ("_filter_" not in scenario
-                              or (visible.text().splitlines()[0].strip() == "Filter:"
+                              or (visible.text().splitlines()[0].strip() == ""
                                   and "Second" in "\n".join(visible.text().splitlines()[2:list_bottom()]))))
             assert cli("list") == initial_tasks
             assert child.poll() is None
@@ -1272,7 +1272,7 @@ print(json.dumps({"result": result}))
             visible.resize(12, 8)
             clear_capture()
             os.kill(child.pid, signal.SIGWINCH)
-            wait_visible(lambda: visible.text().splitlines()[0].startswith("Filter:"))
+            wait_visible(lambda: visible.text().splitlines()[0].strip() == "")
             wait_visible(lambda: editor_row() is not None
                          and editor_line().startswith("First")
                          and (visible.x, visible.y) == (len("First"), editor_row() + 1))
@@ -1289,12 +1289,12 @@ print(json.dumps({"result": result}))
             wait_visible(lambda: "Priority must be -100..100" in
                          " ".join(row.strip() for row in visible.text().splitlines()[3:7]))
             send(b"\x1b")
-            wait_visible(lambda: visible.text().splitlines()[0].startswith("Filter:"))
+            wait_visible(lambda: visible.text().splitlines()[0].strip() == "")
             send(b"\x07d0\r")
             wait_visible(lambda: "Parent must be a positive task ID or none" in
                          " ".join(row.strip() for row in visible.text().splitlines()[3:8]))
             send(b"\x1b")
-            wait_visible(lambda: visible.text().splitlines()[0].startswith("Filter:"))
+            wait_visible(lambda: visible.text().splitlines()[0].strip() == "")
             send(b"X\x07p-1\r")
             wait_visible(lambda: "Lose draft?" in visible.text())
             send(b"y")
@@ -1557,7 +1557,7 @@ print(json.dumps({"result": result}))
                 wait_visible(lambda: visible.text().splitlines()[0].strip() == "Filter: First/")
                 assert cli("list") == initial_tasks
                 send(b"\x1b")
-                wait_visible(lambda: visible.text().splitlines()[0].strip() == "Filter:")
+                wait_visible(lambda: visible.text().splitlines()[0].strip() == "")
                 send(b"\x1b")
                 wait_visible(lambda: visible.text().splitlines()[-1].startswith("Ctrl-S save")
                              and "Ctrl+/ filter" in visible.text().splitlines()[-1])
@@ -1607,7 +1607,7 @@ print(json.dumps({"result": result}))
             assert cli("list") == initial_tasks
             clear_capture()
             send(b"\x1b")
-            wait_visible(lambda: visible.text().splitlines()[0].strip() == "Filter:"
+            wait_visible(lambda: visible.text().splitlines()[0].strip() == ""
                          and "Other" in visible.text())
             clear_capture()
             send(b"\x1b")
@@ -1770,9 +1770,9 @@ print(json.dumps({"result": result}))
             read_until(b"Saved #3")
             assert cli("show", "3")["task"]["description"] == "Draft"
         if scenario != "wheel_error":
-            if visible.text().splitlines()[0].startswith("Filter:") and visible.text().splitlines()[0].strip() != "Filter:":
+            if visible.text().splitlines()[0].startswith("Filter:"):
                 send(b"\x03")
-                wait_visible(lambda: visible.text().splitlines()[0].strip() == "Filter:")
+                wait_visible(lambda: visible.text().splitlines()[0].strip() == "")
             if scenario == "ctrl_c_filter_empty":
                 send(b"\x03")
             elif scenario in ("ctrl_c_new_discard", "ctrl_c_new_image", "ctrl_c_new_whitespace"):
