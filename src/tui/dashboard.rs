@@ -228,8 +228,8 @@ pub fn wheel_area(size: (u16, u16), column: u16, row: u16) -> Option<WheelArea> 
         details,
         editor,
     } = panes(Rect::new(0, 0, size.0, size.1));
-    if row < list.y + list.height - 1 {
-        Some(WheelArea::List(usize::from(list.height.saturating_sub(2))))
+    if row < list.y + list.height {
+        Some(WheelArea::List(usize::from(list.height.saturating_sub(1))))
     } else if details_content(details).contains(Position::new(column, row)) {
         Some(WheelArea::Details(details_height(details)))
     } else if row >= editor.y && row < editor.y + editor.height - 1 {
@@ -258,7 +258,7 @@ pub fn click_target(
         return None;
     }
     let Panes { list, editor, .. } = panes(Rect::new(0, 0, size.0, size.1));
-    if row > list.y && row < list.y + list.height - 1 {
+    if row > list.y && row < list.y + list.height {
         let index = hit.list_top + usize::from(row - list.y - 1);
         return hit.rows.get(index)?.task_id.map(ClickTarget::Task);
     }
@@ -498,7 +498,7 @@ pub fn draw(
         details: details_area,
         editor: editor_area,
     } = panes(area);
-    let list_height = usize::from(list.height.saturating_sub(2));
+    let list_height = usize::from(list.height.saturating_sub(1));
     *list_view.top = if list_view.follow_selected {
         panel::scroll_to(rows, selected, *list_view.top, list_height)
     } else {
@@ -543,15 +543,6 @@ pub fn draw(
             Rect::new(list.x, list.y + 1 + offset as u16, list.width, 1),
         );
     }
-    let separator_style = if color {
-        Style::default().fg(Color::DarkGray)
-    } else {
-        Style::default()
-    };
-    frame.render_widget(
-        Paragraph::new("─".repeat(list.width.into())).style(separator_style),
-        Rect::new(list.x, list.y + list.height - 1, list.width, 1),
-    );
     let empty_details = [render::DetailRow::new(
         "Select task to view details.",
         render::DetailKind::Muted,

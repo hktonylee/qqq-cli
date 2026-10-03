@@ -317,7 +317,7 @@ fn blank_draft_keeps_details_pane_and_editor_position() {
         .unwrap();
     let buffer = terminal.backend().buffer();
     assert!(line(buffer, 9).starts_with("║  Select task to view details."));
-    assert_eq!(line(buffer, 7), "─".repeat(72));
+    assert_eq!(line(buffer, 7), " ".repeat(72));
     assert_eq!(line(buffer, 8), format!("╔{}╗", "═".repeat(70)));
     assert_eq!(line(buffer, 12), format!("╚{}╝", "═".repeat(70)));
     for y in 9..12 {
@@ -443,7 +443,7 @@ fn selected_task_renders_details_between_list_and_editor() {
                     );
                 }
             }
-            assert_eq!(line(buffer, 7), "─".repeat(72));
+            assert_eq!(line(buffer, 7), " ".repeat(72));
             assert_eq!(line(buffer, 8), format!("╔{}╗", "═".repeat(70)));
             assert_eq!(line(buffer, 12), format!("╚{}╝", "═".repeat(70)));
             for y in 9..12 {
@@ -593,7 +593,7 @@ fn selected_task_geometry_and_details_hit_test_share_rectangles() {
 fn new_draft_hit_test_keeps_three_panes() {
     assert_eq!(
         dashboard::wheel_area((72, 18), 5, 3),
-        Some(dashboard::WheelArea::List(4))
+        Some(dashboard::WheelArea::List(5))
     );
     assert_eq!(
         dashboard::wheel_area((72, 18), 5, 7),
@@ -609,13 +609,16 @@ fn new_draft_hit_test_keeps_three_panes() {
 fn wheel_hit_test_uses_list_editor_and_excludes_edges() {
     assert_eq!(
         dashboard::wheel_area((72, 24), 5, 3),
-        Some(dashboard::WheelArea::List(6))
+        Some(dashboard::WheelArea::List(7))
     );
     assert_eq!(
         dashboard::wheel_area((72, 24), 5, 1),
-        Some(dashboard::WheelArea::List(6))
+        Some(dashboard::WheelArea::List(7))
     );
-    assert_eq!(dashboard::wheel_area((72, 24), 5, 7), None);
+    assert_eq!(
+        dashboard::wheel_area((72, 24), 5, 7),
+        Some(dashboard::WheelArea::List(7))
+    );
     assert_eq!(
         dashboard::wheel_area((72, 24), 5, 10),
         Some(dashboard::WheelArea::Details(3))
@@ -757,8 +760,21 @@ fn manual_list_scroll_does_not_snap_to_selected_task() {
             )
         })
         .unwrap();
-    assert_eq!(top, 4);
-    assert!(line(terminal.backend().buffer(), 6).contains("Task 10"));
+    assert_eq!(top, 3);
+    assert!(line(terminal.backend().buffer(), 7).contains("Task 10"));
+    assert_eq!(
+        click((72, 24), 5, 7, &rows, top, 0, &layout),
+        Some(dashboard::ClickTarget::Task(10))
+    );
+    assert_eq!(
+        dashboard::wheel_area((72, 24), 5, 7),
+        Some(dashboard::WheelArea::List(7))
+    );
+    assert_eq!(
+        line(terminal.backend().buffer(), 8),
+        format!("╔{}╗", "═".repeat(70))
+    );
+    assert!(line(terminal.backend().buffer(), 13).starts_with("Editor"));
 }
 
 #[test]
