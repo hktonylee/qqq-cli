@@ -292,6 +292,20 @@ fn tui_dashboard_menu_arrows() {
 }
 
 #[test]
+fn tui_dashboard_retry_menu_action_requires_error_status() {
+    for scenario in [
+        "menu_retry_new",
+        "menu_retry_in_progress",
+        "menu_retry_completed",
+        "menu_retry_error",
+        "menu_retry_new_no_color",
+        "menu_retry_error_no_color",
+    ] {
+        dashboard_scenario(scenario);
+    }
+}
+
+#[test]
 fn tui_dashboard_task_actions() {
     dashboard_scenario("actions_basic");
     dashboard_scenario("actions_rejected");

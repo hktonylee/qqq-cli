@@ -94,7 +94,7 @@ CTRL_P = b"\x10"
 with tempfile.TemporaryDirectory(prefix="qqq-dashboard-test-") as folder:
     env = dict(os.environ, HOME=folder, TERM="xterm-256color")
     env.pop("NO_COLOR", None)
-    if scenario in ("no_color", "pasteboard_no_color", "filter_no_color", "details_no_color", "actions_popup_no_color", "wide_layout_no_color", "menu_arrows_no_color", "filter_escape_empty_no_color", "compact_layout_no_color"):
+    if scenario in ("no_color", "pasteboard_no_color", "filter_no_color", "details_no_color", "actions_popup_no_color", "wide_layout_no_color", "menu_arrows_no_color", "filter_escape_empty_no_color", "compact_layout_no_color", "menu_retry_new_no_color", "menu_retry_error_no_color"):
         env["NO_COLOR"] = "1"
     elif scenario == "dumb":
         env["TERM"] = "dumb"
@@ -124,7 +124,7 @@ with tempfile.TemporaryDirectory(prefix="qqq-dashboard-test-") as folder:
         cli("complete", "1", "--session", "worker")
         cli("next", "--local", "--session", "worker")
         cli("edit", "2", "--set-status", "error", "--reason", "Failed", "--session", "worker")
-    elif scenario in ("actions_basic", "actions_rejected"):
+    elif scenario in ("actions_basic", "actions_rejected") or scenario.startswith("menu_retry_"):
         cli("add", "Owned item")
         cli("add", "Failed item")
         cli("add", "Finished item")
@@ -269,7 +269,7 @@ print(json.dumps({"result": result}))
     fcntl.ioctl(slave, termios.TIOCSCTTY, 0)
     signal.signal(signal.SIGHUP, signal.SIG_IGN)
     args = [binary, "--json", "tui"] if scenario in ("empty_json", "save_json", "handoff_json") else [binary, "tui"]
-    if scenario in ("actions_basic", "actions_rejected", "actions_narrow"):
+    if scenario in ("actions_basic", "actions_rejected", "actions_narrow") or scenario.startswith("menu_retry_"):
         args.extend(["--session", "worker"])
     if scenario in ("archive_included", "actions_basic", "actions_rejected"):
         args.append("--include-archived")
@@ -426,7 +426,7 @@ print(json.dumps({"result": result}))
                              and editor_line().startswith("Second"))
                 settle()
                 assert b"\x1b[38;" not in screen and b"\x1b[48;" not in screen, screen[-2000:]
-        if not scenario.startswith("wide_layout") and scenario not in ("handoff_scroll", "ctrl_c_new_scroll", "live_refresh_scroll", "tree_navigation", "scroll", "wheel", "click", "click_filter", "workflow", "workflow_empty", "workflow_status", "filter", "filter_no_color", "archive_hidden", "archive_included", "actions_basic", "actions_rejected", "actions_hidden"):
+        if not scenario.startswith(("wide_layout", "menu_retry_")) and scenario not in ("handoff_scroll", "ctrl_c_new_scroll", "live_refresh_scroll", "tree_navigation", "scroll", "wheel", "click", "click_filter", "workflow", "workflow_empty", "workflow_status", "filter", "filter_no_color", "archive_hidden", "archive_included", "actions_basic", "actions_rejected", "actions_hidden"):
             read_until(b"Second")
             assert "First" in visible.text() and "Second" in visible.text(), visible.text()
         assert not select.select([child.stdout], [], [], 0)[0], "TUI wrote stdout while open"
@@ -1350,11 +1350,11 @@ print(json.dumps({"result": result}))
             send(b"\x07")
             wait_visible(lambda: visible.text().splitlines()[7][12] == "┌"
                          and "Task actions #2" in visible.text().splitlines()[8]
-                         and visible.text().splitlines()[16][59] == "┘")
+                         and visible.text().splitlines()[15][59] == "┘")
             popup_rows = visible.text().splitlines()
             for row in range(24):
                 for column in range(72):
-                    if not (7 <= row < 17 and 12 <= column < 60):
+                    if not (7 <= row < 16 and 12 <= column < 60):
                         assert popup_rows[row][column] == before_popup[row][column], (row, column)
             send(b"\x1b[<0;6;4M\x1b[<0;6;4m\x10")
             settle()
@@ -1365,7 +1365,7 @@ print(json.dumps({"result": result}))
             os.kill(child.pid, signal.SIGWINCH)
             wait_visible(lambda: visible.text().splitlines()[10][21] == "┌"
                          and "Task actions #2" in visible.text().splitlines()[11]
-                         and visible.text().splitlines()[19][68] == "┘"
+                         and visible.text().splitlines()[18][68] == "┘"
                          and (visible.x, visible.y) == (22, 12))
             settle()
             send(b"p")
@@ -1386,6 +1386,63 @@ print(json.dumps({"result": result}))
                          and "Priority task #2" not in visible.text())
             assert cli("list") == initial_tasks
             if scenario == "actions_popup_no_color":
+                assert b"\x1b[38;" not in screen and b"\x1b[48;" not in screen, screen[-2000:]
+        elif scenario.startswith("menu_retry_"):
+            status = scenario.removeprefix("menu_retry_").removesuffix("_no_color")
+            label, task_id = {
+                "new": ("Fresh item", 4),
+                "in_progress": ("Owned item", 1),
+                "completed": ("Finished item", 3),
+                "error": ("Failed item", 2),
+            }[status]
+            initial_tasks = cli("list")
+            click(5, task_row(label))
+            wait_visible(lambda: f"Task #{task_id} (" in editor_title()
+                         and editor_line().startswith(label))
+
+            def selected_action(key):
+                return any(part.strip().startswith(f"> {key} ")
+                           for line in visible.text().splitlines() for part in line.split("│"))
+
+            def open_menu():
+                send(b"\x07")
+                wait_visible(lambda: f"Task actions #{task_id}" in visible.text()
+                             and selected_action("c")
+                             and "Up/Down Select" in visible.text())
+
+            open_menu()
+            settle()
+            assert ("r Retry error" in visible.text()) == (status == "error"), visible.text()
+            if status != "error":
+                send(b"r")
+                settle()
+                assert f"Task actions #{task_id}" in visible.text(), visible.text()
+                assert "Retry task" not in visible.text(), visible.text()
+                assert selected_action("c"), visible.text()
+            send(b"\x1b[B")
+            wait_visible(lambda: selected_action("r" if status == "error" else "o"))
+            assert cli("list") == initial_tasks
+            send(b"\r")
+            wait_visible(lambda: f"{'Retry' if status == 'error' else 'Reopen'} task #{task_id}?" in visible.text())
+            send(b"y" if status == "error" else b"n")
+            wait_visible(lambda: f"Task #{task_id} (" in editor_title()
+                         and editor_line().startswith(label)
+                         and visible.cursor_visible
+                         and "Reopen task" not in visible.text()
+                         and (status != "error" or f"Task #{task_id} (New)" in editor_title()))
+            if status == "error":
+                assert cli("show", str(task_id))["task"]["status"] == "new"
+                open_menu()
+                settle()
+                assert "r Retry error" not in visible.text(), visible.text()
+                send(b"\x1b[B")
+                wait_visible(lambda: selected_action("o"))
+                send(b"\x1b")
+                wait_visible(lambda: "Task actions" not in visible.text()
+                             and editor_line().startswith(label) and visible.cursor_visible)
+            else:
+                assert cli("list") == initial_tasks
+            if scenario.endswith("no_color"):
                 assert b"\x1b[38;" not in screen and b"\x1b[48;" not in screen, screen[-2000:]
         elif scenario.startswith("menu_arrows"):
             send(b"\x1b[1;2A")
@@ -1418,7 +1475,7 @@ print(json.dumps({"result": result}))
             wait_visible(lambda: selected_action("d"))
             send(b"\x1b[B")
             wait_visible(lambda: selected_action("c"))
-            for key in "roapd":
+            for key in "oapd":
                 send(b"\x1b[B")
                 wait_visible(lambda key=key: selected_action(key))
             assert cli("list") == initial_tasks
@@ -1426,8 +1483,7 @@ print(json.dumps({"result": result}))
             wait_visible(lambda: prompt_visible("Parent task"))
             close_menu()
             for index, (key, prompt) in enumerate([
-                ("c", "Complete task"), ("r", "Retry task"),
-                ("o", "Reopen task"), ("a", "Archive task"),
+                ("c", "Complete task"), ("o", "Reopen task"), ("a", "Archive task"),
                 ("p", "Priority task"),
             ]):
                 open_menu()
@@ -1552,7 +1608,7 @@ print(json.dumps({"result": result}))
             assert child.poll() is None
             assert not select.select([child.stdout], [], [], 0)[0], "TUI wrote stdout"
         elif scenario == "actions_rejected":
-            def rejected_action(label, task_id, letter, prompt, error):
+            def rejected_action(label, task_id, letter, prompt, error, before_confirm=None):
                 clear_capture()
                 click(5, task_row(label))
                 wait_visible(lambda: f"Task #{task_id}" in editor_title())
@@ -1561,6 +1617,8 @@ print(json.dumps({"result": result}))
                 wait_visible(lambda: "c Complete" in visible.text())
                 send(letter.encode())
                 read_until(prompt.encode())
+                if before_confirm is not None:
+                    before_confirm()
                 clear_capture()
                 send(b"y")
                 read_until(error.encode())
@@ -1573,9 +1631,11 @@ print(json.dumps({"result": result}))
                             "Task 1 is in progress and cannot be archived")
             rejected_action("Owned item", 1, "o", "Reopen task #1?",
                             "Task 1 must be completed to reopen")
-            rejected_action("Finished item", 3, "r", "Retry task #3?",
-                            "Task 3 is no longer in error")
+            rejected_action("Failed item", 2, "r", "Retry task #2?",
+                            "Task 2 is no longer in error",
+                            lambda: cli("edit", "2", "--set-status", "new"))
             assert cli("show", "1")["task"]["archived"] is False
+            assert cli("show", "2")["task"]["status"] == "new"
             assert cli("show", "3")["task"]["status"] == "completed"
 
             clear_capture()

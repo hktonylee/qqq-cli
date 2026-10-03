@@ -110,12 +110,26 @@ enum ActionInputKind {
     Parent,
 }
 
-const ACTION_MENU_KEYS: [char; 6] = ['c', 'r', 'o', 'a', 'p', 'd'];
+const ACTION_MENU_ITEMS: [(char, &str); 6] = [
+    ('c', "Complete"),
+    ('r', "Retry error"),
+    ('o', "Reopen"),
+    ('a', "Archive"),
+    ('p', "Priority"),
+    ('d', "Parent"),
+];
+
+fn action_menu_items(can_retry: bool) -> impl Iterator<Item = (char, &'static str)> {
+    ACTION_MENU_ITEMS
+        .into_iter()
+        .filter(move |(key, _)| can_retry || *key != 'r')
+}
 
 enum ActionUi {
     Menu {
         id: i64,
         archived: bool,
+        can_retry: bool,
         selected: usize,
     },
     Input {
@@ -165,28 +179,29 @@ fn action_lines(ui: &ActionUi, width: usize, height: usize) -> Vec<render::Popup
         ActionUi::Menu {
             id,
             archived,
+            can_retry,
             selected,
         } => {
-            let mut lines = vec![
-                PopupRow::new(format!("Task actions #{id}"), PopupKind::Heading),
-                PopupRow::new("c Complete", PopupKind::Action),
-                PopupRow::new("r Retry error", PopupKind::Action),
-                PopupRow::new("o Reopen", PopupKind::Action),
-                PopupRow::new(
-                    format!("a {}", if *archived { "Unarchive" } else { "Archive" }),
-                    PopupKind::Action,
-                ),
-                PopupRow::new("p Priority", PopupKind::Action),
-                PopupRow::new("d Parent", PopupKind::Action),
-                PopupRow::new(
-                    if width >= "Up/Down Select  Enter Apply  Esc Cancel".len() {
-                        "Up/Down Select  Enter Apply  Esc Cancel"
-                    } else {
-                        "Up/Dn Enter"
-                    },
-                    PopupKind::Hint,
-                ),
-            ];
+            let mut lines = vec![PopupRow::new(
+                format!("Task actions #{id}"),
+                PopupKind::Heading,
+            )];
+            lines.extend(action_menu_items(*can_retry).map(|(key, label)| {
+                let label = if key == 'a' && *archived {
+                    "Unarchive"
+                } else {
+                    label
+                };
+                PopupRow::new(format!("{key} {label}"), PopupKind::Action)
+            }));
+            lines.push(PopupRow::new(
+                if width >= "Up/Down Select  Enter Apply  Esc Cancel".len() {
+                    "Up/Down Select  Enter Apply  Esc Cancel"
+                } else {
+                    "Up/Dn Enter"
+                },
+                PopupKind::Hint,
+            ));
             lines[1 + selected].kind = PopupKind::SelectedAction;
             lines
         }
@@ -1088,29 +1103,37 @@ fn compose_inner(
                         ActionUi::Menu {
                             id,
                             archived,
+                            can_retry,
                             mut selected,
                         } => {
+                            let count = action_menu_items(can_retry).count();
                             if matches!(key.code, KeyCode::Up | KeyCode::Down) {
                                 selected = if key.code == KeyCode::Up {
-                                    (selected + ACTION_MENU_KEYS.len() - 1) % ACTION_MENU_KEYS.len()
+                                    (selected + count - 1) % count
                                 } else {
-                                    (selected + 1) % ACTION_MENU_KEYS.len()
+                                    (selected + 1) % count
                                 };
                                 action_ui = Some(ActionUi::Menu {
                                     id,
                                     archived,
+                                    can_retry,
                                     selected,
                                 });
                                 continue;
                             }
                             let activation = if key.code == KeyCode::Enter {
-                                KeyCode::Char(ACTION_MENU_KEYS[selected])
+                                KeyCode::Char(
+                                    action_menu_items(can_retry)
+                                        .nth(selected)
+                                        .expect("menu selection is valid")
+                                        .0,
+                                )
                             } else {
                                 key.code
                             };
                             let chosen = match activation {
                                 KeyCode::Char('c') => Some(TaskAction::Complete(id)),
-                                KeyCode::Char('r') => Some(TaskAction::Retry(id)),
+                                KeyCode::Char('r') if can_retry => Some(TaskAction::Retry(id)),
                                 KeyCode::Char('o') => Some(TaskAction::Reopen(id)),
                                 KeyCode::Char('a') => Some(TaskAction::SetArchived(id, !archived)),
                                 KeyCode::Char('p') => {
@@ -1136,6 +1159,7 @@ fn compose_inner(
                                     action_ui = Some(ActionUi::Menu {
                                         id,
                                         archived,
+                                        can_retry,
                                         selected,
                                     });
                                     None
@@ -1291,6 +1315,7 @@ fn compose_inner(
                                 action_ui = Some(ActionUi::Menu {
                                     id,
                                     archived: task.archived,
+                                    can_retry: task.status == "error",
                                     selected: 0,
                                 });
                                 message.clear();
