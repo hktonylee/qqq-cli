@@ -598,9 +598,7 @@ pub fn draw(
     });
     details(frame, details_area, details_view, color);
     let editor_cursor = editor(frame, editor_area, editor_state, color);
-    if !list_view.focused
-        && let Some(cursor) = editor_cursor
-    {
+    if let Some(cursor) = editor_cursor.filter(|_| !list_view.focused) {
         frame.set_cursor_position(cursor);
     }
     if let Some(lines) = list_view.modal_lines {
