@@ -201,16 +201,16 @@ mod tests {
         let rendered = text(&detail_rows, "\n");
         assert!(
             rendered.starts_with(
-                "#4 · In progress\n\nDescription:\n  Full editable description\n\nDetails:\n"
+                "#4 · In progress\n\nDescription:\n  Full editable description\n\nMessages: (2)\n"
             ),
             "{rendered}"
         );
         assert_eq!(rendered, crate::output::detail_text(&value, false));
         for title in [
             "Description:",
+            "Messages: (2)",
             "Details:",
             "Assignment:",
-            "Messages: (2)",
             "Images: (1)",
             "History: (1)",
             "Herdr:",
@@ -237,7 +237,7 @@ mod tests {
         assert!(
             rendered.find("Earlier message").unwrap() < rendered.find("Latest message").unwrap()
         );
-        assert!(rendered.contains("\n    Latest message\n    Next line\n\nImages:"));
+        assert!(rendered.contains("\n    Latest message\n    Next line\n\nDetails:"));
         assert!(rendered.contains("  Image #1: screenshot.png (image/png, 128 bytes)"));
         assert!(rendered.contains("  Server: named\n  Workspace: w1\n  Tab: t1\n  Pane: p1"));
         assert_eq!(
@@ -246,7 +246,7 @@ mod tests {
         );
         assert_eq!(
             styled_text(&detail_rows, DetailKind::Section),
-            "Description:Details:Assignment:Messages:Images:History:Herdr:"
+            "Description:Messages:Details:Assignment:Images:History:Herdr:"
         );
         let muted = styled_text(&detail_rows, DetailKind::Muted);
         assert!(muted.contains("Harness name:"));
@@ -268,6 +268,11 @@ mod tests {
 
     #[test]
     fn empty_collections_and_unicode_controls_keep_show_text_and_roles() {
+        assert!(
+            text(&rows(&value(&[]), 80), "\n").contains(
+                "Description:\n  Full editable description\n\nMessages: None\n\nDetails:"
+            )
+        );
         for width in [12, 80] {
             let rendered = text(&rows(&value(&[]), width), "");
             for empty in [

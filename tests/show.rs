@@ -38,7 +38,7 @@ fn show_groups_description_and_aligns_complete_metadata() {
     let shown = cli(p, &["show", "-1"]);
     assert!(
         shown.starts_with(
-            "#2 · New\n\nDescription:\n  Build 界\n  \n  Details\\t\\u{1b}[31m\n\nDetails:\n"
+            "#2 · New\n\nDescription:\n  Build 界\n  \n  Details\\t\\u{1b}[31m\n\nMessages: None\n\nDetails:\n"
         ),
         "{shown}"
     );
@@ -92,12 +92,15 @@ fn show_separates_message_headers_from_multiline_bodies() {
     );
     cli(p, &["message", "1", "Second"]);
     let shown = cli(p, &["show", "1"]);
-    assert!(shown.contains("Messages: (2)\n  #1 · author · "), "{shown}");
+    assert!(
+        shown.starts_with("#1 · New\n\nDescription:\n  Task\n\nMessages: (2)\n  #1 · author · "),
+        "{shown}"
+    );
     assert!(
         shown.contains("\n    First\n    \n    Details\n\n  #2 · - · "),
         "{shown}"
     );
-    assert!(shown.contains("\n    Second\n\nImages: None"), "{shown}");
+    assert!(shown.contains("\n    Second\n\nDetails:"), "{shown}");
 }
 
 #[derive(Deserialize)]

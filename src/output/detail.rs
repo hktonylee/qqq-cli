@@ -105,6 +105,13 @@ pub(super) fn render(value: &Value, color: bool) -> String {
             block(task, "description")
         ));
     }
+    sections.push(collection(
+        "Messages",
+        value["messages"]
+            .as_array()
+            .expect("detail section is an array"),
+        color,
+    ));
     sections.push(format!(
         "{}\n{}\n{}\n{}\n{}\n{}",
         heading("Details", color),
@@ -133,11 +140,7 @@ pub(super) fn render(value: &Value, color: bool) -> String {
     .collect::<Vec<_>>()
     .join("\n");
     sections.push(format!("{}\n{assignment}", heading("Assignment", color)));
-    for (key, label) in [
-        ("messages", "Messages"),
-        ("images", "Images"),
-        ("events", "History"),
-    ] {
+    for (key, label) in [("images", "Images"), ("events", "History")] {
         sections.push(collection(
             label,
             value[key].as_array().expect("detail section is an array"),
