@@ -90,8 +90,17 @@ task to load it, scroll each pane, or use the keyboard:
 
 ## Give your agent the queue
 
-Give each worker a unique, stable session ID. Add instructions like these to
-your agent prompt or `AGENTS.md`, replacing `agent-1` for each worker:
+Give each worker a unique, stable session ID, replacing `agent-1` for each worker.
+To keep working as new tasks arrive, start with this `/goal` prompt:
+
+```text
+/goal Use `qqq next --wait --local --json --session agent-1` to pick up the next task
+and work on it. Complete each task after its checks pass, then get the next one.
+Loop indefinitely. Keep the blocking wait running; don't wake up repeatedly to
+poll status.
+```
+
+For your agent prompt or `AGENTS.md`, use these workflow instructions:
 
 ```text
 Use qqq to get work for this project.
