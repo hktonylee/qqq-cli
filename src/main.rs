@@ -11,6 +11,7 @@ mod identity;
 mod images;
 mod list_filter;
 mod output;
+mod queue;
 mod session;
 mod snapshot;
 mod sql_filter;
@@ -199,6 +200,12 @@ enum Commands {
         #[arg(long)]
         yes: bool,
     },
+    /// Summarize queue readiness, owners, blockers and latest activity.
+    Status {
+        /// Include archived tasks in diagnostic rows and counts.
+        #[arg(long)]
+        include_archived: bool,
+    },
     /// Return owned task or atomically claim highest-priority ready task (oldest ID on ties).
     Next {
         /// Filter queued candidates with Luau; normal next still returns owned task. See docs/filter.md.
@@ -210,6 +217,12 @@ enum Commands {
         /// Preview queued candidate without claiming or returning an owned task.
         #[arg(long)]
         dry_run: bool,
+        /// Explain selection without claiming, dispatching or discovering a session.
+        #[arg(long, conflicts_with_all = ["wait", "dry_run"])]
+        explain: bool,
+        /// Include archived diagnostic rows; archived tasks remain ineligible.
+        #[arg(long, requires = "explain")]
+        include_archived: bool,
         /// Claim locally even when Herdr new-agent dispatch is configured.
         #[arg(long)]
         local: bool,
@@ -308,6 +321,26 @@ fn execute(
         return Ok(json!(delete::preview_cli(*id)?));
     }
     let session_input = cli.session.as_deref().or(cli.harness_session.as_deref());
+    let diagnostics = match &cli.command {
+        Commands::Status { include_archived } => Some((*include_archived, false)),
+        Commands::Next {
+            explain: true,
+            include_archived,
+            ..
+        } => Some((*include_archived, true)),
+        _ => None,
+    };
+    if let Some((include_archived, explain)) = diagnostics {
+        let (mut db, _) = db::Db::open_read_only()?;
+        return Ok(json!(queue::report(
+            &mut db.conn,
+            include_archived,
+            filter,
+            explain,
+            session_input,
+            cli.harness_name.as_deref(),
+        )?));
+    }
     let (mut db, path) = db::Db::open(matches!(cli.command, Commands::Init))?;
     delete::recover(&mut db.conn, &path)?;
     let project_dir = path
@@ -318,6 +351,7 @@ fn execute(
         Commands::Next {
             local,
             dry_run: false,
+            explain: false,
             ..
         } if *local || !config::load()?.herdr.next_to_new_agent => {
             Some(local_owner(&cli, project_dir, &db)?)
@@ -327,6 +361,7 @@ fn execute(
     Ok(match cli.command {
         Commands::Config { .. } => unreachable!("config was handled before database lookup"),
         Commands::Init => json!({"database":path}),
+        Commands::Status { .. } => unreachable!("diagnostics handled before database writes"),
         Commands::Add {
             text,
             description,

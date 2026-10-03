@@ -69,6 +69,10 @@ Commands also work from subdirectories. Add `.qqq/` to your `.gitignore`.
 
 ## See and edit the work
 
+Inspect readiness, owners and blockers with `qqq status`. Preview selection reasons
+with `qqq next --explain`; neither command claims work. Both support `--json`.
+See [queue diagnostics](docs/reference.md#queue-diagnostics) for filters and owner context.
+
 ```sh
 qqq tui
 ```

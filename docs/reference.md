@@ -378,6 +378,100 @@ description link while keeping the attachment available through `show`.
 
 Description, status, parent and image updates save atomically.
 
+## Queue diagnostics
+
+```sh
+qqq status
+qqq status --include-archived --json
+qqq next --explain
+qqq next --explain --filter 'priority >= 5' --json
+qqq next --explain --session worker-1
+```
+
+`status` summarizes ready, blocked, in-progress, error and completed counts,
+then shows unfinished tasks with active owners, immediate parent blockers and
+latest activity. JSON includes every task in scope, including completed tasks.
+Archived tasks are excluded by default; `--include-archived` includes their rows
+and counts. Archived tasks never become ready.
+
+`next --explain` reports selection and every scoped task's eligibility without
+claiming, dispatching an agent or changing assignment metadata. It distinguishes
+an empty queue, blocked/error/owned queues, mixed unavailable work and ready tasks
+excluded by filters. Candidates use priority descending, then ID ascending on
+ties. Readiness uses exactly the same rules as real next: new, unarchived, with
+no parent or a completed parent.
+
+Global explanation needs no session. Native Codex/Herdr identity discovery and
+dispatch config are ignored. Supply `--session`, `QQQ_SESSION` or
+`--harness-session` to inspect owned-task reuse; add `--harness-name` when a
+public harness session is ambiguous. Exact claim keys take precedence over public
+session matching. Existing owned tasks return before queue/filter selection, as
+with ordinary next. This differs from `--dry-run`, which always previews queued
+candidates. Explanation accepts `--local`, conflicts with `--wait` and
+`--dry-run`; next's `--include-archived` requires `--explain`.
+
+Diagnostics open the existing DB read-only, without creating a project, migrating
+schema or recovering pending deletion files. Older supported schemas require a
+normal command such as `qqq list` before diagnostics. Counts, task rows, blockers,
+activity, owner lookup and selection share one SQLite transaction snapshot.
+Reports do not reserve work; subsequent claims may see newer state. Activity age
+never expires or reassigns ownership. Owners still explicitly complete or release
+their claims.
+
+### Diagnostic JSON
+
+Both commands return an object with these fields:
+
+| Field | Meaning |
+| --- | --- |
+| `include_archived` | Requested archive scope |
+| `counts.total` | Number of scoped tasks |
+| `counts.new` | Scoped tasks with `new` status |
+| `counts.ready` | Unfiltered ready tasks |
+| `counts.blocked` | New tasks that are not ready; includes archived new tasks when included |
+| `counts.matching_ready` | Ready tasks matching supplied filter; same as ready without a filter |
+| `counts.in_progress`, `.error`, `.completed` | Scoped task counts for each status |
+| `counts.archived` | Archived subset of total; not an additional status category |
+| `state` | `empty`, `ready`, `no_matching_ready`, `blocked`, `error`, `in_progress`, or `no_ready` |
+| `tasks` | Scoped diagnostic rows in ascending creation ID order |
+| `explanation` | Selection diagnostics for `--explain`; null for status |
+
+`ready + blocked = new`. `blocked`, `error` and `in_progress` states describe
+queues containing only that unfinished class; completed history does not hide
+those states. Mixed unavailable or completed-only queues use `no_ready`.
+
+Each row contains the normal `task` object plus:
+
+| Field | Meaning |
+| --- | --- |
+| `ready` | Shared readiness predicate, independent of filter |
+| `matches_filter` | Filter result, independent of readiness; true without a filter |
+| `queue_rank` | One-based rank among all ready tasks by priority/ID; null otherwise |
+| `reasons` | Zero or more eligibility/exclusion codes |
+| `owner` | Recorded claim key for an active task; null otherwise |
+| `blockers` | Immediate unfinished/missing parent: ID, status and archived flag; missing parent has null status/flag |
+| `latest_activity` | Latest task update, message or event: `at`, `source`, `id`, `session`, `action` |
+
+Reason codes: `archived`, `parent_not_completed`, `in_progress`, `error`,
+`completed`, `filter_excluded`. A ready matching task has no reasons.
+Latest activity compares task `updated_at` with message/event `created_at`.
+Timestamp ties prefer message, then event, then task; higher IDs break ties
+within one source. Task activity has null ID/session/action; messages have null
+action; events include their action. Updates cover creation and edits as well as
+other task changes. Blocker resolution includes archived parents regardless of
+output scope.
+
+Explanation contains `owner_input`, `resolved_owner` (both null without explicit
+context), `ordering: ["priority_desc", "id_asc"]`, `eligible_ids` (matching ready
+IDs in selection order), `outcome` and `selection`. Outcome is
+`owned_task_reuse`, `ready_candidate`, `empty_queue`,
+`no_matching_ready_candidate`, `blocked_queue`, `error_queue`,
+`in_progress_queue` or `no_ready_tasks`. Selection is null or
+`{"kind":"owned"|"queued","task":...}`. An archived active owned task can appear
+in selection while absent from default scoped rows, matching ordinary next.
+Task objects retain the existing task JSON format; raw claim keys are exposed
+only in diagnostic row `owner`.
+
 ## Agents and recovery
 
 Use stable, unique session ID per worker:

@@ -1,4 +1,5 @@
 mod detail;
+mod queue;
 
 use crate::{Commands, HerdrCommand};
 use serde_json::Value;
@@ -15,6 +16,8 @@ pub enum Format {
     AddedTask,
     Task,
     NextTask,
+    QueueOverview,
+    NextExplanation,
     Tasks,
     CompactTasks,
     PriorityTasks,
@@ -51,6 +54,8 @@ impl From<&Commands> for Format {
             Commands::Doctor => Self::Doctor,
             Commands::Delete { .. } => Self::Delete,
             Commands::Tui { .. } => Self::Task,
+            Commands::Status { .. } => Self::QueueOverview,
+            Commands::Next { explain: true, .. } => Self::NextExplanation,
             Commands::Next { .. } => Self::NextTask,
             Commands::Edit { .. }
             | Commands::Archive { .. }
@@ -388,6 +393,8 @@ fn task_tree(
 
 pub fn render(format: Format, value: &Value, color: bool, columns: Option<usize>) -> String {
     match format {
+        Format::QueueOverview => queue::render(value, color, false),
+        Format::NextExplanation => queue::render(value, color, true),
         Format::ConfigList => {
             let values = value.as_object().expect("config list is an object");
             if values.is_empty() {

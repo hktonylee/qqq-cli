@@ -6,9 +6,13 @@ use std::{
 use tempfile::TempDir;
 
 fn command(dir: &Path) -> Command {
+    let mut c = human_command(dir);
+    c.arg("--json");
+    c
+}
+fn human_command(dir: &Path) -> Command {
     let mut c = Command::new(env!("CARGO_BIN_EXE_qqq"));
-    c.arg("--json")
-        .current_dir(dir)
+    c.current_dir(dir)
         .env("HOME", dir)
         .env_remove("QQQ_SESSION")
         .env_remove("CODEX_THREAD_ID")
@@ -838,3 +842,6 @@ fn show_recent_invalid_references_leave_export_and_database_unchanged() {
         }
     }
 }
+
+#[path = "cli/queue.rs"]
+mod queue;

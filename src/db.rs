@@ -16,6 +16,10 @@ use std::{
 
 pub const DB_NAME: &str = "qqq.db";
 const PROJECT_DIR_NAME: &str = ".qqq";
+pub(crate) const SCHEMA_VERSION: i64 = 10;
+pub(crate) const READY_TASK_PREDICATE: &str = "tasks.status='new' AND tasks.archived=0 AND
+    (tasks.parent_id IS NULL OR EXISTS
+    (SELECT 1 FROM tasks parent WHERE parent.id=tasks.parent_id AND parent.status='completed'))";
 pub struct Db {
     pub conn: Connection,
     pub image_store: ImageStore,
@@ -258,27 +262,31 @@ fn commit_with_files(tx: Transaction<'_>, pending: &mut PendingFiles) -> Result<
         }
     }
 }
+fn database_path(init: bool) -> Result<PathBuf> {
+    let cwd = std::env::current_dir()?;
+    let path = if init {
+        let directory = cwd.join(PROJECT_DIR_NAME);
+        std::fs::create_dir_all(&directory)?;
+        directory.join(DB_NAME)
+    } else {
+        let directory = cwd
+            .ancestors()
+            .map(|parent| parent.join(PROJECT_DIR_NAME))
+            .find(|candidate| candidate.is_dir())
+            .context("No .qqq directory found; run qqq init in project root")?;
+        let path = directory.join(DB_NAME);
+        ensure!(
+            path.is_file(),
+            "No .qqq/qqq.db found in {}",
+            directory.display()
+        );
+        path
+    };
+    Ok(path)
+}
 impl Db {
     pub fn open(init: bool) -> Result<(Self, PathBuf)> {
-        let cwd = std::env::current_dir()?;
-        let path = if init {
-            let directory = cwd.join(PROJECT_DIR_NAME);
-            std::fs::create_dir_all(&directory)?;
-            directory.join(DB_NAME)
-        } else {
-            let directory = cwd
-                .ancestors()
-                .map(|parent| parent.join(PROJECT_DIR_NAME))
-                .find(|candidate| candidate.is_dir())
-                .context("No .qqq directory found; run qqq init in project root")?;
-            let path = directory.join(DB_NAME);
-            ensure!(
-                path.is_file(),
-                "No .qqq/qqq.db found in {}",
-                directory.display()
-            );
-            path
-        };
+        let path = database_path(init)?;
         let flags = OpenFlags::SQLITE_OPEN_READ_WRITE
             | if init {
                 OpenFlags::SQLITE_OPEN_CREATE
@@ -295,11 +303,11 @@ impl Db {
         conn.pragma_update(None, "foreign_keys", "ON")?;
         let version: i64 = conn.pragma_query_value(None, "user_version", |r| r.get(0))?;
         ensure!(
-            (1..=10).contains(&version) || (init && version == 0),
+            (1..=SCHEMA_VERSION).contains(&version) || (init && version == 0),
             "Unsupported database schema version {version}"
         );
         ensure_description_schema(&conn)?;
-        if version < 10 {
+        if version < SCHEMA_VERSION {
             // Rebuild CHECK constraints without changing references to tasks.
             // SQLite requires foreign_keys to change outside a transaction.
             let disable_foreign_keys = version < 6;
@@ -312,7 +320,7 @@ impl Db {
             // Another CLI may have migrated while we waited for the write lock.
             let version: i64 = tx.pragma_query_value(None, "user_version", |r| r.get(0))?;
             ensure!(
-                (1..=10).contains(&version) || (init && version == 0),
+                (1..=SCHEMA_VERSION).contains(&version) || (init && version == 0),
                 "Unsupported database schema version {version}"
             );
             ensure_description_schema(&tx)?;
@@ -383,8 +391,29 @@ impl Db {
         }
         let version: i64 = conn.pragma_query_value(None, "user_version", |r| r.get(0))?;
         ensure!(
-            version == 10,
+            version == SCHEMA_VERSION,
             "Unsupported database schema version {version}"
+        );
+        Ok((Self { conn, image_store }, path))
+    }
+    pub fn open_read_only() -> Result<(Self, PathBuf)> {
+        let path = database_path(false)?;
+        let conn = Connection::open_with_flags(&path, OpenFlags::SQLITE_OPEN_READ_ONLY)?;
+        conn.busy_timeout(Duration::from_secs(10))?;
+        let version: i64 = conn.pragma_query_value(None, "user_version", |row| row.get(0))?;
+        ensure!(
+            (1..=SCHEMA_VERSION).contains(&version),
+            "Unsupported database schema version {version}"
+        );
+        ensure!(
+            version == SCHEMA_VERSION,
+            "Database schema version {version} requires migration; run qqq list before diagnostics"
+        );
+        ensure_description_schema(&conn)?;
+        let image_store = ImageStore::new(
+            path.parent()
+                .context("Missing database directory")?
+                .join("images"),
         );
         Ok((Self { conn, image_store }, path))
     }
@@ -964,7 +993,11 @@ impl Db {
         )?;
         Ok(())
     }
-    fn owner_key(conn: &Connection, session: &str, harness_name: Option<&str>) -> Result<String> {
+    pub(crate) fn owner_key(
+        conn: &Connection,
+        session: &str,
+        harness_name: Option<&str>,
+    ) -> Result<String> {
         nonempty(session, "Session")?;
         let exact: bool = conn.query_row(
             "SELECT EXISTS(SELECT 1 FROM tasks WHERE status='in_progress' AND claim_key=?)",
@@ -1015,31 +1048,23 @@ impl Db {
         ).optional()?)
     }
     pub fn has_ready(&self) -> Result<bool> {
-        Ok(self.conn.query_row(
-            "SELECT EXISTS(SELECT 1 FROM tasks WHERE status='new' AND archived=0 AND
-                (parent_id IS NULL OR EXISTS(SELECT 1 FROM tasks parent WHERE parent.id=tasks.parent_id AND parent.status='completed')))",
-            [], |row| row.get(0),
-        )?)
+        Ok(Self::ready_task_id(&self.conn, None)?.is_some())
     }
     pub fn has_ready_filtered(&self, filter: Option<&CompiledFilter>) -> Result<bool> {
-        let Some(filter) = filter else {
-            return self.has_ready();
-        };
-        let sql = format!(
-            "SELECT EXISTS(SELECT 1 FROM tasks WHERE status='new' AND archived=0 AND
-             (parent_id IS NULL OR EXISTS(SELECT 1 FROM tasks parent WHERE parent.id=tasks.parent_id AND parent.status='completed'))
-             AND ({}))", filter.sql()
-        );
-        Ok(self
-            .conn
-            .query_row(&sql, params_from_iter(filter.params()), |row| row.get(0))?)
+        match filter {
+            None => self.has_ready(),
+            Some(filter) => Ok(Self::ready_task_id(&self.conn, Some(filter))?.is_some()),
+        }
     }
-    fn ready_task_id(conn: &Connection, filter: Option<&CompiledFilter>) -> Result<Option<i64>> {
+    pub(crate) fn ready_task_id(
+        conn: &Connection,
+        filter: Option<&CompiledFilter>,
+    ) -> Result<Option<i64>> {
         let predicate = filter.map_or("1", CompiledFilter::sql);
-        let sql = format!("SELECT id FROM tasks WHERE status='new' AND archived=0
-            AND (parent_id IS NULL OR EXISTS
-                (SELECT 1 FROM tasks parent WHERE parent.id=tasks.parent_id AND parent.status='completed'))
-            AND ({predicate}) ORDER BY priority DESC,id ASC LIMIT 1");
+        let sql = format!(
+            "SELECT id FROM tasks WHERE {READY_TASK_PREDICATE}
+            AND ({predicate}) ORDER BY priority DESC,id ASC LIMIT 1"
+        );
         Ok(conn
             .query_row(
                 &sql,
