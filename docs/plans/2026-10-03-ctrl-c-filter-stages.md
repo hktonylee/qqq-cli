@@ -74,7 +74,11 @@
 
 - [x] Describe filter stages in reference: `Ctrl-C clears nonempty query, preserving current focus. With empty focused filter, next Ctrl-C closes filter and returns focus to editor without changing opened task or draft. Later Ctrl-C follows editor cancel flow.` Keep Esc and popup/confirmation preservation semantics.
 - [x] Run `cargo fmt --check`, `cargo test --locked`, `cargo clippy --locked --all-targets -- -D warnings`; require zero failures. Request read-only review through existing reviewer.
-- [ ] Record verification; commit `[Fix] Close Empty Filter Before Ctrl C Cancels Editor`. Rebase on current master, resolve conflicts, verify changed integration if needed; fast-forward master.
-- [ ] Install with `cargo install --path . --locked --offline --force`. Run installed CLI PTY scenarios `filter_ctrl_c_empty_selected_dirty`, `ctrl_c_new_filter`, `filter_ctrl_c_empty_no_color`. Remove merged worktree/branch, complete task #143, resume one persistent `qqq next --wait --local --json` waiter.
+- [x] Record verification; commit `[Fix] Close Empty Filter Before Ctrl C Cancels Editor`. Rebase on current master, resolve conflicts, verify changed integration if needed; fast-forward master.
+- [x] Install with `cargo install --path . --locked --offline --force`. Run installed CLI PTY scenarios `filter_ctrl_c_empty_selected_dirty`, `ctrl_c_new_filter`, `filter_ctrl_c_empty_no_color`.
+
+Cleanup: remove merged worktree/branch, complete task #143, resume one persistent `qqq next --wait --local --json` waiter.
 
 Verification: existing eight cancellation scenarios passed at baseline. New empty-filter regression failed with `Editor exited before visible state`; after fix, three Ctrl-C tests covering 22 PTY scenarios passed. Full suite passed 490 tests; formatting, Clippy, diff check passed. Read-only review approved with no findings.
+
+Integration verification: rebased cleanly over concurrent `next` human-output changes. Combined suite passed 491 tests; formatting and Clippy passed. Installed CLI passed dirty selected empty-filter, staged dirty new-filter, staged dirty selected-filter, and NO_COLOR empty-filter scenarios.
