@@ -27,7 +27,9 @@ Visible ancestors of direct matches remain as context rows, even when predicate 
 
 `next` applies predicate to **new candidates** inside atomic claim transaction. Candidates must also be unarchived, ready, unclaimed. Completed parent dependency remains required. Highest priority wins, oldest ID breaks ties.
 
-Existing owned task always returns, even when predicate no longer matches. Changing filter never releases ownership. Complete or explicitly release current task before choosing another.
+Without `--dry-run`, existing owned task always returns, even when predicate no longer matches. Changing filter never releases ownership. Complete or explicitly release current task before choosing another.
+
+`next --dry-run --filter EXPR` previews matching queued candidate using same readiness/priority rules. Existing claims are skipped. Preview uses read-only snapshot; `--wait` waits for matching candidate without claiming or dispatching it. No session or Herdr identity required.
 
 No match -> JSON `null` or human `No ready tasks.`. `--wait` blocks until matching ready candidate exists, reevaluating predicate on each claim attempt. Herdr dispatch uses same filter for readiness and atomic claim; no matching candidate creates no tab.
 

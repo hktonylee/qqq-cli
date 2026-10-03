@@ -51,6 +51,26 @@ fn human_list_tty_width_shows_multiline_rows() {
 }
 
 #[test]
+fn next_dry_run_reports_stored_task_and_empty_queue() {
+    let dir = project();
+    let p = dir.path();
+    assert_eq!(text(p, &["next", "--dry-run"]), "No ready tasks.\n");
+    assert_eq!(text(p, &["next", "--dry-run", "--json"]), "null\n");
+    text(p, &["add", "Preview"]);
+    let preview = text(p, &["next", "--dry-run"]);
+    assert!(preview.contains("#1"));
+    assert!(preview.contains("Status: New"));
+    assert!(preview.contains("Harness session: -"));
+    assert!(!preview.contains('\u{1b}'));
+    assert_eq!(text(p, &["next", "--dry-run"]), preview);
+    text(p, &["next", "--local", "--session", "owner"]);
+    assert_eq!(
+        text(p, &["next", "--dry-run", "--session", "owner"]),
+        "No ready tasks.\n"
+    );
+}
+
+#[test]
 fn human_tasks_show_descriptions_dependencies_and_ownership() {
     let d = project();
     let p = d.path();

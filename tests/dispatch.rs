@@ -112,6 +112,48 @@ print(json.dumps({'result':result}))
 }
 
 #[test]
+fn dispatch_dry_run_never_starts_agent_or_returns_owned_task() {
+    let p = Project::new();
+    p.ok(&["add", "Owned"]);
+    p.ok(&["next", "--local", "--session", "caller"]);
+    let queued = p.ok(&["add", "Queued"]);
+    let before = p.ok(&["show", "1"]);
+    let output = p
+        .command()
+        .env_remove("HERDR_ENV")
+        .env_remove("HERDR_PANE_ID")
+        .args(["next", "--dry-run"])
+        .output()
+        .unwrap();
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let preview: Value = serde_json::from_slice(&output.stdout).unwrap();
+    assert_eq!(preview, queued);
+    assert_eq!(
+        p.ok(&[
+            "next",
+            "--dry-run",
+            "--session",
+            "caller",
+            "--harness-session",
+            "changed"
+        ]),
+        queued
+    );
+    assert_eq!(p.ok(&["show", "1"]), before);
+    assert!(p.calls().is_empty());
+    assert!(
+        p.ok(&["show", "2"])["events"]
+            .as_array()
+            .unwrap()
+            .is_empty()
+    );
+}
+
+#[test]
 fn dispatch_filters_preflight_and_atomic_claim() {
     let p = Project::new();
     p.ok(&["add", "Other", "--priority", "100"]);

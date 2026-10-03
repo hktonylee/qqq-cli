@@ -138,6 +138,82 @@ impl Drop for Waiter {
 }
 
 #[test]
+fn wait_dry_run_returns_unclaimed_incoming_task() {
+    let dir = project();
+    let p = dir.path();
+    let mut waiter = Waiter(Some(
+        command(p)
+            .arg("--json")
+            .args(["next", "--wait", "--dry-run"])
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .spawn()
+            .unwrap(),
+    ));
+    waiter.assert_waiting();
+    ok(p, &["add", "Incoming"]);
+    let preview = waiter.task();
+    assert_eq!(preview["status"], "new");
+    assert!(preview["harness_session"].is_null());
+    assert!(
+        ok(p, &["show", "1"])["events"]
+            .as_array()
+            .unwrap()
+            .is_empty()
+    );
+    assert_eq!(
+        ok(p, &["next", "--local", "--session", "worker"])["id"],
+        preview["id"]
+    );
+}
+
+#[test]
+fn concurrent_waiting_previews_skip_owned_and_blocked_tasks_without_reserving() {
+    let dir = project();
+    let p = dir.path();
+    ok(p, &["add", "Parent"]);
+    ok(p, &["next", "--local", "--session", "parent"]);
+    ok(p, &["add", "Child", "--parent", "1"]);
+    let mut waiters: Vec<_> = (0..2)
+        .map(|_| {
+            Waiter(Some(
+                command(p)
+                    .arg("--json")
+                    .args([
+                        "next",
+                        "--wait",
+                        "--dry-run",
+                        "--session",
+                        "parent",
+                        "--filter",
+                        "id == 2",
+                    ])
+                    .stdout(Stdio::piped())
+                    .stderr(Stdio::piped())
+                    .spawn()
+                    .unwrap(),
+            ))
+        })
+        .collect();
+    for waiter in &mut waiters {
+        waiter.assert_waiting();
+    }
+    ok(p, &["complete", "1", "--session", "parent"]);
+    let first = waiters.pop().unwrap().task();
+    let second = waiters.pop().unwrap().task();
+    assert_eq!(first, second);
+    assert_eq!(first["id"], 2);
+    assert_eq!(first["status"], "new");
+    assert!(
+        ok(p, &["show", "2"])["events"]
+            .as_array()
+            .unwrap()
+            .is_empty()
+    );
+    assert_eq!(ok(p, &["next", "--local", "--session", "worker"])["id"], 2);
+}
+
+#[test]
 fn wait_returns_ready_or_already_owned_task_immediately() {
     let dir = project();
     let p = dir.path();

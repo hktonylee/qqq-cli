@@ -331,8 +331,19 @@ qqq next --wait
 without it, empty queue prints `No ready tasks.` and exits successfully. Error
 tasks and blocked children stay out of queue.
 
+`next --dry-run` previews queued candidate without claiming or dispatching an
+agent. Existing claims are skipped; no session or Herdr identity required.
+Preview retains stored `new` status and metadata. Combine with `--filter`,
+`--wait`, `--local`, and `--json`. Preview does not reserve task; another worker
+can claim it afterward.
+
+```sh
+qqq next --dry-run --json
+```
+
 `next --filter 'priority >= 5'` selects matching new candidates using same
-priority/readiness rules. Existing owned task still returns regardless of filter.
+priority/readiness rules. Without `--dry-run`, existing owned task still returns
+regardless of filter.
 Combine with `--wait` or Herdr dispatch; no matching ready candidate yields no claim.
 
 Without `--session` or `QQQ_SESSION`, owner discovery uses:

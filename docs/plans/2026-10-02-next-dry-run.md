@@ -128,7 +128,7 @@ Retain return condition and 250ms wait after transaction ends. Update wait comme
 
 **Files:** Modify `tests/wait.rs`, `tests/dispatch.rs`, `tests/output.rs`, `README.md`, `docs/filter.md`.
 
-- [ ] Add waiting preview using existing `Waiter` cleanup and test helpers:
+- [x] Add waiting preview using existing `Waiter` cleanup and test helpers:
 
 ```rust
 #[test]
@@ -136,7 +136,7 @@ fn wait_dry_run_returns_unclaimed_incoming_task() {
     let dir = project();
     let p = dir.path();
     let mut waiter = Waiter(Some(command(p).arg("--json")
-        .args(["next", "--wait", "--dry-run", "--local", "--session", "preview"])
+        .args(["next", "--wait", "--dry-run"])
         .stdout(Stdio::piped()).stderr(Stdio::piped()).spawn().unwrap()));
     waiter.assert_waiting();
     ok(p, &["add", "Incoming"]);
@@ -148,7 +148,7 @@ fn wait_dry_run_returns_unclaimed_incoming_task() {
 }
 ```
 
-- [ ] Add configured-dispatch bypass regression using existing fake Herdr fixture:
+- [x] Add configured-dispatch bypass regression using existing fake Herdr fixture:
 
 ```rust
 #[test]
@@ -170,7 +170,7 @@ fn dispatch_dry_run_never_starts_agent_or_returns_owned_task() {
 }
 ```
 
-- [ ] Add human/JSON output test using existing output helpers:
+- [x] Add human/JSON output test using existing output helpers:
 
 ```rust
 #[test]
@@ -183,7 +183,7 @@ fn next_dry_run_reports_stored_task_and_empty_queue() {
     let preview = text(p, &["next", "--dry-run"]);
     assert!(preview.contains("#1"));
     assert!(preview.contains("Status: New"));
-    assert!(!preview.contains("Harness session:"));
+    assert!(preview.contains("Harness session: -"));
     assert!(!preview.contains('\u{1b}'));
     assert_eq!(text(p, &["next", "--dry-run"]), preview);
     text(p, &["next", "--local", "--session", "owner"]);
@@ -191,7 +191,7 @@ fn next_dry_run_reports_stored_task_and_empty_queue() {
 }
 ```
 
-- [ ] Strengthen queue-state test before preview: seed completed/error tasks with higher priority through CLI transitions, then snapshot all tasks:
+- [x] Strengthen queue-state test before preview: seed completed/error tasks with higher priority through CLI transitions, then snapshot all tasks:
 
 ```rust
 ok(p, &["add", "Done", "--priority", "100"]);
@@ -202,7 +202,7 @@ ok(p, &["next", "--local", "--session", "failed", "--filter", "id == 7"]);
 ok(p, &["edit", "7", "--set-status", "error", "--reason", "Retry needed", "--session", "failed"]);
 ```
 
-- [ ] Strengthen read-only regression before capturing snapshots: save valid stale link for queued task and reject all task/event/link mutations:
+- [x] Strengthen read-only regression before capturing snapshots: save valid stale link for queued task and reject all task/event/link mutations:
 
 ```rust
 let link = serde_json::json!({
@@ -219,7 +219,7 @@ for table in ["tasks", "events", "herdr_links"] {
 
 Capture `before_queued` after link insertion; compare both show snapshots after preview. This replaces single update trigger from initial regression.
 
-- [ ] Add README usage immediately after worker loop:
+- [x] Add README usage immediately after worker loop:
 
 ````markdown
 `next --dry-run` previews queued candidate without claiming or dispatching an agent.
@@ -234,7 +234,9 @@ qqq next --dry-run --json
 
 Add `next --dry-run --filter EXPR` sentence in `docs/filter.md`: same filter/readiness ordering, read-only snapshot; `--wait` waits without claiming.
 
-- [ ] Run `cargo test --locked --test cli --test filters --test dispatch --test wait --test output`. Commit `[Test] Cover Next Preview Wait And Dispatch` after checks pass.
+- [x] Run `cargo test --locked --test cli --test filters --test dispatch --test wait --test output`. Commit `[Test] Cover Next Preview Wait And Dispatch` after checks pass.
+
+Additional coverage: two concurrent previews wait for blocked child while caller owns parent, then both return same unclaimed child after parent completes.
 
 ### Task 4: Verify, review, integrate and resume queue
 
