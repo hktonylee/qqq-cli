@@ -131,7 +131,7 @@ with tempfile.TemporaryDirectory(prefix="qqq-history-test-") as folder:
         else:
             read_until(f"Saved #{expected_id}. New task".encode())
             assert child.poll() is None
-            assert b"Task Editor - new task" in screen
+            assert b"Task Editor - New Task" in screen
             if next_task is not None:
                 screen.clear()
                 send(next_task + b"\x13")
@@ -174,9 +174,9 @@ with tempfile.TemporaryDirectory(prefix="qqq-history-test-") as folder:
     try:
         read_until(b"Ctrl-S")
         if scenario == "history_save":
-            press(UP, b"task #3")
-            press(UP, b"task #2")
-            press(DOWN, b"task #3")
+            press(UP, b"Task #3")
+            press(UP, b"Task #2")
+            press(DOWN, b"Task #3")
             send(b"\x05 updated")
             batch = finish(3, b"Fresh")
             saved = batch[0]
@@ -192,7 +192,7 @@ with tempfile.TemporaryDirectory(prefix="qqq-history-test-") as folder:
             def status_title(direction, task_id, status, code):
                 screen.clear()
                 send(direction)
-                title = f"task #{task_id} ".encode()
+                title = f"Task #{task_id} ".encode()
                 colored = scenario == "status_header" and code is not None
                 expected = title + (f"\x1b[{code}m".encode() if colored else b"") + f"({status})".encode()
                 read_until(expected)
@@ -205,19 +205,19 @@ with tempfile.TemporaryDirectory(prefix="qqq-history-test-") as folder:
             for task_id, status in ((2, "In progress"), (3, "Error"), (4, "New")):
                 status_title(DOWN, task_id, status,
                              {"New": None, "Error": "31", "In progress": "36", "Completed": "90"}[status])
-            press(DOWN, b"new task")
+            press(DOWN, b"New Task")
             send(b"Fresh")
             assert finish(5)[0]["description"] == "Fresh"
         elif scenario == "skip_deleted":
-            press(UP, b"task #3")
-            press(UP, b"task #1")
-            press(DOWN, b"task #3")
+            press(UP, b"Task #3")
+            press(UP, b"Task #1")
+            press(DOWN, b"Task #3")
             send(b"\x05!")
             saved = finish(3)[0]
             assert saved["id"] == 3 and saved["description"] == "Third!"
             assert [task["id"] for task in cli("list")] == [1, 3]
         elif scenario == "long_task_ends_at_bottom":
-            press(UP, b"task #1")
+            press(UP, b"Task #1")
             read_until(b"Shift-Up/Dn Switch Tasks")
             read_until(b"Bottom marker")
             assert b"Top marker" not in screen, screen[-2000:]
@@ -226,7 +226,7 @@ with tempfile.TemporaryDirectory(prefix="qqq-history-test-") as folder:
             assert saved["id"] == 1
             assert saved["description"].endswith("Bottom marker appended")
         elif scenario == "existing_and_flagged_images":
-            press(UP, b"task #1")
+            press(UP, b"Task #1")
             send(b"\x05 edited")
             saved = finish(1)[0]
             assert saved["id"] == 1 and saved["description"] == "First edited"
@@ -239,7 +239,7 @@ with tempfile.TemporaryDirectory(prefix="qqq-history-test-") as folder:
             read_until(b"[Image #1: pasted.png]")
             press(b"\x13", b"Saved #1. New task")
             assert cli("show", "1")["task"]["description"] == "Prefix ![pasted.png](.qqq/images/1/1.png)"
-            press(UP, b"task #1")
+            press(UP, b"Task #1")
             read_until(b"[Image #1: pasted.png]")
             send(b"\x05\x7f")
             saved = finish(1)[-1]
@@ -254,22 +254,22 @@ with tempfile.TemporaryDirectory(prefix="qqq-history-test-") as folder:
             press(b"\x13", b"Saved #1. New task")
             stored = "Prefix \n````pasteboard\n" + payload + "\n````"
             assert cli("show", "1")["task"]["description"] == stored
-            press(UP, b"task #1")
+            press(UP, b"Task #1")
             read_until(f"[Pasted Content {len(payload)} chars]".encode())
             assert b"\x1b[38;5;222m" in screen, "Reloaded paste accent missing"
             send(b"\x1b[C" * (len("Prefix \n") + 1) + b"\x17")
             saved = finish(1)[-1]
             assert saved["description"] == "Prefix \n", repr(saved["description"])
         elif scenario == "legacy_image_reload":
-            press(UP, b"task #1")
+            press(UP, b"Task #1")
             read_until(b"[Image #1: old.png]")
-            press(DOWN, b"new task")
+            press(DOWN, b"New Task")
             assert b"Discard changes and switch?" not in screen
-            press(UP, b"task #1")
+            press(UP, b"Task #1")
             saved = finish(1)[0]
             assert saved["description"] == "Prefix ![old.png](.qqq/images/1/1.png)"
         elif scenario == "selected_deleted":
-            press(UP, b"task #1")
+            press(UP, b"Task #1")
             with sqlite3.connect(Path(folder) / ".qqq/qqq.db") as db:
                 db.execute("DELETE FROM tasks WHERE id=1")
             send(b"\x05!")
@@ -277,8 +277,8 @@ with tempfile.TemporaryDirectory(prefix="qqq-history-test-") as folder:
             assert b"Task 1 not found" in screen
             assert cli("list") == []
         elif scenario == "return_new":
-            press(UP, b"task #1")
-            press(DOWN, b"new task")
+            press(UP, b"Task #1")
+            press(DOWN, b"New Task")
             send(b"Fresh")
             saved = finish(2)[0]
             assert saved["id"] == 2 and saved["description"] == "Fresh"
@@ -287,13 +287,13 @@ with tempfile.TemporaryDirectory(prefix="qqq-history-test-") as folder:
             send(b"Draft")
             press(UP, b"Discard changes and switch? (y/N)")
             send(b"zzz")
-            press(b"n", b"new task")
+            press(b"n", b"New Task")
             saved = finish(2)[0]
             assert saved["id"] == 2 and saved["description"] == "Draft"
         elif scenario == "dirty_new_discard":
             send(b"Draft")
             press(UP, b"Discard changes and switch? (y/N)")
-            press(b"y", b"task #1")
+            press(b"y", b"Task #1")
             send(b"\x05 edited")
             saved = finish(1)[0]
             assert saved["id"] == 1 and saved["description"] == "First edited"
@@ -304,21 +304,21 @@ with tempfile.TemporaryDirectory(prefix="qqq-history-test-") as folder:
             send(b"\x1b[200~" + str(image).encode() + b"\x1b[201~")
             read_until(b"[Image #1:")
             press(UP, b"Discard changes and switch? (y/N)")
-            press(b"y", b"task #1")
+            press(b"y", b"Task #1")
             send(b"\x05 edited")
             saved = finish(1)[0]
             assert saved["id"] == 1 and saved["description"] == "First edited"
             assert cli("show", "1")["images"] == []
         elif scenario == "dirty_loaded_keep":
-            press(UP, b"task #2")
+            press(UP, b"Task #2")
             send(b"\x05!")
             press(UP, b"Discard changes and switch? (y/N)")
-            press(b"\x1b", b"task #2")
+            press(b"\x1b", b"Task #2")
             saved = finish(2)[0]
             assert saved["id"] == 2 and saved["description"] == "Second!"
             assert cli("show", "1")["task"]["description"] == "First"
         elif scenario == "oldest_boundary":
-            press(UP, b"task #1")
+            press(UP, b"Task #1")
             send(b"\x05!")
             press(UP, b"No older task")
             assert b"Discard changes and switch?" not in screen

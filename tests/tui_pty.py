@@ -129,7 +129,7 @@ with tempfile.TemporaryDirectory(prefix="qqq-tui-test-") as folder:
                 screen.clear()
                 send(b"\x1b[1;2A\x1b[1;2B\x05")
                 read_until(b"Ctrl-S")
-                assert b"task #2" not in screen and b"new task" not in screen
+                assert b"Task #2" not in screen and b"New Task" not in screen
             paste(" amended")
         elif scenario == "edit_image":
             read_until(b"[Image #1: test image.png]")
