@@ -94,7 +94,7 @@ CTRL_P = b"\x10"
 with tempfile.TemporaryDirectory(prefix="qqq-dashboard-test-") as folder:
     env = dict(os.environ, HOME=folder, TERM="xterm-256color")
     env.pop("NO_COLOR", None)
-    if scenario in ("no_color", "pasteboard_no_color", "filter_no_color", "details_no_color", "actions_popup_no_color", "wide_layout_no_color", "menu_arrows_no_color", "filter_escape_empty_no_color", "compact_layout_no_color", "handoff_hint_no_color", "menu_retry_new_no_color", "menu_retry_error_no_color"):
+    if scenario in ("no_color", "pasteboard_no_color", "filter_no_color", "details_no_color", "actions_popup_no_color", "wide_layout_no_color", "menu_arrows_no_color", "filter_escape_empty_no_color", "filter_ctrl_c_empty_no_color", "compact_layout_no_color", "handoff_hint_no_color", "menu_retry_new_no_color", "menu_retry_error_no_color"):
         env["NO_COLOR"] = "1"
     elif scenario == "dumb":
         env["TERM"] = "dumb"
@@ -740,7 +740,7 @@ print(json.dumps({"result": result}))
             assert editor_line().strip() == "", visible.text()
             assert cli("list") == initial_tasks
             assert child.poll() is None
-        elif scenario.startswith("filter_escape_empty"):
+        elif scenario.startswith(("filter_escape_empty", "filter_ctrl_c_empty")):
             initial_tasks = cli("list")
             if "selected" in scenario or scenario.endswith("child"):
                 send(b"\x1b[1;2A")
@@ -772,7 +772,7 @@ print(json.dumps({"result": result}))
                 wait_visible(lambda: visible.text().splitlines()[0].strip() == "Filter:"
                              and visible.text().splitlines()[-1].startswith("Type to Filter")
                              and visible.cursor_visible and (visible.x, visible.y) == (8, 0))
-            send(b"\x1b")
+            send(b"\x03" if scenario.startswith("filter_ctrl_c_empty") else b"\x1b")
             wait_visible(lambda: visible.text().splitlines()[-1].startswith("Ctrl-S Save")
                          and not visible.text().splitlines()[0].startswith("Filter:")
                          and editor_title() == original_title
@@ -950,8 +950,12 @@ print(json.dumps({"result": result}))
                 assert "Discard draft?" not in visible.text(), visible.text()
                 assert "New Task" in editor_title(), visible.text()
                 assert visible.cursor_visible and (visible.x, visible.y) == (8, 0), visible.text()
-                send(b"\t")
-                wait_visible(lambda: (visible.x, visible.y) == (len("Unsaved draft"), editor_row() + 1))
+                send(b"\x03")
+                wait_visible(lambda: not visible.text().splitlines()[0].startswith("Filter:")
+                             and visible.text().splitlines()[-1].startswith("Ctrl-S Save")
+                             and editor_line().startswith("Unsaved draft")
+                             and (visible.x, visible.y) == (len("Unsaved draft"), editor_row() + 1))
+                assert child.poll() is None and cli("list") == initial_tasks
                 send(b"\x03")
             read_until(b"Discard draft? (y/N)")
             assert cli("list") == initial_tasks
@@ -1207,6 +1211,13 @@ print(json.dumps({"result": result}))
                                  and editor_line().startswith(expected_draft))
                 clear_capture()
                 send(key)
+                if focused_ctrl_c:
+                    wait_visible(lambda: not visible.text().splitlines()[0].startswith("Filter:")
+                                 and visible.text().splitlines()[-1].startswith("Ctrl-S Save")
+                                 and "Task #2 (" in editor_title()
+                                 and editor_line().startswith(expected_draft))
+                    assert child.poll() is None and cli("list") == initial_tasks
+                    send(key)
             if "dirty_selected" in scenario:
                 read_until(b"Discard changes and switch? (y/N)")
                 assert cli("list") == initial_tasks
@@ -2288,6 +2299,11 @@ print(json.dumps({"result": result}))
                 wait_visible(lambda: visible.text().splitlines()[0].strip() == "Filter:"
                              or not visible.text().splitlines()[0].startswith("Filter:"))
             if scenario == "ctrl_c_filter_empty":
+                send(b"\x03")
+                wait_visible(lambda: not visible.text().splitlines()[0].startswith("Filter:")
+                             and "New Task" in editor_title()
+                             and (visible.x, visible.y) == (0, editor_row() + 1))
+                assert child.poll() is None and cli("list") == initial_tasks
                 send(b"\x03")
             elif scenario in ("ctrl_c_new_discard", "ctrl_c_new_image", "ctrl_c_new_whitespace"):
                 send(b"y")

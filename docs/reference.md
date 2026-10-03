@@ -269,8 +269,9 @@ tasks while filter is active. Query changes do not change selected task, unsaved
 draft, or DB.
 While filter is visible, Esc clears query and closes filter focus. Ctrl-C clears
 nonempty query, preserving current focus. Selected task and editor draft stay intact, including while
-popup or confirmation is open. Next Esc follows
-editor clearing flow; next Ctrl-C follows editor cancel flow. Dirty drafts ask
+popup or confirmation is open. With empty focused filter, next Ctrl-C closes filter
+and returns focus to editor without changing opened task or draft. Next Esc follows
+editor clearing flow; later Ctrl-C follows editor cancel flow. Dirty drafts ask
 before discard.
 
 Ctrl-G opens centered actions popup for selected task; dashboard stays visible

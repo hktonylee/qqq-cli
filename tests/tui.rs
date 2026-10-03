@@ -181,6 +181,22 @@ fn tui_dashboard_escape_and_ctrl_c_return_to_new_before_exit() {
 }
 
 #[test]
+fn tui_dashboard_ctrl_c_empty_filter_returns_to_editor() {
+    for name in [
+        "filter_ctrl_c_empty",
+        "filter_ctrl_c_empty_dirty",
+        "filter_ctrl_c_empty_selected",
+        "filter_ctrl_c_empty_selected_dirty",
+        "filter_ctrl_c_empty_child",
+        "filter_ctrl_c_empty_no_color",
+        "filter_ctrl_c_empty_cleared",
+        "filter_ctrl_c_empty_backspace",
+    ] {
+        dashboard_scenario(name);
+    }
+}
+
+#[test]
 fn tui_dashboard_escape_empty_filter_returns_to_editor() {
     for name in [
         "filter_escape_empty",

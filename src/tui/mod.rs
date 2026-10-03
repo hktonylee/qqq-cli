@@ -966,12 +966,12 @@ fn compose_inner(
                 let cancel_key = control && key.code == KeyCode::Char('c');
                 if dashboard
                     && (cancel_key || key.code == KeyCode::Esc)
-                    && (!filter_query.is_empty() || (key.code == KeyCode::Esc && filter_focused))
+                    && (!filter_query.is_empty() || filter_focused)
                 {
-                    filter_query.clear();
-                    if key.code == KeyCode::Esc {
+                    if key.code == KeyCode::Esc || filter_query.is_empty() {
                         filter_focused = false;
                     }
+                    filter_query.clear();
                     list_top = 0;
                     list_follow_selected = true;
                     continue;
@@ -1428,9 +1428,6 @@ fn compose_inner(
                     continue;
                 }
                 if filter_focused {
-                    if control && key.code == KeyCode::Char('c') {
-                        return cancel(saved_any, dashboard);
-                    }
                     if control && key.code == KeyCode::Char('u') {
                         filter_query.clear();
                         list_top = 0;
