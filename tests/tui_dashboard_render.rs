@@ -36,7 +36,7 @@ fn click(
         column,
         row,
         dashboard::HitState {
-            query: "",
+            filter_visible: false,
             rows,
             list_top,
             editor_top,
@@ -588,16 +588,22 @@ fn selected_task_geometry_and_details_hit_test_share_rectangles() {
             }
         }
         assert_eq!(
-            dashboard::wheel_area((72, height), 5, content.y, ""),
+            dashboard::wheel_area((72, height), 5, content.y, false),
             Some(dashboard::WheelArea::Details(dashboard::details_height(
                 details
             )))
         );
         assert!(content.height >= 1);
         assert_eq!(content.width, if details.height >= 3 { 66 } else { 68 });
-        assert_eq!(dashboard::wheel_area((72, height), 1, content.y, ""), None);
+        assert_eq!(
+            dashboard::wheel_area((72, height), 1, content.y, false),
+            None
+        );
         if details.height >= 3 {
-            assert_eq!(dashboard::wheel_area((72, height), 5, details.y, ""), None);
+            assert_eq!(
+                dashboard::wheel_area((72, height), 5, details.y, false),
+                None
+            );
         }
         let fragments: Vec<_> = "Editable".chars().map(|ch| ch.to_string()).collect();
         let layout = render::Layout::new(&fragments, &[], 72);
@@ -607,7 +613,7 @@ fn selected_task_geometry_and_details_hit_test_share_rectangles() {
                 5,
                 details.y,
                 dashboard::HitState {
-                    query: "",
+                    filter_visible: false,
                     rows: &[],
                     list_top: 0,
                     editor_top: 0,
@@ -622,7 +628,7 @@ fn selected_task_geometry_and_details_hit_test_share_rectangles() {
                 2,
                 panes.editor.y + 1,
                 dashboard::HitState {
-                    query: "",
+                    filter_visible: false,
                     rows: &[],
                     list_top: 0,
                     editor_top: 0,
@@ -637,15 +643,15 @@ fn selected_task_geometry_and_details_hit_test_share_rectangles() {
 #[test]
 fn new_draft_hit_test_keeps_three_panes() {
     assert_eq!(
-        dashboard::wheel_area((72, 18), 5, 3, ""),
+        dashboard::wheel_area((72, 18), 5, 3, false),
         Some(dashboard::WheelArea::List(6))
     );
     assert_eq!(
-        dashboard::wheel_area((72, 18), 5, 7, ""),
+        dashboard::wheel_area((72, 18), 5, 7, false),
         Some(dashboard::WheelArea::Details(2))
     );
     assert_eq!(
-        dashboard::wheel_area((72, 18), 5, 11, ""),
+        dashboard::wheel_area((72, 18), 5, 11, false),
         Some(dashboard::WheelArea::Editor(6))
     );
 }
@@ -653,33 +659,33 @@ fn new_draft_hit_test_keeps_three_panes() {
 #[test]
 fn wheel_hit_test_uses_list_editor_and_excludes_edges() {
     assert_eq!(
-        dashboard::wheel_area((72, 24), 5, 3, ""),
+        dashboard::wheel_area((72, 24), 5, 3, false),
         Some(dashboard::WheelArea::List(8))
     );
     assert_eq!(
-        dashboard::wheel_area((72, 24), 5, 1, ""),
+        dashboard::wheel_area((72, 24), 5, 1, false),
         Some(dashboard::WheelArea::List(8))
     );
     assert_eq!(
-        dashboard::wheel_area((72, 24), 5, 7, ""),
+        dashboard::wheel_area((72, 24), 5, 7, false),
         Some(dashboard::WheelArea::List(8))
     );
     assert_eq!(
-        dashboard::wheel_area((72, 24), 5, 10, ""),
+        dashboard::wheel_area((72, 24), 5, 10, false),
         Some(dashboard::WheelArea::Details(3))
     );
-    assert_eq!(dashboard::wheel_area((72, 24), 5, 8, ""), None);
-    assert_eq!(dashboard::wheel_area((72, 24), 0, 10, ""), None);
-    assert_eq!(dashboard::wheel_area((72, 24), 2, 10, ""), None);
-    assert_eq!(dashboard::wheel_area((72, 24), 69, 10, ""), None);
-    assert_eq!(dashboard::wheel_area((72, 24), 5, 12, ""), None);
+    assert_eq!(dashboard::wheel_area((72, 24), 5, 8, false), None);
+    assert_eq!(dashboard::wheel_area((72, 24), 0, 10, false), None);
+    assert_eq!(dashboard::wheel_area((72, 24), 2, 10, false), None);
+    assert_eq!(dashboard::wheel_area((72, 24), 69, 10, false), None);
+    assert_eq!(dashboard::wheel_area((72, 24), 5, 12, false), None);
     assert_eq!(
-        dashboard::wheel_area((72, 24), 5, 14, ""),
+        dashboard::wheel_area((72, 24), 5, 14, false),
         Some(dashboard::WheelArea::Editor(9))
     );
-    assert_eq!(dashboard::wheel_area((72, 24), 5, 23, ""), None);
-    assert_eq!(dashboard::wheel_area((72, 24), 72, 3, ""), None);
-    assert_eq!(dashboard::wheel_area((10, 7), 5, 3, ""), None);
+    assert_eq!(dashboard::wheel_area((72, 24), 5, 23, false), None);
+    assert_eq!(dashboard::wheel_area((72, 24), 72, 3, false), None);
+    assert_eq!(dashboard::wheel_area((10, 7), 5, 3, false), None);
 }
 
 #[test]
@@ -812,7 +818,7 @@ fn manual_list_scroll_does_not_snap_to_selected_task() {
         Some(dashboard::ClickTarget::Task(10))
     );
     assert_eq!(
-        dashboard::wheel_area((72, 24), 5, 7, ""),
+        dashboard::wheel_area((72, 24), 5, 7, false),
         Some(dashboard::WheelArea::List(8))
     );
     assert_eq!(
@@ -958,7 +964,8 @@ fn manual_offsets_clamp_after_resize() {
 fn list_mouse_geometry_tracks_filter_visibility() {
     let rows = panel::rows("1 New First\n2 New Second", 70);
     let layout = render::Layout::new(&["Draft".into()], &[], 72);
-    for query in ["", "first"] {
+    for (query, focused) in [("", false), ("", true), ("first", false), ("first", true)] {
+        let visible = focused || !query.is_empty();
         let hit = |row| {
             dashboard::click_target(
                 (72, 24),
@@ -966,7 +973,7 @@ fn list_mouse_geometry_tracks_filter_visibility() {
                 row,
                 dashboard::HitState {
                     rows: &rows,
-                    query,
+                    filter_visible: visible,
                     list_top: 0,
                     editor_top: 0,
                     layout: &layout,
@@ -975,29 +982,21 @@ fn list_mouse_geometry_tracks_filter_visibility() {
         };
         assert_eq!(
             hit(0),
-            query.is_empty().then_some(dashboard::ClickTarget::Task(1))
+            (!visible).then_some(dashboard::ClickTarget::Task(1))
         );
         assert_eq!(
             hit(1),
-            Some(dashboard::ClickTarget::Task(if query.is_empty() {
-                2
-            } else {
-                1
-            }))
+            Some(dashboard::ClickTarget::Task(if !visible { 2 } else { 1 }))
         );
         assert_eq!(
-            dashboard::wheel_area((72, 24), 5, 0, query),
-            Some(dashboard::WheelArea::List(if query.is_empty() {
-                8
-            } else {
-                7
-            }))
+            dashboard::wheel_area((72, 24), 5, 0, visible),
+            Some(dashboard::WheelArea::List(if !visible { 8 } else { 7 }))
         );
     }
 }
 
 #[test]
-fn empty_filter_reclaims_list_row_regardless_of_focus() {
+fn empty_filter_reserves_list_row_while_focused() {
     let rows = panel::rows(
         &(1..=8)
             .map(|id| format!("{id} New Task {id}"))
@@ -1042,8 +1041,14 @@ fn empty_filter_reclaims_list_row_regardless_of_focus() {
                 );
             })
             .unwrap();
-        assert_eq!(top, 0);
-        assert!(line(terminal.backend().buffer(), 0).contains("Task 1"));
+        assert_eq!(top, usize::from(focused));
+        if focused {
+            assert!(line(terminal.backend().buffer(), 0).starts_with("Filter: "));
+            assert!(line(terminal.backend().buffer(), 1).contains("Task 2"));
+            assert_eq!(terminal.get_cursor_position().unwrap(), Position::new(8, 0));
+        } else {
+            assert!(line(terminal.backend().buffer(), 0).contains("Task 1"));
+        }
         assert!(line(terminal.backend().buffer(), 7).contains("Task 8"));
     }
 }
@@ -1089,11 +1094,11 @@ fn filter_bar_shows_empty_result_and_takes_cursor_only_while_focused() {
                     })
                     .unwrap();
                 let buffer = terminal.backend().buffer();
-                let editable_start = if query.is_empty() {
+                let editable_start = if query.is_empty() && !focused {
                     assert!(line(buffer, 0).starts_with("No matching tasks."));
                     72
                 } else {
-                    assert!(line(buffer, 0).starts_with("Filter: absent"));
+                    assert!(line(buffer, 0).starts_with(&format!("Filter: {query}")));
                     for x in 0..8 {
                         assert_eq!(buffer[(x, 0)].bg, Color::Reset);
                         assert_eq!(
@@ -1142,14 +1147,15 @@ fn filter_bar_shows_empty_result_and_takes_cursor_only_while_focused() {
                     assert_eq!(buffer[(x, 0)].modifier, Modifier::empty());
                 }
                 assert!(
-                    line(buffer, u16::from(!query.is_empty())).starts_with("No matching tasks.")
+                    line(buffer, u16::from(focused || !query.is_empty()))
+                        .starts_with("No matching tasks.")
                 );
                 assert!(line(buffer, 13).starts_with("Task Editor"));
-                if !focused || !query.is_empty() {
+                {
                     assert_eq!(
                         terminal.get_cursor_position().unwrap(),
                         if focused {
-                            Position::new(14, 0)
+                            Position::new(8 + query.len() as u16, 0)
                         } else {
                             Position::new(0, 14)
                         }
@@ -1675,15 +1681,15 @@ fn wide_dashboard_mouse_routes_list_and_details_by_column() {
     let fragments: Vec<_> = "Draft".chars().map(|ch| ch.to_string()).collect();
     let layout = render::Layout::new(&fragments, &[], 150);
     assert_eq!(
-        dashboard::wheel_area((150, 24), 89, 1, ""),
+        dashboard::wheel_area((150, 24), 89, 1, false),
         Some(dashboard::WheelArea::List(13))
     );
     assert_eq!(
-        dashboard::wheel_area((150, 24), 89, 1, "first"),
+        dashboard::wheel_area((150, 24), 89, 1, true),
         Some(dashboard::WheelArea::List(12))
     );
     assert_eq!(
-        dashboard::wheel_area((150, 24), 93, 1, ""),
+        dashboard::wheel_area((150, 24), 93, 1, false),
         Some(dashboard::WheelArea::Details(11))
     );
     for (column, row) in [
@@ -1695,7 +1701,7 @@ fn wide_dashboard_mouse_routes_list_and_details_by_column() {
         (93, 0),
         (93, 12),
     ] {
-        assert_eq!(dashboard::wheel_area((150, 24), column, row, ""), None);
+        assert_eq!(dashboard::wheel_area((150, 24), column, row, false), None);
         assert_eq!(click((150, 24), column, row, &rows, 0, 0, &layout), None);
     }
     assert_eq!(
@@ -1708,7 +1714,7 @@ fn wide_dashboard_mouse_routes_list_and_details_by_column() {
         Some(dashboard::ClickTarget::Editor(2))
     );
     assert_eq!(
-        dashboard::wheel_area((150, 24), 149, 14, ""),
+        dashboard::wheel_area((150, 24), 149, 14, false),
         Some(dashboard::WheelArea::Editor(9))
     );
 }

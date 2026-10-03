@@ -754,8 +754,13 @@ fn compose_inner(
                     && action_ui.is_none()
                     && match mouse.kind {
                         MouseEventKind::ScrollUp | MouseEventKind::ScrollDown => {
-                            dashboard::wheel_area(size, mouse.column, mouse.row, &filter_query)
-                                .is_some()
+                            dashboard::wheel_area(
+                                size,
+                                mouse.column,
+                                mouse.row,
+                                filter_focused || !filter_query.is_empty(),
+                            )
+                            .is_some()
                         }
                         MouseEventKind::Down(MouseButton::Left) => dashboard::click_target(
                             size,
@@ -763,7 +768,7 @@ fn compose_inner(
                             mouse.row,
                             dashboard::HitState {
                                 rows: &rows,
-                                query: &filter_query,
+                                filter_visible: filter_focused || !filter_query.is_empty(),
                                 list_top,
                                 editor_top: top,
                                 layout: &layout,
@@ -813,7 +818,12 @@ fn compose_inner(
                     MouseEventKind::ScrollUp => false,
                     _ => continue,
                 };
-                match dashboard::wheel_area(size, mouse.column, mouse.row, &filter_query) {
+                match dashboard::wheel_area(
+                    size,
+                    mouse.column,
+                    mouse.row,
+                    filter_focused || !filter_query.is_empty(),
+                ) {
                     Some(dashboard::WheelArea::List(height)) => {
                         list_follow_selected = false;
                         list_top = panel::wheel_top(list_top, list_row_count, height, down);
@@ -838,7 +848,7 @@ fn compose_inner(
                     mouse.row,
                     dashboard::HitState {
                         rows: &rows,
-                        query: &filter_query,
+                        filter_visible: filter_focused || !filter_query.is_empty(),
                         list_top,
                         editor_top: top,
                         layout: &layout,
@@ -893,9 +903,14 @@ fn compose_inner(
             Event::Key(key) if key.kind != KeyEventKind::Release => {
                 let control = key.modifiers.contains(KeyModifiers::CONTROL);
                 let cancel_key = control && key.code == KeyCode::Char('c');
-                if dashboard && (cancel_key || key.code == KeyCode::Esc) && !filter_query.is_empty()
+                if dashboard
+                    && (cancel_key || key.code == KeyCode::Esc)
+                    && (!filter_query.is_empty() || (key.code == KeyCode::Esc && filter_focused))
                 {
                     filter_query.clear();
+                    if key.code == KeyCode::Esc {
+                        filter_focused = false;
+                    }
                     list_top = 0;
                     list_follow_selected = true;
                     continue;

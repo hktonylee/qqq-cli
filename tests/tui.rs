@@ -178,9 +178,11 @@ fn tui_dashboard_escape_clears_filter_editor_then_exits() {
         "escape_selected_filter_menu",
         "escape_dirty_selected_filter_confirmation",
         "escape_staged_new",
+        "escape_staged_new_empty_filter",
         "escape_staged_new_image",
         "escape_staged_new_whitespace",
         "escape_staged_empty",
+        "escape_staged_empty_filter",
         "escape_staged_child",
     ] {
         dashboard_scenario(name);

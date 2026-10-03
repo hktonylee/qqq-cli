@@ -230,8 +230,8 @@ pub fn details_height(area: Rect) -> usize {
     usize::from(details_content(area).height)
 }
 
-fn list_content(area: Rect, query: &str) -> Rect {
-    let filter_height = u16::from(!query.is_empty());
+fn list_content(area: Rect, filter_visible: bool) -> Rect {
+    let filter_height = u16::from(filter_visible);
     Rect::new(
         area.x,
         area.y + filter_height,
@@ -240,7 +240,12 @@ fn list_content(area: Rect, query: &str) -> Rect {
     )
 }
 
-pub fn wheel_area(size: (u16, u16), column: u16, row: u16, query: &str) -> Option<WheelArea> {
+pub fn wheel_area(
+    size: (u16, u16),
+    column: u16,
+    row: u16,
+    filter_visible: bool,
+) -> Option<WheelArea> {
     if size.0 < 12 || size.1 < 8 || column >= size.0 || row >= size.1 {
         return None;
     }
@@ -251,7 +256,7 @@ pub fn wheel_area(size: (u16, u16), column: u16, row: u16, query: &str) -> Optio
     } = panes(Rect::new(0, 0, size.0, size.1));
     if list.contains(Position::new(column, row)) {
         Some(WheelArea::List(usize::from(
-            list_content(list, query).height,
+            list_content(list, filter_visible).height,
         )))
     } else if details_content(details).contains(Position::new(column, row)) {
         Some(WheelArea::Details(details_height(details)))
@@ -266,7 +271,7 @@ pub fn wheel_area(size: (u16, u16), column: u16, row: u16, query: &str) -> Optio
 
 pub struct HitState<'a> {
     pub rows: &'a [panel::ListRow],
-    pub query: &'a str,
+    pub filter_visible: bool,
     pub list_top: usize,
     pub editor_top: usize,
     pub layout: &'a render::Layout,
@@ -282,7 +287,7 @@ pub fn click_target(
         return None;
     }
     let Panes { list, editor, .. } = panes(Rect::new(0, 0, size.0, size.1));
-    let content = list_content(list, hit.query);
+    let content = list_content(list, hit.filter_visible);
     if content.contains(Position::new(column, row)) {
         let index = hit.list_top + usize::from(row - content.y);
         return hit.rows.get(index)?.task_id.map(ClickTarget::Task);
@@ -314,7 +319,7 @@ fn text_tail(text: &str, available: usize) -> (String, usize) {
 }
 
 fn filter_line(query: &str, width: usize, focused: bool, color: bool) -> (Line<'static>, u16) {
-    let label = if query.is_empty() { "" } else { "Filter: " };
+    let label = "Filter: ";
     let (tail, used) = text_tail(query, width.saturating_sub(label.len()));
     let label_style = if color && focused {
         Style::default()
@@ -548,14 +553,15 @@ pub fn draw(
         details: details_area,
         editor: editor_area,
     } = panes(area);
-    let content = list_content(list, list_view.query);
+    let filter_visible = list_view.focused || !list_view.query.is_empty();
+    let content = list_content(list, filter_visible);
     let list_height = usize::from(content.height);
     *list_view.top = if list_view.follow_selected {
         panel::scroll_to(rows, selected, *list_view.top, list_height)
     } else {
         (*list_view.top).min(rows.len().saturating_sub(list_height))
     };
-    if !list_view.query.is_empty() {
+    if filter_visible {
         let (filter, filter_cursor) = filter_line(
             list_view.query,
             usize::from(list.width),
