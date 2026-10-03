@@ -1,3 +1,4 @@
+use crate::errors::{Code, Info};
 use anyhow::{Context, Result, bail};
 use clap::CommandFactory;
 use std::{collections::HashSet, ffi::OsString};
@@ -41,7 +42,7 @@ pub fn expand(mut args: Vec<OsString>) -> Result<Vec<OsString>> {
     if builtin(args[index].to_str().expect("command_index checked UTF-8")) {
         return Ok(args);
     }
-    let config = crate::config::load()?;
+    let config = crate::config::load().map_err(crate::cli_error::config_error)?;
     let mut seen = HashSet::new();
     while let Some(index) = command_index(&args) {
         let name = args[index].to_str().expect("command_index checked UTF-8");
@@ -52,22 +53,50 @@ pub fn expand(mut args: Vec<OsString>) -> Result<Vec<OsString>> {
             break;
         };
         if !seen.insert(name.to_owned()) {
-            bail!("Alias cycle detected at '{name}'");
+            bail!(
+                Info::invalid_argument("alias", format!("Alias cycle detected at '{name}'"))
+                    .detail("alias", name)
+                    .detail("reason", "cycle")
+            );
         }
         if value.trim_start().starts_with('!') {
-            bail!("Shell aliases are not supported: '{name}'");
+            bail!(
+                Info::invalid_argument(
+                    "alias",
+                    format!("Shell aliases are not supported: '{name}'")
+                )
+                .detail("alias", name)
+                .detail("reason", "shell_alias")
+            );
         }
-        let words =
-            shlex::split(value).with_context(|| format!("Invalid quoting in alias '{name}'"))?;
+        let words = shlex::split(value).with_context(|| {
+            Info::invalid_argument("alias", format!("Invalid quoting in alias '{name}'"))
+                .detail("alias", name)
+                .detail("reason", "invalid_quoting")
+        })?;
         if words.is_empty() {
-            bail!("Alias '{name}' is empty");
+            bail!(
+                Info::new(Code::InvalidArgument, format!("Alias '{name}' is empty"))
+                    .detail("alias", name)
+                    .detail("reason", "empty_alias")
+            );
         }
         let mut expanded = vec![args[0].clone()];
         expanded.extend(words.into_iter().map(OsString::from));
+        let mut prospective = args.clone();
+        prospective.splice(index..=index, expanded.iter().skip(1).cloned());
+        crate::errors::set_json_output(crate::cli_error::requests_json(&prospective));
         if command_index(&expanded).is_none() {
-            bail!("Alias '{name}' must contain a qqq command");
+            bail!(
+                Info::invalid_argument(
+                    "alias",
+                    format!("Alias '{name}' must contain a qqq command")
+                )
+                .detail("alias", name)
+                .detail("reason", "missing_command")
+            );
         }
-        args.splice(index..=index, expanded.into_iter().skip(1));
+        args = prospective;
     }
     Ok(args)
 }

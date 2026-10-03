@@ -1,4 +1,5 @@
 use crate::db::{Db, nonempty};
+use crate::errors::{Code, Info};
 use anyhow::{Context, Result, ensure};
 use serde::{Deserialize, Serialize, de::DeserializeOwned};
 use std::{
@@ -52,17 +53,27 @@ pub(crate) fn call<T: DeserializeOwned>(server: Option<&str>, args: &[&str]) -> 
         nonempty(server, "Herdr server")?;
         cmd.args(["--session", server]);
     }
-    let out = cmd
-        .args(args)
-        .output()
-        .context("Cannot run herdr; install Herdr or provide --session for local ownership")?;
+    let out = cmd.args(args).output().context(
+        Info::new(
+            Code::DispatchError,
+            "Cannot run herdr; install Herdr or provide --session for local ownership",
+        )
+        .detail("reason", "herdr_unavailable"),
+    )?;
     ensure!(
         out.status.success(),
-        "Herdr failed: {}",
-        String::from_utf8_lossy(&out.stderr).trim()
+        Info::new(Code::DispatchError, "Herdr command failed")
+            .detail("reason", "herdr_command_failed")
+            .detail("exit_code", out.status.code())
+            .human(format!(
+                "Herdr failed: {}",
+                String::from_utf8_lossy(&out.stderr).trim()
+            ))
     );
-    let response: Envelope<T> =
-        serde_json::from_slice(&out.stdout).context("Invalid Herdr response")?;
+    let response: Envelope<T> = serde_json::from_slice(&out.stdout).context(
+        Info::new(Code::DispatchError, "Invalid Herdr response")
+            .detail("reason", "invalid_herdr_response"),
+    )?;
     Ok(response.result)
 }
 pub fn find(identity: &AgentSession, server: Option<&str>) -> Result<Pane> {
@@ -76,12 +87,20 @@ pub fn find(identity: &AgentSession, server: Option<&str>) -> Result<Pane> {
             s.agent == identity.agent && s.kind == identity.kind && s.value == identity.value
         })
     });
-    let pane = matches
-        .next()
-        .context("Linked Herdr agent session is not live")?;
+    let pane = matches.next().context(
+        Info::new(
+            Code::DispatchError,
+            "Linked Herdr agent session is not live",
+        )
+        .detail("reason", "agent_not_live"),
+    )?;
     ensure!(
         matches.next().is_none(),
-        "Multiple Herdr panes match agent session; resolve duplicate session reports"
+        Info::new(
+            Code::DispatchError,
+            "Multiple Herdr panes match agent session; resolve duplicate session reports"
+        )
+        .detail("reason", "ambiguous_agent")
     );
     Ok(pane)
 }
@@ -93,11 +112,17 @@ pub fn pane_identity(pane: &Pane) -> Result<AgentSession> {
         nonempty(&identity.value, "Herdr agent session")?;
         return Ok(identity.clone());
     }
-    let value = pane
-        .terminal_id
-        .as_deref()
-        .context("Herdr agent has no session or terminal identity")?;
-    let agent = pane.agent.as_deref().context("Herdr agent kind missing")?;
+    let value = pane.terminal_id.as_deref().context(
+        Info::invalid_argument(
+            "--session",
+            "Herdr agent has no session or terminal identity",
+        )
+        .detail("reason", "missing_agent_identity"),
+    )?;
+    let agent = pane.agent.as_deref().context(
+        Info::invalid_argument("--session", "Herdr agent kind missing")
+            .detail("reason", "missing_agent_kind"),
+    )?;
     nonempty(value, "Herdr terminal identity")?;
     nonempty(agent, "Herdr agent kind")?;
     Ok(AgentSession {
@@ -125,10 +150,19 @@ pub fn has_context() -> bool {
 fn current_pane() -> Result<Pane> {
     ensure!(
         has_context(),
-        "No exact Herdr context; use --session or QQQ_SESSION"
+        Info::invalid_argument(
+            "--session",
+            "No exact Herdr context; use --session or QQQ_SESSION"
+        )
+        .detail("reason", "missing_herdr_context")
     );
-    let pane_id = std::env::var("HERDR_PANE_ID")
-        .context("HERDR_PANE_ID missing or not UTF-8; use --session")?;
+    let pane_id = std::env::var("HERDR_PANE_ID").context(
+        Info::invalid_argument(
+            "--session",
+            "HERDR_PANE_ID missing or not UTF-8; use --session",
+        )
+        .detail("reason", "missing_herdr_pane"),
+    )?;
     nonempty(&pane_id, "HERDR_PANE_ID")?;
     let current: Current = call(None, &["pane", "current", "--pane", &pane_id])?;
     Ok(current.pane)
@@ -221,15 +255,18 @@ pub fn discover(project_dir: &Path) -> Result<Link> {
             .is_some_and(|cwd| cwd == project_dir)
     });
     let pane = matches.next().with_context(|| {
-        format!(
-            "No Herdr agent matches project root {}; use --session or QQQ_SESSION",
-            project_dir.display()
+        Info::invalid_argument(
+            "--session",
+            format!(
+                "No Herdr agent matches project root {}; use --session or QQQ_SESSION",
+                project_dir.display()
+            ),
         )
+        .detail("reason", "missing_project_agent")
     })?;
     ensure!(
         matches.next().is_none(),
-        "Multiple Herdr agents match project root {}; use --session or run inside intended Herdr pane",
-        project_dir.display()
+        Info::invalid_argument("--session", format!("Multiple Herdr agents match project root {}; use --session or run inside intended Herdr pane", project_dir.display())).detail("reason", "ambiguous_project_agent")
     );
     let identity = pane_identity(&pane).context(
         "Cannot identify matching Herdr agent; use --session or enable Herdr session reporting",

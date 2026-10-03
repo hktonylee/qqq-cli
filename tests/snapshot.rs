@@ -14,8 +14,14 @@ use std::{
 use tempfile::TempDir;
 
 fn run(path: &Path, args: &[&str]) -> Output {
-    Command::new(env!("CARGO_BIN_EXE_qqq"))
-        .arg("--json")
+    run_mode(path, args, true)
+}
+fn run_mode(path: &Path, args: &[&str], json: bool) -> Output {
+    let mut command = Command::new(env!("CARGO_BIN_EXE_qqq"));
+    if json {
+        command.arg("--json");
+    }
+    command
         .args(args)
         .current_dir(path)
         .env_remove("QQQ_SESSION")
@@ -38,7 +44,8 @@ fn ok(path: &Path, args: &[&str]) -> Value {
 }
 
 fn fail(path: &Path, args: &[&str], expected: &str) {
-    let output = run(path, args);
+    // Keep readable human diagnostics covered alongside JSON contract tests.
+    let output = run_mode(path, args, false);
     assert_eq!(output.status.code(), Some(1), "{args:?}");
     assert!(output.stdout.is_empty());
     assert!(

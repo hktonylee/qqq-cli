@@ -17,7 +17,12 @@ fn env_session(name: &str) -> Result<Option<String>> {
     let value = match env::var(name) {
         Ok(value) => value,
         Err(env::VarError::NotPresent) => return Ok(None),
-        Err(error) => return Err(error).with_context(|| format!("{name} must be UTF-8")),
+        Err(error) => {
+            return Err(error).with_context(|| {
+                crate::errors::Info::invalid_argument("--session", format!("{name} must be UTF-8"))
+                    .detail("environment_variable", name)
+            });
+        }
     };
     nonempty(&value, name)?;
     Ok(Some(value))

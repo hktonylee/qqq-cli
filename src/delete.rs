@@ -1,5 +1,6 @@
 use crate::{
     db::{Db, Task, task_row},
+    errors::{Code, Info},
     images::ImageStore,
 };
 use anyhow::{Context, Result, bail, ensure};
@@ -47,12 +48,20 @@ pub fn preview_cli(id: i64) -> Result<DeleteReport> {
         .ancestors()
         .map(|ancestor| ancestor.join(".qqq"))
         .find(|candidate| candidate.is_dir())
-        .context("No .qqq directory found; run qqq init in project root")?;
+        .context(Info::new(
+            Code::ProjectNotFound,
+            "No .qqq directory found; run qqq init in project root",
+        ))?;
     ensure!(real_directory(&project)?, "Project directory is missing");
     let staging_root = project.join(STAGING_DIR);
     ensure!(
         fs::symlink_metadata(&staging_root).is_err_and(|error| error.kind() == ErrorKind::NotFound),
-        "Deletion recovery pending; run qqq list before preview"
+        Info::new(
+            Code::CommandError,
+            "Deletion recovery pending; run qqq list before preview"
+        )
+        .detail("reason", "deletion_recovery_pending")
+        .detail("task_id", id)
     );
     let db_path = project.join("qqq.db");
     ensure!(
@@ -78,7 +87,15 @@ pub fn preview_cli(id: i64) -> Result<DeleteReport> {
     let version: i64 = conn.pragma_query_value(None, "user_version", |row| row.get(0))?;
     ensure!(
         version == 10,
-        "Database schema version {version} needs migration; run qqq list before preview"
+        Info::new(
+            Code::DatabaseError,
+            format!(
+                "Database schema version {version} needs migration; run qqq list before preview"
+            )
+        )
+        .detail("schema_version", version)
+        .detail("expected_schema_version", 10)
+        .detail("reason", "migration_required")
     );
     Ok(plan(&conn, &db_path, id)?.report)
 }
@@ -120,14 +137,28 @@ fn plan(conn: &Connection, db_path: &Path, id: i64) -> Result<Plan> {
             task_row,
         )
         .optional()?
-        .with_context(|| format!("Task {id} not found"))?;
+        .with_context(|| crate::errors::Info::missing_task(id))?;
     ensure!(
         task.status != "in_progress",
-        "Task {id} is in progress; release or complete it before archiving and deletion"
+        crate::errors::Info::transition(
+            id,
+            &task.status,
+            &["new", "error", "completed"],
+            format!(
+                "Task {id} is in progress; release or complete it before archiving and deletion"
+            )
+        )
     );
     ensure!(
         task.archived,
-        "Task {id} is not archived; archive it before deletion"
+        crate::errors::Info::transition(
+            id,
+            &task.status,
+            &["new", "error", "completed"],
+            format!("Task {id} is not archived; archive it before deletion")
+        )
+        .detail("actual_archived", false)
+        .detail("expected_archived", true)
     );
     let child = conn
         .query_row(
@@ -138,8 +169,17 @@ fn plan(conn: &Connection, db_path: &Path, id: i64) -> Result<Plan> {
         .optional()?;
     ensure!(
         child.is_none(),
-        "Task {id} has dependent child #{}; delete or reparent child first",
-        child.unwrap_or_default()
+        crate::errors::Info::transition(
+            id,
+            &task.status,
+            &["new", "error", "completed"],
+            format!(
+                "Task {id} has dependent child #{}; delete or reparent child first",
+                child.unwrap_or_default()
+            )
+        )
+        .detail("reason", "dependent_child")
+        .detail("blocking_child_id", child)
     );
     let project = db_path
         .parent()
@@ -232,16 +272,32 @@ fn stage_images(db_path: &Path, id: i64, expected: &[PathBuf]) -> Result<Option<
         let metadata = fs::symlink_metadata(&path)?;
         ensure!(
             metadata.file_type().is_file() && expected.contains(path.as_path()),
-            "Unexpected or unsafe image path {}; inspect before deletion",
-            path.display()
+            Info::new(
+                Code::IoError,
+                format!(
+                    "Unexpected or unsafe image path {}; inspect before deletion",
+                    path.display()
+                )
+            )
+            .detail("task_id", id)
+            .detail("path", path.to_string_lossy().into_owned())
+            .detail("reason", "unsafe_image_path")
         );
         seen.insert(path);
     }
     for path in expected {
         ensure!(
             seen.contains(path),
-            "Stored image {} is missing; restore image before deletion",
-            path.display()
+            Info::new(
+                Code::IoError,
+                format!(
+                    "Stored image {} is missing; restore image before deletion",
+                    path.display()
+                )
+            )
+            .detail("task_id", id)
+            .detail("path", path.to_string_lossy().into_owned())
+            .detail("reason", "missing_stored_image")
         );
     }
     let staging_root = project.join(STAGING_DIR);

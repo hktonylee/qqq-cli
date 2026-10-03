@@ -287,12 +287,22 @@ fn startup_errors_release_claim_prompt_errors_retain_claim_and_link() {
             .output()
             .unwrap();
         assert!(!out.status.success(), "{step}");
+        assert!(out.stdout.is_empty());
+        let failure: Value = serde_json::from_slice(&out.stderr).unwrap();
+        assert_eq!(failure["code"], "DISPATCH_ERROR");
+        assert_eq!(failure["details"]["task_id"], 1);
         let detail = p.ok(&["show", "1"]);
         if step == "prompt" {
             assert_eq!(detail["task"]["status"], "in_progress");
             assert!(!detail["herdr"].is_null());
             assert!(String::from_utf8_lossy(&out.stderr).contains("may have been delivered"));
+            assert_eq!(failure["details"]["reason"], "prompt_delivery_uncertain");
+            assert_eq!(failure["details"]["delivery_possible"], true);
+            assert_eq!(failure["details"]["actual_status"], "in_progress");
         } else {
+            assert_eq!(failure["details"]["reason"], "startup_failed");
+            assert_eq!(failure["details"]["delivery_possible"], false);
+            assert_eq!(failure["details"]["actual_status"], "new");
             assert_eq!(detail["task"]["status"], "new");
             assert!(
                 !p.calls()

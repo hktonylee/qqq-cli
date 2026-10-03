@@ -212,10 +212,10 @@ fn default_release_still_rejects_wrong_owner_atomically() {
         }
         let output = cmd.output().unwrap();
         assert!(!output.status.success());
-        assert!(
-            String::from_utf8_lossy(&output.stderr)
-                .contains("Task 1 is not claimed by session wrong")
-        );
+        let failure: Value = serde_json::from_slice(&output.stderr).unwrap();
+        assert_eq!(failure["code"], "OWNERSHIP_MISMATCH");
+        assert_eq!(failure["details"]["task_id"], 1);
+        assert!(!failure.to_string().contains("wrong"));
         assert_eq!(ok(p, &["show", "1"]), before);
     }
 }
@@ -283,7 +283,9 @@ fn force_combined_edits_and_release_history_roll_back_on_image_failure() {
     ];
     let output = run(p, &args);
     assert!(!output.status.success());
-    assert!(String::from_utf8_lossy(&output.stderr).contains("image insertion blocked"));
+    let failure: Value = serde_json::from_slice(&output.stderr).unwrap();
+    assert_eq!(failure["code"], "DATABASE_ERROR");
+    assert_eq!(failure["details"]["sqlite_extended_code"], 1811);
     assert_eq!(ok(p, &["show", "1"]), before);
     conn.execute_batch("DROP TRIGGER reject_image").unwrap();
     let released = ok(p, &args);

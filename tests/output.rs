@@ -272,10 +272,17 @@ fn global_json_flag_preserves_machine_output_and_errors() {
     text(p, &["next", "--session", "a"]);
     assert_eq!(text(p, &["next", "--session", "b", "--json"]), "null\n");
     for args in [vec!["show", "999"], vec!["--json", "show", "999"]] {
+        let json = args.contains(&"--json");
         let out = command(p).args(args).output().unwrap();
         assert_eq!(out.status.code(), Some(1));
         assert!(out.stdout.is_empty());
-        assert!(String::from_utf8_lossy(&out.stderr).contains("error: Task 999 not found"));
+        if json {
+            let failure: Value = serde_json::from_slice(&out.stderr).unwrap();
+            assert_eq!(failure["code"], "TASK_NOT_FOUND");
+            assert_eq!(failure["details"]["task_id"], 999);
+        } else {
+            assert!(String::from_utf8_lossy(&out.stderr).contains("error: Task 999 not found"));
+        }
     }
 }
 

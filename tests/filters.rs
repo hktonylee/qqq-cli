@@ -180,10 +180,9 @@ fn runtime_filter_error_rolls_back_new_claim_and_owned_task_bypasses_predicate()
         &["next", "--local", "--session", "a", "--filter", filter],
     );
     assert!(!output.status.success());
-    assert!(
-        String::from_utf8_lossy(&output.stderr)
-            .contains("ESCAPE expression must be a single character")
-    );
+    let failure: Value = serde_json::from_slice(&output.stderr).unwrap();
+    assert_eq!(failure["code"], "INVALID_FILTER");
+    assert_eq!(failure["details"]["reason"], "evaluation_failed");
     assert_eq!(ok(p, &["show", "1"]), before);
     assert_eq!(ok(p, &["next", "--local", "--session", "a"])["id"], 1);
     assert_eq!(

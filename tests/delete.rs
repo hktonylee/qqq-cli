@@ -174,7 +174,7 @@ fn delete_restores_staged_images_when_database_delete_fails() {
         "CREATE TRIGGER block_delete BEFORE DELETE ON tasks BEGIN SELECT RAISE(ABORT,'blocked'); END;",
     )
     .unwrap();
-    fail(path, &["delete", "1", "--yes"], "blocked");
+    fail(path, &["delete", "1", "--yes"], "DATABASE_ERROR");
     assert_eq!(
         conn.query_row("SELECT count(*) FROM tasks WHERE id=1", [], |row| row
             .get::<_, i64>(0))

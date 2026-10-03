@@ -11,9 +11,14 @@ const PNG: &[u8] = b"\x89PNG\r\n\x1a\nfixture";
 const JPEG: &[u8] = b"\xff\xd8\xfffixture";
 
 fn command(dir: &Path) -> Command {
+    command_mode(dir, true)
+}
+fn command_mode(dir: &Path, json: bool) -> Command {
     let mut command = Command::new(env!("CARGO_BIN_EXE_qqq"));
+    if json {
+        command.arg("--json");
+    }
     command
-        .arg("--json")
         .current_dir(dir)
         .env("HOME", dir)
         .env_remove("EDITOR")
@@ -37,7 +42,8 @@ fn ok(dir: &Path, args: &[&str]) -> Value {
     serde_json::from_slice(&out.stdout).unwrap()
 }
 fn error(dir: &Path, args: &[&str], code: i32, text: &str) {
-    let out = run(dir, args);
+    // Verify human diagnostic context; JSON envelopes have dedicated contract coverage.
+    let out = command_mode(dir, false).args(args).output().unwrap();
     assert_eq!(
         out.status.code(),
         Some(code),

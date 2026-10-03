@@ -1,6 +1,6 @@
-use crate::db::{Db, READY_TASK_PREDICATE, Task, task_row};
+use crate::db::{Db, READY_TASK_PREDICATE, Task, filter_evaluation_error, task_row};
 use crate::sql_filter::CompiledFilter;
-use anyhow::Result;
+use anyhow::{Context, Result};
 use rusqlite::{Connection, OptionalExtension, TransactionBehavior, params_from_iter};
 use serde::Serialize;
 use std::collections::BTreeMap;
@@ -198,7 +198,7 @@ fn report_with_activity(
         harness_name,
     } = options;
     let tx = conn.transaction_with_behavior(TransactionBehavior::Deferred)?;
-    let raw_rows = {
+    let raw_rows = (|| -> rusqlite::Result<Vec<_>> {
         let predicate = filter.map_or("1", CompiledFilter::sql);
         let mut statement = tx.prepare(&format!(
             "SELECT {TASK_COLUMNS},({READY_TASK_PREDICATE}),COALESCE(({predicate}),0)
@@ -215,7 +215,11 @@ fn report_with_activity(
                 ))
             },
         )?;
-        rows.collect::<rusqlite::Result<Vec<_>>>()?
+        rows.collect::<rusqlite::Result<Vec<_>>>()
+    })();
+    let raw_rows = match filter {
+        Some(_) => raw_rows.context(filter_evaluation_error())?,
+        None => raw_rows?,
     };
     let parents: BTreeMap<_, _> = raw_rows
         .iter()

@@ -5,6 +5,9 @@ mod db;
 #[path = "../src/tui/draft.rs"]
 pub mod draft;
 #[allow(dead_code)]
+#[path = "../src/errors.rs"]
+mod errors;
+#[allow(dead_code)]
 #[path = "../src/herdr.rs"]
 mod herdr;
 #[allow(dead_code)]

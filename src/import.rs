@@ -1,4 +1,5 @@
 use crate::db::{ensure_parent_available, nonempty, validate_description, validate_priority};
+use crate::errors::Info;
 use anyhow::{Context, Result, ensure};
 use rusqlite::{Connection, TransactionBehavior, params};
 use serde::{Deserialize, Serialize};
@@ -82,23 +83,36 @@ pub fn read(path: &Path) -> Result<ValidatedBatch> {
         std::fs::read_to_string(path)
             .with_context(|| format!("Failed to read import file {} as UTF-8", path.display()))?
     };
-    let batch: Batch = serde_json::from_str(&content).context("Invalid import JSON")?;
+    let batch: Batch = serde_json::from_str(&content).map_err(|error| {
+        let info = Info::invalid_argument("path", "Invalid import JSON")
+            .detail("reason", "invalid_import_json")
+            .detail("line", error.line())
+            .detail("column", error.column());
+        anyhow::Error::new(error).context(info)
+    })?;
     validate(batch)
 }
 
 fn validate(batch: Batch) -> Result<ValidatedBatch> {
     ensure!(
         batch.version == 1,
-        "Unsupported import version {}; expected 1",
-        batch.version
+        Info::invalid_argument(
+            "version",
+            format!("Unsupported import version {}; expected 1", batch.version)
+        )
+        .detail("reason", "unsupported_import_version")
+        .detail("expected_version", 1)
+        .detail("actual_version", batch.version)
     );
     let mut keys = HashMap::new();
     for (index, task) in batch.tasks.iter().enumerate() {
         nonempty(&task.key, "Batch task key")?;
         ensure!(
             keys.insert(task.key.as_str(), index).is_none(),
-            "Duplicate batch task key {:?}",
-            task.key
+            Info::invalid_argument("key", "Duplicate batch task key")
+                .detail("reason", "duplicate_batch_key")
+                .detail("batch_key", task.key.clone())
+                .human(format!("Duplicate batch task key {:?}", task.key))
         );
         validate_description(&task.description)
             .with_context(|| format!("Batch task {:?}", task.key))?;
@@ -112,16 +126,27 @@ fn validate(batch: Batch) -> Result<ValidatedBatch> {
             Some(Parent::Local(parent)) => {
                 nonempty(&parent.key, "Batch parent key")?;
                 let parent_index = keys.get(parent.key.as_str()).with_context(|| {
-                    format!(
-                        "Batch task {:?} references missing parent key {:?}",
-                        task.key, parent.key
-                    )
+                    Info::invalid_argument("parent", "Batch task references missing parent key")
+                        .detail("reason", "missing_batch_parent")
+                        .detail("batch_key", task.key.clone())
+                        .detail("parent_key", parent.key.clone())
+                        .human(format!(
+                            "Batch task {:?} references missing parent key {:?}",
+                            task.key, parent.key
+                        ))
                 })?;
                 children[*parent_index].push(index);
             }
             parent => {
                 if let Some(Parent::Existing(parent)) = parent {
-                    ensure!(parent.id > 0, "Existing parent must be a positive task ID");
+                    ensure!(
+                        parent.id > 0,
+                        Info::invalid_argument(
+                            "parent",
+                            "Existing parent must be a positive task ID"
+                        )
+                        .detail("task_id", parent.id)
+                    );
                     existing_parents.insert(parent.id);
                 }
                 ready.push(Reverse(index));
@@ -135,7 +160,8 @@ fn validate(batch: Batch) -> Result<ValidatedBatch> {
     }
     ensure!(
         order.len() == batch.tasks.len(),
-        "Import batch contains dependency cycle"
+        Info::invalid_argument("parent", "Import batch contains dependency cycle")
+            .detail("reason", "dependency_cycle")
     );
     Ok(ValidatedBatch {
         tasks: batch.tasks,

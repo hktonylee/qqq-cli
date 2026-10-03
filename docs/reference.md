@@ -12,6 +12,7 @@ Detailed behavior and flags for qqq. For a first run, start with the
 - [Dependencies and images](#dependencies-and-images)
 - [Ownership and recovery](#agents-and-recovery)
 - [Config and aliases](#config-and-aliases) · [Herdr](#herdr)
+- [JSON error contract](#json-error-contract)
 - [Backup, restore, deletion, health](#data)
 - [Development](#development) · [Publishing](#publish-to-cratesio)
 
@@ -88,7 +89,78 @@ consume that limit.
 Global `--json` works before or after commands. JSON lists stay flat, preserve
 full descriptions and `parent_id`; watch prints one array per line. Empty lists
 return `[]`; no ready task returns `null`. Errors use stderr (exit 1 for runtime,
-2 for arguments). `NO_COLOR=1` or `TERM=dumb` disables color.
+2 for arguments). JSON failures follow [error contract](#json-error-contract).
+`NO_COLOR=1` or `TERM=dumb` disables color.
+
+## JSON error contract
+
+Failed commands with global `--json` write one JSON object plus newline to
+stderr. Error prose and terminal UI never appear on stdout. Runtime failures
+exit 1; argument-parser failures exit 2. Existing success payloads stay unchanged.
+
+```sh
+qqq --json show 999 >result.json 2>error.json
+```
+
+```json
+{"code":"TASK_NOT_FOUND","message":"Task 999 not found","details":{"task_id":999,"command":"show"}}
+```
+
+`code` is stable machine classification; branch on code and details.
+`message` is readable diagnostic text; wording can change.
+`details` is always an object; fields depend on failure and can grow over time.
+Runtime errors include `command` when known. Omitted fields mean unavailable;
+explicit `null` indicates absent current content or optional recovery file.
+Parser and alias failures can occur before command resolution.
+
+| Code | Meaning | Relevant details |
+| --- | --- | --- |
+| `TASK_NOT_FOUND` | Task ID or creation-order reference unavailable | `task_id` or `task_reference` |
+| `OWNERSHIP_MISMATCH` | Active task belongs to different owner | `task_id`, `actual_status`, `expected_statuses` |
+| `INVALID_TRANSITION` | State or dependency blocks operation | `task_id`, `actual_status`, `expected_statuses`; archive guards add `actual_archived`, `expected_archived`; dependency guards add `reason`, `blocking_child_id` |
+| `INVALID_ARGUMENT` | Flag/value, alias or owner-resolution input invalid | `argument`, `reason`; alias errors add `alias` |
+| `INVALID_FILTER` | Luau filter invalid or failed during evaluation | `argument: "--filter"`; runtime failure adds `reason: "evaluation_failed"` |
+| `DB_BUSY` | SQLite busy/locked; retry after competing transaction finishes | `sqlite_code` (5 or 6), `sqlite_extended_code` |
+| `CONTENT_CONFLICT` | Loaded content changed or task removed during edit | `task_id`, `expected_revision`, `current_revision`, `reason` (`revision_changed` or `task_removed`) |
+| `PROJECT_NOT_FOUND` | Project DB unavailable | `command` when resolved |
+| `CONFIG_ERROR` | Config cannot load or requested config operation failed | `path` |
+| `IO_ERROR` | Filesystem or input/output operation failed | `io_kind`, `os_code` when available; explicit guards may add `path`, `task_id`, `reason` |
+| `EDITOR_ERROR` | EDITOR missing, failed to start or exited unsuccessfully | `exit_code` when available |
+| `DISPATCH_ERROR` | Herdr lookup, transport or dispatch failed | `reason`, `exit_code` when available; dispatch failures add `task_id`, `actual_status`, `delivery_possible` |
+| `DATABASE_ERROR` | Other SQLite or schema failure | `sqlite_code`, `sqlite_extended_code`, or `schema_version`, `expected_schema_version`, `reason` |
+| `COMMAND_ERROR` | Failure without narrower public classification | `command`; explicit guards may add `reason` |
+
+Ownership details omit claim keys and owner identity values. Error envelopes
+omit full task text, raw Herdr/editor output and arbitrary SQLite trigger text.
+Human mode keeps underlying diagnostic context. Existing successful task and
+diagnostic payloads keep their own identity/content fields.
+
+Stale-save example:
+
+```json
+{"code":"CONTENT_CONFLICT","message":"Content conflict for task 1: expected revision 1, current revision 2; save rejected","details":{"command":"edit","task_id":1,"expected_revision":1,"current_revision":2,"reason":"revision_changed"}}
+```
+
+Reload current task, review changes, then explicitly retry with reviewed revision
+via `edit --expected-revision N`. `task_removed` has `current_revision: null`;
+do not recreate task automatically. Missing task before editor opens remains
+`TASK_NOT_FOUND`. `DB_BUSY` permits retry; other codes need caller-specific recovery.
+
+External editor save failures can add `details.recovery` with `local_draft`,
+`current_text` and `attachments_manifest` paths. Draft and pending image bytes
+remain available for recovery. Nonterminal JSON editor calls suppress editor
+terminal output and recovery prose so whole stderr stays parseable.
+
+Help/version still print plain help/version to stdout with exit 0, including
+with `--json`. Empty `next` returns successful `null`. Unhealthy `doctor --json`
+keeps diagnostic report on stdout with exit 1 and no error envelope.
+JSON watch can emit successful snapshots before later failure.
+
+Explicit interactive terminal sessions keep UI/prompts on stderr, followed by
+one final JSON error line after terminal restoration if command fails. For
+whole-stderr JSON parsing, supply inline fields or nonterminal stdin.
+Literal `--json` after `--` or consumed as option value does not enable JSON;
+fully expanded aliases determine output mode.
 
 ## Add and edit
 

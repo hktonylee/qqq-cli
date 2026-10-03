@@ -422,10 +422,10 @@ fn queue_owner_context_resolves_exact_harness_ambiguity_and_archived_reuse() {
     let before = ok(p, &["show", "1"]);
     let ambiguous = run(p, &["next", "--explain", "--harness-session", "shared"]);
     assert!(!ambiguous.status.success());
-    assert!(
-        String::from_utf8_lossy(&ambiguous.stderr)
-            .contains("Multiple active claims match harness session shared")
-    );
+    let failure: Value = serde_json::from_slice(&ambiguous.stderr).unwrap();
+    assert_eq!(failure["code"], "INVALID_ARGUMENT");
+    assert_eq!(failure["details"]["argument"], "--harness-name");
+    assert_eq!(failure["details"]["matches"], 2);
     let resolved = ok(
         p,
         &[

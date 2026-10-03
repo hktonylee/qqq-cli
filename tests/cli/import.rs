@@ -300,7 +300,9 @@ fn import_write_failure_rolls_back_tasks_activity_attachments_and_id_allocation(
     );
     let out = file_import(p, &value, false);
     assert!(!out.status.success());
-    assert!(String::from_utf8_lossy(&out.stderr).contains("injected batch write failure"));
+    let failure: Value = serde_json::from_slice(&out.stderr).unwrap();
+    assert_eq!(failure["code"], "DATABASE_ERROR");
+    assert_eq!(failure["details"]["sqlite_extended_code"], 1811);
     for table in ["tasks", "events", "messages", "images", "herdr_links"] {
         assert_eq!(
             conn.query_row(&format!("SELECT count(*) FROM {table}"), [], |row| row

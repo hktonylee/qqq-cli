@@ -2,7 +2,7 @@ use super::ExternalDraft;
 use crate::db::{ContentConflict, ContentSnapshot, Db, ParentChange, Task};
 use crate::images::ImageInput;
 use crate::tui::draft::Composition;
-use anyhow::{Context, Result, bail};
+use anyhow::{Context, Result};
 use serde_json::json;
 use std::{
     fs,
@@ -60,6 +60,16 @@ fn recovery_files(
     Ok(())
 }
 
+fn recovery(draft: &ExternalDraft) -> crate::errors::Recovery {
+    let current = draft.directory().join("current.txt");
+    let attachments = draft.directory().join("attachments.json");
+    crate::errors::Recovery {
+        local_draft: draft.path.clone(),
+        current_text: current.exists().then_some(current),
+        attachments_manifest: attachments.exists().then_some(attachments),
+    }
+}
+
 pub fn edit_external(
     db: &mut Db,
     snapshot: ContentSnapshot,
@@ -94,48 +104,54 @@ pub fn edit_external(
                     &composition,
                     current.map(|current| current.description.as_str()),
                 )
-                .context("Failed to preserve editor recovery files")?;
-                eprintln!("{error:#}\nLocal draft: {}", draft.path.display());
-                if let Some(current) = current {
-                    eprintln!(
-                        "Current DB text (revision {}): {}",
-                        current.revision,
-                        draft.directory().join("current.txt").display()
-                    );
-                }
-                if !composition.images.is_empty() {
-                    eprintln!(
-                        "Pending image bytes: {}",
-                        draft.directory().join("attachments.json").display()
-                    );
+                .context("Failed to preserve editor recovery files")
+                .with_context(|| recovery(&draft))?;
+                if !crate::errors::json_output() || io::stdin().is_terminal() {
+                    eprintln!("{error:#}\nLocal draft: {}", draft.path.display());
+                    if let Some(current) = current {
+                        eprintln!(
+                            "Current DB text (revision {}): {}",
+                            current.revision,
+                            draft.directory().join("current.txt").display()
+                        );
+                    }
+                    if !composition.images.is_empty() {
+                        eprintln!(
+                            "Pending image bytes: {}",
+                            draft.directory().join("attachments.json").display()
+                        );
+                    }
                 }
                 if conflict.is_none() || current.is_none() || !io::stdin().is_terminal() {
-                    let path = draft.path.clone();
-                    bail!("{error:#}; local draft kept at {}", path.display());
+                    return Err(error.context(recovery(&draft)));
                 }
                 let current = current.expect("checked current content");
                 loop {
                     match input(
                         "[r] Reload DB text  [o] Overwrite DB text  [k] Keep draft and exit: ",
-                    )?
+                    )
+                    .with_context(|| recovery(&draft))?
                     .as_str()
                     {
                         "r" => {
                             if !confirm(
                                 "Discard local text and pending images, then reload? (y/N): ",
-                            )? {
+                            )
+                            .with_context(|| recovery(&draft))?
+                            {
                                 continue;
                             }
                             let snapshot = match db.content_snapshot(id) {
                                 Ok(snapshot) => snapshot,
                                 Err(error) => {
-                                    let path = draft.path.clone();
-                                    bail!("{error:#}; local draft kept at {}", path.display());
+                                    return Err(error.context(recovery(&draft)));
                                 }
                             };
                             expected_revision = snapshot.task.content_revision;
-                            fs::write(&draft.path, &snapshot.task.description)?;
-                            composition.description = draft.edit()?;
+                            fs::write(&draft.path, &snapshot.task.description)
+                                .with_context(|| recovery(&draft))?;
+                            composition.description =
+                                draft.edit().with_context(|| recovery(&draft))?;
                             composition.images.clear();
                             break;
                         }
@@ -143,15 +159,14 @@ pub fn edit_external(
                             if !confirm(&format!(
                                 "Replace DB text at revision {} with local draft and pending images? (y/N): ",
                                 current.revision
-                            ))? {
+                            )).with_context(|| recovery(&draft))? {
                                 continue;
                             }
                             expected_revision = current.revision;
                             break;
                         }
                         "k" | "" => {
-                            let path = draft.path.clone();
-                            bail!("{error:#}; local draft kept at {}", path.display());
+                            return Err(error.context(recovery(&draft)));
                         }
                         _ => eprintln!("Choose r, o, or k."),
                     }

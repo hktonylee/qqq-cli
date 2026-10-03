@@ -65,7 +65,7 @@ echo 'editor output'
         task["description"],
         "  Edited title  \r\n\r\nDetails\r\nSecond line\r\n"
     );
-    assert!(String::from_utf8_lossy(&output.stderr).contains("editor output"));
+    assert!(output.stderr.is_empty());
     let path = fs::read_to_string(dir.path().join("edited-path")).unwrap();
     assert!(!Path::new(&path).exists());
     let saved = command(dir.path()).args(["show", "1"]).output().unwrap();

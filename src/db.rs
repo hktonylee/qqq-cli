@@ -1,6 +1,6 @@
 use crate::images::{ImageInput, ImageReference, ImageStore, PendingFiles};
 use crate::sql_filter::CompiledFilter;
-use anyhow::{Context, Result, bail, ensure};
+use anyhow::{Context, Result, ensure};
 use rusqlite::{
     Connection, OpenFlags, OptionalExtension, Transaction, TransactionBehavior, params,
     params_from_iter,
@@ -13,6 +13,15 @@ use std::{
     path::{Path, PathBuf},
     time::Duration,
 };
+
+pub(crate) fn filter_evaluation_error() -> crate::errors::Info {
+    crate::errors::Info::new(
+        crate::errors::Code::InvalidFilter,
+        "Invalid --filter evaluation",
+    )
+    .detail("argument", "--filter")
+    .detail("reason", "evaluation_failed")
+}
 
 pub const DB_NAME: &str = "qqq.db";
 const PROJECT_DIR_NAME: &str = ".qqq";
@@ -152,7 +161,10 @@ pub(crate) fn task_row(r: &rusqlite::Row<'_>) -> rusqlite::Result<Task> {
     })
 }
 pub fn nonempty(value: &str, name: &str) -> Result<()> {
-    ensure!(!value.trim().is_empty(), "{name} must not be empty");
+    ensure!(
+        !value.trim().is_empty(),
+        crate::errors::Info::invalid_argument(name, format!("{name} must not be empty"))
+    );
     Ok(())
 }
 pub(crate) fn validate_description(description: &str) -> Result<()> {
@@ -165,16 +177,60 @@ pub(crate) fn validate_description(description: &str) -> Result<()> {
             .unwrap_or("")
             .trim_matches(' ')
             .is_empty(),
-        "Description fails database blank-text validation"
+        crate::errors::Info::invalid_argument(
+            "description",
+            "Description fails database blank-text validation"
+        )
     );
     Ok(())
 }
 pub fn validate_priority(priority: i64) -> Result<()> {
     ensure!(
         (-100..=100).contains(&priority),
-        "Priority must be between -100 and 100"
+        crate::errors::Info::invalid_argument(
+            "--priority",
+            "Priority must be between -100 and 100"
+        )
     );
     Ok(())
+}
+pub fn transition_error(
+    conn: &Connection,
+    id: i64,
+    expected: &[&str],
+    session: Option<&str>,
+    human: String,
+) -> Result<crate::errors::Info> {
+    let state: Option<(String, Option<String>)> = conn
+        .query_row(
+            "SELECT status,claim_key FROM tasks WHERE id=?",
+            [id],
+            |row| Ok((row.get(0)?, row.get(1)?)),
+        )
+        .optional()?;
+    let Some((status, key)) = state else {
+        return Ok(crate::errors::Info::missing_task(id));
+    };
+    if expected.contains(&status.as_str())
+        && session.is_some_and(|session| key.as_deref() != Some(session))
+    {
+        return Ok(crate::errors::Info::new(
+            crate::errors::Code::OwnershipMismatch,
+            format!("Task {id} is not claimed by session used for this command"),
+        )
+        .detail("task_id", id)
+        .detail("actual_status", status)
+        .detail("expected_statuses", expected.to_vec())
+        .human(human));
+    }
+    let message = if session.is_none() {
+        human.clone()
+    } else {
+        format!(
+            "Task {id} is not claimed by session used for this command; current status {status}"
+        )
+    };
+    Ok(crate::errors::Info::transition(id, &status, expected, message).human(human))
 }
 pub(crate) fn ensure_parent_available(
     conn: &Connection,
@@ -188,10 +244,16 @@ pub(crate) fn ensure_parent_available(
             |row| Ok((row.get(0)?, row.get(1)?)),
         )
         .optional()?
-        .with_context(|| format!("Task {parent_id} not found"))?;
+        .with_context(|| crate::errors::Info::missing_task(parent_id))?;
     ensure!(
         !unfinished || !archived || status == "completed",
-        "Task {parent_id} is archived unfinished parent"
+        crate::errors::Info::transition(
+            parent_id,
+            &status,
+            &["completed"],
+            format!("Task {parent_id} is archived unfinished parent")
+        )
+        .detail("actual_archived", true)
     );
     Ok(())
 }
@@ -249,7 +311,11 @@ fn ensure_description_schema(conn: &Connection) -> Result<()> {
             [],
             |r| r.get::<_, bool>(0)
         )?,
-        "Database contains legacy title column; update SQLite manually before using qqq"
+        crate::errors::Info::new(
+            crate::errors::Code::DatabaseError,
+            "Database contains legacy title column; update SQLite manually before using qqq"
+        )
+        .detail("reason", "legacy_title_column")
     );
     Ok(())
 }
@@ -271,10 +337,13 @@ fn commit_with_files(tx: Transaction<'_>, pending: &mut PendingFiles) -> Result<
             let cleanup_error = pending.discard().err();
             let rollback_error = tx.rollback().err();
             if let Some(cleanup_error) = cleanup_error {
-                bail!("Commit failed: {error}; image cleanup failed: {cleanup_error:#}");
+                return Err(anyhow::Error::new(error).context(format!(
+                    "Commit failed; image cleanup failed: {cleanup_error:#}"
+                )));
             }
             if let Some(rollback_error) = rollback_error {
-                bail!("Commit failed: {error}; rollback failed: {rollback_error}");
+                return Err(anyhow::Error::new(error)
+                    .context(format!("Commit failed; rollback failed: {rollback_error}")));
             }
             Err(error.into())
         }
@@ -291,12 +360,17 @@ fn database_path(init: bool) -> Result<PathBuf> {
             .ancestors()
             .map(|parent| parent.join(PROJECT_DIR_NAME))
             .find(|candidate| candidate.is_dir())
-            .context("No .qqq directory found; run qqq init in project root")?;
+            .context(crate::errors::Info::new(
+                crate::errors::Code::ProjectNotFound,
+                "No .qqq directory found; run qqq init in project root",
+            ))?;
         let path = directory.join(DB_NAME);
         ensure!(
             path.is_file(),
-            "No .qqq/qqq.db found in {}",
-            directory.display()
+            crate::errors::Info::new(
+                crate::errors::Code::ProjectNotFound,
+                format!("No .qqq/qqq.db found in {}", directory.display())
+            )
         );
         path
     };
@@ -322,7 +396,12 @@ impl Db {
         let version: i64 = conn.pragma_query_value(None, "user_version", |r| r.get(0))?;
         ensure!(
             (1..=SCHEMA_VERSION).contains(&version) || (init && version == 0),
-            "Unsupported database schema version {version}"
+            crate::errors::Info::new(
+                crate::errors::Code::DatabaseError,
+                format!("Unsupported database schema version {version}")
+            )
+            .detail("schema_version", version)
+            .detail("reason", "unsupported_schema")
         );
         ensure_description_schema(&conn)?;
         if version < SCHEMA_VERSION {
@@ -339,7 +418,12 @@ impl Db {
             let version: i64 = tx.pragma_query_value(None, "user_version", |r| r.get(0))?;
             ensure!(
                 (1..=SCHEMA_VERSION).contains(&version) || (init && version == 0),
-                "Unsupported database schema version {version}"
+                crate::errors::Info::new(
+                    crate::errors::Code::DatabaseError,
+                    format!("Unsupported database schema version {version}")
+                )
+                .detail("schema_version", version)
+                .detail("reason", "unsupported_schema")
             );
             ensure_description_schema(&tx)?;
             if version == 0 {
@@ -410,7 +494,12 @@ impl Db {
         let version: i64 = conn.pragma_query_value(None, "user_version", |r| r.get(0))?;
         ensure!(
             version == SCHEMA_VERSION,
-            "Unsupported database schema version {version}"
+            crate::errors::Info::new(
+                crate::errors::Code::DatabaseError,
+                format!("Unsupported database schema version {version}")
+            )
+            .detail("schema_version", version)
+            .detail("reason", "unsupported_schema")
         );
         Ok((Self { conn, image_store }, path))
     }
@@ -421,11 +510,16 @@ impl Db {
         let version: i64 = conn.pragma_query_value(None, "user_version", |row| row.get(0))?;
         ensure!(
             (1..=SCHEMA_VERSION).contains(&version),
-            "Unsupported database schema version {version}"
+            crate::errors::Info::new(
+                crate::errors::Code::DatabaseError,
+                format!("Unsupported database schema version {version}")
+            )
+            .detail("schema_version", version)
+            .detail("reason", "unsupported_schema")
         );
         ensure!(
             version == SCHEMA_VERSION,
-            "Database schema version {version} requires migration; run qqq list before diagnostics"
+            crate::errors::Info::new(crate::errors::Code::DatabaseError, format!("Database schema version {version} requires migration; run qqq list before diagnostics")).detail("schema_version", version).detail("expected_schema_version", SCHEMA_VERSION).detail("reason", "migration_required")
         );
         ensure_description_schema(&conn)?;
         let image_store = ImageStore::new(
@@ -436,7 +530,7 @@ impl Db {
         Ok((Self { conn, image_store }, path))
     }
     pub fn task(&self, id: i64) -> Result<Task> {
-        self.conn.query_row("SELECT id,description,status,claim_key,created_at,updated_at,parent_id,harness_name,harness_session,orchestrator_name,orchestrator_session,priority,archived,content_revision FROM tasks WHERE id=?",[id],task_row).optional()?.with_context(||format!("Task {id} not found"))
+        self.conn.query_row("SELECT id,description,status,claim_key,created_at,updated_at,parent_id,harness_name,harness_session,orchestrator_name,orchestrator_session,priority,archived,content_revision FROM tasks WHERE id=?",[id],task_row).optional()?.with_context(|| crate::errors::Info::missing_task(id))
     }
     pub fn task_exists(&self, id: i64) -> Result<bool> {
         Ok(self.conn.query_row(
@@ -450,7 +544,7 @@ impl Db {
         let task = tx.query_row(
             "SELECT id,description,status,claim_key,created_at,updated_at,parent_id,harness_name,harness_session,orchestrator_name,orchestrator_session,priority,archived,content_revision FROM tasks WHERE id=?",
             [id], task_row,
-        ).optional()?.with_context(|| format!("Task {id} not found"))?;
+        ).optional()?.with_context(|| crate::errors::Info::missing_task(id))?;
         // Same connection participates in the read transaction above.
         let references = self.image_references(id)?;
         tx.commit()?;
@@ -468,7 +562,7 @@ impl Db {
                 task_row,
             )
             .optional()?
-            .with_context(|| format!("Task {id} not found"))?;
+            .with_context(|| crate::errors::Info::missing_task(id))?;
         if task.archived == archived {
             tx.commit()?;
             return Ok(task);
@@ -476,7 +570,12 @@ impl Db {
         if archived {
             ensure!(
                 task.status != "in_progress",
-                "Task {id} is in progress and cannot be archived"
+                crate::errors::Info::transition(
+                    id,
+                    &task.status,
+                    &["new", "error", "completed"],
+                    format!("Task {id} is in progress and cannot be archived")
+                )
             );
             if task.status != "completed" {
                 let unfinished_child: bool = tx.query_row(
@@ -486,7 +585,13 @@ impl Db {
                 )?;
                 ensure!(
                     !unfinished_child,
-                    "Task {id} has non-archived unfinished child"
+                    crate::errors::Info::transition(
+                        id,
+                        &task.status,
+                        &["completed"],
+                        format!("Task {id} has non-archived unfinished child")
+                    )
+                    .detail("reason", "unfinished_child")
                 );
             }
         } else if task.status != "completed" {
@@ -696,14 +801,16 @@ impl Db {
             rusqlite::types::Value::Integer,
         ));
         values.push(rusqlite::types::Value::Integer(i64::from(include_archived)));
-        let mut statement = self.conn.prepare(&sql)?;
-        let rows = statement.query_map(params_from_iter(values.iter()), |row| {
-            Ok((task_row(row)?, row.get::<_, bool>(14)?))
-        })?;
+        let mut statement = self.conn.prepare(&sql).context(filter_evaluation_error())?;
+        let rows = statement
+            .query_map(params_from_iter(values.iter()), |row| {
+                Ok((task_row(row)?, row.get::<_, bool>(14)?))
+            })
+            .context(filter_evaluation_error())?;
         let mut tasks = Vec::new();
         let mut matches = HashSet::new();
         for row in rows {
-            let (task, matched) = row?;
+            let (task, matched) = row.context(filter_evaluation_error())?;
             if matched {
                 matches.insert(task.id);
             }
@@ -810,7 +917,14 @@ impl Db {
             let parent_id = match parent {
                 ParentChange::Clear => None,
                 ParentChange::Set(parent_id) => {
-                    ensure!(parent_id != id, "Task {id} cannot depend on itself");
+                    ensure!(
+                        parent_id != id,
+                        crate::errors::Info::invalid_argument(
+                            "--set-parent",
+                            format!("Task {id} cannot depend on itself")
+                        )
+                        .detail("task_id", id)
+                    );
                     let unfinished: bool = tx
                         .query_row(
                             "SELECT status!='completed' FROM tasks WHERE id=?",
@@ -818,7 +932,7 @@ impl Db {
                             |row| row.get(0),
                         )
                         .optional()?
-                        .with_context(|| format!("Task {id} not found"))?;
+                        .with_context(|| crate::errors::Info::missing_task(id))?;
                     ensure_parent_available(&tx, parent_id, unfinished)?;
                     let cycle: bool = tx.query_row(
                         "WITH RECURSIVE ancestors(id,parent_id) AS (
@@ -833,7 +947,14 @@ impl Db {
                     )?;
                     ensure!(
                         !cycle,
-                        "Parent {parent_id} would create a dependency cycle for task {id}"
+                        crate::errors::Info::invalid_argument(
+                            "--set-parent",
+                            format!(
+                                "Parent {parent_id} would create a dependency cycle for task {id}"
+                            )
+                        )
+                        .detail("task_id", id)
+                        .detail("parent_id", parent_id)
                     );
                     Some(parent_id)
                 }
@@ -843,7 +964,7 @@ impl Db {
                     "UPDATE tasks SET parent_id=? WHERE id=?",
                     params![parent_id, id]
                 )? == 1,
-                "Task {id} not found"
+                crate::errors::Info::missing_task(id)
             );
         }
         match transition {
@@ -864,7 +985,7 @@ impl Db {
                         "UPDATE tasks SET status='new',claim_key=NULL,harness_name=NULL,harness_session=NULL,orchestrator_name=NULL,orchestrator_session=NULL WHERE id=? AND status IN ('in_progress','error')",
                         [id]
                     )? == 1,
-                    "Task {id} is not in progress or error"
+                    transition_error(&tx, id, &["in_progress", "error"], None, format!("Task {id} is not in progress or error"))?
                 );
                 tx.execute(
                     "INSERT INTO events(task_id,session,action) VALUES (?,?,'release')",
@@ -878,7 +999,7 @@ impl Db {
                         "UPDATE tasks SET status='new',claim_key=NULL,harness_name=NULL,harness_session=NULL,orchestrator_name=NULL,orchestrator_session=NULL WHERE id=? AND status='error'",
                         [id]
                     )? == 1,
-                    "Task {id} is no longer in error; inspect its current status before retrying"
+                    transition_error(&tx, id, &["error"], None, format!("Task {id} is no longer in error; inspect its current status before retrying"))?
                 );
                 tx.execute(
                     "INSERT INTO events(task_id,session,action) VALUES (?,?,'release')",
@@ -892,7 +1013,7 @@ impl Db {
             }) => {
                 let session = Self::owner_key(&tx, session, harness_name)?;
                 nonempty(reason, "Error reason")?;
-                ensure!(tx.execute("UPDATE tasks SET status='error',claim_key=NULL,harness_name=NULL,harness_session=NULL,orchestrator_name=NULL,orchestrator_session=NULL WHERE id=? AND status='in_progress' AND claim_key=?",params![id,session])?==1,"Task {id} is not claimed by session {session}");
+                ensure!(tx.execute("UPDATE tasks SET status='error',claim_key=NULL,harness_name=NULL,harness_session=NULL,orchestrator_name=NULL,orchestrator_session=NULL WHERE id=? AND status='in_progress' AND claim_key=?",params![id,session])?==1,Self::transition_error_for_owner(&tx, id, &session)?);
                 tx.execute(
                     "INSERT INTO events(task_id,session,action) VALUES (?,?,'error')",
                     params![id, session],
@@ -904,7 +1025,7 @@ impl Db {
             }
             None => {}
         }
-        ensure!(tx.execute("UPDATE tasks SET description=COALESCE(?,description),priority=COALESCE(?,priority),updated_at=strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE id=?",params![description,priority,id])?==1,"Task {id} not found");
+        ensure!(tx.execute("UPDATE tasks SET description=COALESCE(?,description),priority=COALESCE(?,priority),updated_at=strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE id=?",params![description,priority,id])?==1,crate::errors::Info::missing_task(id));
         let image_ids = Self::save_images(&tx, &self.image_store, &mut pending, id, images)?;
         if !image_spans.is_empty() {
             let source = description.context("Image references require description")?;
@@ -924,7 +1045,10 @@ impl Db {
     pub fn resolve_task_id(&self, reference: i64) -> Result<i64> {
         ensure!(
             reference != 0,
-            "Task reference must be a positive ID or negative creation index"
+            crate::errors::Info::invalid_argument(
+                "task_id",
+                "Task reference must be a positive ID or negative creation index"
+            )
         );
         if reference > 0 {
             return Ok(reference);
@@ -939,7 +1063,13 @@ impl Db {
                 |row| row.get(0),
             )
             .optional()?
-            .with_context(|| format!("No task at recent creation index {reference}"))
+            .with_context(|| {
+                crate::errors::Info::new(
+                    crate::errors::Code::TaskNotFound,
+                    format!("No task at recent creation index {reference}"),
+                )
+                .detail("task_reference", reference)
+            })
     }
     pub fn adjacent_task(
         &self,
@@ -1002,9 +1132,22 @@ impl Db {
         }
         Ok(active)
     }
+    fn transition_error_for_owner(
+        conn: &Connection,
+        id: i64,
+        session: &str,
+    ) -> Result<crate::errors::Info> {
+        transition_error(
+            conn,
+            id,
+            &["in_progress"],
+            Some(session),
+            format!("Task {id} is not claimed by session {session}"),
+        )
+    }
     fn release_claim(conn: &Connection, id: i64, session: &str) -> Result<()> {
         nonempty(session, "Session")?;
-        ensure!(conn.execute("UPDATE tasks SET status='new',claim_key=NULL,harness_name=NULL,harness_session=NULL,orchestrator_name=NULL,orchestrator_session=NULL WHERE id=? AND status='in_progress' AND claim_key=?",params![id,session])?==1,"Task {id} is not claimed by session {session}");
+        ensure!(conn.execute("UPDATE tasks SET status='new',claim_key=NULL,harness_name=NULL,harness_session=NULL,orchestrator_name=NULL,orchestrator_session=NULL WHERE id=? AND status='in_progress' AND claim_key=?",params![id,session])?==1,Self::transition_error_for_owner(conn, id, session)?);
         conn.execute(
             "INSERT INTO events(task_id,session,action) VALUES (?,?,'release')",
             params![id, session],
@@ -1036,7 +1179,8 @@ impl Db {
             .collect::<rusqlite::Result<Vec<_>>>()?;
         ensure!(
             keys.len() <= 1,
-            "Multiple active claims match harness session {session}; use --harness-name or original --session token"
+            crate::errors::Info::invalid_argument("--harness-name", "Multiple active claims match harness session; use --harness-name or original --session token")
+                .detail("matches", keys.len()).human(format!("Multiple active claims match harness session {session}; use --harness-name or original --session token"))
         );
         Ok(keys.into_iter().next().unwrap_or_else(|| session.into()))
     }
@@ -1083,13 +1227,17 @@ impl Db {
             "SELECT id FROM tasks WHERE {READY_TASK_PREDICATE}
             AND ({predicate}) ORDER BY priority DESC,id ASC LIMIT 1"
         );
-        Ok(conn
+        let result = conn
             .query_row(
                 &sql,
                 params_from_iter(filter.map_or(&[][..], CompiledFilter::params)),
                 |row| row.get(0),
             )
-            .optional()?)
+            .optional();
+        match filter {
+            Some(_) => Ok(result.context(filter_evaluation_error())?),
+            None => Ok(result?),
+        }
     }
     pub fn peek_next_filtered(&mut self, filter: Option<&CompiledFilter>) -> Result<Option<Task>> {
         let tx = self
@@ -1222,7 +1370,7 @@ impl Db {
             .conn
             .transaction_with_behavior(TransactionBehavior::Immediate)?;
         let session = Self::owner_key(&tx, session, harness_name)?;
-        ensure!(tx.execute("UPDATE tasks SET status='completed',claim_key=NULL,harness_name=NULL,harness_session=NULL,orchestrator_name=NULL,orchestrator_session=NULL,updated_at=strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE id=? AND status='in_progress' AND claim_key=?",params![id,session])?==1,"Task {id} is not claimed by session {session}");
+        ensure!(tx.execute("UPDATE tasks SET status='completed',claim_key=NULL,harness_name=NULL,harness_session=NULL,orchestrator_name=NULL,orchestrator_session=NULL,updated_at=strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE id=? AND status='in_progress' AND claim_key=?",params![id,session])?==1,Self::transition_error_for_owner(&tx, id, &session)?);
         tx.execute(
             "INSERT INTO events(task_id,session,action) VALUES (?, ?, 'complete')",
             params![id, session],
@@ -1246,12 +1394,27 @@ impl Db {
                 task_row,
             )
             .optional()?
-            .with_context(|| format!("Task {id} not found"))?;
+            .with_context(|| crate::errors::Info::missing_task(id))?;
         ensure!(
             task.status == "completed",
-            "Task {id} must be completed to reopen"
+            crate::errors::Info::transition(
+                id,
+                &task.status,
+                &["completed"],
+                format!("Task {id} must be completed to reopen")
+            )
         );
-        ensure!(!task.archived, "Task {id} is archived; unarchive first");
+        ensure!(
+            !task.archived,
+            crate::errors::Info::transition(
+                id,
+                &task.status,
+                &["completed"],
+                format!("Task {id} is archived; unarchive first")
+            )
+            .detail("actual_archived", true)
+            .detail("expected_archived", false)
+        );
         if let Some(parent_id) = task.parent_id {
             ensure_parent_available(&tx, parent_id, true)?;
         }
@@ -1373,11 +1536,18 @@ impl Db {
                 row.get(0)
             })
             .optional()?
-            .with_context(|| format!("Task {id} not found"))?;
+            .with_context(|| crate::errors::Info::missing_task(id))?;
         if let Some(expected) = expected_claim {
             ensure!(
                 key.as_deref() == Some(expected),
-                "Task {id} is no longer claimed by dispatch session {expected}"
+                crate::errors::Info::new(
+                    crate::errors::Code::OwnershipMismatch,
+                    format!("Task {id} is no longer claimed by expected dispatch owner")
+                )
+                .detail("task_id", id)
+                .human(format!(
+                    "Task {id} is no longer claimed by dispatch session {expected}"
+                ))
             );
         }
         Self::save_link(&tx, id, link)?;

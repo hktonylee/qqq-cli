@@ -1,5 +1,6 @@
 use crate::{
     db::{Db, EditTransition, Task, nonempty},
+    errors::{Code, Info},
     herdr::{self, Link, Pane},
 };
 use anyhow::{Context, Result, ensure};
@@ -40,10 +41,19 @@ pub fn next(
     }
     ensure!(
         std::env::var("HERDR_ENV").as_deref() == Ok("1"),
-        "Herdr dispatch requires HERDR_ENV=1; use next --local outside Herdr"
+        Info::new(
+            Code::DispatchError,
+            "Herdr dispatch requires HERDR_ENV=1; use next --local outside Herdr"
+        )
+        .detail("reason", "missing_herdr_context")
     );
-    let workspace = std::env::var("HERDR_WORKSPACE_ID")
-        .context("HERDR_WORKSPACE_ID missing; use next --local")?;
+    let workspace = std::env::var("HERDR_WORKSPACE_ID").context(
+        Info::new(
+            Code::DispatchError,
+            "HERDR_WORKSPACE_ID missing; use next --local",
+        )
+        .detail("reason", "missing_herdr_workspace"),
+    )?;
     nonempty(&workspace, "HERDR_WORKSPACE_ID")?;
     let cwd = std::env::current_dir()?.canonicalize()?;
     let cwd = cwd
@@ -135,7 +145,9 @@ pub fn next(
                     task.id
                 )
             })?;
-            return Err(error).with_context(|| format!("Task {} returned to new; dispatch failed at {location}. Any created tab remains for inspection", task.id));
+            return Err(error).with_context(|| Info::new(Code::DispatchError, format!("Task {} returned to new; dispatch startup failed. Any created tab remains for inspection", task.id))
+                .detail("task_id", task.id).detail("actual_status", "new").detail("reason", "startup_failed").detail("delivery_possible", false)
+                .human(format!("Task {} returned to new; dispatch failed at {location}. Any created tab remains for inspection", task.id)));
         }
     };
     let prompt = format!(
@@ -146,6 +158,8 @@ pub fn next(
         bin = quote(executable)
     );
     let _: Value = herdr::call(None, &["agent", "prompt", &pane.pane_id, &prompt])
-        .with_context(|| format!("Prompt may have been delivered. Task {} remains assigned to {name}, linked to {location}; inspect agent before retrying. Recovery: qqq edit {} --set-status new --session {}", task.id, task.id, quote(&name)))?;
+        .with_context(|| Info::new(Code::DispatchError, format!("Prompt may have been delivered. Task {} remains assigned; inspect agent before retrying", task.id))
+            .detail("task_id", task.id).detail("actual_status", "in_progress").detail("reason", "prompt_delivery_uncertain").detail("delivery_possible", true)
+            .human(format!("Prompt may have been delivered. Task {} remains assigned to {name}, linked to {location}; inspect agent before retrying. Recovery: qqq edit {} --set-status new --session {}", task.id, task.id, quote(&name))))?;
     Ok(Some(db.task(task.id)?))
 }

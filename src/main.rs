@@ -1,4 +1,5 @@
 mod aliases;
+mod cli_error;
 mod config;
 mod config_cli;
 mod db;
@@ -6,6 +7,7 @@ mod delete;
 mod dispatch;
 mod doctor;
 mod editor;
+mod errors;
 mod herdr;
 mod identity;
 mod images;
@@ -281,23 +283,30 @@ enum HerdrCommand {
     /// Find live pane by stored agent session identity.
     Find { task_id: i64 },
 }
+fn resolved_owner(
+    explicit: Option<&str>,
+    project: &std::path::Path,
+    db: &db::Db,
+) -> Result<session::Owner> {
+    session::owner(explicit, project, db).map_err(cli_error::session_error)
+}
 fn local_owner(cli: &Cli, project_dir: &std::path::Path, db: &db::Db) -> Result<session::Owner> {
     if let Some(session) = cli.session.as_deref() {
-        return session::owner(Some(session), project_dir, db);
+        return resolved_owner(Some(session), project_dir, db);
     }
     if let Some(session) = cli.harness_session.as_deref() {
         if db
             .owned_with_name(session, cli.harness_name.as_deref())?
             .is_some()
         {
-            return session::owner(Some(session), project_dir, db);
+            return resolved_owner(Some(session), project_dir, db);
         }
         // Override public session while retaining auto-fill; local explicit input
         // remains usable when Herdr is unavailable or ambiguous.
-        return session::owner(None, project_dir, db)
-            .or_else(|_| session::owner(Some(session), project_dir, db));
+        return resolved_owner(None, project_dir, db)
+            .or_else(|_| resolved_owner(Some(session), project_dir, db));
     }
-    session::owner(None, project_dir, db)
+    resolved_owner(None, project_dir, db)
 }
 fn execute(
     cli: Cli,
@@ -318,7 +327,8 @@ fn execute(
             unset.as_deref(),
             key.as_deref(),
             value.as_deref(),
-        );
+        )
+        .map_err(cli_error::config_error);
     }
     if matches!(&cli.command, Commands::Doctor) {
         return doctor::run();
@@ -393,7 +403,12 @@ fn execute(
             dry_run: false,
             explain: false,
             ..
-        } if *local || !config::load()?.herdr.next_to_new_agent => {
+        } if *local
+            || !config::load()
+                .map_err(cli_error::config_error)?
+                .herdr
+                .next_to_new_agent =>
+        {
             Some(local_owner(&cli, project_dir, &db)?)
         }
         _ => None,
@@ -421,7 +436,7 @@ fn execute(
             }
             let images = images
                 .iter()
-                .map(|path| images::ImageInput::read(path))
+                .map(|path| images::ImageInput::read(path).map_err(cli_error::image_error))
                 .collect::<Result<Vec<_>>>()?;
             match stdin_description.or(text).or(description) {
                 Some(description) if !edit => {
@@ -480,7 +495,7 @@ fn execute(
             }
         }
         Commands::Tui { include_archived } => {
-            let settings = config::load_tui()?;
+            let settings = config::load_tui().map_err(cli_error::config_error)?;
             tui::compose_dashboard(
                 &mut db,
                 include_archived,
@@ -500,7 +515,7 @@ fn execute(
                 },
                 &mut |db, action| match action {
                     tui::TaskAction::Complete(id) => {
-                        let owner = session::owner(session_input, project_dir, db)?;
+                        let owner = resolved_owner(session_input, project_dir, db)?;
                         db.complete(id, &owner.key, overrides.harness_name.as_deref())
                     }
                     tui::TaskAction::Retry(id) => db.edit_with_priority(
@@ -570,7 +585,10 @@ fn execute(
         } => {
             ensure!(
                 !force || matches!(set_status, Some(EditStatus::New)),
-                "--force is only valid with --set-status new"
+                errors::Info::invalid_argument(
+                    "--force",
+                    "--force is only valid with --set-status new"
+                )
             );
             let set_status = if set_pending {
                 Some(EditStatus::New)
@@ -581,7 +599,7 @@ fn execute(
             let task = db.task(id)?;
             let images = images
                 .iter()
-                .map(|path| images::ImageInput::read(path))
+                .map(|path| images::ImageInput::read(path).map_err(cli_error::image_error))
                 .collect::<Result<Vec<_>>>()?;
             if edit
                 || (description.is_none()
@@ -640,13 +658,17 @@ fn execute(
             } else {
                 ensure!(
                     reason.is_none() || matches!(set_status, Some(EditStatus::Error)),
-                    "--reason is only valid with --set-status error"
+                    errors::Info::invalid_argument(
+                        "--reason",
+                        "--reason is only valid with --set-status error"
+                    )
                 );
                 if matches!(set_status, Some(EditStatus::Error)) {
                     db::nonempty(
-                        reason
-                            .as_deref()
-                            .context("--set-status error requires --reason")?,
+                        reason.as_deref().context(errors::Info::invalid_argument(
+                            "--reason",
+                            "--set-status error requires --reason",
+                        ))?,
                         "Error reason",
                     )?;
                 }
@@ -658,7 +680,7 @@ fn execute(
                         Some(session_input.unwrap_or("manual").to_owned())
                     }
                     Some(EditStatus::New | EditStatus::Error) => {
-                        Some(session::owner(session_input, project_dir, &db)?.key)
+                        Some(resolved_owner(session_input, project_dir, &db)?.key)
                     }
                     None => None,
                 };
@@ -720,7 +742,16 @@ fn execute(
                             &overrides,
                             filter,
                         )?,
-                        None => dispatch::next(&mut db, session_input, &overrides, filter)?,
+                        None => dispatch::next(&mut db, session_input, &overrides, filter)
+                            .map_err(|error| {
+                                cli_error::annotate(
+                                    error,
+                                    errors::Info::new(
+                                        errors::Code::DispatchError,
+                                        "Agent dispatch failed; inspect assignment before retrying",
+                                    ),
+                                )
+                            })?,
                     }
                 };
                 if task.is_some() || !wait {
@@ -731,7 +762,7 @@ fn execute(
             }
         }
         Commands::Complete { id } => {
-            let owner = session::owner(session_input, project_dir, &db)?;
+            let owner = resolved_owner(session_input, project_dir, &db)?;
             json!(db.complete(id, &owner.key, overrides.harness_name.as_deref())?)
         }
         Commands::Reopen { id } => {
@@ -761,20 +792,33 @@ fn execute(
             }
             HerdrCommand::Find { task_id } => {
                 db.task(task_id)?;
-                let link = db
-                    .link(task_id)?
-                    .context("Task has no Herdr link; run qqq herdr link")?;
+                let link = db.link(task_id)?.context(
+                    errors::Info::new(
+                        errors::Code::InvalidTransition,
+                        "Task has no Herdr link; run qqq herdr link",
+                    )
+                    .detail("task_id", task_id)
+                    .detail("actual_link", false)
+                    .detail("expected_link", true),
+                )?;
                 json!(herdr::find(&link.identity, link.server.as_deref())?)
             }
         },
     })
 }
-fn run() -> Result<(Option<String>, bool)> {
-    let cli = Cli::parse_from(aliases::expand(std::env::args_os().collect())?);
+fn run(cli: Cli) -> Result<(Option<String>, bool)> {
     let filter = match &cli.command {
-        Commands::List { filter, .. } | Commands::Next { filter, .. } => {
-            filter.as_deref().map(sql_filter::compile).transpose()?
-        }
+        Commands::List { filter, .. } | Commands::Next { filter, .. } => filter
+            .as_deref()
+            .map(sql_filter::compile)
+            .transpose()
+            .map_err(|error| {
+                cli_error::annotate(
+                    error,
+                    errors::Info::new(errors::Code::InvalidFilter, "Invalid --filter expression")
+                        .detail("argument", "--filter"),
+                )
+            })?,
         _ => None,
     };
     let is_tui = matches!(&cli.command, Commands::Tui { .. });
@@ -789,7 +833,8 @@ fn run() -> Result<(Option<String>, bool)> {
             all: false,
             max_completed: None,
             ..
-        } if !cli.json => config::load_display()?
+        } if !cli.json => config::load_display()
+            .map_err(cli_error::config_error)?
             .display
             .max_completed
             .map(|limit| i64::try_from(limit).context("display.max-completed is too large"))
@@ -852,7 +897,37 @@ fn run() -> Result<(Option<String>, bool)> {
     ))
 }
 fn main() {
-    match run() {
+    let arguments: Vec<_> = std::env::args_os().collect();
+    let requested_json = cli_error::requests_json(&arguments);
+    errors::set_json_output(requested_json);
+    let arguments = match aliases::expand(arguments) {
+        Ok(arguments) => arguments,
+        Err(error) => {
+            let error = cli_error::annotate(
+                error,
+                errors::Info::invalid_argument("alias", "Invalid command alias"),
+            );
+            if errors::json_output() {
+                cli_error::emit(&cli_error::payload(&error, None));
+            } else {
+                eprintln!("error: {error:#}");
+            }
+            std::process::exit(1);
+        }
+    };
+    let requested_json = cli_error::requests_json(&arguments);
+    let cli = match Cli::try_parse_from(arguments) {
+        Ok(cli) => cli,
+        Err(error) if requested_json && error.use_stderr() => {
+            cli_error::emit(&cli_error::parser_payload(&error));
+            std::process::exit(error.exit_code());
+        }
+        Err(error) => error.exit(),
+    };
+    let json_output = cli.json;
+    errors::set_json_output(json_output);
+    let command = cli_error::command_name(&cli.command);
+    match run(cli) {
         Ok((Some(output), unhealthy)) => {
             println!("{output}");
             if unhealthy {
@@ -861,7 +936,11 @@ fn main() {
         }
         Ok((None, _)) => (),
         Err(error) => {
-            eprintln!("error: {error:#}");
+            if json_output {
+                cli_error::emit(&cli_error::payload(&error, Some(command)));
+            } else {
+                eprintln!("error: {error:#}");
+            }
             std::process::exit(1);
         }
     }

@@ -491,7 +491,9 @@ fn failed_image_insert_rolls_back_error_reason_history_and_content() {
     ];
     let output = run(&d, &args);
     assert!(!output.status.success());
-    assert!(String::from_utf8_lossy(&output.stderr).contains("image insertion blocked"));
+    let failure: Value = serde_json::from_slice(&output.stderr).unwrap();
+    assert_eq!(failure["code"], "DATABASE_ERROR");
+    assert_eq!(failure["details"]["sqlite_extended_code"], 1811);
     assert_eq!(ok(&d, &["show", "1"]), before);
     conn.execute_batch("DROP TRIGGER reject_image").unwrap();
     assert_eq!(ok(&d, &args)["status"], "error");
