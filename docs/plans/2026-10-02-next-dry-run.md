@@ -240,8 +240,13 @@ Additional coverage: two concurrent previews wait for blocked child while caller
 
 ### Task 4: Verify, review, integrate and resume queue
 
-- [ ] Run `cargo fmt --check`, `cargo test --locked`, `cargo clippy --locked --all-targets -- -D warnings` in worktree's private Cargo target directory. Record totals and exit codes.
-- [ ] Request read-only review through required review skill; resolve concrete findings, repeat affected checks.
+- [x] Run `cargo fmt --check`, `cargo test --locked`, `cargo clippy --locked --all-targets -- -D warnings` in worktree's private Cargo target directory. Record totals and exit codes.
+- [x] Request read-only review through required review skill; resolve concrete findings, repeat affected checks.
 - [ ] Rebase on current master; preserve concurrent work, verify affected integration paths. Fast-forward local master, install with `cargo install --path . --locked --offline --force`.
 - [ ] Exercise installed `next --dry-run --json`; current owned task #118 must never return. Compare `qqq show 118 --json` before/after to prove unchanged ownership.
 - [ ] Remove merged worktree/branch, complete #118 with qqq, resume one persistent `qqq next --wait --local --json` waiter.
+
+Verification: focused CLI/filter/dispatch/wait/output suites passed 68 tests;
+full suite passed 470 tests. Formatting and Clippy passed with exit code 0.
+Read-only review found no issues. Help wording subsequently clarified claim vs
+preview; CLI/output suites and formatting/Clippy passed again.

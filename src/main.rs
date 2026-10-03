@@ -198,10 +198,10 @@ enum Commands {
     },
     /// Return owned task or atomically claim highest-priority ready task (oldest ID on ties).
     Next {
-        /// Filter new candidates with a Luau expression; owned task still returns. See docs/filter.md.
+        /// Filter queued candidates with Luau; normal next still returns owned task. See docs/filter.md.
         #[arg(long, value_name = "EXPR", allow_hyphen_values = true)]
         filter: Option<String>,
-        /// Wait until a task is available; concurrent sessions claim each task once.
+        /// Wait until a task is available to claim or preview.
         #[arg(long)]
         wait: bool,
         /// Preview queued candidate without claiming or returning an owned task.
