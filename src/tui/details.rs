@@ -47,24 +47,22 @@ pub fn rows(task: &Task, messages: &[TaskMessage], width: usize) -> Vec<DetailRo
     let parent = task
         .parent_id
         .map_or_else(|| "none".to_owned(), |id| format!("#{id}"));
-    let mut content = vec![
-        DetailRow::new(
-            format!(
-                "Task #{} | {} | Priority {} | Parent {parent}",
-                task.id,
-                crate::output::status_label(&task.status),
-                task.priority
-            ),
-            DetailKind::Heading,
+    let mut content = vec![DetailRow::new(
+        format!(
+            "Task #{} | {} | Priority {} | Parent {parent}",
+            task.id,
+            crate::output::status_label(&task.status),
+            task.priority
         ),
-        DetailRow::new(
-            format!("Messages ({}) | PgUp/PgDn scroll", messages.len()),
-            DetailKind::Heading,
-        ),
-    ];
+        DetailKind::Heading,
+    )];
     if messages.is_empty() {
         content.push(DetailRow::new("No messages yet.", DetailKind::Muted));
     } else {
+        content.push(DetailRow::new(
+            format!("Messages ({}) | PgUp/PgDn scroll", messages.len()),
+            DetailKind::Heading,
+        ));
         for message in messages.iter().rev() {
             content.push(DetailRow::new(
                 format!(
@@ -193,6 +191,7 @@ mod tests {
             "In progress",
             "Priority 8",
             "Parent #2",
+            "Messages (2) | PgUp/PgDn scroll",
             "reviewer",
             "2026-10-02T14:00",
             "Created:",
@@ -224,7 +223,14 @@ mod tests {
 
     #[test]
     fn empty_messages_and_unicode_controls_are_readable() {
-        assert!(text(&rows(&task(), &[], 80), "\n").contains("No messages yet."));
+        for width in [12, 80] {
+            let rendered = text(&rows(&task(), &[], width), "");
+            assert!(rendered.contains("No messages yet."));
+            assert!(!rendered.contains("Messages (0)"));
+            assert!(!rendered.contains("PgUp/PgDn scroll"));
+            assert!(rendered.contains("Created:"));
+            assert!(rendered.contains("Orchestrator:"));
+        }
         let messages = [TaskMessage {
             id: 1,
             body: "界界界界界界界界\n\x1b[31m unsafe".into(),

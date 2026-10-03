@@ -467,6 +467,8 @@ print(json.dumps({"result": result}))
                          and "Latest message" not in details_text()
                          and editor_line().startswith("Fresh"))
             assert "Latest message" not in details_text(), visible.text()
+            assert "Messages (0)" not in details_text(), visible.text()
+            assert "PgUp/PgDn scroll" not in details_text(), visible.text()
             assert cli("show", "3")["task"]["description"] == "Fresh"
             if scenario == "details_no_color":
                 assert b"\x1b[38;" not in screen and b"\x1b[48;" not in screen, screen[-2000:]
@@ -518,6 +520,8 @@ print(json.dumps({"result": result}))
                          and details_text().startswith("Task #1")
                          and "No messages yet." in details_text())
             assert "No messages yet." in details_text(), visible.text()
+            assert "Messages (0)" not in details_text(), visible.text()
+            assert "PgUp/PgDn scroll" not in details_text(), visible.text()
             send(b"\x1b[1;2B")
             wait_visible(lambda: "task #2" in editor_title() and "Messages (1)" in details_text())
             assert cli("list") == initial_tasks
