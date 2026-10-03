@@ -711,7 +711,7 @@ fn compose_inner(
                 )
                 .saturating_sub(2);
                 let tree = crate::output::render(
-                    if size.0 < 50 {
+                    if size.0 < dashboard::COMPACT_COLUMNS {
                         crate::output::Format::CompactTasks
                     } else {
                         crate::output::Format::Tasks

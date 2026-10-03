@@ -329,7 +329,7 @@ print(json.dumps({"result": result}))
         send(f"\x1b[<0;{column};{row}M\x1b[<0;{column};{row}m".encode())
 
     def list_bottom():
-        if visible.width < 50 or visible.width >= 150:
+        if visible.width < 60 or visible.width >= 150:
             row = editor_row()
             return row - 1 if row is not None else 3
         # Details box starts immediately after final task-list row.
@@ -437,13 +437,13 @@ print(json.dumps({"result": result}))
                 fcntl.ioctl(slave, termios.TIOCSWINSZ, struct.pack("HHHH", height, width, 0, 0))
                 visible.resize(width, height)
                 os.kill(child.pid, signal.SIGWINCH)
-                editor_y = (height + 1) // 2 if width < 50 else 13
+                editor_y = (height + 1) // 2 if width < 60 else 13
                 wait_visible(lambda: editor_row() == editor_y
                              and (visible.x, visible.y) == (8 if dirty else 0, editor_y + 1)
                              and (not dirty or editor_line().startswith("Changed Second")))
                 settle()
 
-            resize_compact(49)
+            resize_compact(59)
             upper = "\n".join(visible.text().splitlines()[:editor_row()])
             assert "First" in upper and "Second" in upper and "New" not in upper, visible.text()
             assert not any(symbol in visible.text() for symbol in "╔╚║"), visible.text()
@@ -464,12 +464,15 @@ print(json.dumps({"result": result}))
             send(b"\x1b")
             wait_visible(lambda: not visible.text().splitlines()[0].startswith("Filter:")
                          and editor_line().startswith("Changed Second") and (visible.x, visible.y) == (8, 13))
-            resize_compact(48, height=25, dirty=True)
+            resize_compact(58, height=25, dirty=True)
             resize_compact(50, dirty=True)
+            assert "New" not in "\n".join(visible.text().splitlines()[:editor_row()]), visible.text()
+            assert not any(symbol in visible.text() for symbol in "╔╚║"), visible.text()
+            resize_compact(60, dirty=True)
             assert "New" in "\n".join(visible.text().splitlines()[:8]), visible.text()
             assert "╔" in visible.text(), visible.text()
             resize_compact(150, dirty=True)
-            resize_compact(49, dirty=True)
+            resize_compact(59, dirty=True)
             assert "New" not in "\n".join(visible.text().splitlines()[:editor_row()]), visible.text()
             assert cli("list") == initial_tasks
             if scenario.endswith("no_color"):

@@ -18,6 +18,8 @@ const BODY_BG: Color = Color::Indexed(236);
 const POPUP_ERROR_FG: Color = Color::Indexed(210);
 const POPUP_PROMPT_FG: Color = Color::Indexed(222);
 
+pub(super) const COMPACT_COLUMNS: u16 = 60;
+
 pub struct DetailsView<'a> {
     pub rows: &'a [render::DetailRow],
     pub top: &'a mut usize,
@@ -200,7 +202,7 @@ fn popup(frame: &mut Frame<'_>, lines: &[render::PopupRow], color: bool) {
 }
 
 pub fn panes(area: Rect) -> Panes {
-    if area.width < 50 {
+    if area.width < COMPACT_COLUMNS {
         let list_height = area.height.div_ceil(2);
         let editor_y = area.y + list_height;
         return Panes {
