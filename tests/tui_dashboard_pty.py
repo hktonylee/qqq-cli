@@ -454,7 +454,12 @@ print(json.dumps({"result": result}))
             send(b"\x1b[6~")
             wait_visible(lambda: details_text().splitlines()[0] == "TAIL"
                          and (visible.x, visible.y) == (len("Second"), editor_row() + 1))
-            send(b"\x1b[5~" * 2)
+            send(b"\x1b[6~")
+            selected_task = cli("show", "2")["task"]
+            timestamps = f"Created {selected_task['created_at']}  Updated {selected_task['updated_at']}"
+            wait_visible(lambda: timestamps in details_text().splitlines()
+                         and (visible.x, visible.y) == (len("Second"), editor_row() + 1))
+            send(b"\x1b[5~" * 3)
             wait_visible(lambda: details_text().startswith("Task #2"))
             assert editor_line().startswith("Second"), visible.text()
             clear_capture()

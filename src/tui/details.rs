@@ -78,8 +78,10 @@ pub fn rows(task: &Task, messages: &[TaskMessage], width: usize) -> Vec<DetailRo
     }
     content.extend([
         DetailRow::new("", DetailKind::Body),
-        DetailRow::new(format!("Created: {}", task.created_at), DetailKind::Muted),
-        DetailRow::new(format!("Updated: {}", task.updated_at), DetailKind::Muted),
+        DetailRow::new(
+            format!("Created {}  Updated {}", task.created_at, task.updated_at),
+            DetailKind::Muted,
+        ),
         DetailRow::new(
             format!("Archived: {}", if task.archived { "yes" } else { "no" }),
             DetailKind::Muted,
@@ -184,7 +186,7 @@ mod tests {
                 created_at: "2026-10-02T14:00:00.000Z".into(),
             },
         ];
-        let detail_rows = rows(&task(), &messages, 120);
+        let detail_rows = rows(&task(), &messages, 66);
         let rendered = text(&detail_rows, "\n");
         for value in [
             "Task #4",
@@ -194,8 +196,8 @@ mod tests {
             "Messages (2) | PgUp/PgDn scroll",
             "reviewer",
             "2026-10-02T14:00",
-            "Created:",
-            "Updated:",
+            "Created ",
+            "Updated ",
             "codex",
             "session-1",
             "herdr",
@@ -206,7 +208,16 @@ mod tests {
         assert!(
             rendered.find("Latest message").unwrap() < rendered.find("Earlier message").unwrap()
         );
-        assert!(rendered.find("Earlier message").unwrap() < rendered.find("Created:").unwrap());
+        assert!(rendered.find("Earlier message").unwrap() < rendered.find("Created ").unwrap());
+        assert_eq!(
+            detail_rows
+                .iter()
+                .find(|row| row.text.starts_with("Created ")),
+            Some(&DetailRow::new(
+                "Created 2026-10-02T12:00:00.000Z  Updated 2026-10-02T13:00:00.000Z",
+                DetailKind::Muted,
+            ))
+        );
         assert!(!rendered.contains("Full editable description"));
         assert_eq!(detail_rows[0].kind, DetailKind::Heading);
         assert_eq!(detail_rows[1].kind, DetailKind::Heading);
@@ -216,7 +227,7 @@ mod tests {
         assert!(
             detail_rows
                 .iter()
-                .filter(|row| row.text.starts_with("Created:") || row.text.starts_with("Harness:"))
+                .filter(|row| row.text.starts_with("Created ") || row.text.starts_with("Harness:"))
                 .all(|row| row.kind == DetailKind::Muted)
         );
     }
@@ -228,7 +239,7 @@ mod tests {
             assert!(rendered.contains("No messages yet."));
             assert!(!rendered.contains("Messages (0)"));
             assert!(!rendered.contains("PgUp/PgDn scroll"));
-            assert!(rendered.contains("Created:"));
+            assert!(rendered.contains("Created "));
             assert!(rendered.contains("Orchestrator:"));
         }
         let messages = [TaskMessage {
@@ -246,5 +257,9 @@ mod tests {
         assert!(!text(&lines, "\n").contains('\x1b'));
         assert!(text(&lines, "").contains("\\u{1b}"));
         assert!(text(&lines, "").contains("界界界界界界界界"));
+        assert!(
+            text(&lines, "")
+                .contains("Created 2026-10-02T12:00:00.000Z  Updated 2026-10-02T13:00:00.000Z")
+        );
     }
 }
