@@ -200,6 +200,15 @@ fn popup(frame: &mut Frame<'_>, lines: &[render::PopupRow], color: bool) {
 }
 
 pub fn panes(area: Rect) -> Panes {
+    if area.width < 50 {
+        let list_height = area.height.div_ceil(2);
+        let editor_y = area.y + list_height;
+        return Panes {
+            list: Rect::new(area.x, area.y, area.width, list_height),
+            details: Rect::new(area.x, editor_y, area.width, 0),
+            editor: Rect::new(area.x, editor_y, area.width, area.height - list_height),
+        };
+    }
     let list_height = ((u32::from(area.height) * 35 + 50) / 100) as u16;
     let list_height = list_height.max(4).min(area.height.saturating_sub(4));
     let details_height = ((u32::from(area.height) * 20 + 50) / 100) as u16;
@@ -631,7 +640,9 @@ pub fn draw(
         rows: &empty_details,
         top: &mut empty_top,
     });
-    details(frame, details_area, details_view, color);
+    if details_area.height > 0 {
+        details(frame, details_area, details_view, color);
+    }
     let editor_cursor = editor(frame, editor_area, editor_state, color);
     if let Some(cursor) = editor_cursor.filter(|_| !list_view.focused) {
         frame.set_cursor_position(cursor);

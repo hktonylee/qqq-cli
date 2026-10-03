@@ -1685,6 +1685,38 @@ fn hotkey_footer_colors_shortcuts_and_clears_styles_for_messages() {
 }
 
 #[test]
+fn compact_dashboard_uses_equal_panels_below_50_columns() {
+    use ratatui::layout::Rect;
+    for width in [12, 17, 49] {
+        for height in [8, 9, 24, 31, 100] {
+            let panes = dashboard::panes(Rect::new(2, 3, width, height));
+            assert_eq!(panes.list.height, height.div_ceil(2));
+            assert_eq!(panes.editor.height, height / 2);
+            assert_eq!(panes.editor.y, 3 + panes.list.height);
+            assert_eq!(panes.details.height, 0);
+            assert_eq!(panes.list.width, width);
+            assert_eq!(panes.editor.width, width);
+        }
+    }
+    let panes = dashboard::panes(Rect::new(0, 0, 50, 24));
+    assert_eq!(panes.list.height, 8);
+    assert_eq!(panes.details.height, 5);
+    assert_eq!(panes.editor.y, 13);
+    assert_eq!(
+        dashboard::wheel_area((49, 24), 5, 11, false),
+        Some(dashboard::WheelArea::List(12))
+    );
+    assert_eq!(
+        dashboard::wheel_area((49, 24), 5, 11, true),
+        Some(dashboard::WheelArea::List(11))
+    );
+    assert_eq!(
+        dashboard::wheel_area((49, 24), 5, 13, false),
+        Some(dashboard::WheelArea::Editor(10))
+    );
+}
+
+#[test]
 fn wide_dashboard_places_details_beside_list_at_150_columns() {
     use ratatui::layout::Rect;
     for height in [8, 18, 24, 40, 100] {

@@ -15,6 +15,7 @@ pub enum Format {
     AddedTask,
     Task,
     Tasks,
+    CompactTasks,
     PriorityTasks,
     OnelinePriorityTasks,
     Detail,
@@ -273,6 +274,7 @@ fn task_tree(
     show_priority: bool,
     oneline: bool,
     wrap_narrow: bool,
+    show_status: bool,
 ) -> String {
     if tasks.is_empty() {
         return "No tasks yet.".to_owned();
@@ -301,8 +303,10 @@ fn task_tree(
     let mut continuations = Vec::new();
     let mut lines = vec![if show_priority {
         format!("{:<6} {:<12} {:>4} TASK", "ID", "STATUS", "PRI")
-    } else {
+    } else if show_status {
         format!("{:<6} {:<12} TASK", "ID", "STATUS")
+    } else {
+        format!("{:<6} TASK", "ID")
     }];
     while let Some((index, depth, last)) = stack.pop() {
         continuations.truncate(depth.saturating_sub(1));
@@ -322,8 +326,10 @@ fn task_tree(
                 status(task),
                 field(task, "priority")
             )
-        } else {
+        } else if show_status {
             format!("{:<6} {:<12} ", field(task, "id"), status(task))
+        } else {
+            format!("{:<6} ", field(task, "id"))
         };
         let first_prefix = format!("{fields}{prefix}");
         let continuation_prefix = format!(
@@ -481,6 +487,16 @@ pub fn render(format: Format, value: &Value, color: bool, columns: Option<usize>
             false,
             false,
             true,
+            true,
+        ),
+        Format::CompactTasks => task_tree(
+            value.as_array().expect("task list is an array"),
+            color,
+            columns,
+            false,
+            false,
+            true,
+            false,
         ),
         Format::PriorityTasks => task_tree(
             value.as_array().expect("task list is an array"),
@@ -489,6 +505,7 @@ pub fn render(format: Format, value: &Value, color: bool, columns: Option<usize>
             true,
             false,
             false,
+            true,
         ),
         Format::OnelinePriorityTasks => task_tree(
             value.as_array().expect("task list is an array"),
@@ -497,6 +514,7 @@ pub fn render(format: Format, value: &Value, color: bool, columns: Option<usize>
             true,
             true,
             false,
+            true,
         ),
         Format::Detail => detail::render(value, color),
         Format::Message => format!(

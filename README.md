@@ -209,12 +209,14 @@ attachments.
 qqq tui
 ```
 
-Below 150 columns, task list, details/messages and editor stay visible at 35%,
+Below 50 columns, compact layout hides task status labels and details/messages.
+Task list and editor each use half terminal height, rounded to rows.
+From 50 through 149 columns, task list, details/messages and editor stay visible at 35%,
 20% and 45% of terminal height, rounded to rows. At 150 columns or wider, list
 and details share upper rows: list uses 60% of width, details 40%. Editor spans
-full width below them, retaining its height and position across layout changes.
+full width below them, retaining its height and position between stacked and wide layouts.
 Task list shows unarchived tasks by default.
-Blank drafts show `Select task to view details.` in details pane; selecting or
+Visible details pane shows `Select task to view details.` for blank drafts; selecting or
 saving task keeps pane positions fixed. Small terminals retain usable list and
 editor rows.
 Details use a double-line box with two spaces inside each side; short panes

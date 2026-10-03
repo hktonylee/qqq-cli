@@ -562,14 +562,10 @@ fn compose_inner(
             if let Some(task) = tasks.iter().find(|task| Some(task.id) == target_id) {
                 target_status = Some(task.status.clone());
             }
-            let details_width = usize::from(
-                dashboard::details_content(
-                    dashboard::panes(ratatui::layout::Rect::new(0, 0, size.0, size.1)).details,
-                )
-                .width,
-            )
-            .max(1);
-            let details_rows = match target_id {
+            let details_area =
+                dashboard::panes(ratatui::layout::Rect::new(0, 0, size.0, size.1)).details;
+            let details_width = usize::from(dashboard::details_content(details_area).width).max(1);
+            let details_rows = match target_id.filter(|_| details_area.height > 0) {
                 Some(id) => match tasks.iter().find(|task| task.id == id) {
                     Some(task) => details::rows(&db.show_task(task)?, details_width),
                     None => details::unavailable(id, details_width),
@@ -672,7 +668,11 @@ fn compose_inner(
                 )
                 .saturating_sub(2);
                 let tree = crate::output::render(
-                    crate::output::Format::Tasks,
+                    if size.0 < 50 {
+                        crate::output::Format::CompactTasks
+                    } else {
+                        crate::output::Format::Tasks
+                    },
                     &serde_json::json!(displayed),
                     false,
                     Some(list_width),
@@ -1414,6 +1414,9 @@ fn compose_inner(
                 {
                     let area =
                         dashboard::panes(ratatui::layout::Rect::new(0, 0, size.0, size.1)).details;
+                    if area.height == 0 {
+                        continue;
+                    }
                     let page = dashboard::details_height(area).max(1);
                     details_top = if key.code == KeyCode::PageDown {
                         details_top
@@ -1589,21 +1592,33 @@ mod tests {
     #[test]
     fn tui_preview_cap_handles_wrapped_text_and_narrow_tree_prefixes() {
         let tasks = json!([
-            {"id":1,"description":"ABCDEFGHIJKLMN","status":"new","parent_id":null},
+            {"id":1,"description":"ABCDEFGHIJKLMNOPQRSTUVWXYZ".repeat(4),"status":"new","parent_id":null},
             {"id":2,"description":"Child first\nChild second\nChild third\nHidden","status":"new","parent_id":1}
         ]);
         for width in [24, 20, 10] {
-            let tree = render(Format::Tasks, &tasks, false, Some(width));
-            let rows = super::panel::rows(&tree, width);
-            for id in [1, 2] {
-                let preview: Vec<_> = rows.iter().filter(|row| row.task_id == Some(id)).collect();
-                assert_eq!(preview.len(), 3, "task {id}, width {width}");
-                assert!(
-                    preview[2].text.ends_with("..."),
-                    "task {id}, width {width}: {}",
-                    preview[2].text
-                );
-                assert!(unicode_width::UnicodeWidthStr::width(preview[2].text.as_str()) <= width);
+            for format in [Format::Tasks, Format::CompactTasks] {
+                let compact = matches!(format, Format::CompactTasks);
+                let tree = render(format, &tasks, false, Some(width));
+                if compact {
+                    assert!(!tree.contains("New"));
+                    assert!(tree.contains("└──"));
+                }
+                let rows = super::panel::rows(&tree, width);
+                assert_eq!(rows.len(), 6);
+                assert_eq!(rows[0].task_id, Some(1));
+                for id in [1, 2] {
+                    let preview: Vec<_> =
+                        rows.iter().filter(|row| row.task_id == Some(id)).collect();
+                    assert_eq!(preview.len(), 3, "task {id}, width {width}");
+                    assert!(
+                        preview[2].text.ends_with("..."),
+                        "task {id}, width {width}: {}",
+                        preview[2].text
+                    );
+                    assert!(
+                        unicode_width::UnicodeWidthStr::width(preview[2].text.as_str()) <= width
+                    );
+                }
             }
         }
     }

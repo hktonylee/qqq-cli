@@ -68,7 +68,10 @@ pub fn rows(tree: &str, width: usize) -> Vec<ListRow> {
     let mut task_rows = 0;
     let mut rows: Vec<ListRow> = Vec::new();
     for (index, line) in tree.lines().enumerate() {
-        if index == 0 && line.split_whitespace().eq(["ID", "STATUS", "TASK"]) {
+        if index == 0
+            && (line.split_whitespace().eq(["ID", "STATUS", "TASK"])
+                || line.split_whitespace().eq(["ID", "TASK"]))
+        {
             continue;
         }
         if line.as_bytes().first().is_some_and(u8::is_ascii_digit) {

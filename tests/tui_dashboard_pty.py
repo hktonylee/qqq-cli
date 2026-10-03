@@ -94,7 +94,7 @@ CTRL_P = b"\x10"
 with tempfile.TemporaryDirectory(prefix="qqq-dashboard-test-") as folder:
     env = dict(os.environ, HOME=folder, TERM="xterm-256color")
     env.pop("NO_COLOR", None)
-    if scenario in ("no_color", "pasteboard_no_color", "filter_no_color", "details_no_color", "actions_popup_no_color", "wide_layout_no_color", "menu_arrows_no_color", "filter_escape_empty_no_color"):
+    if scenario in ("no_color", "pasteboard_no_color", "filter_no_color", "details_no_color", "actions_popup_no_color", "wide_layout_no_color", "menu_arrows_no_color", "filter_escape_empty_no_color", "compact_layout_no_color"):
         env["NO_COLOR"] = "1"
     elif scenario == "dumb":
         env["TERM"] = "dumb"
@@ -329,7 +329,7 @@ print(json.dumps({"result": result}))
         send(f"\x1b[<0;{column};{row}M\x1b[<0;{column};{row}m".encode())
 
     def list_bottom():
-        if visible.width >= 150:
+        if visible.width < 50 or visible.width >= 150:
             row = editor_row()
             return row - 1 if row is not None else 3
         # Details box starts immediately after final task-list row.
@@ -430,7 +430,51 @@ print(json.dumps({"result": result}))
             read_until(b"Second")
             assert "First" in visible.text() and "Second" in visible.text(), visible.text()
         assert not select.select([child.stdout], [], [], 0)[0], "TUI wrote stdout while open"
-        if scenario.startswith("wide_layout"):
+        if scenario.startswith("compact_layout"):
+            initial_tasks = cli("list")
+
+            def resize_compact(width, height=24, dirty=False):
+                fcntl.ioctl(slave, termios.TIOCSWINSZ, struct.pack("HHHH", height, width, 0, 0))
+                visible.resize(width, height)
+                os.kill(child.pid, signal.SIGWINCH)
+                editor_y = (height + 1) // 2 if width < 50 else 13
+                wait_visible(lambda: editor_row() == editor_y
+                             and (visible.x, visible.y) == (8 if dirty else 0, editor_y + 1)
+                             and (not dirty or editor_line().startswith("Changed Second")))
+                settle()
+
+            resize_compact(49)
+            upper = "\n".join(visible.text().splitlines()[:editor_row()])
+            assert "First" in upper and "Second" in upper and "New" not in upper, visible.text()
+            assert not any(symbol in visible.text() for symbol in "╔╚║"), visible.text()
+            click(6, task_row("Second"))
+            wait_visible(lambda: "Task #2 (New)" in editor_title() and editor_line().startswith("Second"))
+            send(b"\x01Changed ")
+            wait_visible(lambda: editor_line().rstrip() == "Changed Second"
+                         and (visible.x, visible.y) == (8, 13))
+            send(CTRL_SLASH)
+            wait_visible(lambda: visible.text().splitlines()[0].strip() == "Filter:"
+                         and (visible.x, visible.y) == (8, 0))
+            click(6, 1)
+            settle()
+            assert "Task #2 (New)" in editor_title() and editor_line().startswith("Changed Second"), visible.text()
+            send(b"first")
+            wait_visible(lambda: visible.text().splitlines()[0].strip() == "Filter: first"
+                         and "Second" not in "\n".join(visible.text().splitlines()[1:editor_row()]))
+            send(b"\x1b")
+            wait_visible(lambda: not visible.text().splitlines()[0].startswith("Filter:")
+                         and editor_line().startswith("Changed Second") and (visible.x, visible.y) == (8, 13))
+            resize_compact(48, height=25, dirty=True)
+            resize_compact(50, dirty=True)
+            assert "New" in "\n".join(visible.text().splitlines()[:8]), visible.text()
+            assert "╔" in visible.text(), visible.text()
+            resize_compact(150, dirty=True)
+            resize_compact(49, dirty=True)
+            assert "New" not in "\n".join(visible.text().splitlines()[:editor_row()]), visible.text()
+            assert cli("list") == initial_tasks
+            if scenario.endswith("no_color"):
+                assert b"\x1b[38;" not in screen and b"\x1b[48;" not in screen, screen[-2000:]
+        elif scenario.startswith("wide_layout"):
             initial_tasks = cli("list")
 
             def resize_layout(width, selected=False):
