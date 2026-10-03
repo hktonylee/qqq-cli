@@ -95,21 +95,9 @@ Give each worker a unique, stable session ID, replacing `agent-1` for each worke
 To keep working as new tasks arrive, start with this `/goal` prompt:
 
 ```text
-/goal Use `qqq next --wait --local --json --session agent-1` to pick up the next task
-and work on it. Complete each task after its checks pass, then get the next one.
-Loop indefinitely. Keep the blocking wait running; don't wake up repeatedly to
-poll status.
-```
-
-For your agent prompt or `AGENTS.md`, use these workflow instructions:
-
-```text
-Use qqq to get work for this project.
-Run qqq next --wait --local --json --session agent-1.
-Read the returned task, do the work, and run relevant checks.
-Record progress with qqq message <id> "update" --session agent-1.
-Finish with qqq complete <id> --session agent-1, then get the next task.
-If blocked, record the reason and return control without marking it complete.
+/goal Use `qqq next --wait` to pick up the next task and work on it. Complete
+each task after its checks pass, then get the next one. Loop indefinitely.
+Keep the blocking wait running; don't wake up repeatedly to poll status.
 ```
 
 `--wait` blocks until work is ready. `--json` returns full task data for the agent.
