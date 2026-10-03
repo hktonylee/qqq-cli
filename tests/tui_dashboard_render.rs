@@ -340,16 +340,16 @@ fn selected_task_renders_details_between_list_and_editor() {
     let rows = panel::rows("ID STATUS TASK\n1 New Selected", 70);
     let expected = [
         (
-            "Task #1 | New",
-            render::DetailKind::Heading,
-            Color::Indexed(81),
-            Modifier::BOLD,
+            "Task #1 | Error | Priority 8",
+            render::DetailKind::Body,
+            Color::Reset,
+            Modifier::empty(),
         ),
         (
             "#1 reviewer",
             render::DetailKind::MessageHeader,
-            Color::Indexed(222),
-            Modifier::empty(),
+            Color::Reset,
+            Modifier::BOLD,
         ),
         (
             "Created: Latest message",
@@ -360,8 +360,8 @@ fn selected_task_renders_details_between_list_and_editor() {
         (
             "Created: now",
             render::DetailKind::Muted,
-            Color::Gray,
-            Modifier::empty(),
+            Color::Reset,
+            Modifier::DIM,
         ),
         (
             "Task #1 unavailable.",
@@ -369,10 +369,36 @@ fn selected_task_renders_details_between_list_and_editor() {
             Color::Yellow,
             Modifier::empty(),
         ),
+        (
+            "In progress",
+            render::DetailKind::InProgress,
+            Color::Cyan,
+            Modifier::empty(),
+        ),
+        (
+            "Completed",
+            render::DetailKind::Completed,
+            Color::DarkGray,
+            Modifier::empty(),
+        ),
     ];
     let detail_rows: Vec<_> = expected
         .iter()
-        .map(|(text, kind, _, _)| render::DetailRow::new(*text, *kind))
+        .enumerate()
+        .map(|(index, (text, kind, _, _))| {
+            if index == 0 {
+                render::DetailRow::styled([
+                    ("Task ".into(), render::DetailKind::Body),
+                    ("#1".into(), render::DetailKind::Heading),
+                    (" | ".into(), render::DetailKind::Body),
+                    ("Error".into(), render::DetailKind::Error),
+                    (" | Priority ".into(), render::DetailKind::Muted),
+                    ("8".into(), render::DetailKind::Body),
+                ])
+            } else {
+                render::DetailRow::new(*text, *kind)
+            }
+        })
         .collect();
     let layout = render::Layout::new(&["Dirty draft".into()], &[], 72);
     let chrome = render::Chrome {
@@ -383,7 +409,7 @@ fn selected_task_renders_details_between_list_and_editor() {
     };
     let mut terminal = Terminal::new(TestBackend::new(72, 24)).unwrap();
     for color in [true, false] {
-        for requested_top in [0, 1, 2] {
+        for requested_top in 0..=4 {
             let mut details_top = requested_top;
             terminal
                 .draw(|frame| {
@@ -424,15 +450,25 @@ fn selected_task_renders_details_between_list_and_editor() {
                 let y = 9 + offset as u16;
                 assert!(line(buffer, y).starts_with(&format!("║  {text}")));
                 for x in 3..69 {
+                    let (foreground, modifier) = if *text == expected[0].0 {
+                        match x {
+                            8..10 => (Color::Reset, Modifier::BOLD),
+                            13..18 => (Color::Red, Modifier::empty()),
+                            18..30 => (Color::Reset, Modifier::DIM),
+                            _ => (Color::Reset, Modifier::empty()),
+                        }
+                    } else {
+                        (*foreground, *modifier)
+                    };
                     assert_eq!(
                         buffer[(x, y)].fg,
-                        if color { *foreground } else { Color::Reset },
+                        if color { foreground } else { Color::Reset },
                         "cell {x},{y}, top {details_top}"
                     );
                     assert_eq!(buffer[(x, y)].bg, Color::Reset);
                     assert_eq!(
                         buffer[(x, y)].modifier,
-                        if color { *modifier } else { Modifier::empty() },
+                        if color { modifier } else { Modifier::empty() },
                         "cell {x},{y}, top {details_top}"
                     );
                 }

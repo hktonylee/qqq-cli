@@ -219,6 +219,8 @@ retain padding without borders. Text wraps to the inner width.
 Details show status, priority, parent, timestamps, archive state and ownership;
 latest messages appear first with author and timestamp. Empty message history
 shows `No messages yet.`.
+Details match `show` styling: bold IDs, status colors, dim labels/timestamps,
+neutral message bodies and assignment values. Styles survive wrapping and scroll.
 Each task preview shows at most three wrapped lines; clipped previews end with
 `...`. Editor loads full description, including hidden lines.
 Selection fills whole row with muted blue background, including wrapped lines;

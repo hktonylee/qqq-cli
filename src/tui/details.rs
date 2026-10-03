@@ -1,36 +1,50 @@
-use super::render::{DetailKind, DetailRow, Layout};
+use super::render::{DetailKind, DetailRow, escape};
 use crate::db::{Task, TaskMessage};
+use unicode_segmentation::UnicodeSegmentation;
+use unicode_width::UnicodeWidthStr;
 
 fn wrap(content: Vec<DetailRow>, width: usize) -> Vec<DetailRow> {
-    let last = content.len().saturating_sub(1);
-    let fragments: Vec<_> = content
-        .iter()
-        .enumerate()
-        .map(|(index, row)| {
-            if index == last {
-                row.text.clone()
-            } else {
-                format!("{}\n", row.text)
-            }
-        })
-        .collect();
-    let layout = Layout::new(&fragments, &[], width);
-    let mut kinds = vec![DetailKind::Body; layout.rows.len()];
-    for (index, row) in content.iter().enumerate() {
-        let start = layout.positions[index].0;
-        let end = if index == last {
-            kinds.len()
+    let width = width.max(1);
+    let mut wrapped = Vec::new();
+    for row in content {
+        let spans = if row.spans.is_empty() {
+            vec![(0, row.text.len(), row.kind)]
         } else {
-            layout.positions[index + 1].0
+            row.spans
         };
-        kinds[start..end].fill(row.kind);
+        let mut current = DetailRow::new("", row.kind);
+        let mut column = 0;
+        for (start, end, kind) in spans {
+            let safe = escape(&row.text[start..end]);
+            for grapheme in safe.graphemes(true) {
+                if grapheme == "\n" {
+                    wrapped.push(current);
+                    current = DetailRow::new("", row.kind);
+                    column = 0;
+                    continue;
+                }
+                let (grapheme, cells) = if grapheme.width() > width {
+                    ("?", 1)
+                } else {
+                    (grapheme, grapheme.width())
+                };
+                if column + cells > width {
+                    wrapped.push(current);
+                    current = DetailRow::new("", row.kind);
+                    column = 0;
+                }
+                current.push(grapheme, kind);
+                column += cells;
+            }
+        }
+        wrapped.push(current);
     }
-    layout
-        .rows
-        .into_iter()
-        .zip(kinds)
-        .map(|(text, kind)| DetailRow::new(text, kind))
-        .collect()
+    for row in &mut wrapped {
+        if row.spans.iter().all(|&(_, _, kind)| kind == row.kind) {
+            row.spans.clear();
+        }
+    }
+    wrapped
 }
 
 pub fn unavailable(id: i64, width: usize) -> Vec<DetailRow> {
@@ -47,28 +61,37 @@ pub fn rows(task: &Task, messages: &[TaskMessage], width: usize) -> Vec<DetailRo
     let parent = task
         .parent_id
         .map_or_else(|| "none".to_owned(), |id| format!("#{id}"));
-    let mut content = vec![DetailRow::new(
-        format!(
-            "Task #{} | {} | Priority {} | Parent {parent}",
-            task.id,
-            crate::output::status_label(&task.status),
-            task.priority
+    let status_kind = match task.status.as_str() {
+        "in_progress" => DetailKind::InProgress,
+        "completed" => DetailKind::Completed,
+        "error" => DetailKind::Error,
+        _ => DetailKind::Body,
+    };
+    let mut content = vec![DetailRow::styled([
+        ("Task ".into(), DetailKind::Body),
+        (format!("#{}", task.id), DetailKind::Heading),
+        (" | ".into(), DetailKind::Body),
+        (
+            crate::output::status_label(&task.status).into(),
+            status_kind,
         ),
-        DetailKind::Heading,
-    )];
+        (" | Priority ".into(), DetailKind::Muted),
+        (task.priority.to_string(), DetailKind::Body),
+        (" | Parent ".into(), DetailKind::Muted),
+        (parent, DetailKind::Body),
+    ])];
     if messages.is_empty() {
         content.push(DetailRow::new("No messages yet.", DetailKind::Muted));
     } else {
         for message in messages.iter().rev() {
-            content.push(DetailRow::new(
-                format!(
-                    "#{} {} | {}",
-                    message.id,
-                    message.session.as_deref().unwrap_or("cli"),
-                    message.created_at
+            content.push(DetailRow::styled([
+                (format!("#{}", message.id), DetailKind::MessageHeader),
+                (
+                    format!(" {} | ", message.session.as_deref().unwrap_or("cli")),
+                    DetailKind::Body,
                 ),
-                DetailKind::MessageHeader,
-            ));
+                (message.created_at.clone(), DetailKind::Muted),
+            ]));
             content.push(DetailRow::new(message.body.clone(), DetailKind::Body));
         }
     }
@@ -78,28 +101,48 @@ pub fn rows(task: &Task, messages: &[TaskMessage], width: usize) -> Vec<DetailRo
             format!("Created {}  Updated {}", task.created_at, task.updated_at),
             DetailKind::Muted,
         ),
-        DetailRow::new(
-            format!("Archived: {}", if task.archived { "yes" } else { "no" }),
-            DetailKind::Muted,
-        ),
-        DetailRow::new(
-            format!(
-                "Harness: {} / {}",
-                task.identity.harness_name.as_deref().unwrap_or("-"),
-                task.identity.harness_session.as_deref().unwrap_or("-")
+        DetailRow::styled([
+            ("Archived: ".into(), DetailKind::Muted),
+            (
+                (if task.archived { "yes" } else { "no" }).into(),
+                DetailKind::Body,
             ),
-            DetailKind::Muted,
+        ]),
+        assignment(
+            "Harness",
+            &task.identity.harness_name,
+            &task.identity.harness_session,
         ),
-        DetailRow::new(
-            format!(
-                "Orchestrator: {} / {}",
-                task.identity.orchestrator_name.as_deref().unwrap_or("-"),
-                task.identity.orchestrator_session.as_deref().unwrap_or("-")
-            ),
-            DetailKind::Muted,
+        assignment(
+            "Orchestrator",
+            &task.identity.orchestrator_name,
+            &task.identity.orchestrator_session,
         ),
     ]);
     wrap(content, width)
+}
+
+fn assignment(label: &str, name: &Option<String>, session: &Option<String>) -> DetailRow {
+    DetailRow::styled([
+        (format!("{label}: "), DetailKind::Muted),
+        (
+            name.as_deref().unwrap_or("-").into(),
+            if name.is_some() {
+                DetailKind::Body
+            } else {
+                DetailKind::Muted
+            },
+        ),
+        (" / ".into(), DetailKind::Body),
+        (
+            session.as_deref().unwrap_or("-").into(),
+            if session.is_some() {
+                DetailKind::Body
+            } else {
+                DetailKind::Muted
+            },
+        ),
+    ])
 }
 
 #[cfg(test)]
@@ -113,6 +156,21 @@ mod tests {
             .map(|row| row.text.as_str())
             .collect::<Vec<_>>()
             .join(separator)
+    }
+
+    fn styled_text(rows: &[DetailRow], kind: DetailKind) -> String {
+        let mut text = String::new();
+        for row in rows {
+            if row.spans.is_empty() && row.kind == kind {
+                text.push_str(&row.text);
+            }
+            for &(start, end, span_kind) in &row.spans {
+                if span_kind == kind {
+                    text.push_str(&row.text[start..end]);
+                }
+            }
+        }
+        text
     }
 
     #[test]
@@ -216,17 +274,45 @@ mod tests {
         assert!(!rendered.contains("Full editable description"));
         assert!(!rendered.contains("Messages ("));
         assert!(!rendered.contains("PgUp/PgDn scroll"));
-        assert_eq!(detail_rows[0].kind, DetailKind::Heading);
-        assert_eq!(detail_rows[1].kind, DetailKind::MessageHeader);
+        assert_eq!(detail_rows[0].kind, DetailKind::Body);
+        assert_eq!(detail_rows[1].kind, DetailKind::Body);
         assert_eq!(detail_rows[2].kind, DetailKind::Body);
         assert_eq!(detail_rows[3].kind, DetailKind::Body);
-        assert_eq!(detail_rows[4].kind, DetailKind::MessageHeader);
+        assert_eq!(detail_rows[4].kind, DetailKind::Body);
         assert!(
             detail_rows
                 .iter()
-                .filter(|row| row.text.starts_with("Created ") || row.text.starts_with("Harness:"))
+                .filter(|row| row.text.starts_with("Created "))
                 .all(|row| row.kind == DetailKind::Muted)
         );
+        for width in [12, 66] {
+            let detail_rows = rows(&task(), &messages, width);
+            assert_eq!(styled_text(&detail_rows, DetailKind::Heading), "#4");
+            assert_eq!(styled_text(&detail_rows, DetailKind::MessageHeader), "#2#1");
+            assert_eq!(
+                styled_text(&detail_rows, DetailKind::InProgress),
+                "In progress"
+            );
+            let muted = styled_text(&detail_rows, DetailKind::Muted);
+            assert!(muted.contains("2026-10-02T14:00:00.000Z"));
+            assert!(muted.contains("Harness: "));
+            assert!(!muted.contains("reviewer"));
+            assert!(!muted.contains("codex"));
+            let body = styled_text(&detail_rows, DetailKind::Body);
+            assert!(body.contains("Latest messageNext line"));
+            assert!(body.contains("codex / session-1"));
+        }
+        for (status, kind) in [
+            ("new", DetailKind::Body),
+            ("in_progress", DetailKind::InProgress),
+            ("completed", DetailKind::Completed),
+            ("error", DetailKind::Error),
+        ] {
+            let mut fixture = task();
+            fixture.status = status.into();
+            let detail_rows = rows(&fixture, &[], 12);
+            assert!(styled_text(&detail_rows, kind).contains(crate::output::status_label(status)));
+        }
     }
 
     #[test]

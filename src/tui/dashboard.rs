@@ -442,6 +442,23 @@ fn editor(frame: &mut Frame<'_>, area: Rect, editor: render::DashboardEditor<'_>
     }
 }
 
+fn detail_style(kind: render::DetailKind, color: bool) -> Style {
+    if !color {
+        return Style::default();
+    }
+    match kind {
+        render::DetailKind::Heading | render::DetailKind::MessageHeader => {
+            Style::default().add_modifier(Modifier::BOLD)
+        }
+        render::DetailKind::InProgress => Style::default().fg(Color::Cyan),
+        render::DetailKind::Completed => Style::default().fg(Color::DarkGray),
+        render::DetailKind::Error => Style::default().fg(Color::Red),
+        render::DetailKind::Muted => Style::default().add_modifier(Modifier::DIM),
+        render::DetailKind::Warning => Style::default().fg(Color::Yellow),
+        render::DetailKind::Body => Style::default(),
+    }
+}
+
 fn details(frame: &mut Frame<'_>, area: Rect, view: DetailsView<'_>, color: bool) {
     let block = details_block(area).border_style(if color {
         Style::default().fg(Color::DarkGray)
@@ -453,21 +470,20 @@ fn details(frame: &mut Frame<'_>, area: Rect, view: DetailsView<'_>, color: bool
     let height = usize::from(content.height);
     *view.top = (*view.top).min(view.rows.len().saturating_sub(height));
     for (offset, row) in view.rows.iter().skip(*view.top).take(height).enumerate() {
-        let style = if color {
-            match row.kind {
-                render::DetailKind::Heading => {
-                    Style::default().fg(ACCENT).add_modifier(Modifier::BOLD)
-                }
-                render::DetailKind::MessageHeader => Style::default().fg(Color::Indexed(222)),
-                render::DetailKind::Muted => Style::default().fg(Color::Gray),
-                render::DetailKind::Warning => Style::default().fg(Color::Yellow),
-                render::DetailKind::Body => Style::default(),
-            }
+        let spans = row
+            .spans
+            .iter()
+            .map(|&(start, end, kind)| {
+                Span::styled(row.text[start..end].to_owned(), detail_style(kind, color))
+            })
+            .collect::<Vec<_>>();
+        let line = if spans.is_empty() {
+            Line::from(row.text.clone())
         } else {
-            Style::default()
+            Line::from(spans)
         };
         frame.render_widget(
-            Paragraph::new(row.text.clone()).style(style),
+            Paragraph::new(line).style(detail_style(row.kind, color)),
             Rect::new(content.x, content.y + offset as u16, content.width, 1),
         );
     }

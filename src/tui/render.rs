@@ -45,6 +45,9 @@ pub struct DashboardEditor<'a> {
 pub enum DetailKind {
     Heading,
     MessageHeader,
+    InProgress,
+    Completed,
+    Error,
     Body,
     Muted,
     Warning,
@@ -54,6 +57,7 @@ pub enum DetailKind {
 pub struct DetailRow {
     pub text: String,
     pub kind: DetailKind,
+    pub spans: Vec<(usize, usize, DetailKind)>,
 }
 
 impl DetailRow {
@@ -61,6 +65,24 @@ impl DetailRow {
         Self {
             text: text.into(),
             kind,
+            spans: Vec::new(),
+        }
+    }
+
+    pub fn styled(parts: impl IntoIterator<Item = (String, DetailKind)>) -> Self {
+        let mut row = Self::new("", DetailKind::Body);
+        for (text, kind) in parts {
+            row.push(&text, kind);
+        }
+        row
+    }
+
+    pub(super) fn push(&mut self, text: &str, kind: DetailKind) {
+        let start = self.text.len();
+        self.text.push_str(text);
+        match self.spans.last_mut() {
+            Some((_, end, previous)) if *previous == kind => *end = self.text.len(),
+            _ => self.spans.push((start, self.text.len(), kind)),
         }
     }
 }
@@ -186,7 +208,7 @@ impl Layout {
             .map_or(0, |(index, _)| index)
     }
 }
-fn escape(text: &str) -> String {
+pub(super) fn escape(text: &str) -> String {
     text.replace("\r\n", "\n")
         .chars()
         .flat_map(|c| {
