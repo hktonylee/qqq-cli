@@ -34,3 +34,10 @@ follows selected menu row. Popup keeps all six actions visible at minimum suppor
    Fast-forward master, install with `cargo install --path . --locked --offline --force`.
    Exercise installed CLI menu arrows/NO_COLOR/compact paths. Remove merged
    worktree/branch, complete #126, resume one persistent qqq queue waiter.
+
+Verification: baseline action tests passed; new arrow regression failed on missing
+selected marker before implementation. Focused terminal/render suites passed 99
+tests. Full suite passed 478 tests; formatting and Clippy passed with exit code 0.
+Read-only review found no issues. Rebased over concurrent editor-label and filter
+updates, aligned added title assertion, repeated full suite (478 passed) and
+formatting/Clippy successfully.

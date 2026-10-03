@@ -1297,7 +1297,7 @@ print(json.dumps({"result": result}))
                 assert b"\x1b[38;" not in screen and b"\x1b[48;" not in screen, screen[-2000:]
         elif scenario.startswith("menu_arrows"):
             send(b"\x1b[1;2A")
-            wait_visible(lambda: "task #2 (New)" in editor_title())
+            wait_visible(lambda: "Task #2 (New)" in editor_title())
             if scenario == "menu_arrows_narrow":
                 fcntl.ioctl(slave, termios.TIOCSWINSZ, struct.pack("HHHH", 8, 12, 0, 0))
                 visible.resize(12, 8)
