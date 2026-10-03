@@ -1130,7 +1130,11 @@ impl Db {
         Ok(json!({"id":self.conn.last_insert_rowid(),"task_id":id,"body":body,"session":session}))
     }
     pub fn show(&self, id: i64) -> Result<Value> {
-        let task = self.task(id)?;
+        self.show_task(&self.task(id)?)
+    }
+    pub(crate) fn show_task(&self, task: &Task) -> Result<Value> {
+        // TUI already listed this task; deletion before section reads is harmless.
+        let id = task.id;
         let messages = self.task_messages(id)?;
         let images=self.conn.prepare("SELECT id,name,media_type,bytes FROM images WHERE task_id=? ORDER BY id")?.query_map([id],|r|Ok(json!({"id":r.get::<_,i64>(0)?,"name":r.get::<_,String>(1)?,"media_type":r.get::<_,String>(2)?,"bytes":r.get::<_,i64>(3)?})))?.collect::<rusqlite::Result<Vec<_>>>()?;
         let events=self.conn.prepare("SELECT session,action,created_at FROM events WHERE task_id=? ORDER BY id")?.query_map([id],|r|Ok(json!({"session":r.get::<_,String>(0)?,"action":r.get::<_,String>(1)?,"created_at":r.get::<_,String>(2)?})))?.collect::<rusqlite::Result<Vec<_>>>()?;

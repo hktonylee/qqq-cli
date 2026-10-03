@@ -67,7 +67,7 @@ fn composition() -> Composition {
 
 #[test]
 fn task_messages_preserve_body_author_order_and_show_contract() {
-    let (mut db, _dir) = database();
+    let (mut db, dir) = database();
     let task = db.add("Selected", None, &[]).unwrap();
     assert!(db.task_messages(task.id).unwrap().is_empty());
     db.message(task.id, "First\nDetails", Some("worker"))
@@ -84,6 +84,27 @@ fn task_messages_preserve_body_author_order_and_show_contract() {
         db.show(task.id).unwrap()["messages"],
         serde_json::to_value(messages).unwrap()
     );
+    assert_eq!(db.show_task(&task).unwrap(), db.show(task.id).unwrap());
+    // Simulate deletion after TUI listed task, before reading its detail sections.
+    let task = db.list(None).unwrap().pop().unwrap();
+    let version = db.data_version().unwrap();
+    let external = rusqlite::Connection::open(dir.path().join("qqq.db")).unwrap();
+    external
+        .execute("DELETE FROM messages WHERE task_id=?", [task.id])
+        .unwrap();
+    external
+        .execute("DELETE FROM tasks WHERE id=?", [task.id])
+        .unwrap();
+    assert!(db.show(task.id).is_err());
+    let snapshot = db.show_task(&task).unwrap();
+    assert_eq!(snapshot["task"]["id"], task.id);
+    assert_eq!(snapshot["task"]["description"], "Selected");
+    for section in ["messages", "images", "events"] {
+        assert_eq!(snapshot[section], serde_json::json!([]));
+    }
+    assert!(snapshot["herdr"].is_null());
+    assert_ne!(db.data_version().unwrap(), version);
+    assert!(db.list(None).unwrap().is_empty());
 }
 
 #[test]

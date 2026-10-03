@@ -9,7 +9,11 @@ Description, Details, Assignment, Messages, Images, History and Herdr. Empty
 collections use `None`; unlinked Herdr uses `Not linked`. Created and Updated
 return to separate aligned rows, as requested by the new layout reference.
 
-TUI loads the complete local `Db::show(id)` snapshot. This reads stored Herdr
+TUI loads the complete local show payload through `Db::show_task(&Task)`, reusing
+the listed task snapshot. This avoids a second lookup failing if another process
+deletes selected task between reads; next version refresh shows unavailable.
+`Db::show(id)` retains its checked CLI lookup, then shares the payload builder.
+This reads stored Herdr
 link metadata without calling Herdr. Selected-task deletion still produces the
 existing unavailable notice. Refresh preserves dirty editor content and detail
 scroll; selecting a different task resets detail scroll. Pane geometry stays

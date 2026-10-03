@@ -77,7 +77,7 @@ if text.is_empty() {
 - [x] Replace selected-task formatting call with full stored snapshot:
 
 ```rust
-Some(_) => details::rows(&db.show(id)?, details_width),
+Some(task) => details::rows(&db.show_task(task)?, details_width),
 ```
 
 - [x] Update details/details_no_color PTY checks: initial `#2 · New`, scroll to Description/Details/Assignment/Messages, field column alignment, separate Created/Updated rows, ascending message IDs, message indentation. Preserve editor cursor, draft save, new-task selection and stale-content checks.
@@ -86,9 +86,19 @@ Some(_) => details::rows(&db.show(id)?, details_width),
 
 ## Task 3: Verify And Integrate
 
+- [x] Review found deletion between list and second task lookup could exit TUI.
+  Factor existing `Db::show` section reads into `Db::show_task(&Task)`; checked
+  `show(id)` delegates after task lookup, TUI passes listed Task. Extend existing
+  `tests/tui_db.rs` regression: compare payloads, capture listed Task/version,
+  delete through separate DB connection, assert checked show fails, captured-task
+  detail succeeds with empty collections, version changes and next list empty.
+  Focused DB/show/refresh-deletion checks pass.
+
 - [x] `cargo fmt --all --check`; `git diff --check`.
 - [x] `cargo test --offline --all-targets`; `cargo clippy --offline --all-targets -- -D warnings`.
-- [ ] Request read-only review through requesting-code-review skill; resolve findings.
+- [x] Request read-only review through requesting-code-review skill; resolve findings.
 - [ ] Rebase onto current master; fast-forward master; verify any changed combined source.
 - [ ] Build/install release; run details, details_no_color, details_scroll, details_refresh, details_deleted, layout_new, dumb, color PTY scenarios.
 - [ ] Record evidence, complete #120, remove owned branch/worktree; return to blocking queue wait.
+
+Final source checks after race fix and rebase: 472 tests across 37 binaries; fmt, diff check and clippy passed. Release build plus 9 PTY scenarios passed, including handoff scroll. Review found no remaining issues.
