@@ -230,10 +230,12 @@ updates selected task or creates new task. By default, saved task stays open for
 further edits or task actions. Loaded and saved tasks place cursor at description
 end; editor scrolls to keep cursor visible. Set `tui.after_save_new` to `open_new`
 to clear editor after creating task; existing-task edits stay open. Shift-Down past last
-displayed task opens blank draft. Esc/Ctrl-C in
-selected task returns to blank draft; both ask before discarding unsaved edits.
-Press Esc/Ctrl-C again in blank draft to exit. Esc/Ctrl-C in dirty new draft asks before
-discard; `y` exits without saving, `n` keeps draft for editing or Ctrl-S save.
+displayed task opens blank draft. After filter clears, Esc clears editor before
+exiting on next press. Selected tasks and dirty new drafts ask before discarding
+unsaved content; `y` clears editor, `n` keeps draft for editing or Ctrl-S save.
+Ctrl-C returns selected task to blank draft, asking before discarding edits.
+Ctrl-C in dirty new draft asks before exit; `y` exits without saving, `n` keeps draft.
+Esc/Ctrl-C in blank draft exits.
 Repeated Ctrl-C keeps confirmation open. Ctrl-V or terminal paste inserts text; pasting
 image file path attaches image. Saves commit immediately. TUI needs terminal
 and writes no stdout, including with `--json`.
@@ -265,14 +267,14 @@ Filter bar appears above task list only while query is nonempty. Empty query
 reserves no row or editable caret, including while focused. Ctrl+/ focuses filter;
 type to match any
 part of full description, ignoring case. Matching tasks retain parent chain;
-no matches shows `No matching tasks.`. Backspace edits query. Esc clears
-nonempty query, then exits filter focus on next press. Tab or Enter returns to
+no matches shows `No matching tasks.`. Backspace edits query. Tab or Enter returns to
 editor. `/` or Alt+/ inserts literal `/` into editor. Shift-Up/Down navigates visible
 tasks while filter is active. Query changes do not change selected task, unsaved
 draft, or DB.
-With nonempty filter query, Ctrl-C clears only query; selected task and editor
-draft stay intact. Next Ctrl-C follows editor cancel flow, asking before
-discarding dirty draft.
+With nonempty filter query, Esc/Ctrl-C clears only query; selected task and editor
+draft stay intact, including while popup or confirmation is open. Next Esc follows
+editor clearing flow; next Ctrl-C follows editor cancel flow. Dirty drafts ask
+before discard.
 
 Ctrl-G opens centered actions popup for selected task; dashboard stays visible
 around it. Prompts, confirmations and errors share popup; small terminals use
@@ -280,7 +282,7 @@ compact view. Cyan titles/shortcuts, muted help, gold prompts/warnings and soft-
 errors distinguish popup states. Press `c` to complete owned task,
 `r` to retry error task, `o` to reopen completed task, `a` to archive or
 unarchive, `p` to set priority (-100..100), or `d` to set parent by positive
-task ID or `none`. Esc closes menu or prompt. State changes ask for `y` before
+task ID or `none`. After filter clears, Esc closes menu or prompt. State changes ask for `y` before
 running; priority and parent changes ask when draft has unsaved edits. Successful
 action refreshes task and list; rejected action keeps draft and shows DB error.
 Error view wraps long messages; Up/Down scrolls, Esc closes it.

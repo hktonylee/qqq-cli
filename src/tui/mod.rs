@@ -887,7 +887,8 @@ fn compose_inner(
             Event::Key(key) if key.kind != KeyEventKind::Release => {
                 let control = key.modifiers.contains(KeyModifiers::CONTROL);
                 let cancel_key = control && key.code == KeyCode::Char('c');
-                if dashboard && cancel_key && !filter_query.is_empty() {
+                if dashboard && (cancel_key || key.code == KeyCode::Esc) && !filter_query.is_empty()
+                {
                     filter_query.clear();
                     list_top = 0;
                     list_follow_selected = true;
@@ -903,11 +904,12 @@ fn compose_inner(
                     filter_focused = false;
                     continue;
                 }
-                let editor_escape = key.code == KeyCode::Esc
-                    && confirmation.is_none()
-                    && action_ui.is_none()
-                    && !filter_focused;
-                if dashboard && target_id.is_some() && (cancel_key || editor_escape) {
+                let editor_escape =
+                    key.code == KeyCode::Esc && confirmation.is_none() && action_ui.is_none();
+                if dashboard && (editor_escape || (target_id.is_some() && cancel_key)) {
+                    if target_id.is_none() && draft.is_empty() && draft_parent_id.is_none() {
+                        return cancel(saved_any, dashboard);
+                    }
                     if draft.is_dirty_against(&baseline) {
                         confirmation = Some(Confirmation::Switch {
                             target: Target::New { parent_id: None },
@@ -1320,12 +1322,6 @@ fn compose_inner(
                     {
                         match key.code {
                             KeyCode::Tab | KeyCode::Enter => filter_focused = false,
-                            KeyCode::Esc if filter_query.is_empty() => filter_focused = false,
-                            KeyCode::Esc => {
-                                filter_query.clear();
-                                list_top = 0;
-                                list_follow_selected = true;
-                            }
                             KeyCode::Backspace => {
                                 if let Some((index, _)) =
                                     filter_query.grapheme_indices(true).next_back()

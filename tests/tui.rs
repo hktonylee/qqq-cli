@@ -163,6 +163,25 @@ fn tui_dashboard_escape_and_ctrl_c_return_to_new_before_exit() {
 }
 
 #[test]
+fn tui_dashboard_escape_clears_filter_editor_then_exits() {
+    for name in [
+        "escape_selected_filter_editor",
+        "escape_selected_filter_focused",
+        "escape_dirty_selected_filter_editor",
+        "escape_dirty_selected_filter_focused",
+        "escape_selected_filter_menu",
+        "escape_dirty_selected_filter_confirmation",
+        "escape_staged_new",
+        "escape_staged_new_image",
+        "escape_staged_new_whitespace",
+        "escape_staged_empty",
+        "escape_staged_child",
+    ] {
+        dashboard_scenario(name);
+    }
+}
+
+#[test]
 fn tui_dashboard_ctrl_c_confirms_dirty_new_drafts() {
     dashboard_scenario("ctrl_c_new_keep");
     dashboard_scenario("ctrl_c_new_filter");

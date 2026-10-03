@@ -860,10 +860,67 @@ print(json.dumps({"result": result}))
             wait_visible(lambda: "task #2 (" in editor_title())
             send(b"\x1b[1;2B")
             wait_visible(lambda: "new task" in editor_title())
+        elif scenario.startswith("escape_staged_"):
+            initial_tasks = cli("list")
+            child_draft = scenario == "escape_staged_child"
+            empty = scenario == "escape_staged_empty" or child_draft
+            if child_draft:
+                send(b"\x1b[1;2A")
+                wait_visible(lambda: "task #2 (" in editor_title() and editor_line().startswith("Second"))
+                send(b"\x10")
+                wait_visible(lambda: "new task (parent #2)" in editor_title()
+                             and (visible.x, visible.y) == (0, editor_row() + 1))
+            if scenario == "escape_staged_new_image":
+                image_path = Path(folder) / "unsaved.png"
+                image_path.write_bytes(base64.b64decode(
+                    "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aGD8AAAAASUVORK5CYII="
+                ))
+                send(b"\x1b[200~" + str(image_path).encode() + b"\x1b[201~")
+                wait_visible(lambda: "[Image #1: unsaved.png]" in editor_line()
+                             and (visible.x, visible.y) == (len("[Image #1: unsaved.png]"), editor_row() + 1))
+            elif not empty:
+                payload = b"   " if scenario.endswith("whitespace") else b"Unsaved draft"
+                send(payload)
+                wait_visible(lambda: editor_line().startswith(payload.decode())
+                             and (visible.x, visible.y) == (len(payload), editor_row() + 1))
+            original_draft = editor_line()
+            send(CTRL_SLASH + b"first")
+            wait_visible(lambda: visible.text().splitlines()[0].strip() == "Filter: first")
+            send(b"\x1b")
+            wait_visible(lambda: not visible.text().splitlines()[0].startswith("Filter:")
+                         and "Second" in "\n".join(visible.text().splitlines()[1:list_bottom() + 1]))
+            assert editor_line() == original_draft, visible.text()
+            assert child.poll() is None and cli("list") == initial_tasks
+            if child_draft:
+                assert "parent #2" in editor_title(), visible.text()
+                send(b"\x1b")
+                wait_visible(lambda: "new task" in editor_title() and "parent" not in editor_title()
+                             and (visible.x, visible.y) == (0, editor_row() + 1))
+                assert child.poll() is None and cli("list") == initial_tasks
+            if not empty:
+                clear_capture()
+                send(b"\x1b")
+                read_until(b"Discard changes and switch? (y/N)")
+                send(b"n")
+                wait_visible(lambda: editor_line() == original_draft
+                             and visible.text().splitlines()[-1].startswith("Ctrl-S Save"))
+                assert child.poll() is None and cli("list") == initial_tasks
+                clear_capture()
+                send(b"\x1b")
+                read_until(b"Discard changes and switch? (y/N)")
+                send(b"y")
+                wait_visible(lambda: "new task" in editor_title() and editor_line().strip() == ""
+                             and (visible.x, visible.y) == (0, editor_row() + 1))
+                assert child.poll() is None and cli("list") == initial_tasks
+            # Final Esc exit goes through common terminal-restoration assertions.
         elif scenario in (
             "escape_selected", "ctrl_c_selected", "escape_dirty_selected", "ctrl_c_dirty_selected",
             "ctrl_c_dirty_selected_filter_editor", "ctrl_c_dirty_selected_filter_focused",
             "ctrl_c_selected_filter_menu",
+            "escape_selected_filter_editor", "escape_selected_filter_focused",
+            "escape_dirty_selected_filter_editor", "escape_dirty_selected_filter_focused",
+            "escape_selected_filter_menu",
+            "escape_dirty_selected_filter_confirmation",
         ):
             initial_tasks = cli("list")
             send(b"\x1b[1;2A")
@@ -881,6 +938,9 @@ print(json.dumps({"result": result}))
                 if scenario.endswith("menu"):
                     send(b"\x07")
                     wait_visible(lambda: "Task actions" in visible.text())
+                if scenario.endswith("confirmation"):
+                    send(b"\x1b[1;2A")
+                    wait_visible(lambda: visible.text().splitlines()[-1].startswith("Discard changes and switch?"))
             key = b"\x03" if scenario.startswith("ctrl_c") else b"\x1b"
             clear_capture()
             send(key)
@@ -895,9 +955,15 @@ print(json.dumps({"result": result}))
                              and editor_line().startswith(expected_draft)
                              and "Second" in "\n".join(visible.text().splitlines()[1:list_bottom() + 1]))
                 settle()
-                assert "Discard changes and switch?" not in visible.text(), visible.text()
+                if not scenario.endswith("confirmation"):
+                    assert "Discard changes and switch?" not in visible.text(), visible.text()
                 assert child.poll() is None
                 assert cli("list") == initial_tasks
+                if scenario.endswith("confirmation"):
+                    assert visible.text().splitlines()[-1].startswith("Discard changes and switch?"), visible.text()
+                    send(b"\x1b")
+                    wait_visible(lambda: visible.text().splitlines()[-1].startswith("Ctrl-S Save")
+                                 and editor_line().startswith(expected_draft))
                 clear_capture()
                 send(key)
             if "dirty_selected" in scenario:
@@ -1606,7 +1672,7 @@ print(json.dumps({"result": result}))
                 send(b"\x1b")
                 wait_visible(lambda: not visible.text().splitlines()[0].startswith("Filter:")
                              and not visible.cursor_visible and "Second" in visible.text())
-                send(b"\x1b")
+                send(b"\t")
                 wait_visible(lambda: visible.text().splitlines()[-1].startswith("Ctrl-S Save")
                              and "Shift-Up/Dn Switch Tasks" in visible.text().splitlines()[-1]
                              and "Ctrl+/" in visible.text().splitlines()[-1])
@@ -1659,7 +1725,7 @@ print(json.dumps({"result": result}))
             wait_visible(lambda: not visible.text().splitlines()[0].startswith("Filter:")
                          and "Other" in visible.text())
             clear_capture()
-            send(b"\x1b")
+            send(b"\t")
             wait_visible(lambda: visible.y == editor_row() + 1)
             send(b"!")
             wait_visible(lambda: "Unsaved!" in visible.text())
@@ -1830,7 +1896,7 @@ print(json.dumps({"result": result}))
                 send(b"y")
                 assert cli("list") == initial_tasks
             else:
-                send(b"\x1b" if scenario in ("empty", "empty_json", "workflow_empty", "escape_selected", "escape_dirty_selected") else b"\x03\x03y\x03")
+                send(b"\x1b" if scenario.startswith("escape_") or scenario in ("empty", "empty_json", "workflow_empty") else b"\x03\x03y\x03")
         deadline = time.monotonic() + 5
         while child.poll() is None:
             assert time.monotonic() < deadline, f"TUI failed to exit: {screen[-1000:]!r}\n{visible.text()}"
