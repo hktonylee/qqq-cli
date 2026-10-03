@@ -397,7 +397,8 @@ impl Db {
             "SELECT id,description,status,claim_key,created_at,updated_at,parent_id,harness_name,harness_session,orchestrator_name,orchestrator_session,priority,archived,content_revision FROM tasks WHERE id=?",
             [id], task_row,
         ).optional()?.with_context(|| format!("Task {id} not found"))?;
-        let references = Self::image_references_from(&tx, id)?;
+        // Same connection participates in the read transaction above.
+        let references = self.image_references(id)?;
         tx.commit()?;
         Ok(ContentSnapshot { task, references })
     }

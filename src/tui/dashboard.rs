@@ -147,7 +147,7 @@ fn popup_row_line(text: String, kind: render::PopupKind, color: bool) -> Line<'s
     }
 }
 
-fn popup(frame: &mut Frame<'_>, lines: &[render::PopupRow], color: bool) {
+pub(super) fn popup(frame: &mut Frame<'_>, lines: &[render::PopupRow], color: bool) {
     use render::PopupKind;
     let PopupLayout {
         outer,

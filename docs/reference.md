@@ -222,6 +222,18 @@ files, then retry with `--description` and `--expected-revision` for the current
 revision; use `--image` with recovered attachment paths if needed. A removed
 task keeps local draft and is never recreated by save.
 
+Built-in edits and TUI saves guard loaded content revision automatically. A
+conflict view opens instead of saving. `Tab` switches between complete current
+DB text and local draft; arrows, Page-Up/Down and Home/End scroll text. Line breaks
+and whitespace remain visible. `Esc` or Ctrl-C closes view while keeping draft,
+cursor, collapsed paste blocks and pending image bytes.
+
+`r` offers reload, then `y` confirms discarding local draft; `o` offers overwrite,
+then `y` confirms saving local draft against displayed DB revision. `n`, Enter
+or Esc cancels confirmation. Further content changes reject overwrite again.
+Reload reads latest complete content. A removed task offers local text and keep
+only. Message/status updates do not cause content conflicts.
+
 ## Task TUI
 
 ```sh
@@ -607,11 +619,13 @@ qqq list # run updated CLI
 Check task data before removing old DB. New CLI does not discover root-level
 `qqq.db`; `qqq init` without migration creates separate empty DB.
 
-Compatible DBs at schema versions 1–8 migrate to version 9. Version 6 moves
+Compatible DBs at schema versions 1–9 migrate to version 10. Version 10 adds
+content revisions; released schema-9 backups still restore, then migrate on
+next normal DB open. Version 6 moves
 existing image blobs to `.qqq/images/` before SQLite drops its `data` column.
 Migration tries `VACUUM` to reclaim old blob pages. If compaction warns, stop
 writers and run `sqlite3 .qqq/qqq.db 'VACUUM;'` later. Upgrade other qqq workers
-before migration; older binaries cannot open version 9. Legacy `title` or
+before migration; older binaries cannot open version 10. Legacy `title` or
 `pending` schemas need manual conversion; newer unknown schemas fail. Back up
 before conversion.
 

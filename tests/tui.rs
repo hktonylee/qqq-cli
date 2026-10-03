@@ -52,6 +52,33 @@ fn dashboard_scenario(name: &str) {
 }
 
 #[test]
+fn tui_dashboard_content_conflicts_preserve_local_drafts() {
+    dashboard_scenario("content_conflict");
+    dashboard_scenario("content_conflict_no_color");
+}
+
+#[test]
+fn tui_single_task_edit_recovers_from_content_conflicts() {
+    for scenario in ["overwrite", "removed"] {
+        let output = Command::new("python3")
+            .arg(concat!(
+                env!("CARGO_MANIFEST_DIR"),
+                "/tests/tui_edit_conflict_pty.py"
+            ))
+            .arg(env!("CARGO_BIN_EXE_qqq"))
+            .arg(scenario)
+            .output()
+            .unwrap();
+        assert!(
+            output.status.success(),
+            "{}\n{}",
+            String::from_utf8_lossy(&output.stdout),
+            String::from_utf8_lossy(&output.stderr)
+        );
+    }
+}
+
+#[test]
 fn tui_dashboard_actions_popup_keeps_background_and_restores_editor() {
     dashboard_scenario("actions_popup");
     dashboard_scenario("actions_popup_no_color");

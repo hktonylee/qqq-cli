@@ -354,12 +354,21 @@ fn execute(
                             .composition
                             .images
                             .extend(first_images.iter().cloned());
-                        let task = db.save_composition_with_priority(
-                            outcome.target_id,
-                            parent,
-                            &outcome.composition,
-                            priority,
-                        )?;
+                        let task = match outcome.target_id {
+                            Some(id) => db.edit_composition_guarded(
+                                id,
+                                &outcome.composition,
+                                None,
+                                None,
+                                outcome.expected_revision,
+                            ),
+                            None => db.save_composition_with_priority(
+                                None,
+                                parent,
+                                &outcome.composition,
+                                priority,
+                            ),
+                        }?;
                         first_images.clear();
                         let id = task.id;
                         saved.push(task);
@@ -371,12 +380,21 @@ fn execute(
                     let mut outcome =
                         editor::compose(description.as_deref().unwrap_or(""), edit, Some(&db))?;
                     outcome.composition.images.extend(images);
-                    json!(db.save_composition_with_priority(
-                        outcome.target_id,
-                        parent,
-                        &outcome.composition,
-                        priority
-                    )?)
+                    json!(match outcome.target_id {
+                        Some(id) => db.edit_composition_guarded(
+                            id,
+                            &outcome.composition,
+                            None,
+                            None,
+                            outcome.expected_revision
+                        )?,
+                        None => db.save_composition_with_priority(
+                            None,
+                            parent,
+                            &outcome.composition,
+                            priority
+                        )?,
+                    })
                 }
             }
         }
@@ -387,11 +405,16 @@ fn execute(
                 include_archived,
                 settings.tui.after_save_new,
                 &mut |db, outcome| {
-                    let task = db.save_composition(
-                        outcome.target_id,
-                        outcome.parent_id,
-                        &outcome.composition,
-                    )?;
+                    let task = match outcome.target_id {
+                        Some(id) => db.edit_composition_guarded(
+                            id,
+                            &outcome.composition,
+                            None,
+                            None,
+                            outcome.expected_revision,
+                        ),
+                        None => db.save_composition(None, outcome.parent_id, &outcome.composition),
+                    }?;
                     Ok(task.id)
                 },
                 &mut |db, action| match action {
@@ -501,16 +524,26 @@ fn execute(
                     }
                 }
                 if editor::uses_builtin(edit) {
-                    let description = description.as_deref().unwrap_or(&snapshot.task.description);
-                    let mut outcome = tui::compose_existing(description, id, &snapshot.references)?;
-                    outcome.composition.images.extend(images);
-                    json!(db.edit_composition_guarded(
-                        id,
-                        &outcome.composition,
-                        set_parent,
-                        priority,
-                        Some(snapshot.task.content_revision),
-                    )?)
+                    let mut saved = None;
+                    tui::compose_existing(
+                        &mut db,
+                        snapshot,
+                        description.as_deref(),
+                        &mut |db, mut outcome| {
+                            outcome.composition.images.extend(images.iter().cloned());
+                            let task = db.edit_composition_guarded(
+                                id,
+                                &outcome.composition,
+                                set_parent,
+                                priority,
+                                outcome.expected_revision,
+                            )?;
+                            let id = task.id;
+                            saved = Some(task);
+                            Ok(id)
+                        },
+                    )?;
+                    json!(saved.context("Editor cancelled; task not saved")?)
                 } else {
                     json!(editor::edit_external(
                         &mut db,

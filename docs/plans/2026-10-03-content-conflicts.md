@@ -60,7 +60,7 @@ PRAGMA user_version=10;
 
 **Files:** `src/tui/mod.rs`, new focused `src/tui/conflict.rs`, task 144 buffer module if present, `src/main.rs`, `tests/tui_dashboard_pty.py`, `tests/tui.rs`, `tests/tui_db.rs`.
 
-- [ ] Rebase onto completed task 144 integration before touching buffer representation. Retain original per-task revision wherever task 144 stores baseline/draft/cursor; switching away/back never refreshes a dirty buffer's baseline.
+- [ ] Implement guarded conflict handling on the current editor baseline; rebase onto completed task 144 before final per-task buffer integration. Retain original per-task revision wherever task 144 stores baseline/draft/cursor; switching away/back never refreshes a dirty buffer's baseline.
 - [ ] Add PTY case: load task, edit draft, another CLI replaces text; Ctrl-S opens conflict view, leaves DB/local draft intact. Switch tasks and back, retry still conflicts. Include multiline paste and unsaved PNG data. Run new case; expect old save overwrites.
 - [ ] Carry `expected_revision: Option<i64>` in `Outcome`. Load snapshots for targets, retain revision per buffer, use guarded callbacks from dashboard/continuous edit. Single-task builtin edit must save inside guarded loop rather than returning draft before save.
 - [ ] Conflict view shows full current/local text through scrollable modal. `Esc` keeps draft; `r` opens discard/reload confirmation; `o` opens overwrite confirmation. Confirmed overwrite submits current view revision; a newer save reopens conflict with new revision. Successful save refreshes baseline from DB, clears only saved buffer. Reload replaces only selected buffer after confirmation. Missing task offers close/keep draft; no overwrite.

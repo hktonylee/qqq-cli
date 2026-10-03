@@ -34,6 +34,7 @@ fn compose_external_outcome(description: &str) -> Result<crate::tui::Outcome> {
         },
         target_id: None,
         parent_id: None,
+        expected_revision: None,
     })
 }
 fn compose_external(description: &str) -> Result<String> {

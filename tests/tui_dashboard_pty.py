@@ -94,7 +94,7 @@ CTRL_P = b"\x10"
 with tempfile.TemporaryDirectory(prefix="qqq-dashboard-test-") as folder:
     env = dict(os.environ, HOME=folder, TERM="xterm-256color")
     env.pop("NO_COLOR", None)
-    if scenario in ("no_color", "pasteboard_no_color", "filter_no_color", "details_no_color", "actions_popup_no_color", "wide_layout_no_color", "menu_arrows_no_color", "filter_escape_empty_no_color", "filter_ctrl_c_empty_no_color", "compact_layout_no_color", "handoff_hint_no_color", "menu_retry_new_no_color", "menu_retry_error_no_color"):
+    if scenario in ("no_color", "pasteboard_no_color", "filter_no_color", "details_no_color", "actions_popup_no_color", "wide_layout_no_color", "menu_arrows_no_color", "filter_escape_empty_no_color", "filter_ctrl_c_empty_no_color", "compact_layout_no_color", "handoff_hint_no_color", "menu_retry_new_no_color", "menu_retry_error_no_color", "content_conflict_no_color"):
         env["NO_COLOR"] = "1"
     elif scenario == "dumb":
         env["TERM"] = "dumb"
@@ -195,6 +195,12 @@ with tempfile.TemporaryDirectory(prefix="qqq-dashboard-test-") as folder:
             cli("add", description)
     if scenario == "click_editor_scroll":
         cli("add", "\n".join(f"Line{index:02}" for index in range(1, 13)))
+    if scenario.startswith("content_conflict"):
+        stored_image = Path(folder) / "stored.png"
+        stored_image.write_bytes(b"\x89PNG\r\n\x1a\nstored")
+        cli("edit", "2", "--image", str(stored_image))
+        pending_image = Path(folder) / "pending.png"
+        pending_image.write_bytes(b"\x89PNG\r\n\x1a\npending")
     if scenario.startswith("details") and scenario != "details_deleted":
         if scenario == "details_scroll":
             cli("message", "2", "\n".join(f"Message line {index:02}" for index in range(1, 31)), "--session", "reviewer")
@@ -441,7 +447,191 @@ print(json.dumps({"result": result}))
             read_until(b"Second")
             assert "First" in visible.text() and "Second" in visible.text(), visible.text()
         assert not select.select([child.stdout], [], [], 0)[0], "TUI wrote stdout while open"
-        if scenario.startswith("compact_layout"):
+        if scenario.startswith("content_conflict"):
+            send(b"\x1b[1;2A")
+            wait_visible(lambda: "Task #2 (New)" in editor_title() and editor_line().startswith("Second"))
+            send(b" local")
+            wait_visible(lambda: editor_line().startswith("Second local"))
+            payload = "Local paste\n" + "P" * 1010 + "\nLocal tail"
+            send(b"\x1b[200~" + payload.encode() + b"\x1b[201~")
+            wait_visible(lambda: "chars]" in visible.text())
+            send(b"\x1b[200~" + str(pending_image).encode() + b"\x1b[201~")
+            wait_visible(lambda: "[Image #1: pending.png]" in visible.text())
+            settle()
+            caret = (visible.x, visible.y)
+            # Park original text/revision plus paste/image atoms while another editor saves.
+            send(b"\x1b[1;2A")
+            wait_visible(lambda: "Task #1 (New)" in editor_title() and editor_line().startswith("First"))
+            send(b" retained")
+            wait_visible(lambda: editor_line().startswith("First retained"))
+            assert "[*]" in visible.text().splitlines()[task_row("Second") - 1], visible.text()
+            other_master, other_slave = pty.openpty()
+            fcntl.ioctl(other_slave, termios.TIOCSWINSZ, struct.pack("HHHH", 24, 72, 0, 0))
+
+            def other_terminal():
+                os.setsid()
+                fcntl.ioctl(0, termios.TIOCSCTTY, 0)
+
+            other = subprocess.Popen([binary, "tui"], cwd=folder, env=env, stdin=other_slave,
+                                     stderr=other_slave, stdout=subprocess.PIPE, preexec_fn=other_terminal)
+            other_visible = TerminalScreen(72, 24)
+
+            def other_wait(predicate):
+                deadline = time.monotonic() + 5
+                while not predicate():
+                    assert time.monotonic() < deadline, other_visible.text()
+                    if select.select([other_master], [], [], 0.05)[0]:
+                        other_visible.feed(os.read(other_master, 65536))
+                    assert other.poll() is None, other_visible.text()
+
+            newer_text = "Newer DB text\n" + "\n".join(f"DB row {index:02}" for index in range(30)) + "\nDB tail"
+            try:
+                other_wait(lambda: "Task Editor - New Task" in other_visible.text())
+                os.write(other_master, b"\x1b[1;2A")
+                other_wait(lambda: "Task #2 (New)" in other_visible.text() and "Second" in other_visible.text())
+                os.write(other_master, b"\x7f" * len("Second"))
+                os.write(other_master, b"\x1b[200~" + newer_text.encode() + b"\x1b[201~")
+                other_wait(lambda: "DB tail" in other_visible.text())
+                os.write(other_master, b"\x13")
+                other_wait(lambda: "Saved #2" in other_visible.text())
+                newer = cli("show", "2")["task"]
+                assert newer["description"] == newer_text
+                os.write(other_master, b"\x03\x03")
+                deadline = time.monotonic() + 5
+                while other.poll() is None:
+                    assert time.monotonic() < deadline, "Second editor failed to exit"
+                    if select.select([other_master], [], [], 0.05)[0]:
+                        try:
+                            other_visible.feed(os.read(other_master, 65536))
+                        except OSError:
+                            pass
+                stdout, _ = other.communicate(timeout=5)
+                assert other.returncode == 0 and stdout == b"", other_visible.text()
+            finally:
+                if other.poll() is None:
+                    other.kill()
+                os.close(other_master)
+                os.close(other_slave)
+                other.wait(timeout=2)
+            send(b"\x1b[1;2B")
+            wait_visible(lambda: "Task #2 (New)" in editor_title() and "[Image #1: pending.png]" in visible.text()
+                         and (visible.x, visible.y) == caret)
+            assert "[*]" in visible.text().splitlines()[task_row("First") - 1], visible.text()
+            send(b"\x13")
+            wait_visible(lambda: "Content conflict #2" in visible.text())
+            wait_visible(lambda: "Current DB revision" in visible.text() and "Newer DB text" in visible.text())
+            assert cli("show", "2")["task"] == newer
+            assert len(cli("show", "2")["images"]) == 1
+            assert (Path(folder) / ".qqq/images/2/1.png").read_bytes() == stored_image.read_bytes()
+            assert not (Path(folder) / ".qqq/images/2/2.png").exists()
+            send(b"\x1b[F")
+            wait_visible(lambda: "DB tail" in visible.text())
+            send(b"\t")
+            wait_visible(lambda: "Local draft" in visible.text() and "Second local" in visible.text())
+            send(b"\x1b[F")
+            wait_visible(lambda: "[Image: pending.png]" in visible.text())
+            send(b"\x1b")
+            wait_visible(lambda: "Content conflict #2" not in visible.text() and "[Image #1: pending.png]" in visible.text()
+                         and (visible.x, visible.y) == caret)
+            send(b"\x13")
+            wait_visible(lambda: "Content conflict #2" in visible.text())
+            send(b"o")
+            wait_visible(lambda: "Overwrite DB text?" in visible.text())
+            send(b"n")
+            wait_visible(lambda: "Content conflict #2" in visible.text())
+            assert cli("show", "2")["task"] == newer
+            fcntl.ioctl(slave, termios.TIOCSWINSZ, struct.pack("HHHH", 24, 59, 0, 0))
+            visible.resize(59, 24)
+            os.kill(child.pid, signal.SIGWINCH)
+            wait_visible(lambda: "Content conflict #2" in visible.text() and "Current DB revision" in visible.text()
+                         and "First" in visible.text().splitlines()[0]
+                         and " New " not in visible.text().splitlines()[0]
+                         and (visible.x, visible.y) == (6, 3))
+            settle()
+            send(b"o")
+            wait_visible(lambda: "Overwrite DB text?" in visible.text())
+            latest = cli("edit", "2", "-d", "Another newer DB text")
+            send(b"y")
+            wait_visible(lambda: "Content conflict #2" in visible.text()
+                         and f"Current DB revision {latest['content_revision']}" in visible.text()
+                         and "Another newer DB text" in visible.text())
+            assert cli("show", "2")["task"] == latest
+            send(b"o")
+            wait_visible(lambda: "Overwrite DB text?" in visible.text())
+            send(b"y")
+            wait_visible(lambda: "Content conflict #2" not in visible.text() and "Saved #2" in visible.text())
+            saved = cli("show", "2")
+            assert payload in saved["task"]["description"]
+            assert "```pasteboard" in saved["task"]["description"]
+            assert ".qqq/images/2/2.png" in saved["task"]["description"]
+            assert len(saved["images"]) == 2
+            assert (Path(folder) / ".qqq/images/2/2.png").read_bytes() == pending_image.read_bytes()
+            assert (Path(folder) / ".qqq/images/2/1.png").read_bytes() == stored_image.read_bytes()
+            assert cli("show", "1")["task"]["description"] == "First"
+            assert "[*]" in visible.text().splitlines()[task_row("First") - 1], visible.text()
+            send(b" more")
+            wait_visible(lambda: "more" in visible.text())
+            cli("message", "2", "Progress without content change")
+            cli("edit", "2", "--priority", "50")
+            cli("next", "--local", "--session", "content-owner")
+            cli("complete", "2", "--session", "content-owner")
+            clear_capture()
+            send(b"\x13")
+            read_until(b"Saved #2")
+            wait_visible(lambda: "Task #2 (Completed)" in editor_title())
+            assert "more" in cli("show", "2")["task"]["description"]
+            send(b" reload-discard")
+            wait_visible(lambda: "reload-discard" in visible.text())
+            restored = cli("edit", "2", "-d", "Reload current text\nFull current details")
+            send(b"\x13")
+            wait_visible(lambda: "Content conflict #2" in visible.text())
+            send(b"r")
+            wait_visible(lambda: "Reload current DB text?" in visible.text())
+            send(b"n")
+            wait_visible(lambda: "Content conflict #2" in visible.text())
+            send(b"r")
+            wait_visible(lambda: "Reload current DB text?" in visible.text())
+            send(b"y")
+            wait_visible(lambda: "Content conflict #2" not in visible.text() and editor_line().startswith("Reload current text")
+                         and editor_line(1).startswith("Full current details"))
+            assert cli("show", "2")["task"] == restored
+            # Reload affects only selected buffer; other task's draft remains saveable.
+            send(b"\x1b[1;2A")
+            wait_visible(lambda: "Task #1 (New)" in editor_title() and editor_line().startswith("First retained"))
+            send(b"\x13")
+            wait_visible(lambda: visible.text().splitlines()[-1].startswith("Saved #1"))
+            assert cli("show", "1")["task"]["description"] == "First retained"
+            send(b"\x1b[1;2B")
+            wait_visible(lambda: "Task #2 (Completed)" in editor_title() and editor_line(1).startswith("Full current details"))
+            send(b" removed-local")
+            wait_visible(lambda: "removed-local" in visible.text())
+            send(b"\x1b[200~" + str(pending_image).encode() + b"\x1b[201~")
+            wait_visible(lambda: "[Image #1: pending.png]" in visible.text())
+            settle()
+            removed_caret = (visible.x, visible.y)
+            send(b"\x1b[1;2A")
+            wait_visible(lambda: "Task #1 (New)" in editor_title())
+            cli("archive", "2")
+            cli("delete", "2", "--yes")
+            send(b"\x1b[1;2B")
+            wait_visible(lambda: "New Task" in editor_title())
+            send(b"\x03")
+            wait_visible(lambda: visible.text().splitlines()[-1].startswith("Discard task #2?"))
+            send(b"n")
+            wait_visible(lambda: "Task #2 (" in editor_title() and "[Image #1: pending.png]" in visible.text()
+                         and (visible.x, visible.y) == removed_caret)
+            send(b"\x13")
+            wait_visible(lambda: "Content conflict #2" in visible.text() and "task removed" in visible.text()
+                         and visible.text().splitlines()[-1].startswith("Content conflict for task 2"))
+            send(b"\t")
+            wait_visible(lambda: "Local draft" in visible.text() and "removed-local" in visible.text())
+            send(b"\x1b")
+            wait_visible(lambda: "Content conflict #2" not in visible.text() and "removed-local" in visible.text())
+            assert [task["id"] for task in cli("list")] == [1]
+            assert not (Path(folder) / ".qqq/images/2/2.png").exists()
+            if scenario.endswith("no_color"):
+                assert b"\x1b[38;" not in screen and b"\x1b[48;" not in screen
+        elif scenario.startswith("compact_layout"):
             initial_tasks = cli("list")
 
             def resize_compact(width, height=24, dirty=False):
@@ -2531,9 +2721,12 @@ print(json.dumps({"result": result}))
                 db.execute("DELETE FROM tasks WHERE id=2")
             clear_capture()
             send(b"\x05 edited\x13")
-            read_until(b"Task 2 not found")
+            wait_visible(lambda: "Content conflict #2" in visible.text() and "task removed" in visible.text()
+                         and visible.text().splitlines()[-1].startswith("Content conflict for task 2"))
             assert b"38;5;1" in screen, screen[-2000:]
             assert child.poll() is None
+            send(b"\x1b")
+            wait_visible(lambda: "Content conflict #2" not in visible.text() and "Second edited" in visible.text())
             with sqlite3.connect(os.path.join(folder, ".qqq", "qqq.db")) as db:
                 db.execute("INSERT INTO tasks(id, description) VALUES (2, 'Second')")
             clear_capture()

@@ -1,3 +1,4 @@
+use super::Baseline;
 use super::draft::Draft;
 use std::collections::BTreeMap;
 
@@ -23,7 +24,7 @@ impl DraftKey {
 
 pub(super) struct ParkedDraft {
     pub draft: Draft,
-    pub baseline: String,
+    pub baseline: Baseline,
     pub top: usize,
     pub follow_cursor: bool,
 }
@@ -38,16 +39,16 @@ impl DraftBuffers {
         &mut self,
         key: DraftKey,
         draft: &mut Draft,
-        baseline: &str,
+        baseline: &Baseline,
         top: usize,
         follow_cursor: bool,
     ) {
-        if draft.is_dirty_against(baseline) {
+        if draft.is_dirty_against(&baseline.description) {
             self.entries.insert(
                 key,
                 ParkedDraft {
                     draft: std::mem::replace(draft, Draft::new("")),
-                    baseline: baseline.to_owned(),
+                    baseline: baseline.clone(),
                     top,
                     follow_cursor,
                 },
@@ -79,7 +80,15 @@ impl DraftBuffers {
 mod tests {
     use super::{DraftBuffers, DraftKey};
     use crate::images::ImageInput;
+    use crate::tui::Baseline;
     use crate::tui::draft::Draft;
+
+    fn baseline(description: &str) -> Baseline {
+        Baseline {
+            description: description.into(),
+            revision: Some(3),
+        }
+    }
 
     #[test]
     fn restores_task_contents_baseline_caret_and_manual_scroll() {
@@ -89,16 +98,27 @@ mod tests {
         draft.insert("!");
         let cursor = draft.cursor();
         let contents = draft.finish().unwrap().description;
-        buffers.park(DraftKey::Task(2), &mut draft, "Saved\nSecond", 7, false);
+        buffers.park(
+            DraftKey::Task(2),
+            &mut draft,
+            &baseline("Saved\nSecond"),
+            7,
+            false,
+        );
         assert!(draft.is_empty());
         assert_eq!(buffers.task_ids().collect::<Vec<_>>(), vec![2]);
         let restored = buffers.take(DraftKey::Task(2)).unwrap();
         assert_eq!(restored.draft.finish().unwrap().description, contents);
         assert_eq!(restored.draft.cursor(), cursor);
-        assert_eq!(restored.baseline, "Saved\nSecond");
+        assert_eq!(restored.baseline.description, "Saved\nSecond");
+        assert_eq!(restored.baseline.revision, Some(3));
         assert_eq!(restored.top, 7);
         assert!(!restored.follow_cursor);
-        assert!(restored.draft.is_dirty_against(&restored.baseline));
+        assert!(
+            restored
+                .draft
+                .is_dirty_against(&restored.baseline.description)
+        );
         assert!(buffers.keys().is_empty());
     }
 
@@ -112,7 +132,7 @@ mod tests {
             (DraftKey::Task(1), "First edit"),
             (DraftKey::New(Some(5)), "Child five"),
         ] {
-            buffers.park(key, &mut Draft::new(text), "", 0, true);
+            buffers.park(key, &mut Draft::new(text), &Baseline::default(), 0, true);
         }
         assert_eq!(
             buffers.keys(),
@@ -150,12 +170,12 @@ mod tests {
         let mut buffers = DraftBuffers::default();
         let mut draft = Draft::new("Saved");
         draft.left();
-        buffers.park(DraftKey::Task(1), &mut draft, "Saved", 0, true);
+        buffers.park(DraftKey::Task(1), &mut draft, &baseline("Saved"), 0, true);
         assert!(buffers.keys().is_empty());
         assert_eq!(draft.finish().unwrap().description, "Saved");
         draft.insert("!");
         draft.backspace();
-        buffers.park(DraftKey::Task(1), &mut draft, "Saved", 0, true);
+        buffers.park(DraftKey::Task(1), &mut draft, &baseline("Saved"), 0, true);
         assert!(buffers.keys().is_empty());
         assert_eq!(draft.finish().unwrap().description, "Saved");
     }
@@ -168,7 +188,7 @@ mod tests {
         buffers.park(
             DraftKey::Task(2),
             &mut Draft::new("Local edits"),
-            "Original",
+            &baseline("Original"),
             7,
             false,
         );
@@ -177,6 +197,7 @@ mod tests {
                 id: 2,
                 description: "External edit".into(),
                 status: "error".into(),
+                revision: 4,
                 draft: Draft::new("External edit"),
             },
             &mut buffers,
@@ -185,7 +206,7 @@ mod tests {
         let mut id = None;
         let mut status = None;
         let mut parent = None;
-        let mut baseline = String::new();
+        let mut baseline = Baseline::default();
         let mut top = 0;
         let follow = load_target(
             target,
@@ -199,7 +220,8 @@ mod tests {
         assert_eq!(id, Some(2));
         assert_eq!(status.as_deref(), Some("error"));
         assert_eq!(parent, None);
-        assert_eq!(baseline, "Original");
+        assert_eq!(baseline.description, "Original");
+        assert_eq!(baseline.revision, Some(3));
         assert_eq!(draft.finish().unwrap().description, "Local edits");
         assert_eq!(top, 7);
         assert!(!follow);
@@ -224,7 +246,7 @@ mod tests {
         let images = draft.image_mask();
         let pastes = draft.paste_mask();
         let description = draft.finish().unwrap().description;
-        buffers.park(DraftKey::Task(4), &mut draft, "Saved", 9, false);
+        buffers.park(DraftKey::Task(4), &mut draft, &baseline("Saved"), 9, false);
         let mut restored = buffers.take(DraftKey::Task(4)).unwrap();
         assert_eq!(restored.draft.fragments(), fragments);
         assert_eq!(restored.draft.image_mask(), images);

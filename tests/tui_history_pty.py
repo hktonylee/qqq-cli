@@ -125,8 +125,12 @@ with tempfile.TemporaryDirectory(prefix="qqq-history-test-") as folder:
         screen.clear()
         send(b"\x13")
         if expect_error:
-            read_until(b"Task 1 not found")
+            read_until(b"Current DB: task removed")
             assert child.poll() is None
+            screen.clear()
+            send(b"\x1b")
+            read_until(b"\x1b[16;1HLocal draft kept")
+            read_until(b"\x1b[2;7H")
             send(b"\x03")
         else:
             read_until(f"Saved #{expected_id}. New task".encode())
@@ -274,7 +278,7 @@ with tempfile.TemporaryDirectory(prefix="qqq-history-test-") as folder:
                 db.execute("DELETE FROM tasks WHERE id=1")
             send(b"\x05!")
             finish(expect_error=True)
-            assert b"Task 1 not found" in screen
+            assert b"Local draft kept" in screen
             assert cli("list") == []
         elif scenario == "return_new":
             press(UP, b"Task #1")

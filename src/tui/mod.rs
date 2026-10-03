@@ -1,5 +1,6 @@
 mod buffers;
 mod clipboard;
+mod conflict;
 mod dashboard;
 mod details;
 pub mod draft;
@@ -36,6 +37,13 @@ pub struct Outcome {
     pub composition: Composition,
     pub target_id: Option<i64>,
     pub parent_id: Option<i64>,
+    pub expected_revision: Option<i64>,
+}
+
+#[derive(Clone, Default)]
+struct Baseline {
+    description: String,
+    revision: Option<i64>,
 }
 
 enum Target {
@@ -46,6 +54,7 @@ enum Target {
         id: i64,
         description: String,
         status: String,
+        revision: i64,
         draft: Draft,
     },
     Retained {
@@ -311,12 +320,14 @@ fn parse_action_input(
     }
 }
 
-fn task_target(db: &crate::db::Db, id: i64, description: String, status: String) -> Result<Target> {
-    let draft = Draft::from_saved(&description, id, &db.image_references(id)?)?;
+fn task_target(db: &crate::db::Db, id: i64) -> Result<Target> {
+    let snapshot = db.content_snapshot(id)?;
+    let draft = Draft::from_saved(&snapshot.task.description, id, &snapshot.references)?;
     Ok(Target::Task {
         id,
-        description,
-        status,
+        description: snapshot.task.description,
+        status: snapshot.task.status,
+        revision: snapshot.task.content_revision,
         draft,
     })
 }
@@ -342,7 +353,7 @@ fn adjacent_target(
         db.adjacent_task(current, older, include_archived)?
     };
     Ok(match found {
-        Some((id, description, status)) => Some(task_target(db, id, description, status)?),
+        Some((id, _, _)) => Some(task_target(db, id)?),
         None if !older => Some(Target::New { parent_id: None }),
         None => None,
     })
@@ -371,7 +382,7 @@ fn load_target(
     target_id: &mut Option<i64>,
     target_status: &mut Option<String>,
     draft_parent_id: &mut Option<i64>,
-    baseline: &mut String,
+    baseline: &mut Baseline,
     top: &mut usize,
 ) -> bool {
     match target {
@@ -379,19 +390,23 @@ fn load_target(
             *target_id = None;
             *target_status = None;
             *draft_parent_id = parent_id;
-            baseline.clear();
+            *baseline = Baseline::default();
             *draft = Draft::new("");
         }
         Target::Task {
             id,
             description,
             status,
+            revision,
             draft: loaded,
         } => {
             *target_id = Some(id);
             *target_status = Some(status);
             *draft_parent_id = None;
-            *baseline = description;
+            *baseline = Baseline {
+                description,
+                revision: Some(revision),
+            };
             *draft = loaded;
         }
         Target::Retained { key, status, saved } => {
@@ -475,6 +490,10 @@ fn paste(draft: &mut Draft, text: &str) -> Result<()> {
 }
 enum Mode<'a, 'b> {
     Single(Option<&'a crate::db::Db>),
+    Edit {
+        db: &'a mut crate::db::Db,
+        save: &'b mut dyn FnMut(&mut crate::db::Db, Outcome) -> Result<i64>,
+    },
     Continuous {
         db: &'a mut crate::db::Db,
         save: &'b mut dyn FnMut(&mut crate::db::Db, Outcome) -> Result<i64>,
@@ -489,7 +508,7 @@ impl Mode<'_, '_> {
     fn db(&self) -> Option<&crate::db::Db> {
         match self {
             Self::Single(db) => *db,
-            Self::Continuous { db, .. } => Some(db),
+            Self::Continuous { db, .. } | Self::Edit { db, .. } => Some(db),
         }
     }
 }
@@ -510,7 +529,7 @@ fn run_action(
     if task.archived && !include_archived {
         return Ok(Target::New { parent_id: None });
     }
-    task_target(db, task.id, task.description, task.status)
+    task_target(db, task.id)
 }
 fn cancel(saved_any: bool, dashboard: bool) -> Result<Option<Outcome>> {
     if saved_any || dashboard {
@@ -524,13 +543,25 @@ pub fn compose(description: &str, navigation: Option<&crate::db::Db>) -> Result<
         .map(|saved| saved.expect("single editor returns saved composition"))
 }
 pub fn compose_existing(
-    description: &str,
-    task_id: i64,
-    references: &[crate::images::ImageReference],
-) -> Result<Outcome> {
-    let draft = Draft::from_saved(description, task_id, references)?;
-    compose_inner(description, Mode::Single(None), Some(draft))
-        .map(|saved| saved.expect("single editor returns saved composition"))
+    db: &mut crate::db::Db,
+    snapshot: crate::db::ContentSnapshot,
+    description: Option<&str>,
+    save: &mut dyn FnMut(&mut crate::db::Db, Outcome) -> Result<i64>,
+) -> Result<()> {
+    let task = snapshot.task;
+    let draft = Draft::from_saved(
+        description.unwrap_or(&task.description),
+        task.id,
+        &snapshot.references,
+    )?;
+    let target = Target::Task {
+        id: task.id,
+        description: task.description,
+        status: task.status,
+        revision: task.content_revision,
+        draft,
+    };
+    compose_inner("", Mode::Edit { db, save }, Some(target)).map(|_| ())
 }
 pub fn compose_continuously(
     db: &mut crate::db::Db,
@@ -574,7 +605,7 @@ pub fn compose_dashboard(
 fn compose_inner(
     description: &str,
     mut mode: Mode<'_, '_>,
-    initial_draft: Option<Draft>,
+    initial_target: Option<Target>,
 ) -> Result<Option<Outcome>> {
     let dashboard = matches!(
         mode,
@@ -592,7 +623,7 @@ fn compose_inner(
     );
     let after_save_new = match &mode {
         Mode::Continuous { after_save_new, .. } => *after_save_new,
-        Mode::Single(_) => AfterSaveNew::default(),
+        Mode::Single(_) | Mode::Edit { .. } => AfterSaveNew::default(),
     };
     let mut terminal = TerminalGuard::enter(dashboard)?;
     let mut dashboard_terminal = if dashboard {
@@ -600,12 +631,26 @@ fn compose_inner(
     } else {
         None
     };
-    let mut draft = initial_draft.unwrap_or_else(|| Draft::new(description));
-    let mut baseline = description.to_owned();
+    let mut draft = Draft::new(description);
+    let mut baseline = Baseline {
+        description: description.to_owned(),
+        revision: None,
+    };
     let mut target_id = None;
     let mut target_status = None;
     let mut draft_parent_id = None;
     let mut top = 0;
+    if let Some(target) = initial_target {
+        load_target(
+            target,
+            &mut draft,
+            &mut target_id,
+            &mut target_status,
+            &mut draft_parent_id,
+            &mut baseline,
+            &mut top,
+        );
+    }
     let mut list_top = 0;
     let mut details_top = 0;
     let mut details_id = None;
@@ -617,6 +662,8 @@ fn compose_inner(
     let mut message_is_error = false;
     let mut confirmation: Option<Confirmation> = None;
     let mut action_ui: Option<ActionUi> = None;
+    let mut conflict_ui: Option<conflict::View> = None;
+    let mut save_revision_override = None;
     let mut saved_any = false;
     let mut buffers = DraftBuffers::default();
     loop {
@@ -717,7 +764,7 @@ fn compose_inner(
             Some(Confirmation::Action { .. }) => "Confirm action? (y/N)",
             None => &message,
         };
-        let active_dirty = draft.is_dirty_against(&baseline);
+        let active_dirty = draft.is_dirty_against(&baseline.description);
         let (mut title, status_start) = match (mode.db().is_some(), target_id) {
             (true, Some(id)) => {
                 let prefix = format!("Task Editor - Task #{id} ");
@@ -762,6 +809,7 @@ fn compose_inner(
                     Mode::Continuous { .. } => render::ADD_KEYS,
                     Mode::Single(Some(_)) => render::NAV_KEYS,
                     Mode::Single(None) => render::KEYS,
+                    Mode::Edit { .. } => render::KEYS,
                 }
             },
             message: footer,
@@ -826,14 +874,22 @@ fn compose_inner(
                 usize::MAX,
             )
             .content;
-            let modal_lines = action_ui
+            let modal_lines = conflict_ui
                 .as_ref()
                 .map(|ui| {
-                    action_lines(
-                        ui,
+                    ui.rows(
                         usize::from(popup_content.width),
                         usize::from(popup_content.height),
                     )
+                })
+                .or_else(|| {
+                    action_ui.as_ref().map(|ui| {
+                        action_lines(
+                            ui,
+                            usize::from(popup_content.width),
+                            usize::from(popup_content.height),
+                        )
+                    })
                 })
                 .or_else(|| match &confirmation {
                     Some(Confirmation::ExitBuffers { keys, index }) => Some(buffer_exit_lines(
@@ -885,6 +941,16 @@ fn compose_inner(
                         terminal.color,
                     );
                 })?;
+        } else if let Some(ui) = &conflict_ui {
+            let area = dashboard::popup_layout(
+                ratatui::layout::Rect::new(0, 0, size.0, size.1),
+                usize::MAX,
+            )
+            .content;
+            let rows = ui.rows(usize::from(area.width), usize::from(area.height));
+            let mut popup_terminal = Terminal::new(CrosstermBackend::new(io::stderr()))?;
+            popup_terminal.clear()?;
+            popup_terminal.draw(|frame| dashboard::popup(frame, &rows, terminal.color))?;
         } else {
             render::draw(
                 &mut io::stderr(),
@@ -915,6 +981,7 @@ fn compose_inner(
                 let active = dashboard
                     && confirmation.is_none()
                     && action_ui.is_none()
+                    && conflict_ui.is_none()
                     && match mouse.kind {
                         MouseEventKind::ScrollUp | MouseEventKind::ScrollDown => {
                             dashboard::wheel_area(
@@ -950,7 +1017,7 @@ fn compose_inner(
             continue;
         };
         match input {
-            Event::Paste(text) if confirmation.is_none() => {
+            Event::Paste(text) if confirmation.is_none() && conflict_ui.is_none() => {
                 if let Some(ActionUi::Input { value, error, .. }) = action_ui.as_mut() {
                     value.extend(text.chars().filter(|ch| !ch.is_control()));
                     error.clear();
@@ -1028,9 +1095,7 @@ fn compose_inner(
                     }
                     Some(dashboard::ClickTarget::Task(id)) => {
                         let db = mode.db().expect("dashboard has database");
-                        let target = db.task(id).and_then(|task| {
-                            task_target(db, task.id, task.description, task.status)
-                        });
+                        let target = db.task(id).and_then(|task| task_target(db, task.id));
                         match target {
                             Ok(target) => {
                                 buffers.park(
@@ -1063,7 +1128,57 @@ fn compose_inner(
                     None => (),
                 }
             }
-            Event::Key(key) if key.kind != KeyEventKind::Release => {
+            Event::Key(mut key) if key.kind != KeyEventKind::Release => {
+                if let Some(mut ui) = conflict_ui.take() {
+                    let area = dashboard::popup_layout(
+                        ratatui::layout::Rect::new(0, 0, size.0, size.1),
+                        usize::MAX,
+                    )
+                    .content;
+                    match ui.key(key, usize::from(area.width), usize::from(area.height)) {
+                        Some(conflict::Action::Keep) => {
+                            message = "Local draft kept".to_owned();
+                            message_is_error = false;
+                            continue;
+                        }
+                        Some(conflict::Action::Reload) => {
+                            match target_id.and_then(|id| mode.db().map(|db| task_target(db, id))) {
+                                Some(Ok(target)) => {
+                                    editor_follow_cursor = load_target(
+                                        target,
+                                        &mut draft,
+                                        &mut target_id,
+                                        &mut target_status,
+                                        &mut draft_parent_id,
+                                        &mut baseline,
+                                        &mut top,
+                                    );
+                                    list_follow_selected = true;
+                                    message = "Reloaded current DB text".to_owned();
+                                    message_is_error = false;
+                                }
+                                Some(Err(error)) => {
+                                    message = format!("{error:#}; local draft kept");
+                                    message_is_error = true;
+                                    conflict_ui = Some(ui);
+                                }
+                                None => conflict_ui = Some(ui),
+                            }
+                            continue;
+                        }
+                        Some(conflict::Action::Overwrite(revision)) => {
+                            save_revision_override = Some(revision);
+                            key = crossterm::event::KeyEvent::new(
+                                KeyCode::Char('s'),
+                                KeyModifiers::CONTROL,
+                            );
+                        }
+                        None => {
+                            conflict_ui = Some(ui);
+                            continue;
+                        }
+                    }
+                }
                 let control = key.modifiers.contains(KeyModifiers::CONTROL);
                 let cancel_key = control && key.code == KeyCode::Char('c');
                 if dashboard
@@ -1087,7 +1202,7 @@ fn compose_inner(
                 if dashboard
                     && target_id.is_none()
                     && cancel_key
-                    && draft.is_dirty_against(&baseline)
+                    && draft.is_dirty_against(&baseline.description)
                 {
                     confirmation = Some(Confirmation::Exit);
                     action_ui = None;
@@ -1105,7 +1220,7 @@ fn compose_inner(
                         }
                         return cancel(saved_any, dashboard);
                     }
-                    if draft.is_dirty_against(&baseline) {
+                    if draft.is_dirty_against(&baseline.description) {
                         confirmation = Some(Confirmation::Switch {
                             target: Target::New { parent_id: None },
                             focus_editor: true,
@@ -1329,7 +1444,7 @@ fn compose_inner(
                             if let Some(action) = chosen {
                                 confirmation = Some(Confirmation::Action {
                                     action,
-                                    dirty: draft.is_dirty_against(&baseline),
+                                    dirty: draft.is_dirty_against(&baseline.description),
                                 });
                             }
                         }
@@ -1365,7 +1480,7 @@ fn compose_inner(
                                 });
                             }
                             KeyCode::Enter => match parse_action_input(id, kind, &value) {
-                                Ok(action) if draft.is_dirty_against(&baseline) => {
+                                Ok(action) if draft.is_dirty_against(&baseline.description) => {
                                     confirmation = Some(Confirmation::Action {
                                         action,
                                         dirty: true,
@@ -1493,6 +1608,7 @@ fn compose_inner(
                     continue;
                 }
                 if key.modifiers.contains(KeyModifiers::SHIFT)
+                    && !matches!(mode, Mode::Edit { .. })
                     && !key
                         .modifiers
                         .intersects(KeyModifiers::CONTROL | KeyModifiers::ALT | KeyModifiers::SUPER)
@@ -1507,7 +1623,9 @@ fn compose_inner(
                             include_archived,
                             visible_ids.as_deref(),
                         ) {
-                            Ok(Some(target)) if !dashboard && draft.is_dirty_against(&baseline) => {
+                            Ok(Some(target))
+                                if !dashboard && draft.is_dirty_against(&baseline.description) =>
+                            {
                                 confirmation = Some(Confirmation::Switch {
                                     target,
                                     focus_editor: false,
@@ -1627,43 +1745,61 @@ fn compose_inner(
                                     composition,
                                     target_id,
                                     parent_id: draft_parent_id,
+                                    expected_revision: save_revision_override
+                                        .take()
+                                        .or(baseline.revision),
                                 };
+                                let finish_after_save = matches!(mode, Mode::Edit { .. });
                                 match &mut mode {
                                     Mode::Single(_) => return Ok(Some(outcome)),
-                                    Mode::Continuous { db, save, .. } => match save(db, outcome)
-                                        .and_then(|id| {
+                                    Mode::Continuous { db, save, .. } | Mode::Edit { db, save } => {
+                                        match save(db, outcome).and_then(|id| {
                                             let target = if keep_saved {
-                                                let task = db.task(id)?;
-                                                task_target(db, id, task.description, task.status)?
+                                                task_target(db, id)?
                                             } else {
                                                 Target::New { parent_id: None }
                                             };
                                             Ok((id, target))
                                         }) {
-                                        Ok((id, target)) => {
-                                            saved_any = true;
-                                            editor_follow_cursor = load_target(
-                                                restore_target(target, &mut buffers),
-                                                &mut draft,
-                                                &mut target_id,
-                                                &mut target_status,
-                                                &mut draft_parent_id,
-                                                &mut baseline,
-                                                &mut top,
-                                            );
-                                            list_follow_selected = true;
-                                            message = if keep_saved {
-                                                format!("Saved #{id}")
-                                            } else {
-                                                format!("Saved #{id}. New task")
-                                            };
-                                            message_is_error = false;
+                                            Ok((id, target)) => {
+                                                if finish_after_save {
+                                                    return Ok(None);
+                                                }
+                                                saved_any = true;
+                                                editor_follow_cursor = load_target(
+                                                    restore_target(target, &mut buffers),
+                                                    &mut draft,
+                                                    &mut target_id,
+                                                    &mut target_status,
+                                                    &mut draft_parent_id,
+                                                    &mut baseline,
+                                                    &mut top,
+                                                );
+                                                list_follow_selected = true;
+                                                message = if keep_saved {
+                                                    format!("Saved #{id}")
+                                                } else {
+                                                    format!("Saved #{id}. New task")
+                                                };
+                                                message_is_error = false;
+                                            }
+                                            Err(error) => {
+                                                if let Some(content_conflict) =
+                                                    error
+                                                        .downcast_ref::<crate::db::ContentConflict>(
+                                                        )
+                                                {
+                                                    conflict_ui = Some(conflict::View::new(
+                                                        content_conflict,
+                                                        draft.finish()?.description,
+                                                    ));
+                                                    filter_focused = false;
+                                                }
+                                                message = format!("{error:#}");
+                                                message_is_error = true;
+                                            }
                                         }
-                                        Err(error) => {
-                                            message = format!("{error:#}");
-                                            message_is_error = true;
-                                        }
-                                    },
+                                    }
                                 }
                             }
                             Err(error) => {

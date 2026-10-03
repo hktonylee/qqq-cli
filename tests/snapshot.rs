@@ -275,6 +275,94 @@ fn backup_waits_for_writer_and_captures_matching_database_and_image() {
 }
 
 #[test]
+fn restore_released_schema_nine_backup_then_migrate_preserves_content_and_images() {
+    let source = TempDir::new().unwrap();
+    let path = source.path();
+    fs::create_dir_all(path.join(".qqq/images/1")).unwrap();
+    let conn = rusqlite::Connection::open(path.join(".qqq/qqq.db")).unwrap();
+    for sql in [
+        include_str!("../src/sql/schema.sql"),
+        include_str!("../src/sql/migrate_v2.sql"),
+        include_str!("../src/sql/migrate_v3.sql"),
+        include_str!("../src/sql/migrate_v4.sql"),
+        include_str!("../src/sql/migrate_v5.sql"),
+        include_str!("../src/sql/migrate_v6.sql"),
+        include_str!("../src/sql/migrate_v7.sql"),
+        include_str!("../src/sql/migrate_v8.sql"),
+        include_str!("../src/sql/migrate_v9.sql"),
+    ] {
+        conn.execute_batch(sql).unwrap();
+    }
+    let image = b"\x89PNG\r\n\x1a\nlegacy bytes";
+    conn.execute(
+        "INSERT INTO tasks(description) VALUES ('Released content\nAll details')",
+        [],
+    )
+    .unwrap();
+    conn.execute(
+        "INSERT INTO messages(task_id,body) VALUES (1,'Progress')",
+        [],
+    )
+    .unwrap();
+    conn.execute(
+        "INSERT INTO images(task_id,name,media_type,bytes) VALUES (1,'legacy.png','image/png',?)",
+        [image.len() as i64],
+    )
+    .unwrap();
+    fs::write(path.join(".qqq/images/1/1.png"), image).unwrap();
+    drop(conn);
+    let database = fs::read(path.join(".qqq/qqq.db")).unwrap();
+    let image_meta = format::hash_reader(&mut &image[..]).unwrap();
+    let manifest = Manifest {
+        version: 1,
+        database: format::hash_reader(&mut &database[..]).unwrap(),
+        images: vec![ImageMeta {
+            path: "images/1/1.png".to_owned(),
+            bytes: image_meta.bytes,
+            sha256: image_meta.sha256,
+        }],
+    };
+    write_entries(
+        &path.join("legacy.tar"),
+        &[
+            (
+                "manifest.json".to_owned(),
+                serde_json::to_vec(&manifest).unwrap(),
+            ),
+            ("qqq.db".to_owned(), database),
+            ("images/1/1.png".to_owned(), image.to_vec()),
+        ],
+    );
+    let target = TempDir::new().unwrap();
+    ok(
+        target.path(),
+        &["restore", path.join("legacy.tar").to_str().unwrap()],
+    );
+    let conn = rusqlite::Connection::open(target.path().join(".qqq/qqq.db")).unwrap();
+    assert_eq!(
+        conn.pragma_query_value(None, "user_version", |row| row.get::<_, i64>(0))
+            .unwrap(),
+        9
+    );
+    let restored = ok(target.path(), &["show", "1"]);
+    assert_eq!(
+        restored["task"]["description"],
+        "Released content\nAll details"
+    );
+    assert_eq!(restored["task"]["content_revision"], 1);
+    assert_eq!(restored["messages"][0]["body"], "Progress");
+    assert_eq!(
+        fs::read(target.path().join(".qqq/images/1/1.png")).unwrap(),
+        image
+    );
+    assert_eq!(
+        conn.pragma_query_value(None, "user_version", |row| row.get::<_, i64>(0))
+            .unwrap(),
+        10
+    );
+}
+
+#[test]
 fn restore_round_trip_into_new_and_empty_project_locations() {
     let source = project();
     let path = source.path();
