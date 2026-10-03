@@ -565,7 +565,7 @@ fn compose_inner(
         } else {
             render::Layout::new(&fragments, &image_mask, size.0 as usize)
         };
-        let (dashboard_tasks, list_version, details_rows) = if dashboard {
+        let (dashboard_tasks, list_version, details_rows, has_herdr_link) = if dashboard {
             let db = mode.db().expect("dashboard has database");
             // Capture before listing so commits during rendering trigger another refresh.
             let version = db.data_version()?;
@@ -607,12 +607,16 @@ fn compose_inner(
                 },
                 None => Vec::new(),
             };
+            let has_herdr_link = match target_id {
+                Some(id) => db.link(id)?.is_some(),
+                None => false,
+            };
             if !include_archived {
                 tasks.retain(|task| !task.archived);
             }
-            (Some(tasks), Some(version), details_rows)
+            (Some(tasks), Some(version), details_rows, has_herdr_link)
         } else {
-            (None, None, Vec::new())
+            (None, None, Vec::new(), false)
         };
         let footer = match &confirmation {
             Some(Confirmation::Exit) if usize::from(size.0) < "Discard draft? (y/N)".len() => {
@@ -656,8 +660,12 @@ fn compose_inner(
                         .and_then(crate::output::status_color_code),
                 )
             },
-            keys: if filter_focused {
+            keys: if filter_focused && has_herdr_link {
+                render::FILTER_HERDR_KEYS
+            } else if filter_focused {
                 render::FILTER_KEYS
+            } else if dashboard && has_herdr_link {
+                render::DASHBOARD_HERDR_KEYS
             } else if dashboard {
                 render::DASHBOARD_KEYS
             } else {

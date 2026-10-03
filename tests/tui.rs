@@ -67,6 +67,12 @@ fn tui_dashboard_ctrl_h_opens_selected_herdr_agent_and_preserves_editor() {
 }
 
 #[test]
+fn tui_dashboard_ctrl_h_hint_follows_selected_link_and_external_refresh() {
+    dashboard_scenario("handoff_hint");
+    dashboard_scenario("handoff_hint_no_color");
+}
+
+#[test]
 fn tui_dashboard_ctrl_h_errors_preserve_editor() {
     for scenario in [
         "handoff_no_selection",

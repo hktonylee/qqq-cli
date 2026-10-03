@@ -83,6 +83,7 @@ task to load it, scroll each pane, or use the keyboard:
 | Ctrl+P | Create a child of the selected task |
 | Ctrl+/ | Filter tasks |
 | Ctrl+G | Open task actions |
+| Ctrl+H | Open linked Herdr agent; shown only for tasks with a Herdr link |
 | Esc | Close the filter, clear the editor, then exit; changed drafts ask before discard |
 
 `qqq add` opens the built-in editor too. Prefer Vim or another editor? Set

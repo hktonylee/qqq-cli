@@ -94,7 +94,7 @@ CTRL_P = b"\x10"
 with tempfile.TemporaryDirectory(prefix="qqq-dashboard-test-") as folder:
     env = dict(os.environ, HOME=folder, TERM="xterm-256color")
     env.pop("NO_COLOR", None)
-    if scenario in ("no_color", "pasteboard_no_color", "filter_no_color", "details_no_color", "actions_popup_no_color", "wide_layout_no_color", "menu_arrows_no_color", "filter_escape_empty_no_color", "compact_layout_no_color", "menu_retry_new_no_color", "menu_retry_error_no_color"):
+    if scenario in ("no_color", "pasteboard_no_color", "filter_no_color", "details_no_color", "actions_popup_no_color", "wide_layout_no_color", "menu_arrows_no_color", "filter_escape_empty_no_color", "compact_layout_no_color", "handoff_hint_no_color", "menu_retry_new_no_color", "menu_retry_error_no_color"):
         env["NO_COLOR"] = "1"
     elif scenario == "dumb":
         env["TERM"] = "dumb"
@@ -779,6 +779,60 @@ print(json.dumps({"result": result}))
                          and visible.text().splitlines()[-1].startswith("Ctrl-S Save")
                          and (visible.x, visible.y) == (len(original_draft) + 1, editor_row() + 1))
             assert cli("list") == initial_tasks
+            if scenario.endswith("no_color"):
+                assert b"38;" not in screen and b"48;" not in screen, screen[-2000:]
+        elif scenario.startswith("handoff_hint"):
+            initial_tasks = cli("list")
+
+            def hint_visible(expected):
+                return ("Ctrl-H Herdr" in visible.text().splitlines()[-1]) == expected
+
+            settle()
+            assert hint_visible(False), visible.text()
+            send(b"\x1b[1;2A")
+            wait_visible(lambda: "Task #2 (" in editor_title()
+                         and editor_line().startswith("Second") and hint_visible(True))
+            send(b"\x1b[1;2A")
+            wait_visible(lambda: "Task #1 (" in editor_title()
+                         and editor_line().startswith("First") and hint_visible(False))
+            send(b"\x1b[1;2B")
+            wait_visible(lambda: "Task #2 (" in editor_title() and hint_visible(True))
+            send(CTRL_SLASH)
+            wait_visible(lambda: visible.text().splitlines()[0].startswith("Filter:")
+                         and hint_visible(True) and (visible.x, visible.y) == (8, 0))
+            send(b"\x1b")
+            wait_visible(lambda: hint_visible(True) and visible.y == editor_row() + 1)
+            send(b"\x1b")
+            wait_visible(lambda: "New Task" in editor_title()
+                         and not editor_line().strip() and hint_visible(False))
+            send(b"\x1b[1;2A")
+            wait_visible(lambda: "Task #2 (" in editor_title() and hint_visible(True))
+            send(b"\x01Changed ")
+            wait_visible(lambda: editor_line().startswith("Changed Second")
+                         and (visible.x, visible.y) == (8, editor_row() + 1))
+            cursor = (visible.x, visible.y)
+            with sqlite3.connect(Path(folder) / ".qqq/qqq.db") as connection:
+                saved_link = connection.execute("SELECT link_json FROM herdr_links WHERE task_id=2").fetchone()[0]
+                connection.execute("DELETE FROM herdr_links WHERE task_id=2")
+            wait_visible(lambda: hint_visible(False) and (visible.x, visible.y) == cursor)
+            assert editor_line().startswith("Changed Second")
+            with sqlite3.connect(Path(folder) / ".qqq/qqq.db") as connection:
+                connection.execute("INSERT INTO herdr_links(task_id,link_json) VALUES(2,?)", (saved_link,))
+            wait_visible(lambda: hint_visible(True) and (visible.x, visible.y) == cursor)
+            assert editor_line().startswith("Changed Second")
+            fcntl.ioctl(slave, termios.TIOCSWINSZ, struct.pack("HHHH", 24, 49, 0, 0))
+            visible.resize(49, 24)
+            wait_visible(lambda: "Task #2 (" in editor_title()
+                         and editor_line().startswith("Changed Second") and hint_visible(True))
+            assert not details_text(), visible.text()
+            with sqlite3.connect(Path(folder) / ".qqq/qqq.db") as connection:
+                connection.execute("DELETE FROM herdr_links WHERE task_id=2")
+            wait_visible(lambda: hint_visible(False) and editor_line().startswith("Changed Second"))
+            with sqlite3.connect(Path(folder) / ".qqq/qqq.db") as connection:
+                connection.execute("INSERT INTO herdr_links(task_id,link_json) VALUES(2,?)", (saved_link,))
+            wait_visible(lambda: hint_visible(True) and editor_line().startswith("Changed Second"))
+            assert cli("list") == initial_tasks
+            assert not (Path(folder) / "herdr-calls").exists(), "Hint discovery called Herdr"
             if scenario.endswith("no_color"):
                 assert b"38;" not in screen and b"48;" not in screen, screen[-2000:]
         elif scenario.startswith("handoff_"):

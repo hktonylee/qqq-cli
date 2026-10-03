@@ -210,8 +210,8 @@ saving task keeps pane positions fixed. Small terminals retain usable list and
 editor rows.
 Details use a double-line box with two spaces inside each side; short panes
 retain padding without borders. Text wraps to the inner width.
-Details share `show` header and layout: `#ID · Status`, Description, Details,
-Assignment, Messages, Images, History and Herdr sections. Fields align their
+Details share `show` header and layout: `#ID · Status`, Description, Messages,
+Details, Assignment, Images, History and Herdr sections. Fields align their
 values; Created/Updated occupy separate rows. Messages follow creation order,
 with indented headers and bodies; empty collections show `None`. IDs are bold,
 statuses colored, labels/timestamps dim. Styles survive wrapping and scroll.
@@ -240,8 +240,9 @@ Changed drafts ask before switching. Ctrl-S creates child with dependency;
 Enter or Shift+Enter inserts newline. Navigating away clears draft's parent context.
 
 Ctrl-H focuses selected task's live Herdr agent and opens Herdr client using
-task's linked server. Detach from client to return to TUI with draft, selection,
-filter, cursor and scroll positions preserved. No task is saved or changed.
+task's linked server. `Ctrl-H Herdr` appears in the shortcut bar only when the
+selected task has a saved Herdr link, including while filtering. Detach from client
+to return to TUI with draft, selection, filter, cursor and scroll positions preserved. No task is saved or changed.
 Missing links, unavailable agents and client errors appear in status bar.
 Link task with `qqq herdr link` first if needed. Backspace still edits text.
 
