@@ -871,6 +871,7 @@ print(json.dumps({"result": result}))
                 wait_visible(lambda: "task #2 (" in editor_title() and editor_line().startswith("Second"))
                 send(b"\x10")
                 wait_visible(lambda: "new task (parent #2)" in editor_title()
+                             and editor_line().strip() == ""
                              and (visible.x, visible.y) == (0, editor_row() + 1))
             if scenario == "escape_staged_new_image":
                 image_path = Path(folder) / "unsaved.png"
