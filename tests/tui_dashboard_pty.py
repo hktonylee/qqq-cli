@@ -1585,7 +1585,8 @@ print(json.dumps({"result": result}))
                 wait_visible(lambda: visible.text().splitlines()[0].strip() == "")
                 send(b"\x1b")
                 wait_visible(lambda: visible.text().splitlines()[-1].startswith("Ctrl-S save")
-                             and "Ctrl+/ filter" in visible.text().splitlines()[-1])
+                             and "Shift-Up/Dn switch tasks" in visible.text().splitlines()[-1]
+                             and "Ctrl+/" in visible.text().splitlines()[-1])
             send(b"\x13")
             read_until(b"Saved #3")
             assert cli("show", "3")["task"]["description"] == "Draft/path"

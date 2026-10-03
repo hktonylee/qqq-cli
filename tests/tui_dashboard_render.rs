@@ -1400,7 +1400,7 @@ fn dashboard_paste_label_uses_gold_while_body_stays_neutral() {
 
 #[test]
 fn hotkey_footer_colors_shortcuts_and_clears_styles_for_messages() {
-    for width in [12, 17, 72] {
+    for width in [12, 17, 72, 79, 96] {
         let layout = render::Layout::new(&["Draft".into()], &[], width.into());
         let mut terminal = Terminal::new(TestBackend::new(width, 24)).unwrap();
         for color in [true, false] {
@@ -1410,6 +1410,8 @@ fn hotkey_footer_colors_shortcuts_and_clears_styles_for_messages() {
                 (render::DASHBOARD_KEYS, "Saved #1. New task", false),
                 (render::FILTER_KEYS, "", false),
                 (render::KEYS, "", false),
+                (render::NAV_KEYS, "", false),
+                (render::ADD_KEYS, "", false),
             ] {
                 let chrome = render::Chrome {
                     title: "Task Editor",
@@ -1454,10 +1456,11 @@ fn hotkey_footer_colors_shortcuts_and_clears_styles_for_messages() {
                             "Ctrl-S",
                             "Ctrl-P",
                             "Ctrl-G",
-                            "Shift-Up/Down",
+                            "Shift-Up/Dn",
                             "Ctrl+/",
                             "Backspace",
                             "Esc",
+                            "Esc/Ctrl-C",
                             "Tab/Enter",
                             "Ctrl-V",
                         ]
