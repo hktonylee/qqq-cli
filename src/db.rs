@@ -35,10 +35,49 @@ pub enum EditTransition<'a> {
         harness_name: Option<&'a str>,
     },
 }
-struct EditChanges<'a> {
-    transition: Option<EditTransition<'a>>,
-    parent: Option<ParentChange>,
-    priority: Option<i64>,
+#[derive(Default)]
+pub struct EditOptions<'a> {
+    pub transition: Option<EditTransition<'a>>,
+    pub parent: Option<ParentChange>,
+    pub priority: Option<i64>,
+    pub expected_revision: Option<i64>,
+}
+
+#[derive(Debug)]
+pub struct CurrentContent {
+    pub description: String,
+    pub revision: i64,
+}
+
+#[derive(Debug)]
+pub struct ContentConflict {
+    pub task_id: i64,
+    pub expected_revision: i64,
+    pub current: Option<CurrentContent>,
+}
+
+impl std::fmt::Display for ContentConflict {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match &self.current {
+            Some(current) => write!(
+                f,
+                "Content conflict for task {}: expected revision {}, current revision {}; save rejected",
+                self.task_id, self.expected_revision, current.revision
+            ),
+            None => write!(
+                f,
+                "Content conflict for task {}: task was removed; save rejected",
+                self.task_id
+            ),
+        }
+    }
+}
+
+impl std::error::Error for ContentConflict {}
+
+pub struct ContentSnapshot {
+    pub task: Task,
+    pub references: Vec<ImageReference>,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -66,6 +105,7 @@ impl std::str::FromStr for ParentChange {
 pub struct Task {
     pub id: i64,
     pub description: String,
+    pub content_revision: i64,
     pub status: String,
     pub priority: i64,
     pub archived: bool,
@@ -91,6 +131,7 @@ pub(crate) fn task_row(r: &rusqlite::Row<'_>) -> rusqlite::Result<Task> {
     Ok(Task {
         id: r.get(0)?,
         description: r.get(1)?,
+        content_revision: r.get(13)?,
         status: r.get(2)?,
         priority: r.get(11)?,
         archived: r.get(12)?,
@@ -254,11 +295,11 @@ impl Db {
         conn.pragma_update(None, "foreign_keys", "ON")?;
         let version: i64 = conn.pragma_query_value(None, "user_version", |r| r.get(0))?;
         ensure!(
-            (1..=9).contains(&version) || (init && version == 0),
+            (1..=10).contains(&version) || (init && version == 0),
             "Unsupported database schema version {version}"
         );
         ensure_description_schema(&conn)?;
-        if version < 9 {
+        if version < 10 {
             // Rebuild CHECK constraints without changing references to tasks.
             // SQLite requires foreign_keys to change outside a transaction.
             let disable_foreign_keys = version < 6;
@@ -271,7 +312,7 @@ impl Db {
             // Another CLI may have migrated while we waited for the write lock.
             let version: i64 = tx.pragma_query_value(None, "user_version", |r| r.get(0))?;
             ensure!(
-                (1..=9).contains(&version) || (init && version == 0),
+                (1..=10).contains(&version) || (init && version == 0),
                 "Unsupported database schema version {version}"
             );
             ensure_description_schema(&tx)?;
@@ -327,6 +368,9 @@ impl Db {
             if version < 9 {
                 tx.execute_batch(include_str!("sql/migrate_v9.sql"))?;
             }
+            if version < 10 {
+                tx.execute_batch(include_str!("sql/migrate_v10.sql"))?;
+            }
             commit_with_files(tx, &mut pending)?;
             if disable_foreign_keys {
                 conn.pragma_update(None, "foreign_keys", "ON")?;
@@ -339,13 +383,23 @@ impl Db {
         }
         let version: i64 = conn.pragma_query_value(None, "user_version", |r| r.get(0))?;
         ensure!(
-            version == 9,
+            version == 10,
             "Unsupported database schema version {version}"
         );
         Ok((Self { conn, image_store }, path))
     }
     pub fn task(&self, id: i64) -> Result<Task> {
-        self.conn.query_row("SELECT id,description,status,claim_key,created_at,updated_at,parent_id,harness_name,harness_session,orchestrator_name,orchestrator_session,priority,archived FROM tasks WHERE id=?",[id],task_row).optional()?.with_context(||format!("Task {id} not found"))
+        self.conn.query_row("SELECT id,description,status,claim_key,created_at,updated_at,parent_id,harness_name,harness_session,orchestrator_name,orchestrator_session,priority,archived,content_revision FROM tasks WHERE id=?",[id],task_row).optional()?.with_context(||format!("Task {id} not found"))
+    }
+    pub fn content_snapshot(&self, id: i64) -> Result<ContentSnapshot> {
+        let tx = self.conn.unchecked_transaction()?;
+        let task = tx.query_row(
+            "SELECT id,description,status,claim_key,created_at,updated_at,parent_id,harness_name,harness_session,orchestrator_name,orchestrator_session,priority,archived,content_revision FROM tasks WHERE id=?",
+            [id], task_row,
+        ).optional()?.with_context(|| format!("Task {id} not found"))?;
+        let references = Self::image_references_from(&tx, id)?;
+        tx.commit()?;
+        Ok(ContentSnapshot { task, references })
     }
     pub fn set_archived(&mut self, id: i64, archived: bool, actor: &str) -> Result<Task> {
         nonempty(actor, "Actor")?;
@@ -354,7 +408,7 @@ impl Db {
             .transaction_with_behavior(TransactionBehavior::Immediate)?;
         let task = tx
             .query_row(
-                "SELECT id,description,status,claim_key,created_at,updated_at,parent_id,harness_name,harness_session,orchestrator_name,orchestrator_session,priority,archived FROM tasks WHERE id=?",
+                "SELECT id,description,status,claim_key,created_at,updated_at,parent_id,harness_name,harness_session,orchestrator_name,orchestrator_session,priority,archived,content_revision FROM tasks WHERE id=?",
                 [id],
                 task_row,
             )
@@ -394,7 +448,7 @@ impl Db {
             params![id, actor, if archived { "archive" } else { "unarchive" }],
         )?;
         let task = tx.query_row(
-            "SELECT id,description,status,claim_key,created_at,updated_at,parent_id,harness_name,harness_session,orchestrator_name,orchestrator_session,priority,archived FROM tasks WHERE id=?",
+            "SELECT id,description,status,claim_key,created_at,updated_at,parent_id,harness_name,harness_session,orchestrator_name,orchestrator_session,priority,archived,content_revision FROM tasks WHERE id=?",
             [id],
             task_row,
         )?;
@@ -455,7 +509,7 @@ impl Db {
                 params![description, id],
             )?;
         }
-        let task = tx.query_row("SELECT id,description,status,claim_key,created_at,updated_at,parent_id,harness_name,harness_session,orchestrator_name,orchestrator_session,priority,archived FROM tasks WHERE id=?", [id], task_row)?;
+        let task = tx.query_row("SELECT id,description,status,claim_key,created_at,updated_at,parent_id,harness_name,harness_session,orchestrator_name,orchestrator_session,priority,archived,content_revision FROM tasks WHERE id=?", [id], task_row)?;
         commit_with_files(tx, &mut pending)?;
         Ok(task)
     }
@@ -500,21 +554,34 @@ impl Db {
         parent: Option<ParentChange>,
         priority: Option<i64>,
     ) -> Result<Task> {
+        self.edit_composition_guarded(id, draft, parent, priority, None)
+    }
+    pub fn edit_composition_guarded(
+        &mut self,
+        id: i64,
+        draft: &crate::tui::draft::Composition,
+        parent: Option<ParentChange>,
+        priority: Option<i64>,
+        expected_revision: Option<i64>,
+    ) -> Result<Task> {
         self.edit_with_spans(
             id,
             Some(&draft.description),
             &draft.images,
             &draft.image_spans,
-            EditChanges {
+            EditOptions {
                 transition: None,
                 parent,
                 priority,
+                expected_revision,
             },
         )
     }
     pub fn image_references(&self, task_id: i64) -> Result<Vec<ImageReference>> {
-        Ok(self
-            .conn
+        Self::image_references_from(&self.conn, task_id)
+    }
+    fn image_references_from(conn: &Connection, task_id: i64) -> Result<Vec<ImageReference>> {
+        Ok(conn
             .prepare("SELECT id,name,media_type FROM images WHERE task_id=? ORDER BY id")?
             .query_map([task_id], |row| {
                 Ok(ImageReference {
@@ -534,7 +601,7 @@ impl Db {
         include_archived: bool,
     ) -> Result<Vec<Task>> {
         Ok(self.conn.prepare(
-            "SELECT id,description,status,claim_key,created_at,updated_at,parent_id,harness_name,harness_session,orchestrator_name,orchestrator_session,priority,archived FROM tasks
+            "SELECT id,description,status,claim_key,created_at,updated_at,parent_id,harness_name,harness_session,orchestrator_name,orchestrator_session,priority,archived,content_revision FROM tasks
              WHERE (?2 OR archived=0) AND (?1 IS NULL OR status!='completed' OR id IN (
                  SELECT id FROM tasks WHERE status='completed' AND (?2 OR archived=0)
                  ORDER BY (SELECT MAX(id) FROM events WHERE task_id=tasks.id AND action='complete') DESC,
@@ -560,7 +627,7 @@ impl Db {
         let limit = filter.params().len() + 1;
         let archive = limit + 1;
         let sql = format!(
-            "SELECT id,description,status,claim_key,created_at,updated_at,parent_id,harness_name,harness_session,orchestrator_name,orchestrator_session,priority,archived,({predicate}) FROM tasks
+            "SELECT id,description,status,claim_key,created_at,updated_at,parent_id,harness_name,harness_session,orchestrator_name,orchestrator_session,priority,archived,content_revision,({predicate}) FROM tasks
              WHERE (?{archive} OR archived=0) AND (?{limit} IS NULL OR status!='completed' OR id IN (
                  SELECT id FROM tasks WHERE status='completed' AND (?{archive} OR archived=0)
                  ORDER BY (SELECT MAX(id) FROM events WHERE task_id=tasks.id AND action='complete') DESC,
@@ -576,7 +643,7 @@ impl Db {
         values.push(rusqlite::types::Value::Integer(i64::from(include_archived)));
         let mut statement = self.conn.prepare(&sql)?;
         let rows = statement.query_map(params_from_iter(values.iter()), |row| {
-            Ok((task_row(row)?, row.get::<_, bool>(13)?))
+            Ok((task_row(row)?, row.get::<_, bool>(14)?))
         })?;
         let mut tasks = Vec::new();
         let mut matches = HashSet::new();
@@ -613,17 +680,26 @@ impl Db {
         parent: Option<ParentChange>,
         priority: Option<i64>,
     ) -> Result<Task> {
-        self.edit_with_spans(
+        self.edit_guarded(
             id,
             description,
             images,
-            &[],
-            EditChanges {
+            EditOptions {
                 transition,
                 parent,
                 priority,
+                expected_revision: None,
             },
         )
+    }
+    pub fn edit_guarded(
+        &mut self,
+        id: i64,
+        description: Option<&str>,
+        images: &[ImageInput],
+        options: EditOptions<'_>,
+    ) -> Result<Task> {
+        self.edit_with_spans(id, description, images, &[], options)
     }
     fn edit_with_spans(
         &mut self,
@@ -631,12 +707,13 @@ impl Db {
         description: Option<&str>,
         images: &[ImageInput],
         image_spans: &[Range<usize>],
-        changes: EditChanges<'_>,
+        changes: EditOptions<'_>,
     ) -> Result<Task> {
-        let EditChanges {
+        let EditOptions {
             transition,
             parent,
             priority,
+            expected_revision,
         } = changes;
         if let Some(description) = description {
             nonempty(description, "Description")?;
@@ -650,6 +727,29 @@ impl Db {
         let tx = self
             .conn
             .transaction_with_behavior(TransactionBehavior::Immediate)?;
+        if let Some(expected_revision) = expected_revision {
+            ensure!(expected_revision > 0, "Expected revision must be positive");
+            let current = tx
+                .query_row(
+                    "SELECT description,content_revision FROM tasks WHERE id=?",
+                    [id],
+                    |row| {
+                        Ok(CurrentContent {
+                            description: row.get(0)?,
+                            revision: row.get(1)?,
+                        })
+                    },
+                )
+                .optional()?;
+            if current.as_ref().map(|content| content.revision) != Some(expected_revision) {
+                return Err(ContentConflict {
+                    task_id: id,
+                    expected_revision,
+                    current,
+                }
+                .into());
+            }
+        }
         let mut pending = PendingFiles::new();
         if let Some(parent) = parent {
             let parent_id = match parent {
@@ -760,7 +860,7 @@ impl Db {
             )?;
         }
         let task = tx.query_row(
-            "SELECT id,description,status,claim_key,created_at,updated_at,parent_id,harness_name,harness_session,orchestrator_name,orchestrator_session,priority,archived FROM tasks WHERE id=?",
+            "SELECT id,description,status,claim_key,created_at,updated_at,parent_id,harness_name,harness_session,orchestrator_name,orchestrator_session,priority,archived,content_revision FROM tasks WHERE id=?",
             [id], task_row,
         )?;
         commit_with_files(tx, &mut pending)?;
@@ -902,7 +1002,7 @@ impl Db {
     ) -> Result<Option<Task>> {
         let session = self.resolve_owner(session, harness_name)?;
         Ok(self.conn.query_row(
-            "SELECT id,description,status,claim_key,created_at,updated_at,parent_id,harness_name,harness_session,orchestrator_name,orchestrator_session,priority,archived FROM tasks WHERE status='in_progress' AND claim_key=?",
+            "SELECT id,description,status,claim_key,created_at,updated_at,parent_id,harness_name,harness_session,orchestrator_name,orchestrator_session,priority,archived,content_revision FROM tasks WHERE status='in_progress' AND claim_key=?",
             [session], task_row,
         ).optional()?)
     }
@@ -946,7 +1046,7 @@ impl Db {
             .transaction_with_behavior(TransactionBehavior::Deferred)?;
         let id = Self::ready_task_id(&tx, filter)?;
         let task = id.map(|id| tx.query_row(
-            "SELECT id,description,status,claim_key,created_at,updated_at,parent_id,harness_name,harness_session,orchestrator_name,orchestrator_session,priority,archived FROM tasks WHERE id=?",
+            "SELECT id,description,status,claim_key,created_at,updated_at,parent_id,harness_name,harness_session,orchestrator_name,orchestrator_session,priority,archived,content_revision FROM tasks WHERE id=?",
             [id], task_row,
         )).transpose()?;
         tx.commit()?;
@@ -1049,7 +1149,7 @@ impl Db {
                 Self::save_link(&tx, id, link)?;
             }
             let mut identity = if owned.is_some() {
-                tx.query_row("SELECT id,description,status,claim_key,created_at,updated_at,parent_id,harness_name,harness_session,orchestrator_name,orchestrator_session,priority,archived FROM tasks WHERE id=?", [id], task_row)?.identity
+                tx.query_row("SELECT id,description,status,claim_key,created_at,updated_at,parent_id,harness_name,harness_session,orchestrator_name,orchestrator_session,priority,archived,content_revision FROM tasks WHERE id=?", [id], task_row)?.identity
             } else {
                 metadata
                     .cloned()
@@ -1059,7 +1159,7 @@ impl Db {
             Self::save_identity(&tx, id, &identity)?;
         }
         let task = id.map(|id| tx.query_row(
-            "SELECT id,description,status,claim_key,created_at,updated_at,parent_id,harness_name,harness_session,orchestrator_name,orchestrator_session,priority,archived FROM tasks WHERE id=?",
+            "SELECT id,description,status,claim_key,created_at,updated_at,parent_id,harness_name,harness_session,orchestrator_name,orchestrator_session,priority,archived,content_revision FROM tasks WHERE id=?",
             [id], task_row,
         )).transpose()?;
         tx.commit()?;
@@ -1077,7 +1177,7 @@ impl Db {
             params![id, session],
         )?;
         let task = tx.query_row(
-            "SELECT id,description,status,claim_key,created_at,updated_at,parent_id,harness_name,harness_session,orchestrator_name,orchestrator_session,priority,archived FROM tasks WHERE id=?",
+            "SELECT id,description,status,claim_key,created_at,updated_at,parent_id,harness_name,harness_session,orchestrator_name,orchestrator_session,priority,archived,content_revision FROM tasks WHERE id=?",
             [id], task_row,
         )?;
         tx.commit()?;
@@ -1090,7 +1190,7 @@ impl Db {
             .transaction_with_behavior(TransactionBehavior::Immediate)?;
         let task = tx
             .query_row(
-                "SELECT id,description,status,claim_key,created_at,updated_at,parent_id,harness_name,harness_session,orchestrator_name,orchestrator_session,priority,archived FROM tasks WHERE id=?",
+                "SELECT id,description,status,claim_key,created_at,updated_at,parent_id,harness_name,harness_session,orchestrator_name,orchestrator_session,priority,archived,content_revision FROM tasks WHERE id=?",
                 [id],
                 task_row,
             )
@@ -1113,7 +1213,7 @@ impl Db {
             params![id, actor],
         )?;
         let task = tx.query_row(
-            "SELECT id,description,status,claim_key,created_at,updated_at,parent_id,harness_name,harness_session,orchestrator_name,orchestrator_session,priority,archived FROM tasks WHERE id=?",
+            "SELECT id,description,status,claim_key,created_at,updated_at,parent_id,harness_name,harness_session,orchestrator_name,orchestrator_session,priority,archived,content_revision FROM tasks WHERE id=?",
             [id],
             task_row,
         )?;

@@ -145,6 +145,7 @@ mod tests {
     fn task() -> Task {
         Task {
             id: 4,
+            content_revision: 1,
             description: "Full editable description".into(),
             status: "in_progress".into(),
             priority: 8,

@@ -108,6 +108,19 @@ ID. `list` stays in ID/dependency order. Editing priority on active, completed,
 or error tasks keeps status and ownership metadata; an already-owned task still
 returns to its owner before new claims.
 
+Task JSON exposes positive `content_revision`. Description or image changes
+advance it; messages, status, ownership, priority and dependency changes do not.
+Use loaded revision to reject stale direct edits:
+
+```sh
+qqq show 1 --json                    # task.content_revision
+qqq edit 1 --description "Updated details" --expected-revision 3
+```
+
+A stale revision rejects the whole edit, including supplied metadata and images.
+Direct edits without `--expected-revision` retain unconditional-save behavior.
+An identical description save leaves content revision unchanged.
+
 ## Archive and unarchive
 
 ```sh
@@ -193,6 +206,21 @@ qqq edit 1 --edit --description "Prefilled draft"
 Built-in add/edit editor uses stderr; stdout holds result on exit. Cancelling
 draft keeps earlier saves. Direct edits preserve omitted fields, ownership and
 attachments.
+
+External edits automatically guard the revision loaded before `$EDITOR` opens.
+On conflict, qqq shows paths to complete local text and current DB text, plus
+current revision. Pending image bytes are copied beside local draft; an
+`attachments.json` file lists their names and recovery paths. Newer DB content
+and stored images stay intact.
+
+With terminal input, `r` reloads DB text after discard confirmation, `o` saves
+local text after overwrite confirmation, and `k` keeps recovery files and exits
+with failure. Reload discards pending local images. Overwrite checks the displayed
+revision again; another concurrent edit causes another conflict. Without terminal
+input, qqq exits with failure and keeps recovery files. Review local/current
+files, then retry with `--description` and `--expected-revision` for the current
+revision; use `--image` with recovered attachment paths if needed. A removed
+task keeps local draft and is never recreated by save.
 
 ## Task TUI
 

@@ -172,6 +172,216 @@ fn run_json(dir: &Path, args: &[&str]) -> Value {
 }
 
 #[test]
+fn guarded_content_save_rejects_stale_text_and_images_atomically() {
+    let dir = project();
+    let p = dir.path();
+    let loaded = run_json(p, &["add", "Original\nFull description"]);
+    let revision = loaded["content_revision"].as_i64().unwrap();
+    assert!(revision > 0);
+    run_json(p, &["add", "Parent"]);
+    run_json(p, &["next", "--session", "owner"]);
+    let newer = run_json(p, &["edit", "1", "-d", "Newer\nComplete content"]);
+    assert!(newer["content_revision"].as_i64().unwrap() > revision);
+    let image = p.join("local.png");
+    fs::write(&image, b"\x89PNG\r\n\x1a\nlocal bytes").unwrap();
+    let before = run_json(p, &["show", "1"]);
+    let output = command(p)
+        .args([
+            "edit",
+            "1",
+            "-d",
+            "Stale local",
+            "--expected-revision",
+            &revision.to_string(),
+            "--image",
+            image.to_str().unwrap(),
+            "--priority",
+            "50",
+            "--set-parent",
+            "2",
+            "--set-status",
+            "error",
+            "--reason",
+            "Should roll back",
+            "--session",
+            "owner",
+        ])
+        .output()
+        .unwrap();
+    assert_eq!(output.status.code(), Some(1));
+    assert!(String::from_utf8_lossy(&output.stderr).contains("Content conflict"));
+    assert!(output.stdout.is_empty());
+    assert_eq!(run_json(p, &["show", "1"]), before);
+    assert!(!p.join(".qqq/images/1").exists());
+    let saved = run_json(
+        p,
+        &[
+            "edit",
+            "1",
+            "-d",
+            "Explicit replacement",
+            "--expected-revision",
+            &newer["content_revision"].as_i64().unwrap().to_string(),
+            "--image",
+            image.to_str().unwrap(),
+        ],
+    );
+    assert!(
+        saved["content_revision"].as_i64().unwrap() > newer["content_revision"].as_i64().unwrap()
+    );
+    assert_eq!(
+        fs::read(p.join(".qqq/images/1/1.png")).unwrap(),
+        fs::read(image).unwrap()
+    );
+}
+
+#[test]
+fn guarded_content_save_ignores_operational_changes_and_noop_text() {
+    let dir = project();
+    let p = dir.path();
+    let loaded = run_json(p, &["add", "Original"]);
+    let revision = loaded["content_revision"].as_i64().unwrap();
+    run_json(p, &["message", "1", "Progress"]);
+    run_json(p, &["next", "--session", "owner"]);
+    run_json(p, &["edit", "1", "--priority", "10"]);
+    run_json(p, &["complete", "1", "--session", "owner"]);
+    let unchanged = run_json(
+        p,
+        &[
+            "edit",
+            "1",
+            "-d",
+            "Original",
+            "--expected-revision",
+            &revision.to_string(),
+        ],
+    );
+    assert_eq!(unchanged["content_revision"], revision);
+    let changed = run_json(
+        p,
+        &[
+            "edit",
+            "1",
+            "-d",
+            "Updated",
+            "--expected-revision",
+            &revision.to_string(),
+        ],
+    );
+    assert!(changed["content_revision"].as_i64().unwrap() > revision);
+    assert_eq!(changed["status"], "completed");
+    assert_eq!(
+        run_json(p, &["show", "1"])["messages"][0]["body"],
+        "Progress"
+    );
+}
+
+#[test]
+fn external_editor_conflict_keeps_current_and_local_text_and_image_bytes() {
+    let dir = project();
+    let p = dir.path();
+    run_json(p, &["add", "Original\nDetails"]);
+    let image = p.join("pending.png");
+    fs::write(&image, b"\x89PNG\r\n\x1a\npending bytes").unwrap();
+    let editor = editor(
+        p,
+        r#"
+printf '%s' "$2" > edited-path
+"$QQQ_EDITOR_BINARY" --json edit 1 -d 'Newer DB text' > newer.json
+printf 'Local text\nAll details\n' > "$2"
+rm pending.png
+"#,
+    );
+    let output = command(p)
+        .args(["edit", "1", "--image", image.to_str().unwrap(), "--edit"])
+        .env("EDITOR", editor)
+        .env("QQQ_EDITOR_BINARY", env!("CARGO_BIN_EXE_qqq"))
+        .output()
+        .unwrap();
+    assert_eq!(output.status.code(), Some(1));
+    let error = String::from_utf8_lossy(&output.stderr);
+    assert!(error.contains("Content conflict"), "{error}");
+    assert!(output.stdout.is_empty());
+    assert_eq!(
+        run_json(p, &["show", "1"])["task"]["description"],
+        "Newer DB text"
+    );
+    assert_eq!(run_json(p, &["show", "1"])["images"], serde_json::json!([]));
+    let draft = fs::read_to_string(p.join("edited-path")).unwrap();
+    let draft = Path::new(&draft);
+    assert_eq!(
+        fs::read_to_string(draft).unwrap(),
+        "Local text\nAll details\n"
+    );
+    let recovery = draft.parent().unwrap();
+    assert_eq!(
+        fs::read_to_string(recovery.join("current.txt")).unwrap(),
+        "Newer DB text"
+    );
+    let attachments: Value =
+        serde_json::from_slice(&fs::read(recovery.join("attachments.json")).unwrap()).unwrap();
+    assert_eq!(attachments[0]["name"], "pending.png");
+    assert_eq!(
+        fs::read(attachments[0]["path"].as_str().unwrap()).unwrap(),
+        b"\x89PNG\r\n\x1a\npending bytes"
+    );
+    assert!(error.contains(&draft.display().to_string()));
+    fs::remove_dir_all(recovery).unwrap();
+}
+
+#[test]
+fn external_editor_removal_keeps_local_draft_without_recreating_task() {
+    let dir = project();
+    let p = dir.path();
+    run_json(p, &["add", "Original"]);
+    let editor = editor(
+        p,
+        r#"
+printf '%s' "$2" > edited-path
+"$QQQ_EDITOR_BINARY" --json archive 1 > /dev/null
+"$QQQ_EDITOR_BINARY" --json delete 1 --yes > /dev/null
+printf 'Local text survives removal\n' > "$2"
+"#,
+    );
+    let output = command(p)
+        .args(["edit", "1"])
+        .env("EDITOR", editor)
+        .env("QQQ_EDITOR_BINARY", env!("CARGO_BIN_EXE_qqq"))
+        .output()
+        .unwrap();
+    assert_eq!(output.status.code(), Some(1));
+    assert!(String::from_utf8_lossy(&output.stderr).contains("removed"));
+    let path = fs::read_to_string(p.join("edited-path")).unwrap();
+    assert_eq!(
+        fs::read_to_string(&path).unwrap(),
+        "Local text survives removal\n"
+    );
+    assert_eq!(run_json(p, &["list"]), serde_json::json!([]));
+    fs::remove_dir_all(Path::new(&path).parent().unwrap()).unwrap();
+}
+
+#[test]
+fn external_editor_conflict_requires_confirmed_reload_or_overwrite() {
+    for scenario in ["reload", "overwrite"] {
+        let output = Command::new("python3")
+            .arg(concat!(
+                env!("CARGO_MANIFEST_DIR"),
+                "/tests/editor_conflict_pty.py"
+            ))
+            .arg(env!("CARGO_BIN_EXE_qqq"))
+            .arg(scenario)
+            .output()
+            .unwrap();
+        assert!(
+            output.status.success(),
+            "{}\n{}",
+            String::from_utf8_lossy(&output.stdout),
+            String::from_utf8_lossy(&output.stderr)
+        );
+    }
+}
+
+#[test]
 fn edit_arguments_replace_body_and_preserve_task_metadata() {
     let dir = project();
     let p = dir.path();

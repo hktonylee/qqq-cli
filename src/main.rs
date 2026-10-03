@@ -150,6 +150,9 @@ enum Commands {
         id: i64,
         #[arg(short, long)]
         description: Option<String>,
+        /// Reject save if description or attachments changed since this content revision.
+        #[arg(long, value_parser = clap::value_parser!(i64).range(1..))]
+        expected_revision: Option<i64>,
         /// Force $EDITOR with supplied fields prefilled, including attachment edits.
         #[arg(short, long, conflicts_with_all = ["set_status", "set_pending"])]
         edit: bool,
@@ -451,6 +454,7 @@ fn execute(
         Commands::Edit {
             id,
             description,
+            expected_revision,
             edit,
             set_status,
             set_pending,
@@ -482,15 +486,43 @@ fn execute(
                     && priority.is_none()
                     && images.is_empty())
             {
-                let description = description.as_deref().unwrap_or(&task.description);
-                let mut outcome = editor::compose_existing(description, edit, id, &db)?;
-                outcome.composition.images.extend(images);
-                json!(db.edit_composition_with_priority(
-                    id,
-                    &outcome.composition,
-                    set_parent,
-                    priority
-                )?)
+                let snapshot = db.content_snapshot(id)?;
+                if let Some(expected) = expected_revision {
+                    if expected != snapshot.task.content_revision {
+                        return Err(db::ContentConflict {
+                            task_id: id,
+                            expected_revision: expected,
+                            current: Some(db::CurrentContent {
+                                description: snapshot.task.description,
+                                revision: snapshot.task.content_revision,
+                            }),
+                        }
+                        .into());
+                    }
+                }
+                if editor::uses_builtin(edit) {
+                    let description = description.as_deref().unwrap_or(&snapshot.task.description);
+                    let mut outcome = tui::compose_existing(description, id, &snapshot.references)?;
+                    outcome.composition.images.extend(images);
+                    json!(db.edit_composition_guarded(
+                        id,
+                        &outcome.composition,
+                        set_parent,
+                        priority,
+                        Some(snapshot.task.content_revision),
+                    )?)
+                } else {
+                    json!(editor::edit_external(
+                        &mut db,
+                        snapshot,
+                        editor::ExternalEdit {
+                            description: description.as_deref(),
+                            images: &images,
+                            parent: set_parent,
+                            priority,
+                        }
+                    )?)
+                }
             } else {
                 ensure!(
                     reason.is_none() || matches!(set_status, Some(EditStatus::Error)),
@@ -534,13 +566,16 @@ fn execute(
                     }),
                     None => None,
                 };
-                json!(db.edit_with_priority(
+                json!(db.edit_guarded(
                     id,
                     description.as_deref(),
-                    transition,
                     &images,
-                    set_parent,
-                    priority
+                    db::EditOptions {
+                        transition,
+                        parent: set_parent,
+                        priority,
+                        expected_revision,
+                    }
                 )?)
             }
         }

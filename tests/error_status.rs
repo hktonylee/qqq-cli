@@ -332,7 +332,7 @@ fn v3_migration_preserves_data_sequences_constraints_and_foreign_keys() {
     assert_eq!(
         conn.pragma_query_value(None, "user_version", |r| r.get::<_, i64>(0))
             .unwrap(),
-        9
+        10
     );
     assert_eq!(ok(&d, &["add", "After deleted ID"])["id"], 100);
     fail(&d, "1", "legacy");

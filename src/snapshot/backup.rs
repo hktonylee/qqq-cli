@@ -172,7 +172,7 @@ pub(crate) fn validate_database(path: &Path) -> Result<i64> {
     );
     let version: i64 = conn.pragma_query_value(None, "user_version", |row| row.get(0))?;
     ensure!(
-        version == 9,
+        version == 10,
         "Unsupported snapshot database schema version {version}"
     );
     Ok(conn.query_row("SELECT count(*) FROM tasks", [], |row| row.get(0))?)

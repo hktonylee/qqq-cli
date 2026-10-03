@@ -168,7 +168,7 @@ pub fn run() -> Result<Value> {
             return finish_report(report, &db_path);
         }
     };
-    if report.schema_version != Some(9) {
+    if report.schema_version != Some(10) {
         report.issue(
             "DB_SCHEMA",
             &db_path,

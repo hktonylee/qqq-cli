@@ -46,6 +46,8 @@ fn database() -> (Db, tempfile::TempDir) {
         .unwrap();
     conn.execute_batch(include_str!("../src/sql/migrate_v9.sql"))
         .unwrap();
+    conn.execute_batch(include_str!("../src/sql/migrate_v10.sql"))
+        .unwrap();
     (
         Db {
             conn,
@@ -63,6 +65,163 @@ fn composition() -> Composition {
         }],
         image_spans: Vec::new(),
     }
+}
+
+#[test]
+fn loaded_compositions_conflict_without_losing_local_paste_or_image_payloads() {
+    let (mut db, dir) = database();
+    let task = db.add("Original", None, &[]).unwrap();
+    let first = db.content_snapshot(task.id).unwrap();
+    let second = db.content_snapshot(task.id).unwrap();
+    let mut local = Draft::from_saved(&first.task.description, task.id, &first.references).unwrap();
+    local.paste(&"Full\nmultiline\npaste\n".repeat(70));
+    local
+        .image(ImageInput {
+            name: "local.png".into(),
+            data: b"\x89PNG\r\n\x1a\nlocal".to_vec(),
+        })
+        .unwrap();
+    let composition = local.finish().unwrap();
+    let external = Draft::new("Newer content").finish().unwrap();
+    db.edit_composition_guarded(
+        task.id,
+        &external,
+        None,
+        None,
+        Some(second.task.content_revision),
+    )
+    .unwrap();
+    let before = db.show(task.id).unwrap();
+    let error = db
+        .edit_composition_guarded(
+            task.id,
+            &composition,
+            None,
+            None,
+            Some(first.task.content_revision),
+        )
+        .err()
+        .unwrap();
+    let conflict = error.downcast_ref::<db::ContentConflict>().unwrap();
+    assert_eq!(
+        conflict.current.as_ref().unwrap().description,
+        "Newer content"
+    );
+    assert_eq!(db.show(task.id).unwrap(), before);
+    assert!(!dir.path().join("images/1").exists());
+    assert!(composition.description.contains("Full\nmultiline\npaste"));
+    assert_eq!(composition.images[0].data, b"\x89PNG\r\n\x1a\nlocal");
+    let saved = db
+        .edit_composition_guarded(
+            task.id,
+            &composition,
+            None,
+            None,
+            Some(conflict.current.as_ref().unwrap().revision),
+        )
+        .unwrap();
+    assert!(saved.description.contains("pasteboard"));
+    assert!(saved.description.contains(".qqq/images/1/1.png"));
+    assert_eq!(
+        std::fs::read(dir.path().join("images/1/1.png")).unwrap(),
+        composition.images[0].data
+    );
+}
+
+#[test]
+fn attachment_changes_invalidate_snapshots_even_when_text_is_unchanged() {
+    let (mut db, _dir) = database();
+    let task = db.add("Same text", None, &[]).unwrap();
+    let original = db.content_snapshot(task.id).unwrap();
+    let attached = db
+        .edit(task.id, None, None, &composition().images, None)
+        .unwrap();
+    assert!(attached.content_revision > original.task.content_revision);
+    let snapshot = db.content_snapshot(task.id).unwrap();
+    assert_eq!(snapshot.references.len(), 1);
+    assert_eq!(snapshot.task.description, original.task.description);
+    assert!(
+        db.edit_composition_guarded(
+            task.id,
+            &Draft::new("Local").finish().unwrap(),
+            None,
+            None,
+            Some(original.task.content_revision)
+        )
+        .is_err()
+    );
+    db.conn
+        .execute(
+            "UPDATE images SET name='renamed.png' WHERE task_id=?",
+            [task.id],
+        )
+        .unwrap();
+    let renamed = db.task(task.id).unwrap();
+    assert!(renamed.content_revision > attached.content_revision);
+    db.conn
+        .execute("DELETE FROM images WHERE task_id=?", [task.id])
+        .unwrap();
+    assert!(db.task(task.id).unwrap().content_revision > renamed.content_revision);
+}
+
+#[test]
+fn removed_task_rejects_guarded_save_before_creating_images() {
+    let (mut db, dir) = database();
+    let task = db.add("Original", None, &[]).unwrap();
+    db.conn
+        .execute("DELETE FROM tasks WHERE id=?", [task.id])
+        .unwrap();
+    let local = composition();
+    let error = db
+        .edit_composition_guarded(task.id, &local, None, None, Some(task.content_revision))
+        .err()
+        .unwrap();
+    let conflict = error.downcast_ref::<db::ContentConflict>().unwrap();
+    assert!(conflict.current.is_none());
+    assert!(db.list(None).unwrap().is_empty());
+    assert!(!dir.path().join("images/1").exists());
+    assert_eq!(local.images.len(), 1);
+}
+
+#[test]
+fn content_snapshots_never_mix_text_and_attachment_revisions() {
+    let (mut db, dir) = database();
+    db.conn
+        .busy_timeout(std::time::Duration::from_secs(5))
+        .unwrap();
+    db.add("0", None, &[]).unwrap();
+    let path = dir.path().join("qqq.db");
+    let writer = std::thread::spawn(move || {
+        let mut conn = rusqlite::Connection::open(path).unwrap();
+        conn.busy_timeout(std::time::Duration::from_secs(5))
+            .unwrap();
+        for index in 1..=80 {
+            let tx = conn
+                .transaction_with_behavior(rusqlite::TransactionBehavior::Immediate)
+                .unwrap();
+            tx.execute(
+                "UPDATE tasks SET description=? WHERE id=1",
+                [index.to_string()],
+            )
+            .unwrap();
+            tx.execute(
+                "INSERT INTO images(task_id,name,media_type,bytes) VALUES (1,?,'image/png',8)",
+                [index.to_string()],
+            )
+            .unwrap();
+            tx.commit().unwrap();
+        }
+    });
+    for _ in 0..200 {
+        let snapshot = db.content_snapshot(1).unwrap();
+        let index: usize = snapshot.task.description.parse().unwrap();
+        assert_eq!(snapshot.references.len(), index);
+        assert_eq!(snapshot.task.content_revision, 1 + 2 * index as i64);
+        if let Some(reference) = snapshot.references.last() {
+            assert_eq!(reference.name, snapshot.task.description);
+        }
+    }
+    writer.join().unwrap();
 }
 
 #[test]

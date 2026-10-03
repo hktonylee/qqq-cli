@@ -13,7 +13,7 @@ use std::{
 };
 
 const STAGING_DIR: &str = ".delete-staging";
-const TASK_COLUMNS: &str = "id,description,status,claim_key,created_at,updated_at,parent_id,harness_name,harness_session,orchestrator_name,orchestrator_session,priority,archived";
+const TASK_COLUMNS: &str = "id,description,status,claim_key,created_at,updated_at,parent_id,harness_name,harness_session,orchestrator_name,orchestrator_session,priority,archived,content_revision";
 
 #[derive(Serialize)]
 pub struct DeleteReport {
@@ -77,7 +77,7 @@ pub fn preview_cli(id: i64) -> Result<DeleteReport> {
     conn.pragma_update(None, "query_only", "ON")?;
     let version: i64 = conn.pragma_query_value(None, "user_version", |row| row.get(0))?;
     ensure!(
-        version == 9,
+        version == 10,
         "Database schema version {version} needs migration; run qqq list before preview"
     );
     Ok(plan(&conn, &db_path, id)?.report)
