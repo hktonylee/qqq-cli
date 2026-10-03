@@ -1,6 +1,6 @@
 # Next Dry Run Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task inline. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task inline. Steps use checkbox (`- [x]`) syntax for tracking.
 
 **Goal:** Preview next task without claiming or dispatching it.
 
@@ -14,7 +14,7 @@
 
 **Files:** Modify `tests/cli.rs`.
 
-- [ ] Add failing CLI regressions using existing `project`, `ok`, `run` helpers:
+- [x] Add failing CLI regressions using existing `project`, `ok`, `run` helpers:
 
 ```rust
 #[test]
@@ -59,13 +59,13 @@ fn next_dry_run_skips_owned_task_and_keeps_queue_without_writes() {
 }
 ```
 
-- [ ] Run `cargo test --locked --test cli next_dry_run`; expect Clap rejection of unknown `--dry-run`.
+- [x] Run `cargo test --locked --test cli next_dry_run`; expect Clap rejection of unknown `--dry-run`.
 
 ### Task 2: Share ready selection, add read-only DB path and CLI routing
 
 **Files:** Modify `src/db.rs`, `src/main.rs`.
 
-- [ ] Extract ready-candidate query into DB helper:
+- [x] Extract ready-candidate query into DB helper:
 
 ```rust
 fn ready_task_id(conn: &Connection, filter: Option<&CompiledFilter>) -> Result<Option<i64>> {
@@ -90,7 +90,7 @@ pub fn peek_next_filtered(&mut self, filter: Option<&CompiledFilter>) -> Result<
 
 Replace only `None if allow_new` candidate-query branch in `claim` with `Self::ready_task_id(&tx, filter)?`. Keep existing owned query, immediate transaction, all mutation/identity/link handling unchanged.
 
-- [ ] Add Clap flag inside `Commands::Next`:
+- [x] Add Clap flag inside `Commands::Next`:
 
 ```rust
 /// Preview queued candidate without claiming or returning an owned task.
@@ -98,7 +98,7 @@ Replace only `None if allow_new` candidate-query branch in `claim` with `Self::r
 dry_run: bool,
 ```
 
-- [ ] Make existing `next_owner` match apply only to normal next:
+- [x] Make existing `next_owner` match apply only to normal next:
 
 ```rust
 Commands::Next { local, dry_run: false, .. }
@@ -107,7 +107,7 @@ Commands::Next { local, dry_run: false, .. }
     }
 ```
 
-- [ ] Bind `dry_run` in next execution and wrap current claim/dispatch choice:
+- [x] Bind `dry_run` in next execution and wrap current claim/dispatch choice:
 
 ```rust
 let task = if dry_run {
@@ -122,7 +122,7 @@ let task = if dry_run {
 
 Retain return condition and 250ms wait after transaction ends. Update wait comment to include read snapshots.
 
-- [ ] Run `cargo test --locked --test cli next_dry_run`, `cargo fmt`, existing priority/filter/ownership/dispatch tests. Commit `[Feat] Preview Queued Task Without Claiming` after checks pass.
+- [x] Run `cargo test --locked --test cli next_dry_run`, `cargo fmt`, existing priority/filter/ownership/dispatch tests. Commit `[Feat] Preview Queued Task Without Claiming` after checks pass.
 
 ### Task 3: Cover wait, dispatch and empty/human output
 

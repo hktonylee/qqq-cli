@@ -35,6 +35,136 @@ fn project() -> TempDir {
     ok(d.path(), &["init"]);
     d
 }
+
+#[test]
+fn next_dry_run_previews_priority_filter_and_readiness_without_claim() {
+    let dir = project();
+    let p = dir.path();
+    ok(p, &["add", "Parent"]);
+    ok(p, &["add", "Blocked", "--parent", "1", "--priority", "100"]);
+    ok(p, &["add", "Archived", "--priority", "100"]);
+    ok(p, &["archive", "3"]);
+    ok(p, &["add", "Match first", "--priority", "5"]);
+    ok(p, &["add", "Match second", "--priority", "5"]);
+    ok(p, &["add", "Done", "--priority", "100"]);
+    ok(
+        p,
+        &[
+            "next",
+            "--local",
+            "--session",
+            "finished",
+            "--filter",
+            "id == 6",
+        ],
+    );
+    ok(p, &["complete", "6", "--session", "finished"]);
+    ok(p, &["add", "Failed", "--priority", "100"]);
+    ok(
+        p,
+        &[
+            "next",
+            "--local",
+            "--session",
+            "failed",
+            "--filter",
+            "id == 7",
+        ],
+    );
+    ok(
+        p,
+        &[
+            "edit",
+            "7",
+            "--set-status",
+            "error",
+            "--reason",
+            "Retry needed",
+            "--session",
+            "failed",
+        ],
+    );
+    let before = ok(p, &["list", "--include-archived"]);
+    let preview = ok(p, &["next", "--dry-run", "--local", "--session", "preview"]);
+    assert_eq!(preview["id"], 4);
+    assert_eq!(preview["status"], "new");
+    assert!(preview["harness_session"].is_null());
+    assert_eq!(ok(p, &["list", "--include-archived"]), before);
+    assert!(
+        ok(p, &["show", "4"])["events"]
+            .as_array()
+            .unwrap()
+            .is_empty()
+    );
+    assert_eq!(
+        ok(p, &["next", "--dry-run", "--filter", "id == 5"])["id"],
+        5
+    );
+    assert!(ok(p, &["next", "--dry-run", "--filter", "id == 2"]).is_null());
+    assert!(ok(p, &["next", "--dry-run", "--filter", "false"]).is_null());
+    assert_eq!(ok(p, &["next", "--local", "--session", "worker"])["id"], 4);
+}
+
+#[test]
+fn next_dry_run_skips_owned_task_and_keeps_queue_without_writes() {
+    let dir = project();
+    let p = dir.path();
+    ok(p, &["add", "Owned"]);
+    ok(p, &["next", "--local", "--session", "owner"]);
+    let queued = ok(p, &["add", "Queued"]);
+    let conn = rusqlite::Connection::open(p.join(".qqq/qqq.db")).unwrap();
+    let link = serde_json::json!({
+        "server": "saved", "identity": {"agent": "codex", "kind": "id", "value": "saved"},
+        "pane": {"pane_id": "saved", "workspace_id": "saved", "tab_id": "saved", "terminal_id": "saved", "agent": "codex"}
+    });
+    conn.execute(
+        "INSERT INTO herdr_links(task_id,link_json) VALUES(2,?)",
+        [link.to_string()],
+    )
+    .unwrap();
+    for table in ["tasks", "events", "herdr_links"] {
+        for operation in ["INSERT", "UPDATE", "DELETE"] {
+            conn.execute_batch(&format!("CREATE TRIGGER preview_no_{table}_{operation} BEFORE {operation} ON {table} BEGIN SELECT RAISE(ABORT, 'preview mutated queue'); END;")).unwrap();
+        }
+    }
+    let before_owned = ok(p, &["show", "1"]);
+    let before_queued = ok(p, &["show", "2"]);
+    let preview = ok(
+        p,
+        &[
+            "next",
+            "--dry-run",
+            "--local",
+            "--session",
+            "owner",
+            "--harness-name",
+            "changed",
+            "--harness-session",
+            "changed",
+            "--orchestrator-name",
+            "changed",
+        ],
+    );
+    assert_eq!(preview, queued);
+    assert_eq!(ok(p, &["show", "1"]), before_owned);
+    assert_eq!(ok(p, &["show", "2"]), before_queued);
+    assert_eq!(ok(p, &["next", "--dry-run"]), queued);
+    assert!(
+        ok(
+            p,
+            &[
+                "next",
+                "--dry-run",
+                "--session",
+                "owner",
+                "--filter",
+                "false"
+            ]
+        )
+        .is_null()
+    );
+}
+
 #[test]
 fn cli_name_stays_qqq_in_help_and_version() {
     let dir = TempDir::new().unwrap();

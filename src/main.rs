@@ -204,6 +204,9 @@ enum Commands {
         /// Wait until a task is available; concurrent sessions claim each task once.
         #[arg(long)]
         wait: bool,
+        /// Preview queued candidate without claiming or returning an owned task.
+        #[arg(long)]
+        dry_run: bool,
         /// Claim locally even when Herdr new-agent dispatch is configured.
         #[arg(long)]
         local: bool,
@@ -309,7 +312,11 @@ fn execute(
         .and_then(|directory| directory.parent())
         .context("Database path has no project directory")?;
     let next_owner = match &cli.command {
-        Commands::Next { local, .. } if *local || !config::load()?.herdr.next_to_new_agent => {
+        Commands::Next {
+            local,
+            dry_run: false,
+            ..
+        } if *local || !config::load()?.herdr.next_to_new_agent => {
             Some(local_owner(&cli, project_dir, &db)?)
         }
         _ => None,
@@ -551,22 +558,26 @@ fn execute(
         Commands::Delete { yes: false, .. } => {
             unreachable!("delete preview handled before database open")
         }
-        Commands::Next { wait, .. } => {
+        Commands::Next { wait, dry_run, .. } => {
             loop {
-                let task = match &next_owner {
-                    Some(owner) => db.next_with_identity_filtered(
-                        &owner.key,
-                        owner.link.as_ref(),
-                        owner.metadata.as_ref(),
-                        &overrides,
-                        filter,
-                    )?,
-                    None => dispatch::next(&mut db, session_input, &overrides, filter)?,
+                let task = if dry_run {
+                    db.peek_next_filtered(filter)?
+                } else {
+                    match &next_owner {
+                        Some(owner) => db.next_with_identity_filtered(
+                            &owner.key,
+                            owner.link.as_ref(),
+                            owner.metadata.as_ref(),
+                            &overrides,
+                            filter,
+                        )?,
+                        None => dispatch::next(&mut db, session_input, &overrides, filter)?,
+                    }
                 };
                 if task.is_some() || !wait {
                     break json!(task);
                 }
-                // Claims commit before waiting; no write lock spans the sleep.
+                // Claim/read transactions end before waiting; no lock spans the sleep.
                 thread::sleep(Duration::from_millis(250));
             }
         }

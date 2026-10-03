@@ -926,6 +926,32 @@ impl Db {
             .conn
             .query_row(&sql, params_from_iter(filter.params()), |row| row.get(0))?)
     }
+    fn ready_task_id(conn: &Connection, filter: Option<&CompiledFilter>) -> Result<Option<i64>> {
+        let predicate = filter.map_or("1", CompiledFilter::sql);
+        let sql = format!("SELECT id FROM tasks WHERE status='new' AND archived=0
+            AND (parent_id IS NULL OR EXISTS
+                (SELECT 1 FROM tasks parent WHERE parent.id=tasks.parent_id AND parent.status='completed'))
+            AND ({predicate}) ORDER BY priority DESC,id ASC LIMIT 1");
+        Ok(conn
+            .query_row(
+                &sql,
+                params_from_iter(filter.map_or(&[][..], CompiledFilter::params)),
+                |row| row.get(0),
+            )
+            .optional()?)
+    }
+    pub fn peek_next_filtered(&mut self, filter: Option<&CompiledFilter>) -> Result<Option<Task>> {
+        let tx = self
+            .conn
+            .transaction_with_behavior(TransactionBehavior::Deferred)?;
+        let id = Self::ready_task_id(&tx, filter)?;
+        let task = id.map(|id| tx.query_row(
+            "SELECT id,description,status,claim_key,created_at,updated_at,parent_id,harness_name,harness_session,orchestrator_name,orchestrator_session,priority,archived FROM tasks WHERE id=?",
+            [id], task_row,
+        )).transpose()?;
+        tx.commit()?;
+        Ok(task)
+    }
     pub fn next(
         &mut self,
         session: &str,
@@ -1007,19 +1033,7 @@ impl Db {
             .optional()?;
         let id = match owned {
             Some(id) => Some(id),
-            None if allow_new => {
-                let predicate = filter.map_or("1", CompiledFilter::sql);
-                let sql = format!("SELECT id FROM tasks WHERE status='new' AND archived=0
-                     AND (parent_id IS NULL OR EXISTS
-                         (SELECT 1 FROM tasks parent WHERE parent.id=tasks.parent_id AND parent.status='completed'))
-                     AND ({predicate}) ORDER BY priority DESC,id ASC LIMIT 1");
-                tx.query_row(
-                    &sql,
-                    params_from_iter(filter.map_or(&[][..], CompiledFilter::params)),
-                    |r| r.get(0),
-                )
-                .optional()?
-            }
+            None if allow_new => Self::ready_task_id(&tx, filter)?,
             None => None,
         };
         if let Some(id) = id {
