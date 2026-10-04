@@ -1,6 +1,6 @@
 # Ctrl+L Task ID Jump Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task inline. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task inline. Steps use checkbox (`- [x]`) syntax for tracking.
 
 **Goal:** Ctrl+L opens a task ID popup and navigates safely without saving or discarding drafts.
 
@@ -14,7 +14,7 @@
 
 **Files:** `tests/tui.rs`, `tests/tui_dashboard_pty.py`.
 
-- [ ] Add `jump`, `jump_no_color`, `jump_filter`, `jump_drafts`, `jump_archived` and `jump_narrow` scenarios. Reuse the existing isolated DB, terminal emulator, visible-state waits and terminal cleanup checks. Core missing-feature assertion:
+- [x] Add `jump`, `jump_no_color`, `jump_filter`, `jump_drafts`, `jump_archived` and `jump_narrow` scenarios. Reuse the existing isolated DB, terminal emulator, visible-state waits and terminal cleanup checks. Core missing-feature assertion:
 
 ```python
 send(b"\x0c")
@@ -48,13 +48,13 @@ fn tui_dashboard_task_id_jump_works_in_compact_terminal() {
 }
 ```
 
-- [ ] Run `cargo test --offline --test tui tui_dashboard_task_id_jump_input_and_color -- --exact`. Expect missing `Go to task` visible state before production changes.
+- [x] Run `cargo test --offline --test tui tui_dashboard_task_id_jump_input_and_color -- --exact`. Expect missing `Go to task` visible state before production changes.
 
 ## Task 2: Input Controller
 
 **Create:** `src/tui/jump.rs`. **Modify:** module declaration in `src/tui/mod.rs`.
 
-- [ ] Create the controller below, with module-local tests covering valid IDs
+- [x] Create the controller below, with module-local tests covering valid IDs
   `1`, whitespace around `42`, `i64::MAX`; invalid empty/zero/negative/text/
   overflow/multiple IDs; Esc/Ctrl+C cancellation; Ctrl+U; Backspace; paste
   control replacement; Heading/Hint/Input/Error row roles.
@@ -130,7 +130,7 @@ impl View {
 }
 ```
 
-- [ ] Add `mod jump;`; run `cargo test --offline --bin qqq tui::jump`.
+- [x] Add `mod jump;`; run `cargo test --offline --bin qqq tui::jump`.
 
 Controller tests (inside `jump.rs`):
 
@@ -192,7 +192,7 @@ mod tests {
 
 **Modify:** `src/tui/mod.rs`, `src/tui/render.rs`.
 
-- [ ] Split snapshot loading into a helper returning archive state from the same
+- [x] Split snapshot loading into a helper returning archive state from the same
   snapshot; keep the existing `task_target` API as a wrapper:
 
 ```rust
@@ -213,7 +213,7 @@ fn task_target_with_archived(db: &crate::db::Db, id: i64) -> Result<(Target, boo
 }
 ```
 
-- [ ] Make local `include_archived` mutable; add `let mut jump_ui: Option<jump::View> = None;`. Add popup rows between conflict and action rows:
+- [x] Make local `include_archived` mutable; add `let mut jump_ui: Option<jump::View> = None;`. Add popup rows between conflict and action rows:
 
 ```rust
 .or_else(|| jump_ui.as_ref().map(|ui| ui.rows(usize::from(popup_content.width))))
@@ -231,7 +231,7 @@ if let Some(ui) = jump_ui.as_mut() {
 }
 ```
 
-- [ ] Handle jump keys at the start of the key branch, before existing conflict,
+- [x] Handle jump keys at the start of the key branch, before existing conflict,
   confirmation, filter and editor handling:
 
 ```rust
@@ -277,7 +277,7 @@ if dashboard && control && key.code == KeyCode::Char('l')
 }
 ```
 
-- [ ] Add `Ctrl-L Go to Task` to dashboard and filter shortcut constants,
+- [x] Add `Ctrl-L Go to Task` to dashboard and filter shortcut constants,
   including both Herdr variants. Keep non-dashboard editor shortcuts unchanged.
 
 ```rust
@@ -286,11 +286,11 @@ pub const DASHBOARD_HERDR_KEYS: &str = "Ctrl-S Save  Ctrl-H Herdr  Ctrl-L Go to 
 pub const FILTER_KEYS: &str = "Type to Filter  Ctrl-L Go to Task  Backspace Edit  Esc Clear/Close  Tab/Enter Editor";
 pub const FILTER_HERDR_KEYS: &str = "Type to Filter  Ctrl-H Herdr  Ctrl-L Go to Task  Backspace Edit  Esc Clear/Close  Tab/Enter Editor";
 ```
-- [ ] Run `cargo fmt --all`, controller tests and all new PTY tests. Verify
+- [x] Run `cargo fmt --all`, controller tests and all new PTY tests. Verify
   invalid/missing IDs do not mutate DB, cancellation preserves filter/focus,
   dirty new/task/child drafts restore, same-ID jump preserves caret, offscreen
   list follows selection, archived task appears, narrow input clips safely.
-- [ ] Commit verified feature with `[Feat] Add Ctrl L Task ID Jump`.
+- [x] Commit verified feature with `[Feat] Add Ctrl L Task ID Jump`.
 
 ## Task 4: Documentation And Integration
 

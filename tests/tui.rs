@@ -52,6 +52,25 @@ fn dashboard_scenario(name: &str) {
 }
 
 #[test]
+fn tui_dashboard_task_id_jump_input_and_color() {
+    for name in ["jump", "jump_no_color"] {
+        dashboard_scenario(name);
+    }
+}
+
+#[test]
+fn tui_dashboard_task_id_jump_preserves_drafts_and_reveals_targets() {
+    for name in ["jump_filter", "jump_drafts", "jump_archived"] {
+        dashboard_scenario(name);
+    }
+}
+
+#[test]
+fn tui_dashboard_task_id_jump_works_in_compact_terminal() {
+    dashboard_scenario("jump_narrow");
+}
+
+#[test]
 fn tui_dashboard_content_conflicts_preserve_local_drafts() {
     dashboard_scenario("content_conflict");
     dashboard_scenario("content_conflict_no_color");

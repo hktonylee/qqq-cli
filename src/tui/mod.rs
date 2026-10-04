@@ -5,6 +5,7 @@ mod dashboard;
 mod details;
 pub mod draft;
 mod handoff;
+mod jump;
 mod panel;
 mod render;
 
@@ -321,15 +322,23 @@ fn parse_action_input(
 }
 
 fn task_target(db: &crate::db::Db, id: i64) -> Result<Target> {
+    task_target_with_archived(db, id).map(|(target, _)| target)
+}
+
+fn task_target_with_archived(db: &crate::db::Db, id: i64) -> Result<(Target, bool)> {
     let snapshot = db.content_snapshot(id)?;
+    let archived = snapshot.task.archived;
     let draft = Draft::from_saved(&snapshot.task.description, id, &snapshot.references)?;
-    Ok(Target::Task {
-        id,
-        description: snapshot.task.description,
-        status: snapshot.task.status,
-        revision: snapshot.task.content_revision,
-        draft,
-    })
+    Ok((
+        Target::Task {
+            id,
+            description: snapshot.task.description,
+            status: snapshot.task.status,
+            revision: snapshot.task.content_revision,
+            draft,
+        },
+        archived,
+    ))
 }
 
 fn adjacent_target(
@@ -614,7 +623,7 @@ fn compose_inner(
             ..
         }
     );
-    let include_archived = matches!(
+    let mut include_archived = matches!(
         mode,
         Mode::Continuous {
             include_archived: true,
@@ -663,6 +672,7 @@ fn compose_inner(
     let mut message_is_error = false;
     let mut confirmation: Option<Confirmation> = None;
     let mut action_ui: Option<ActionUi> = None;
+    let mut jump_ui: Option<jump::View> = None;
     let mut conflict_ui: Option<conflict::View> = None;
     let mut save_revision_override = None;
     let mut saved_any = false;
@@ -899,6 +909,11 @@ fn compose_inner(
                     )
                 })
                 .or_else(|| {
+                    jump_ui
+                        .as_ref()
+                        .map(|ui| ui.rows(usize::from(popup_content.width)))
+                })
+                .or_else(|| {
                     action_ui.as_ref().map(|ui| {
                         action_lines(
                             ui,
@@ -998,6 +1013,7 @@ fn compose_inner(
                 let active = dashboard
                     && confirmation.is_none()
                     && action_ui.is_none()
+                    && jump_ui.is_none()
                     && conflict_ui.is_none()
                     && match mouse.kind {
                         MouseEventKind::ScrollUp | MouseEventKind::ScrollDown => {
@@ -1030,7 +1046,9 @@ fn compose_inner(
         };
         match input {
             Event::Paste(text) if confirmation.is_none() && conflict_ui.is_none() => {
-                if let Some(ActionUi::Input { value, error, .. }) = action_ui.as_mut() {
+                if let Some(ui) = jump_ui.as_mut() {
+                    ui.paste(&text);
+                } else if let Some(ActionUi::Input { value, error, .. }) = action_ui.as_mut() {
                     value.extend(text.chars().filter(|ch| !ch.is_control()));
                     error.clear();
                 } else if action_ui.is_some() {
@@ -1141,6 +1159,47 @@ fn compose_inner(
                 }
             }
             Event::Key(mut key) if key.kind != KeyEventKind::Release => {
+                if let Some(mut ui) = jump_ui.take() {
+                    match ui.key(key) {
+                        Some(jump::Action::Go(id)) => match task_target_with_archived(
+                            mode.db().expect("dashboard has database"),
+                            id,
+                        ) {
+                            Ok((target, archived)) => {
+                                buffers.park(
+                                    DraftKey::current(target_id, draft_parent_id),
+                                    &mut draft,
+                                    &baseline,
+                                    top,
+                                    editor_follow_cursor,
+                                );
+                                editor_follow_cursor = load_target(
+                                    restore_target(target, &mut buffers),
+                                    &mut draft,
+                                    &mut target_id,
+                                    &mut target_status,
+                                    &mut draft_parent_id,
+                                    &mut baseline,
+                                    &mut top,
+                                );
+                                include_archived |= archived;
+                                filter_query.clear();
+                                filter_focused = false;
+                                list_top = 0;
+                                list_follow_selected = true;
+                                message.clear();
+                                message_is_error = false;
+                            }
+                            Err(error) => {
+                                ui.set_error(format!("{error:#}"));
+                                jump_ui = Some(ui);
+                            }
+                        },
+                        Some(jump::Action::Cancel) => (),
+                        None => jump_ui = Some(ui),
+                    }
+                    continue;
+                }
                 if let Some(mut ui) = conflict_ui.take() {
                     let area = dashboard::popup_layout(
                         ratatui::layout::Rect::new(0, 0, size.0, size.1),
@@ -1593,6 +1652,16 @@ fn compose_inner(
                             _ => action_ui = Some(ActionUi::Error { text, top }),
                         },
                     }
+                    continue;
+                }
+                if dashboard
+                    && control
+                    && key.code == KeyCode::Char('l')
+                    && !key
+                        .modifiers
+                        .intersects(KeyModifiers::ALT | KeyModifiers::SUPER)
+                {
+                    jump_ui = Some(jump::View::default());
                     continue;
                 }
                 if dashboard

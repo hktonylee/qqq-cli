@@ -98,7 +98,7 @@ with tempfile.TemporaryDirectory(prefix="qqq-dashboard-test-") as folder:
         env["NO_COLOR"] = "1"
     elif scenario == "dumb":
         env["TERM"] = "dumb"
-    if scenario.startswith(("buffers_", "long_description_", "prerequisites", "dirty_marker", "completed_toggle")) and scenario.endswith("no_color"):
+    if scenario.startswith(("buffers_", "long_description_", "prerequisites", "dirty_marker", "completed_toggle", "jump")) and scenario.endswith("no_color"):
         env["NO_COLOR"] = "1"
     for name in ("EDITOR", "QQQ_SESSION", "HERDR_ENV", "HERDR_PANE_ID", "CODEX_THREAD_ID", "CODEX_SESSION_ID"):
         env.pop(name, None)
@@ -208,6 +208,10 @@ with tempfile.TemporaryDirectory(prefix="qqq-dashboard-test-") as folder:
         cli("add", "\n".join(f"Line{index:02}" for index in range(1, 13)))
     if scenario in ("prerequisites", "prerequisites_no_color"):
         cli("edit", "2", "--depends-on", "1")
+    if scenario == "jump_archived":
+        cli("archive", "2")
+        for index in range(3, 21):
+            cli("add", f"Task {index}")
     if scenario.startswith("dirty_marker"):
         cli("edit", "1", "--description", "First " + "unchanged clean words " * 8 + "\nClean tail")
         cli("edit", "2", "--description", "Second " + "wrapped saved words " * 8 + "\nContinuation\nTail")
@@ -490,7 +494,7 @@ print(json.dumps({"result": result}))
                              and editor_line().startswith("Second"))
                 settle()
                 assert b"\x1b[38;" not in screen and b"\x1b[48;" not in screen, screen[-2000:]
-        if not scenario.startswith(("wide_layout", "menu_retry_", "long_description_", "completed_toggle")) and scenario not in ("buffers_scroll", "handoff_scroll", "ctrl_c_new_scroll", "live_refresh_scroll", "tree_navigation", "scroll", "wheel", "click", "click_filter", "workflow", "workflow_empty", "workflow_status", "filter", "filter_no_color", "archive_hidden", "archive_included", "actions_basic", "actions_rejected", "actions_hidden"):
+        if not scenario.startswith(("wide_layout", "menu_retry_", "long_description_", "completed_toggle")) and scenario not in ("buffers_scroll", "handoff_scroll", "ctrl_c_new_scroll", "live_refresh_scroll", "tree_navigation", "scroll", "wheel", "click", "click_filter", "workflow", "workflow_empty", "workflow_status", "filter", "filter_no_color", "archive_hidden", "archive_included", "actions_basic", "actions_rejected", "actions_hidden", "jump_archived"):
             read_until(b"Second")
             assert "First" in visible.text() and "Second" in visible.text(), visible.text()
         assert not select.select([child.stdout], [], [], 0)[0], "TUI wrote stdout while open"
@@ -882,6 +886,113 @@ print(json.dumps({"result": result}))
             wait_visible(lambda: "#1 · new · blocks claim" in details_text())
             if scenario == "prerequisites_no_color":
                 assert b"\x1b[38;" not in screen
+        elif scenario.startswith("jump"):
+            initial_tasks = cli("list")
+
+            def open_jump():
+                send(b"\x0c")
+                wait_visible(lambda: "Go to task" in visible.text())
+
+            def go_to(task_id, description, cursor=None):
+                open_jump()
+                send(str(task_id).encode() + b"\r")
+                wait_visible(lambda: f"Task #{task_id} (New)" in editor_title()
+                             and editor_line().startswith(description)
+                             and (cursor is None or (visible.x, visible.y) == (cursor, editor_row() + 1)))
+                assert "Go to task" not in visible.text(), visible.text()
+
+            if scenario in ("jump", "jump_no_color"):
+                send(b"New draft")
+                wait_visible(lambda: editor_line().startswith("New draft"))
+                open_jump()
+                for value in (b"", b"0", b"-1", b"abc", b"9223372036854775808"):
+                    send(b"\x15" + value + b"\r")
+                    wait_visible(lambda value=value: "Enter a positive task ID" in visible.text()
+                                 and (not value or "> " + value.decode() in visible.text()))
+                send(b"\x15\x1b[200~1\n2\x1b[201~\r")
+                wait_visible(lambda: "> 1 2" in visible.text()
+                             and "Enter a positive task ID" in visible.text())
+                send(b"\x15" + b"9999\r")
+                wait_visible(lambda: "9999" in visible.text() and "not found" in visible.text())
+                send(b"\x15\x1b[200~ 2 \n\x1b[201~\r")
+                wait_visible(lambda: "Task #2 (New)" in editor_title()
+                             and editor_line().startswith("Second")
+                             and (visible.x, visible.y) == (6, editor_row() + 1))
+                for cancel_key in (b"\x1b", b"\x03"):
+                    open_jump()
+                    send(cancel_key)
+                    wait_visible(lambda: "Go to task" not in visible.text()
+                                 and "Task #2 (New)" in editor_title()
+                                 and (visible.x, visible.y) == (6, editor_row() + 1))
+                    assert child.poll() is None
+                send(b"\x1b[1;2B")
+                wait_visible(lambda: "New Task" in editor_title()
+                             and editor_line().startswith("New draft")
+                             and (visible.x, visible.y) == (9, editor_row() + 1))
+            elif scenario == "jump_filter":
+                send(b"Draft" + CTRL_SLASH + b"zzz")
+                wait_visible(lambda: "No matching tasks" in visible.text()
+                             and (visible.x, visible.y) == (11, 0))
+                for cancel_key in (b"\x1b", b"\x03"):
+                    open_jump()
+                    send(b"1")
+                    send(cancel_key)
+                    wait_visible(lambda: "Go to task" not in visible.text()
+                                 and visible.text().splitlines()[0].startswith("Filter: zzz")
+                                 and (visible.x, visible.y) == (11, 0))
+                    assert child.poll() is None
+                go_to(1, "First", 5)
+                assert not visible.text().splitlines()[0].startswith("Filter:"), visible.text()
+                send(b"\x1b[1;2B\x1b[1;2B")
+                wait_visible(lambda: "New Task" in editor_title()
+                             and editor_line().startswith("Draft")
+                             and (visible.x, visible.y) == (5, editor_row() + 1))
+            elif scenario == "jump_drafts":
+                go_to(2, "Second", 6)
+                send(b" local\x1b[D\x1b[D")
+                wait_visible(lambda: editor_line().startswith("Second local")
+                             and (visible.x, visible.y) == (10, editor_row() + 1))
+                go_to(1, "First", 5)
+                send(b" local")
+                wait_visible(lambda: editor_line().startswith("First local"))
+                go_to(2, "Second local", 10)
+                go_to(2, "Second local", 10)
+                send(CTRL_P + b"Child draft")
+                wait_visible(lambda: "parent #2" in editor_title()
+                             and editor_line().startswith("Child draft"))
+                go_to(1, "First local", 11)
+                go_to(2, "Second local", 10)
+                send(CTRL_P)
+                wait_visible(lambda: "parent #2" in editor_title()
+                             and editor_line().startswith("Child draft")
+                             and (visible.x, visible.y) == (11, editor_row() + 1))
+            elif scenario == "jump_archived":
+                assert "Second" not in "\n".join(visible.text().splitlines()[:list_bottom() + 1])
+                go_to(1, "First", 5)
+                assert "First" in "\n".join(visible.text().splitlines()[:list_bottom() + 1])
+                go_to(2, "Second", 6)
+                assert "Second" in "\n".join(visible.text().splitlines()[:list_bottom() + 1])
+                assert cli("show", "2")["task"]["archived"]
+                send(b"\x1b[1;2A\x1b[1;2B")
+                wait_visible(lambda: "Task #2 (New)" in editor_title()
+                             and editor_line().startswith("Second"))
+            elif scenario == "jump_narrow":
+                fcntl.ioctl(slave, termios.TIOCSWINSZ, struct.pack("HHHH", 12, 32, 0, 0))
+                visible.resize(32, 12)
+                os.kill(child.pid, signal.SIGWINCH)
+                wait_visible(lambda: "New Task" in editor_title()
+                             and (visible.x, visible.y) == (0, editor_row() + 1))
+                open_jump()
+                send(b"9" * 40 + b"\r")
+                wait_visible(lambda: "positive" in visible.text())
+                assert 0 <= visible.x < 32 and 0 <= visible.y < 12
+                send(b"\x15" + b"2\r")
+                wait_visible(lambda: "Task #2 (New)" in editor_title()
+                             and editor_line().startswith("Second")
+                             and (visible.x, visible.y) == (6, editor_row() + 1))
+            assert cli("list") == initial_tasks
+            if scenario.endswith("no_color"):
+                assert b"\x1b[38;" not in screen and b"\x1b[48;" not in screen, screen[-2000:]
         elif scenario in ("details_assignment", "details_assignment_no_color"):
             initial_tasks = cli("list")
             send(b"\x1b[1;2A")
