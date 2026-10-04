@@ -78,7 +78,7 @@ list_follow_selected = true;
 - [x] Update old PTY query assertions to inspect query segment before button. Keep existing filter shortcuts, draft navigation, mouse routing and Escape/Ctrl-C checks.
 - [x] Document click state, Ctrl-T, collapse rule, compact button, session-only behavior and retained drafts.
 - [x] Run `cargo test --locked`, `cargo clippy --locked --all-targets -- -D warnings`, `cargo fmt --check`, `git diff --check`; request read-only review.
-- [ ] Commit `[UI] Add Completed Visibility Toggle`, rebase current master, verify combined tree, fast-forward locally, install using this worktree's own target, run installed color/plain scenarios. Record evidence, complete #158, clean worktree, resume `qqq next --wait --local --json`.
+- [x] Commit `[UI] Add Completed Visibility Toggle`, rebase current master, verify combined tree, fast-forward locally, install using this worktree's own target, run installed color/plain scenarios and record evidence.
 
 ## Validation before integration
 
@@ -87,3 +87,10 @@ list_follow_selected = true;
 - Color/plain terminal scenarios passed: click and Ctrl-T, active-filter collapse, retained new/task drafts, hidden completed selection, external child completion, resizing and unchanged saved descriptions. Assertions wait for expected final caret/frame and Escape processing.
 - Existing wide-layout query-only expectation now reads query segment before button; focused resize scenario passed.
 - Full locked suite: 586 passed. Strict all-target Clippy, fmt and diff checks passed. Read-only review approved with no findings.
+
+## Local integration
+
+- Branch already based on current master (`fb04820`); fast-forwarded local master to feature commit `0549968`.
+- Installed with `cargo install --locked --path . --force` using this worktree's own target directory.
+- Installed CLI passed both Completed-toggle PTY scenarios, covering color/plain clicks, keyboard control, retained drafts, status refresh and 50/150/72-column resizing.
+- Queue closure, worktree cleanup and persistent waiter restart follow these checks.
