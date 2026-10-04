@@ -17,3 +17,12 @@ Human empty `next` and `next --dry-run` now print `No task available for pickup.
 - `qqq complete 155 --json` explicitly completed task at `2026-10-04T07:59:52.219Z`.
 
 Queue handoff after evidence integration and checkout cleanup uses one blocking `qqq next --wait --local --json` process.
+
+## Clarified wording
+
+User clarified preference: “No task available for pick up.” Final copy uses `No task available for pickup.` for both ordinary `next` and `next --dry-run`. Removed separate preview format because both empty results now share wording. Updated current reference, preview spec and filter guide.
+
+- Fresh checkout at `d57f822`: build and 24 output/wait baseline tests passed. Existing output assertions failed on both previous strings before the change (10 passed, 2 expected failures).
+- After fix: 108 focused output/CLI/filter/dispatch/wait tests; 593 full tests across 38 targets, zero failures or ignored (`/private/tmp/qqq-155-copy-full.log`). Strict all-target Clippy, formatting and diff checks passed.
+- Read-only review cleared production code; corrected its stale filter-guide wording finding. Source `6177dfc` and guide correction `a6ebe6b` integrated locally.
+- Install from stable task checkout passed. Installed CLI confirmed both empty messages, JSON `null`, owned-task reuse/preview skipping, stored candidate formatting, and filtered empty results (`/private/tmp/qqq-155-copy-installed.log`). Task 155 remains completed; follow-up changes only wording/formatter routing and docs.
