@@ -130,15 +130,15 @@ tui::TaskAction::MarkError(id, reason) => {
 
 - [x] Document `e` reason prompt, required confirmation, ownership/state
   guard, reason history and existing dirty-draft discard warning.
-- [ ] Run `cargo fmt --all --check`, `git diff --check`,
+- [x] Run `cargo fmt --all --check`, `git diff --check`,
   `cargo test --offline --all-targets --no-fail-fast`,
   `cargo clippy --offline --all-targets -- -D warnings`.
-- [ ] Request read-only review; resolve concrete findings, rebase current
+- [x] Request read-only review; resolve concrete findings, rebase current
   master, verify combined source if production changed, fast-forward locally.
-- [ ] Install `cargo install --path . --locked --offline --force`. Run seven
+- [x] Install `cargo install --path . --locked --offline --force`. Run seven
   new scenarios plus retry, existing menu/action, jump and compact/wide flows
   against absolute installed binary path.
-- [ ] Record evidence with `qqq message 161`, explicitly complete from root
+- [x] Record evidence with `qqq message 161`, explicitly complete from root
   workspace, commit final check record, clean owned worktree/branch, resume one
   persistent `qqq next --wait --local --json`.
 
@@ -150,3 +150,23 @@ wrap target changes; expected bounds and reverse-arrow counts were updated while
 background/selection assertions remained. All 94 TUI tests then passed.
 Logs: `/tmp/qqq-task-161-red.log`, `/tmp/qqq-task-161-focused.log`,
 `/tmp/qqq-task-161-tui-fixed.log`.
+
+
+Final checks: 597 tests across 38 binaries passed with zero failures, including
+94 TUI tests. Formatting, diff checks and Clippy all targets with warnings denied
+passed. Read-only review of `5c97d0c..bcdb158` found no concrete bugs or gaps.
+Rebase onto current master required no changes; local master fast-forwarded to
+`bcdb158`. Locked/offline optimized install passed as qqq 0.4.0.
+
+Installed `/Users/tonylee/.cargo/bin/qqq` passed 19 PTY scenarios: all seven
+mark-error flows, Retry and live availability, arrow navigation in color/plain/
+narrow terminals, popup background in color/plain, existing state actions,
+retained jump drafts, compact layout and wide resize in color/plain. Installed
+SHA256 matched verified release before and after checks:
+`8c2cb2ff14e23d39ccb0c7dd8e36c777a593701ab15c839facaa405b199a38d0`.
+Logs: `/tmp/qqq-task-161-full.log`, `/tmp/qqq-task-161-clippy.log`,
+`/tmp/qqq-task-161-install.log`, `/tmp/qqq-task-161-installed-pty.log`.
+
+Evidence recorded in task message #85. Explicit `qqq complete 161 --json`
+returned `completed` at `2026-10-04T21:53:29.268Z`. Owned checkout cleanup and
+one persistent blocking queue wait follow this documentation checkpoint.
