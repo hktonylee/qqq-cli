@@ -488,14 +488,20 @@ Left-click editor text to place caret. Task-row clicks retain unsaved drafts,
 using same restoration behavior as Shift-Up/Down.
 
 Ctrl+/ focuses filter and shows `Filter:` with editable caret, even when empty.
-Filter bar stays visible while focused or query is nonempty. Empty unfocused query
-reserves no row. Type to match any part of full description, ignoring case.
-Matching tasks retain parent chain;
+Filter bar stays visible while focused, query is nonempty, or completed tasks are
+hidden. Empty unfocused query reserves no row when completed tasks are shown.
+Right-edge `[✓ Completed]` button includes completed tasks; click to switch to
+`[× Completed]` and hide them. Ctrl-T toggles the same state while filter is
+focused. Narrow list panes show compact `[✓]` / `[×]`. Visibility resets when TUI
+opens again. Toggle preserves query, opened task, unsaved drafts and DB; navigation
+uses visible tasks. Unfinished children remain visible when completed parents are
+hidden. Type to match any part of full description, ignoring case.
+Matching tasks retain visible parent chain;
 no matches shows `No matching tasks.`. Backspace edits query. Tab or Enter returns to
 editor. `/` or Alt+/ inserts literal `/` into editor. Shift-Up/Down navigates visible
 tasks while filter is active. Query changes do not change selected task, unsaved
 draft, or DB.
-While filter is visible, Esc clears query and closes filter focus. Ctrl-C clears
+With focused filter or nonempty query, Esc clears query and closes filter focus. Ctrl-C clears
 nonempty query, preserving current focus. Selected task and editor draft stay intact, including while
 popup or confirmation is open. With empty focused filter, next Ctrl-C closes filter
 and returns focus to editor without changing opened task or draft. Next Esc follows

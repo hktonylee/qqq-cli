@@ -658,6 +658,7 @@ fn compose_inner(
     let mut editor_follow_cursor = true;
     let mut filter_query = String::new();
     let mut filter_focused = false;
+    let mut show_completed = true;
     let mut message = String::new();
     let mut message_is_error = false;
     let mut confirmation: Option<Confirmation> = None;
@@ -668,6 +669,8 @@ fn compose_inner(
     let mut buffers = DraftBuffers::default();
     loop {
         let size = terminal::size()?;
+        let filter_visible =
+            dashboard::filter_visible(&filter_query, filter_focused, show_completed);
         if details_id != target_id {
             details_top = 0;
             details_id = target_id;
@@ -827,9 +830,10 @@ fn compose_inner(
                     id: task.id,
                     parent_id: task.parent_id,
                     description: &task.description,
+                    status: &task.status,
                 })
                 .collect();
-            let filtered = panel::filter_tasks(&filter_views, &filter_query);
+            let filtered = panel::filter_tasks(&filter_views, &filter_query, show_completed);
             let displayed: Vec<_> = tasks
                 .iter()
                 .filter(|task| filtered.included_ids.contains(&task.id))
@@ -842,7 +846,7 @@ fn compose_inner(
             if let Some(id) = target_id.filter(|_| active_dirty) {
                 dirty_ids.insert(id);
             }
-            rows = if !filter_query.is_empty() && displayed.is_empty() {
+            rows = if (!filter_query.is_empty() || !show_completed) && displayed.is_empty() {
                 Vec::new()
             } else {
                 let list_width = usize::from(
@@ -870,6 +874,7 @@ fn compose_inner(
                     id: task.id,
                     parent_id: task.parent_id,
                     description: task.description,
+                    status: task.status,
                 })
                 .collect();
             panel::set_dirty_markers(
@@ -933,6 +938,7 @@ fn compose_inner(
                         dashboard::View {
                             query: &filter_query,
                             focused: filter_focused,
+                            show_completed,
                             top: &mut list_top,
                             follow_selected: list_follow_selected,
                             modal_lines: modal_lines.as_deref(),
@@ -995,13 +1001,8 @@ fn compose_inner(
                     && conflict_ui.is_none()
                     && match mouse.kind {
                         MouseEventKind::ScrollUp | MouseEventKind::ScrollDown => {
-                            dashboard::wheel_area(
-                                size,
-                                mouse.column,
-                                mouse.row,
-                                filter_focused || !filter_query.is_empty(),
-                            )
-                            .is_some()
+                            dashboard::wheel_area(size, mouse.column, mouse.row, filter_visible)
+                                .is_some()
                         }
                         MouseEventKind::Down(MouseButton::Left) => dashboard::click_target(
                             size,
@@ -1009,7 +1010,7 @@ fn compose_inner(
                             mouse.row,
                             dashboard::HitState {
                                 rows: &rows,
-                                filter_visible: filter_focused || !filter_query.is_empty(),
+                                filter_visible,
                                 list_top,
                                 editor_top: top,
                                 layout: &layout,
@@ -1059,12 +1060,7 @@ fn compose_inner(
                     MouseEventKind::ScrollUp => false,
                     _ => continue,
                 };
-                match dashboard::wheel_area(
-                    size,
-                    mouse.column,
-                    mouse.row,
-                    filter_focused || !filter_query.is_empty(),
-                ) {
+                match dashboard::wheel_area(size, mouse.column, mouse.row, filter_visible) {
                     Some(dashboard::WheelArea::List(height)) => {
                         list_follow_selected = false;
                         list_top = panel::wheel_top(list_top, list_row_count, height, down);
@@ -1089,12 +1085,17 @@ fn compose_inner(
                     mouse.row,
                     dashboard::HitState {
                         rows: &rows,
-                        filter_visible: filter_focused || !filter_query.is_empty(),
+                        filter_visible,
                         list_top,
                         editor_top: top,
                         layout: &layout,
                     },
                 ) {
+                    Some(dashboard::ClickTarget::ToggleCompleted) => {
+                        show_completed = !show_completed;
+                        list_top = 0;
+                        list_follow_selected = true;
+                    }
                     Some(dashboard::ClickTarget::Editor(cursor)) => {
                         filter_focused = false;
                         draft.set_cursor(cursor);
@@ -1734,7 +1735,11 @@ fn compose_inner(
                     continue;
                 }
                 if filter_focused {
-                    if control && key.code == KeyCode::Char('u') {
+                    if control && key.code == KeyCode::Char('t') {
+                        show_completed = !show_completed;
+                        list_top = 0;
+                        list_follow_selected = true;
+                    } else if control && key.code == KeyCode::Char('u') {
                         filter_query.clear();
                         list_top = 0;
                         list_follow_selected = true;

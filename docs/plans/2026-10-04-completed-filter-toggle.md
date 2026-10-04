@@ -1,6 +1,6 @@
 # Completed Filter Toggle Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task inline. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task inline. Steps use checkbox (`- [x]`) syntax for tracking.
 
 **Goal:** Toggle completed-task visibility using a stateful button at the TUI filter bar's right edge.
 
@@ -14,7 +14,7 @@
 
 **Files:** `tests/tui_dashboard_render.rs`.
 
-- [ ] Add focused-filter render regression using existing `View`, with long Unicode query. Assert right-edge checked button and caret before button.
+- [x] Add focused-filter render regression using existing `View`, with long Unicode query. Assert right-edge checked button and caret before button.
 
 ```rust
 let button = line(terminal.backend().buffer(), 0);
@@ -22,13 +22,13 @@ assert!(button.ends_with("[✓ Completed]"), "{button}");
 assert!(terminal.get_cursor_position().unwrap().x < 58);
 ```
 
-- [ ] Run `cargo test --locked --test tui_dashboard_render completed_filter_button`; confirm assertion fails because no button exists.
+- [x] Run `cargo test --locked --test tui_dashboard_render completed_filter_button`; confirm assertion fails because no button exists.
 
 ### Task 2: State, filtering and geometry
 
 **Files:** `src/tui/panel.rs`, `src/tui/dashboard.rs`, `src/tui/mod.rs`, `src/tui/render.rs`; existing view/model fixtures in `tests/tui_dashboard_render.rs`, `tests/tui_filter.rs`.
 
-- [ ] Extend `FilterTask` with `status: &str`; extend `filter_tasks` with `show_completed: bool`. Exclude completed tasks from matching and ancestor positions when unchecked. Keep eligible children whose parent is excluded. Update existing fixtures to `status: "new"` and current calls to enabled visibility.
+- [x] Extend `FilterTask` with `status: &str`; extend `filter_tasks` with `show_completed: bool`. Exclude completed tasks from matching and ancestor positions when unchecked. Keep eligible children whose parent is excluded. Update existing fixtures to `status: "new"` and current calls to enabled visibility.
 
 ```rust
 let positions: HashMap<_, _> = tasks.iter().enumerate()
@@ -39,7 +39,7 @@ for task in tasks.iter().filter(|task| show_completed || task.status != "complet
 }
 ```
 
-- [ ] Share bar/button geometry in dashboard, add `View.show_completed` and `ClickTarget::ToggleCompleted`. Existing view fixtures use `true`.
+- [x] Share bar/button geometry in dashboard, add `View.show_completed` and `ClickTarget::ToggleCompleted`. Existing view fixtures use `true`.
 
 ```rust
 pub fn filter_visible(query: &str, focused: bool, show_completed: bool) -> bool {
@@ -51,7 +51,7 @@ pub fn completed_button(list: Rect) -> Rect {
 }
 ```
 
-- [ ] Reserve button width plus one gap before drawing filter query. Use `[✓ Completed]` / `[× Completed]`, compact `[✓]` / `[×]` below 24 columns. `filter_line` uses `F: ` when query area is below 10 cells; reserve one query caret cell. Keep button text readable in color/plain mode.
+- [x] Reserve button width plus one gap before drawing filter query. Use `[✓ Completed]` / `[× Completed]`, compact `[✓]` / `[×]` below 24 columns. `filter_line` uses `F: ` when query area is below 10 cells; reserve one query caret cell. Keep button text readable in color/plain mode.
 
 ```rust
 let label = if width >= 10 { "Filter: " } else { "F: " };
@@ -59,7 +59,7 @@ let (tail, used) = text_tail(query, width.saturating_sub(label.len() + 1));
 let cursor = (label.len() + used).min(width.saturating_sub(1)) as u16;
 ```
 
-- [ ] Start `show_completed = true` in editor session. Pass status/visibility into panel filtering and draw state. Use shared `filter_visible` result for wheel/click routing. Mouse button and focused Ctrl-T flip visibility, reset list scroll/follow, preserve all editor/draft/query state. Add `Ctrl-T Completed` to filter shortcut hints. Empty status-filter result uses `No matching tasks.`.
+- [x] Start `show_completed = true` in editor session. Pass status/visibility into panel filtering and draw state. Use shared `filter_visible` result for wheel/click routing. Mouse button and focused Ctrl-T flip visibility, reset list scroll/follow, preserve all editor/draft/query state. Add `Ctrl-T Completed` to filter shortcut hints. Empty status-filter result uses `No matching tasks.`.
 
 ```rust
 show_completed = !show_completed;
@@ -67,15 +67,23 @@ list_top = 0;
 list_follow_selected = true;
 ```
 
-- [ ] Run `cargo test --locked --test tui_filter --test tui_dashboard_render`; verify baseline and new regression pass. Adapt old exact query/style expectations for reserved button area, without weakening caret/geometry checks.
+- [x] Run `cargo test --locked --test tui_filter --test tui_dashboard_render`; verify baseline and new regression pass. Adapt old exact query/style expectations for reserved button area, without weakening caret/geometry checks.
 
 ### Task 3: Product regressions and integration
 
 **Files:** `tests/tui_filter.rs`, `tests/tui_dashboard_render.rs`, `tests/tui_dashboard_pty.py`, `tests/tui.rs`, `docs/reference.md`.
 
-- [ ] Cover checked/unchecked, query interaction, completed ancestor exclusion, active child retention, navigation, exact hit cells, collapsed/active bar, 12/23/24/50/72/150-column layouts and Unicode query caret.
-- [ ] Add color/plain PTY scenarios: create completed parent and unfinished child; open/dirty completed task; click toggle; assert completed rows absent while draft/selection survive; query and keyboard toggle; switch visible tasks and restore dirty draft; external completion respects hidden state; resize and toggle back; DB remains unchanged except explicit fixture mutations. Wait for complete visible states before assertions.
-- [ ] Update old PTY query assertions to inspect query segment before button. Keep existing filter shortcuts, draft navigation, mouse routing and Escape/Ctrl-C checks.
-- [ ] Document click state, Ctrl-T, collapse rule, compact button, session-only behavior and retained drafts.
-- [ ] Run `cargo test --locked`, `cargo clippy --locked --all-targets -- -D warnings`, `cargo fmt --check`, `git diff --check`; request read-only review.
+- [x] Cover checked/unchecked, query interaction, completed ancestor exclusion, active child retention, navigation, exact hit cells, collapsed/active bar, 12/23/24/50/72/150-column layouts and Unicode query caret.
+- [x] Add color/plain PTY scenarios: create completed parent and unfinished child; open/dirty completed task; click toggle; assert completed rows absent while draft/selection survive; query and keyboard toggle; switch visible tasks and restore dirty draft; external completion respects hidden state; resize and toggle back; DB remains unchanged except explicit fixture mutations. Wait for complete visible states before assertions.
+- [x] Update old PTY query assertions to inspect query segment before button. Keep existing filter shortcuts, draft navigation, mouse routing and Escape/Ctrl-C checks.
+- [x] Document click state, Ctrl-T, collapse rule, compact button, session-only behavior and retained drafts.
+- [x] Run `cargo test --locked`, `cargo clippy --locked --all-targets -- -D warnings`, `cargo fmt --check`, `git diff --check`; request read-only review.
 - [ ] Commit `[UI] Add Completed Visibility Toggle`, rebase current master, verify combined tree, fast-forward locally, install using this worktree's own target, run installed color/plain scenarios. Record evidence, complete #158, clean worktree, resume `qqq next --wait --local --json`.
+
+## Validation before integration
+
+- Baseline: 37 model/render checks passed. New checked-button regression failed because no button was rendered; now passes.
+- Model/render checks: 41 passed, including strict completed-ancestor exclusion, unfinished-child retention, visible navigation, query interaction, Unicode caret boundaries, exact hit regions, compact/full buttons and color/plain styles at 12/13/23/24/50/72/150 columns.
+- Color/plain terminal scenarios passed: click and Ctrl-T, active-filter collapse, retained new/task drafts, hidden completed selection, external child completion, resizing and unchanged saved descriptions. Assertions wait for expected final caret/frame and Escape processing.
+- Existing wide-layout query-only expectation now reads query segment before button; focused resize scenario passed.
+- Full locked suite: 586 passed. Strict all-target Clippy, fmt and diff checks passed. Read-only review approved with no findings.

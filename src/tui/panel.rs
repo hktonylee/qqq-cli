@@ -6,21 +6,26 @@ pub struct FilterTask<'a> {
     pub id: i64,
     pub parent_id: Option<i64>,
     pub description: &'a str,
+    pub status: &'a str,
 }
 
 pub struct FilteredTasks {
     pub included_ids: HashSet<i64>,
 }
 
-pub fn filter_tasks(tasks: &[FilterTask<'_>], query: &str) -> FilteredTasks {
+pub fn filter_tasks(tasks: &[FilterTask<'_>], query: &str, show_completed: bool) -> FilteredTasks {
     let query = query.to_lowercase();
     let positions: HashMap<_, _> = tasks
         .iter()
         .enumerate()
+        .filter(|(_, task)| show_completed || task.status != "completed")
         .map(|(index, task)| (task.id, index))
         .collect();
     let mut included_ids = HashSet::new();
-    for task in tasks {
+    for task in tasks
+        .iter()
+        .filter(|task| show_completed || task.status != "completed")
+    {
         if !query.is_empty() && !task.description.to_lowercase().contains(&query) {
             continue;
         }

@@ -448,6 +448,12 @@ fn tui_dashboard_filter_keeps_draft_and_navigates_visible_tasks() {
 }
 
 #[test]
+fn tui_dashboard_completed_toggle_preserves_drafts_and_filters_live_tasks() {
+    dashboard_scenario("completed_toggle");
+    dashboard_scenario("completed_toggle_no_color");
+}
+
+#[test]
 fn tui_dashboard_plain_and_alt_slash_insert_literal_slash() {
     dashboard_scenario("slash_edit");
 }

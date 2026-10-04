@@ -28,6 +28,7 @@ pub struct DetailsView<'a> {
 pub struct View<'a> {
     pub query: &'a str,
     pub focused: bool,
+    pub show_completed: bool,
     pub top: &'a mut usize,
     pub follow_selected: bool,
     pub modal_lines: Option<&'a [render::PopupRow]>,
@@ -45,6 +46,7 @@ pub enum WheelArea {
 pub enum ClickTarget {
     Task(i64),
     Editor(usize),
+    ToggleCompleted,
 }
 
 pub struct Panes {
@@ -269,6 +271,15 @@ fn list_content(area: Rect, filter_visible: bool) -> Rect {
     )
 }
 
+pub fn filter_visible(query: &str, focused: bool, show_completed: bool) -> bool {
+    focused || !query.is_empty() || !show_completed
+}
+
+pub fn completed_button(list: Rect) -> Rect {
+    let width = if list.width >= 24 { 13 } else { 3 };
+    Rect::new(list.x + list.width.saturating_sub(width), list.y, width, 1)
+}
+
 pub fn wheel_area(
     size: (u16, u16),
     column: u16,
@@ -316,6 +327,9 @@ pub fn click_target(
         return None;
     }
     let Panes { list, editor, .. } = panes(Rect::new(0, 0, size.0, size.1));
+    if hit.filter_visible && completed_button(list).contains(Position::new(column, row)) {
+        return Some(ClickTarget::ToggleCompleted);
+    }
     let content = list_content(list, hit.filter_visible);
     if content.contains(Position::new(column, row)) {
         let index = hit.list_top + usize::from(row - content.y);
@@ -348,8 +362,8 @@ fn text_tail(text: &str, available: usize) -> (String, usize) {
 }
 
 fn filter_line(query: &str, width: usize, focused: bool, color: bool) -> (Line<'static>, u16) {
-    let label = "Filter: ";
-    let (tail, used) = text_tail(query, width.saturating_sub(label.len()));
+    let label = if width >= 10 { "Filter: " } else { "F: " };
+    let (tail, used) = text_tail(query, width.saturating_sub(label.len() + 1));
     let label_style = if color && focused {
         Style::default()
             .fg(ACCENT)
@@ -583,7 +597,8 @@ pub fn draw(
         details: details_area,
         editor: editor_area,
     } = panes(area);
-    let filter_visible = list_view.focused || !list_view.query.is_empty();
+    let filter_visible =
+        filter_visible(list_view.query, list_view.focused, list_view.show_completed);
     let content = list_content(list, filter_visible);
     let list_height = usize::from(content.height);
     *list_view.top = if list_view.follow_selected {
@@ -592,9 +607,11 @@ pub fn draw(
         (*list_view.top).min(rows.len().saturating_sub(list_height))
     };
     if filter_visible {
+        let button = completed_button(list);
+        let query_width = button.x.saturating_sub(list.x + 1);
         let (filter, filter_cursor) = filter_line(
             list_view.query,
-            usize::from(list.width),
+            usize::from(query_width),
             list_view.focused,
             color,
         );
@@ -604,9 +621,35 @@ pub fn draw(
             Style::default()
         };
         frame.render_widget(
-            Paragraph::new(filter).style(filter_style),
+            Block::default().style(filter_style),
             Rect::new(list.x, list.y, list.width, 1),
         );
+        frame.render_widget(
+            Paragraph::new(filter).style(filter_style),
+            Rect::new(list.x, list.y, query_width, 1),
+        );
+        let mark = if list_view.show_completed {
+            '✓'
+        } else {
+            '×'
+        };
+        let label = if button.width == 13 {
+            format!("[{mark} Completed]")
+        } else {
+            format!("[{mark}]")
+        };
+        let button_style = if color {
+            filter_style
+                .fg(if list_view.show_completed {
+                    ACCENT
+                } else {
+                    Color::Gray
+                })
+                .add_modifier(Modifier::BOLD)
+        } else {
+            filter_style
+        };
+        frame.render_widget(Paragraph::new(label).style(button_style), button);
         if list_view.focused {
             frame.set_cursor_position((list.x + filter_cursor, list.y));
         }

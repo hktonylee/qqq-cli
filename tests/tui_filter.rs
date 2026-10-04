@@ -8,26 +8,31 @@ use std::collections::HashSet;
 fn tasks() -> Vec<FilterTask<'static>> {
     vec![
         FilterTask {
+            status: "new",
             id: 1,
             parent_id: None,
             description: "Parent",
         },
         FilterTask {
+            status: "new",
             id: 2,
             parent_id: Some(1),
             description: "Child\nHidden CaSe match",
         },
         FilterTask {
+            status: "new",
             id: 3,
             parent_id: Some(2),
             description: "Grandchild",
         },
         FilterTask {
+            status: "new",
             id: 4,
             parent_id: None,
             description: "Other root",
         },
         FilterTask {
+            status: "new",
             id: 5,
             parent_id: Some(4),
             description: "Match sibling",
@@ -37,7 +42,7 @@ fn tasks() -> Vec<FilterTask<'static>> {
 
 #[test]
 fn filter_matches_full_description_case_insensitively_and_keeps_ancestors() {
-    let filtered = panel::filter_tasks(&tasks(), "cAsE MaTcH");
+    let filtered = panel::filter_tasks(&tasks(), "cAsE MaTcH", true);
     assert_eq!(filtered.included_ids, HashSet::from([1, 2]));
     assert!(filtered.included_ids.contains(&1));
     assert!(!filtered.included_ids.contains(&3));
@@ -47,19 +52,59 @@ fn filter_matches_full_description_case_insensitively_and_keeps_ancestors() {
 #[test]
 fn filter_empty_query_restores_all_and_no_match_is_empty() {
     assert_eq!(
-        panel::filter_tasks(&tasks(), "").included_ids,
+        panel::filter_tasks(&tasks(), "", true).included_ids,
         HashSet::from([1, 2, 3, 4, 5])
     );
     assert!(
-        panel::filter_tasks(&tasks(), "absent")
+        panel::filter_tasks(&tasks(), "absent", true)
             .included_ids
             .is_empty()
     );
 }
 
 #[test]
+fn completed_visibility_excludes_ancestors_without_hiding_unfinished_children() {
+    let mut tasks = tasks();
+    tasks[0].status = "completed";
+    tasks[2].status = "completed";
+    tasks[3].status = "error";
+    tasks[4].status = "in_progress";
+    assert_eq!(
+        panel::filter_tasks(&tasks, "", false).included_ids,
+        HashSet::from([2, 4, 5])
+    );
+    assert_eq!(
+        panel::filter_tasks(&tasks, "match", false).included_ids,
+        HashSet::from([2, 4, 5])
+    );
+    assert_eq!(
+        panel::filter_tasks(&tasks, "case", false).included_ids,
+        HashSet::from([2])
+    );
+    assert!(
+        panel::filter_tasks(&tasks, "parent", false)
+            .included_ids
+            .is_empty()
+    );
+    assert_eq!(
+        panel::filter_tasks(&tasks, "case", true).included_ids,
+        HashSet::from([1, 2])
+    );
+    let filtered = panel::filter_tasks(&tasks, "", false);
+    let ids: Vec<_> = tasks
+        .iter()
+        .filter(|task| filtered.included_ids.contains(&task.id))
+        .map(|task| task.id)
+        .collect();
+    assert_eq!(panel::adjacent_visible_id(&ids, None, true), Some(5));
+    assert_eq!(panel::adjacent_visible_id(&ids, Some(5), true), Some(4));
+    assert_eq!(panel::adjacent_visible_id(&ids, Some(4), true), Some(2));
+    assert_eq!(panel::adjacent_visible_id(&ids, Some(2), true), None);
+}
+
+#[test]
 fn filtered_navigation_skips_hidden_ids_and_reaches_new_draft() {
-    let filtered = panel::filter_tasks(&tasks(), "match");
+    let filtered = panel::filter_tasks(&tasks(), "match", true);
     let ids: Vec<_> = tasks()
         .iter()
         .filter(|task| filtered.included_ids.contains(&task.id))
@@ -99,21 +144,25 @@ fn visible_navigation_uses_displayed_rows_once_per_task() {
 fn dirty_description_offsets_use_hierarchy_with_literal_symbols_and_large_ids() {
     let tasks = [
         FilterTask {
+            status: "new",
             id: 1,
             parent_id: None,
             description: "└── Literal root",
         },
         FilterTask {
+            status: "new",
             id: 2,
             parent_id: Some(1),
             description: "│   Literal child λ",
         },
         FilterTask {
+            status: "new",
             id: 1_234_567,
             parent_id: Some(2),
             description: "Deep",
         },
         FilterTask {
+            status: "new",
             id: 4,
             parent_id: Some(99),
             description: "",

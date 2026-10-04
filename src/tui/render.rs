@@ -14,9 +14,9 @@ pub const ADD_KEYS: &str = "Ctrl-S Save  Shift-Up/Dn Switch Tasks  Esc/Ctrl-C Ex
 pub const DASHBOARD_KEYS: &str =
     "Ctrl-S Save  Ctrl-P Create Child  Ctrl-G Menu  Shift-Up/Dn Switch Tasks  Ctrl+/ Filter";
 pub const DASHBOARD_HERDR_KEYS: &str = "Ctrl-S Save  Ctrl-H Herdr  Ctrl-P Create Child  Ctrl-G Menu  Shift-Up/Dn Switch Tasks  Ctrl+/ Filter";
-pub const FILTER_KEYS: &str = "Type to Filter  Backspace Edit  Esc Clear/Close  Tab/Enter Editor";
-pub const FILTER_HERDR_KEYS: &str =
-    "Type to Filter  Ctrl-H Herdr  Backspace Edit  Esc Clear/Close  Tab/Enter Editor";
+pub const FILTER_KEYS: &str =
+    "Type to Filter  Ctrl-T Completed  Backspace Edit  Esc Clear/Close  Tab/Enter Editor";
+pub const FILTER_HERDR_KEYS: &str = "Type to Filter  Ctrl-T Completed  Ctrl-H Herdr  Backspace Edit  Esc Clear/Close  Tab/Enter Editor";
 const BACKGROUND: Color = Color::AnsiValue(236);
 const FOREGROUND: Color = Color::AnsiValue(252);
 const IMAGE_FOREGROUND: Color = Color::AnsiValue(81);
