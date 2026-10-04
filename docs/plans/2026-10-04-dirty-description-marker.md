@@ -10,7 +10,7 @@ Use saved task parent metadata to locate description start rather than interpret
 - [x] Add first-description-row offsets to panel model; derive parent-tree depths from displayed tasks; remove dirty-dependent wrap width and global dirty column.
 - [x] Verify color/plain, compact/wide/narrow, nested trees, literal markers/tree symbols, long previews, marker clearing, retained drafts and unchanged clean-row geometry with render and PTY regressions.
 - [x] Update docs; run full locked suite, fmt, strict Clippy; read-only review.
-- [ ] Integrate locally, install, verify installed behavior, complete task and resume persistent waiter.
+- [x] Integrate locally, install and verify installed behavior.
 
 ## Validation before integration
 
@@ -19,3 +19,10 @@ Use saved task parent metadata to locate description start rather than interpret
 - Color/plain PTY toggles marker at 72/50/150/72 widths. Other task rows and continuation rows remain identical; revert restores original list. Test waits for completed cursor/frame state.
 - Full locked suite: 578 passed. Strict all-target Clippy, fmt and diff checks passed. Independent review approved.
 - Master advanced with task #138 assignment detail changes; rebase and verify combined tree before local integration.
+
+## Integration checks
+
+- Rebased onto `4c82636`, including assignment-detail and empty-preview updates; no conflicts. Full locked suite: 581 passed. Strict all-target Clippy, fmt and diff checks passed.
+- Fast-forwarded local master to `b6f7a4a`; installed with `cargo install --locked --path . --force` from this worktree.
+- Installed CLI passed color/plain dirty-marker PTY checks at 72/50/150/72 columns. Marker clearing restored original list; metadata, continuation rows, clean rows and click targets kept their positions.
+- Queue closure and persistent waiter restart follow these checks.
