@@ -93,6 +93,7 @@ task to load it, scroll each pane, or use the keyboard:
 | --- | --- |
 | Shift+Up / Shift+Down | Move between tasks and a blank draft |
 | Ctrl+S | Save |
+| Ctrl+L | Go to task ID; retain unsaved drafts |
 | Ctrl+P | Create a child of the selected task |
 | Ctrl+/ | Filter tasks |
 | Ctrl+G | Open task actions |

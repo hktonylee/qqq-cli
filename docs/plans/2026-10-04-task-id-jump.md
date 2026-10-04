@@ -296,10 +296,10 @@ pub const FILTER_HERDR_KEYS: &str = "Type to Filter  Ctrl-H Herdr  Ctrl-L Go to 
 
 **Modify:** `README.md`, `docs/reference.md`, this plan.
 
-- [ ] Add keyboard row `| Ctrl+L | Go to task ID; retain unsaved drafts |`.
+- [x] Add keyboard row `| Ctrl+L | Go to task ID; retain unsaved drafts |`.
   Reference text explains Enter, Esc/Ctrl+C, missing/invalid errors, cleared
   filter on success and session-wide archived visibility after archived jump.
-- [ ] Run `cargo fmt --all --check`, `git diff --check`,
+- [x] Run `cargo fmt --all --check`, `git diff --check`,
   `cargo test --offline --all-targets`,
   `cargo clippy --offline --all-targets -- -D warnings`.
 - [ ] Request read-only review with exact base/head diff. Resolve concrete
@@ -311,3 +311,19 @@ pub const FILTER_HERDR_KEYS: &str = "Type to Filter  Ctrl-H Herdr  Ctrl-L Go to 
 - [ ] Record truthful evidence using `qqq message 157`, complete task from root
   workspace, remove only merged task-157 worktree/branch, resume one persistent
   `qqq next --wait --local --json` process.
+
+Pre-integration checks: 587 tests across 38 binaries passed, including 88 TUI
+tests. Formatting, diff checks and Clippy all targets with warnings denied
+passed. Read-only review found no remaining concrete issues. Existing footer
+expectations now include Ctrl+L; shortcut coloring checks include the new key.
+The hint remains visible in normal and Herdr bars at 72 columns.
+
+Concurrent narrow-terminal stress reproduced partial-frame timing failures in
+7 of 24 runs. Waiting for complete startup, resize and popup frames before input
+and cursor assertions passed 24 of 24 runs. No TUI behavior changes were needed.
+Logs: `/tmp/qqq-task-157-full-frame.log`, `/tmp/qqq-task-157-clippy.log` and
+`/tmp/qqq-task-157-narrow-frame-stress/`.
+
+Integration must cover the completed-task visibility toggle added to master
+during this task: a successful jump to a hidden completed task reveals its row;
+cancellation and jumps to unfinished tasks preserve that visibility preference.

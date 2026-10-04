@@ -1892,6 +1892,7 @@ fn hotkey_footer_colors_shortcuts_and_clears_styles_for_messages() {
                     let shortcut = message.is_empty()
                         && [
                             "Ctrl-S",
+                            "Ctrl-L",
                             "Ctrl-P",
                             "Ctrl-G",
                             "Shift-Up/Dn",

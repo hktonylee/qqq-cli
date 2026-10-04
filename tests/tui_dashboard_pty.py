@@ -745,7 +745,7 @@ print(json.dumps({"result": result}))
                              and (width < 150 or not visible.text().splitlines()[12][:split].strip())
                              and (not selected or editor_line().startswith("Changed Second"))
                              and visible.text().splitlines()[-1].rstrip() ==
-                             "Ctrl-S Save  Ctrl-P Create Child  Ctrl-G Menu  Shift-Up/Dn Switch Tasks  Ctrl+/ Filter"
+                             "Ctrl-S Save  Ctrl-L Go to Task  Ctrl-P Create Child  Ctrl-G Menu  Shift-Up/Dn Switch Tasks  Ctrl+/ Filter"
                              and (visible.x, visible.y) == (8 if selected else 0, 14)
                              and not visible.pending and screen.endswith(final_cursor))
                 settle()
@@ -889,9 +889,15 @@ print(json.dumps({"result": result}))
         elif scenario.startswith("jump"):
             initial_tasks = cli("list")
 
+            def jump_frame_ready():
+                return ("Enter go  Esc cancel" in visible.text()
+                        and 0 <= visible.x < visible.width and 0 <= visible.y < visible.height
+                        and not visible.pending
+                        and screen.endswith(f"\x1b[{visible.y + 1};{visible.x + 1}H".encode()))
+
             def open_jump():
                 send(b"\x0c")
-                wait_visible(lambda: "Go to task" in visible.text())
+                wait_visible(lambda: "Go to task" in visible.text() and jump_frame_ready())
 
             def go_to(task_id, description, cursor=None):
                 open_jump()
@@ -977,14 +983,18 @@ print(json.dumps({"result": result}))
                 wait_visible(lambda: "Task #2 (New)" in editor_title()
                              and editor_line().startswith("Second"))
             elif scenario == "jump_narrow":
+                wait_visible(lambda: not visible.pending and screen.endswith(b"\x1b[15;1H"))
+                clear_capture()
                 fcntl.ioctl(slave, termios.TIOCSWINSZ, struct.pack("HHHH", 12, 32, 0, 0))
                 visible.resize(32, 12)
                 os.kill(child.pid, signal.SIGWINCH)
                 wait_visible(lambda: "New Task" in editor_title()
-                             and (visible.x, visible.y) == (0, editor_row() + 1))
+                             and (visible.x, visible.y) == (0, editor_row() + 1)
+                             and visible.text().splitlines()[-1].startswith("Ctrl-S Save")
+                             and not visible.pending and screen.endswith(b"\x1b[8;1H"))
                 open_jump()
                 send(b"9" * 40 + b"\r")
-                wait_visible(lambda: "positive" in visible.text())
+                wait_visible(lambda: "positive" in visible.text() and jump_frame_ready())
                 assert 0 <= visible.x < 32 and 0 <= visible.y < 12
                 send(b"\x15" + b"2\r")
                 wait_visible(lambda: "Task #2 (New)" in editor_title()
@@ -2852,7 +2862,7 @@ print(json.dumps({"result": result}))
                              and (visible.x, visible.y) == (len("Draft/path"), editor_row() + 1)
                              and "Second" in visible.text())
                 wait_visible(lambda: visible.text().splitlines()[-1].startswith("Ctrl-S Save")
-                             and "Shift-Up/Dn Switch Tasks" in visible.text().splitlines()[-1]
+                             and "Ctrl-L Go to Task" in visible.text().splitlines()[-1]
                              and "Ctrl-P Create Child" in visible.text().splitlines()[-1])
             send(b"\x13")
             read_until(b"Saved #3")
