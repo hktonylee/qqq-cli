@@ -14,10 +14,10 @@ fn row(label: &str, value: &str, color: bool) -> String {
     )
 }
 
-fn harness(task: &Value) -> String {
-    let session = field(task, "harness_session");
-    if task["harness_name"].as_str().is_some() {
-        format!("{session} ({})", field(task, "harness_name"))
+fn session_with_name(task: &Value, session_key: &str, name_key: &str) -> String {
+    let session = field(task, session_key);
+    if task[name_key].as_str().is_some() {
+        format!("{session} ({})", field(task, name_key))
     } else {
         session
     }
@@ -166,15 +166,14 @@ pub(super) fn render(value: &Value, color: bool) -> String {
         )
     ));
     let assignment = [
-        row("Harness:", &harness(task), color),
         row(
-            "Orchestrator name:",
-            &field(task, "orchestrator_name"),
+            "Harness",
+            &session_with_name(task, "harness_session", "harness_name"),
             color,
         ),
         row(
-            "Orchestrator session:",
-            &field(task, "orchestrator_session"),
+            "Orchestrator",
+            &session_with_name(task, "orchestrator_session", "orchestrator_name"),
             color,
         ),
     ]

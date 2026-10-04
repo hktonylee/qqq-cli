@@ -99,8 +99,8 @@ task to load it, scroll each pane, or use the keyboard:
 | Ctrl+H | Open linked Herdr agent; shown only for tasks with a Herdr link |
 | Esc | Close the filter, clear the editor, then exit; changed drafts ask before discard |
 
-Harness assignment appears as `Harness: session (name)` in task details and
-`qqq show`.
+Task details and `qqq show` display assignment in two aligned rows:
+`Harness session (name)` and `Orchestrator session (name)`.
 
 `qqq add` opens the built-in editor too. Prefer Vim or another editor? Set
 `EDITOR` and use `qqq add --edit`.

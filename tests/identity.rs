@@ -79,11 +79,11 @@ fn task_responses_use_harness_and_orchestrator_fields() {
         .output()
         .unwrap();
     let text = String::from_utf8(out.stdout).unwrap();
-    assert!(
-        text.lines()
-            .filter_map(|line| line.split_once(':'))
-            .any(|(label, value)| label.trim() == "Harness" && value.trim() == "-")
-    );
+    assert!(text.lines().any(|line| {
+        line.get(..25)
+            .is_some_and(|label| label.trim() == "Harness")
+            && line[25..].trim() == "-"
+    }));
     assert!(!text.contains("Owner:"));
 }
 

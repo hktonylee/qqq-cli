@@ -94,7 +94,7 @@ CTRL_P = b"\x10"
 with tempfile.TemporaryDirectory(prefix="qqq-dashboard-test-") as folder:
     env = dict(os.environ, HOME=folder, TERM="xterm-256color")
     env.pop("NO_COLOR", None)
-    if scenario in ("no_color", "pasteboard_no_color", "filter_no_color", "details_no_color", "actions_popup_no_color", "wide_layout_no_color", "menu_arrows_no_color", "filter_escape_empty_no_color", "filter_ctrl_c_empty_no_color", "compact_layout_no_color", "handoff_hint_no_color", "menu_retry_new_no_color", "menu_retry_error_no_color", "content_conflict_no_color", "details_harness_no_color"):
+    if scenario in ("no_color", "pasteboard_no_color", "filter_no_color", "details_no_color", "actions_popup_no_color", "wide_layout_no_color", "menu_arrows_no_color", "filter_escape_empty_no_color", "filter_ctrl_c_empty_no_color", "compact_layout_no_color", "handoff_hint_no_color", "menu_retry_new_no_color", "menu_retry_error_no_color", "content_conflict_no_color", "details_assignment_no_color"):
         env["NO_COLOR"] = "1"
     elif scenario == "dumb":
         env["TERM"] = "dumb"
@@ -186,10 +186,11 @@ with tempfile.TemporaryDirectory(prefix="qqq-dashboard-test-") as folder:
         cli("next", "--local", "--session", "worker")
     if scenario == "actions_narrow":
         cli("next", "--local", "--session", "worker")
-    if scenario in ("details_harness", "details_harness_no_color"):
+    if scenario in ("details_assignment", "details_assignment_no_color"):
         cli("next", "--local", "--session", "older")
         cli("next", "--local", "--session", "worker", "--harness-name", "codex",
-            "--harness-session", "00000000-0000-0000-0000-000000000000")
+            "--harness-session", "00000000-0000-0000-0000-000000000000",
+            "--orchestrator-name", "herdr", "--orchestrator-session", "default")
     if scenario in ("scroll", "wheel", "live_refresh_scroll", "ctrl_c_new_scroll"):
         for index in range(3, 21):
             description = ("\n".join(f"Line{line:02}" for line in range(1, 16))
@@ -811,17 +812,20 @@ print(json.dumps({"result": result}))
             wait_visible(lambda: "#1 · new · blocks claim" in details_text())
             if scenario == "prerequisites_no_color":
                 assert b"\x1b[38;" not in screen
-        elif scenario in ("details_harness", "details_harness_no_color"):
+        elif scenario in ("details_assignment", "details_assignment_no_color"):
             initial_tasks = cli("list")
             send(b"\x1b[1;2A")
             wait_visible(lambda: "Task #2 (In progress)" in editor_title()
                          and editor_line().startswith("Second")
                          and (visible.x, visible.y) == (6, editor_row() + 1))
-            scroll_details_to(lambda text: "Harness:" in text)
+            scroll_details_to(lambda text: "Harness" in text)
             lines = details_text().splitlines()
-            index = next(index for index, row in enumerate(lines) if row.strip().startswith("Harness:"))
+            index = next(index for index, row in enumerate(lines) if row.strip().startswith("Harness"))
             assert lines[index][25:] + lines[index + 1] == "00000000-0000-0000-0000-000000000000 (codex)", visible.text()
+            assert lines[index][:25].strip() == "Harness", visible.text()
             assert lines[index + 1] == "ex)", visible.text()
+            assert lines[index + 2][:25].strip() == "Orchestrator", visible.text()
+            assert lines[index + 2][25:] == "default (herdr)", visible.text()
             assert "Harness name:" not in details_text() and "Harness session:" not in details_text()
             assert editor_line().startswith("Second") and (visible.x, visible.y) == (6, editor_row() + 1)
             assert cli("list") == initial_tasks
@@ -856,8 +860,8 @@ print(json.dumps({"result": result}))
                 row = next(row for row in details_text().splitlines() if row.strip().startswith(label))
                 assert row[25:] == selected_task[key], visible.text()
             scroll_details_to(lambda text: "Assignment:" in text)
-            scroll_details_to(lambda text: "Harness:" in text)
-            row = next(row for row in details_text().splitlines() if row.strip().startswith("Harness:"))
+            scroll_details_to(lambda text: "Harness" in text)
+            row = next(row for row in details_text().splitlines() if row.strip().startswith("Harness"))
             assert row[25:] == "-", visible.text()
             for empty in ("Images: None", "History: None", "Herdr: Not linked"):
                 scroll_details_to(lambda text, empty=empty: empty in text)

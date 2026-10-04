@@ -140,9 +140,8 @@ fn human_next_omits_assignment_while_json_and_show_retain_it() {
         assert_eq!(json[key], expected);
     }
     for (label, expected) in [
-        ("Harness:", "visible (codex)"),
-        ("Orchestrator name:", "herdr"),
-        ("Orchestrator session:", "work"),
+        ("Harness", "visible (codex)"),
+        ("Orchestrator", "work (herdr)"),
     ] {
         assert!(
             shown
@@ -199,18 +198,12 @@ fn human_tasks_show_descriptions_dependencies_and_ownership() {
             .lines()
             .any(|line| line.trim_start().starts_with("Parent:") && line.ends_with("#1"))
     );
-    for label in [
-        "Harness: -",
-        "Orchestrator name: -",
-        "Orchestrator session: -",
-    ] {
-        let (name, value) = label.split_once(':').unwrap();
+    for name in ["Harness", "Orchestrator"] {
         assert!(
             child
                 .lines()
-                .any(|line| line.trim_start().starts_with(&format!("{name}:"))
-                    && line.trim_end().ends_with(value.trim())),
-            "{label}: {child}"
+                .any(|line| line.trim_start().starts_with(name) && line.trim_end().ends_with('-')),
+            "{name}: {child}"
         );
     }
     let changed = text(p, &["edit", "2", "--description", "New details"]);

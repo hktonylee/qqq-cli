@@ -122,9 +122,9 @@ fn tui_dashboard_keeps_details_and_editor_layout_stable() {
 }
 
 #[test]
-fn tui_dashboard_groups_harness_assignment() {
-    dashboard_scenario("details_harness");
-    dashboard_scenario("details_harness_no_color");
+fn tui_dashboard_groups_assignment_sessions_and_names() {
+    dashboard_scenario("details_assignment");
+    dashboard_scenario("details_assignment_no_color");
 }
 
 #[test]

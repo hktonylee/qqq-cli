@@ -43,22 +43,12 @@ fn show_groups_description_and_aligns_complete_metadata() {
         "{shown}"
     );
     let mut columns = Vec::new();
-    for label in [
-        "Parent:",
-        "Created:",
-        "Updated:",
-        "Harness:",
-        "Orchestrator name:",
-        "Orchestrator session:",
-    ] {
+    for label in ["Parent:", "Created:", "Updated:", "Harness", "Orchestrator"] {
         let row = shown
             .lines()
             .find(|row| row.trim_start().starts_with(label))
             .unwrap();
-        columns.push(
-            row.find(':').unwrap() + 1 + row.split_once(':').unwrap().1.len()
-                - row.split_once(':').unwrap().1.trim_start().len(),
-        );
+        columns.push(row.len() - row[2 + label.len()..].trim_start().len());
     }
     assert!(
         columns.iter().all(|&column| column == 25),
@@ -81,7 +71,7 @@ fn show_groups_description_and_aligns_complete_metadata() {
 }
 
 #[test]
-fn show_combines_harness_session_and_name_without_changing_json() {
+fn show_combines_assignment_sessions_and_names_without_changing_json() {
     let dir = project();
     let p = dir.path();
     cli(p, &["add", "Task"]);
@@ -96,19 +86,36 @@ fn show_combines_harness_session_and_name_without_changing_json() {
             "codex",
             "--harness-session",
             "session-1",
+            "--orchestrator-name",
+            "herdr",
+            "--orchestrator-session",
+            "default",
         ],
     );
     let shown = cli(p, &["show", "1"]);
     let rows: Vec<_> = shown
+        .split("\n\nAssignment:\n")
+        .nth(1)
+        .unwrap()
+        .split("\n\n")
+        .next()
+        .unwrap()
         .lines()
-        .filter(|line| line.trim_start().starts_with("Harness:"))
+        .map(|line| (line[..25].trim(), &line[25..]))
         .collect();
-    assert_eq!(rows.len(), 1, "{shown}");
-    assert_eq!(&rows[0][25..], "session-1 (codex)");
-    assert!(!shown.contains("Harness name:") && !shown.contains("Harness session:"));
+    assert_eq!(
+        rows,
+        [
+            ("Harness", "session-1 (codex)"),
+            ("Orchestrator", "default (herdr)")
+        ],
+        "{shown}"
+    );
     let json: Value = serde_json::from_str(&cli(p, &["show", "1", "--json"])).unwrap();
     assert_eq!(json["task"]["harness_name"], "codex");
     assert_eq!(json["task"]["harness_session"], "session-1");
+    assert_eq!(json["task"]["orchestrator_name"], "herdr");
+    assert_eq!(json["task"]["orchestrator_session"], "default");
 }
 
 #[test]
