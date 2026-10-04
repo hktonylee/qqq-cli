@@ -231,6 +231,12 @@ fn tui_dashboard_buffers_preserve_manual_scroll_and_pending_atoms() {
 }
 
 #[test]
+fn tui_dashboard_dirty_marker_preserves_list_geometry() {
+    dashboard_scenario("dirty_marker");
+    dashboard_scenario("dirty_marker_no_color");
+}
+
+#[test]
 fn tui_dashboard_buffers_retain_navigation_and_independent_saves() {
     for name in [
         "buffers_navigation",

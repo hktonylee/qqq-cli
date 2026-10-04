@@ -98,7 +98,7 @@ with tempfile.TemporaryDirectory(prefix="qqq-dashboard-test-") as folder:
         env["NO_COLOR"] = "1"
     elif scenario == "dumb":
         env["TERM"] = "dumb"
-    if scenario.startswith(("buffers_", "long_description_", "prerequisites")) and scenario.endswith("no_color"):
+    if scenario.startswith(("buffers_", "long_description_", "prerequisites", "dirty_marker")) and scenario.endswith("no_color"):
         env["NO_COLOR"] = "1"
     for name in ("EDITOR", "QQQ_SESSION", "HERDR_ENV", "HERDR_PANE_ID", "CODEX_THREAD_ID", "CODEX_SESSION_ID"):
         env.pop(name, None)
@@ -202,6 +202,9 @@ with tempfile.TemporaryDirectory(prefix="qqq-dashboard-test-") as folder:
         cli("add", "\n".join(f"Line{index:02}" for index in range(1, 13)))
     if scenario in ("prerequisites", "prerequisites_no_color"):
         cli("edit", "2", "--depends-on", "1")
+    if scenario.startswith("dirty_marker"):
+        cli("edit", "1", "--description", "First " + "unchanged clean words " * 8 + "\nClean tail")
+        cli("edit", "2", "--description", "Second " + "wrapped saved words " * 8 + "\nContinuation\nTail")
     if scenario.startswith("content_conflict"):
         stored_image = Path(folder) / "stored.png"
         stored_image.write_bytes(b"\x89PNG\r\n\x1a\nstored")
@@ -797,6 +800,36 @@ print(json.dumps({"result": result}))
             wait_visible(lambda: "Task #3 (New)" in editor_title())
             wait_end("<New text")
             assert cli("show", "3")["task"]["description"] == "<New text"
+        elif scenario.startswith("dirty_marker"):
+            def marker_frame_ready(cursor_x):
+                final_cursor=f"\x1b[{visible.y+1};{cursor_x+1}H".encode()
+                return ("Task #2 (" in editor_title()
+                        and visible.text().splitlines()[-1].startswith("Ctrl-S Save")
+                        and visible.x==cursor_x and editor_row()<visible.y<visible.height-1
+                        and not visible.pending and screen.endswith(final_cursor))
+            send(b"\x1b[1;2A")
+            wait_visible(lambda: marker_frame_ready(4))
+            for width in (72, 50, 150, 72):
+                if visible.width != width:
+                    fcntl.ioctl(slave, termios.TIOCSWINSZ, struct.pack("HHHH", 24, width, 0, 0))
+                    visible.resize(width, 24)
+                    child.send_signal(signal.SIGWINCH)
+                    wait_visible(lambda: marker_frame_ready(4) and "Second" in visible.text())
+                list_before=visible.text().splitlines()[:list_bottom()+1]
+                first=task_row("Second")-1
+                column=9 if width<60 else 22
+                send(b"!")
+                wait_visible(lambda: marker_frame_ready(5) and "[*]" in visible.text().splitlines()[first])
+                list_after=visible.text().splitlines()[:list_bottom()+1]
+                assert len(list_after)==len(list_before), visible.text()
+                assert list_after[first][:column]==list_before[first][:column], visible.text()
+                assert list_after[first][column:column+4]=="[*] ", visible.text()
+                assert all(list_after[index]==row for index,row in enumerate(list_before) if index!=first), visible.text()
+                send(b"\x7f")
+                wait_visible(lambda: marker_frame_ready(4) and "[*]" not in visible.text())
+                assert visible.text().splitlines()[:list_bottom()+1]==list_before, visible.text()
+            if scenario.endswith("no_color"):
+                assert b"\x1b[38;" not in screen and b"\x1b[48;" not in screen
         elif scenario in ("prerequisites", "prerequisites_no_color"):
             send(b"\x1b[1;2A")
             wait_visible(lambda: "Task #2 (New)" in editor_title())

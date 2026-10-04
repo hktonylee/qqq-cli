@@ -94,3 +94,56 @@ fn visible_navigation_uses_displayed_rows_once_per_task() {
     );
     assert_eq!(panel::visible_ids(&rows), vec![1, 4, 2, 3]);
 }
+
+#[test]
+fn dirty_description_offsets_use_hierarchy_with_literal_symbols_and_large_ids() {
+    let tasks = [
+        FilterTask {
+            id: 1,
+            parent_id: None,
+            description: "└── Literal root",
+        },
+        FilterTask {
+            id: 2,
+            parent_id: Some(1),
+            description: "│   Literal child λ",
+        },
+        FilterTask {
+            id: 1_234_567,
+            parent_id: Some(2),
+            description: "Deep",
+        },
+        FilterTask {
+            id: 4,
+            parent_id: Some(99),
+            description: "",
+        },
+    ];
+    let tree = "1      New          └── Literal root\n                    Root continuation\n2      Completed    └── │   Literal child λ\n1234567 In progress      └── Deep\n4      New          ";
+    let mut rows = panel::rows(tree, 70);
+    panel::set_dirty_markers(
+        &mut rows,
+        &tasks,
+        &HashSet::from([1, 2, 1_234_567, 4]),
+        true,
+    );
+    assert_eq!(
+        &rows[0].text[rows[0].description_start.unwrap()..],
+        "└── Literal root"
+    );
+    assert!(rows[1].description_start.is_none());
+    assert_eq!(
+        &rows[2].text[rows[2].description_start.unwrap()..],
+        "│   Literal child λ"
+    );
+    assert_eq!(&rows[3].text[rows[3].description_start.unwrap()..], "Deep");
+    assert_eq!(rows[4].description_start, Some(rows[4].text.len()));
+    assert!(rows.iter().all(|row| row.dirty));
+    let text: Vec<_> = rows.iter().map(|row| row.text.clone()).collect();
+    panel::set_dirty_markers(&mut rows, &tasks, &HashSet::new(), true);
+    assert!(rows.iter().all(|row| !row.dirty));
+    assert_eq!(
+        rows.iter().map(|row| row.text.clone()).collect::<Vec<_>>(),
+        text
+    );
+}

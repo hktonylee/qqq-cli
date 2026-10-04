@@ -435,8 +435,10 @@ Selection fills whole row with muted blue background, including wrapped lines;
 light text stays readable. Plain mode uses `>` marker.
 Shift-Up/Down selects tasks in displayed tree order, then new-task draft.
 Switching retains unsaved drafts in memory for this TUI session. Returning restores
-text, image/paste items, caret and manual editor scroll. Dirty task rows show gold
-`[*]` marker (text marker in plain mode); dirty new/child drafts show `[*]` in title.
+text, image/paste items, caret and manual editor scroll. Dirty tasks show gold
+`[*]` only before the first description preview line (text marker in plain mode).
+ID/status columns, wrapping and continuation rows stay fixed when marker toggles;
+first-line preview clips at pane edge. Dirty new/child drafts show `[*]` in title.
 Reverting edits clears marker. Task list/filter still use saved DB descriptions.
 Ctrl-S saves only selected draft; failed save keeps draft and marker. By default, saved task stays open for
 further edits or task actions. Freshly loaded and saved tasks place cursor at description

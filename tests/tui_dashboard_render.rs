@@ -1984,10 +1984,6 @@ fn failed_save_footer_uses_error_color() {
 
 #[test]
 fn dirty_marker_is_distinct_aligned_and_keeps_task_hit_targets() {
-    let mut rows = panel::rows("1 New First\n  continuation\n2 New Literal [*]", 66);
-    for row in &mut rows {
-        row.dirty = row.task_id == Some(1);
-    }
     let layout = render::Layout::new(&["Draft".into()], &[], 72);
     let chrome = render::Chrome {
         title: "Task Editor",
@@ -1996,6 +1992,31 @@ fn dirty_marker_is_distinct_aligned_and_keeps_task_hit_targets() {
         message: "",
     };
     for width in [12, 50, 72, 150] {
+        let compact = width < dashboard::COMPACT_COLUMNS;
+        let tree = if compact {
+            "1      First\n       continuation\n2      Literal [*]"
+        } else {
+            "1      New          First\n                    continuation\n2      New          Literal [*]"
+        };
+        let mut rows = panel::rows(tree, usize::from(width).saturating_sub(2));
+        panel::set_dirty_markers(
+            &mut rows,
+            &[
+                panel::FilterTask {
+                    id: 1,
+                    parent_id: None,
+                    description: "First\ncontinuation",
+                },
+                panel::FilterTask {
+                    id: 2,
+                    parent_id: None,
+                    description: "Literal [*]",
+                },
+            ],
+            &std::collections::HashSet::from([1]),
+            !compact,
+        );
+        let description = if compact { 9 } else { 22 };
         for color in [true, false] {
             for selected in [None, Some(1)] {
                 let mut terminal = Terminal::new(TestBackend::new(width, 24)).unwrap();
@@ -2027,13 +2048,19 @@ fn dirty_marker_is_distinct_aligned_and_keeps_task_hit_targets() {
                     })
                     .unwrap();
                 let buffer = terminal.backend().buffer();
-                assert_eq!(&line(buffer, 0)[2..6], "[*] ");
-                assert_eq!(&line(buffer, 1)[2..6], "[*] ");
-                let clean = "      2 New Literal [*]";
+                let first = line(buffer, 0);
+                assert_eq!(&first[description..description + 3], "[*]");
+                assert!(first[2..description].starts_with("1      "));
+                assert!(!line(buffer, 1).contains("[*]"));
+                let clean = if compact {
+                    "  2      Literal [*]"
+                } else {
+                    "  2      New          Literal [*]"
+                };
                 assert!(line(buffer, 2).starts_with(&clean[..usize::from(width).min(clean.len())]));
                 assert_eq!(buffer[(2, 2)].bg, Color::Reset);
                 assert_eq!(buffer[(2, 2)].fg, Color::Reset);
-                let marker = &buffer[(2, 0)];
+                let marker = &buffer[(description as u16, 0)];
                 assert_eq!(
                     marker.fg,
                     if color {

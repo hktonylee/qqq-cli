@@ -52,6 +52,7 @@ pub struct ListRow {
     pub text: String,
     pub task_id: Option<i64>,
     pub dirty: bool,
+    pub description_start: Option<usize>,
 }
 
 pub fn visible_ids(rows: &[ListRow]) -> Vec<i64> {
@@ -105,9 +106,52 @@ pub fn rows(tree: &str, width: usize) -> Vec<ListRow> {
             text: line.to_owned(),
             task_id,
             dirty: false,
+            description_start: None,
         });
     }
     rows
+}
+
+/// Locate first description rows from task hierarchy, never from description text.
+/// Metadata widths mirror output::task_tree; large IDs can grow beyond six cells.
+pub fn set_dirty_markers(
+    rows: &mut [ListRow],
+    tasks: &[FilterTask<'_>],
+    dirty: &HashSet<i64>,
+    show_status: bool,
+) {
+    let ids: HashSet<_> = tasks.iter().map(|task| task.id).collect();
+    let mut children: HashMap<i64, Vec<i64>> = HashMap::new();
+    let mut stack = Vec::new();
+    for task in tasks {
+        match task.parent_id.filter(|id| ids.contains(id)) {
+            Some(parent) => children.entry(parent).or_default().push(task.id),
+            None => stack.push((task.id, 0_usize)),
+        }
+    }
+    let mut columns = HashMap::new();
+    while let Some((id, depth)) = stack.pop() {
+        let metadata = id.to_string().len().max(6) + 1 + if show_status { 13 } else { 0 };
+        columns.insert(id, metadata + depth * 4);
+        if let Some(children) = children.get(&id) {
+            stack.extend(children.iter().map(|id| (*id, depth + 1)));
+        }
+    }
+    let mut previous = None;
+    for row in rows {
+        row.dirty = row.task_id.is_some_and(|id| dirty.contains(&id));
+        row.description_start = if row.task_id != previous {
+            row.task_id.and_then(|id| columns.get(&id)).map(|column| {
+                row.text
+                    .char_indices()
+                    .nth(*column)
+                    .map_or(row.text.len(), |(index, _)| index)
+            })
+        } else {
+            None
+        };
+        previous = row.task_id;
+    }
 }
 
 pub fn scroll_to(rows: &[ListRow], selected: Option<i64>, top: usize, height: usize) -> usize {

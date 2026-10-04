@@ -842,7 +842,6 @@ fn compose_inner(
             if let Some(id) = target_id.filter(|_| active_dirty) {
                 dirty_ids.insert(id);
             }
-            let dirty_column = displayed.iter().any(|task| dirty_ids.contains(&task.id));
             rows = if !filter_query.is_empty() && displayed.is_empty() {
                 Vec::new()
             } else {
@@ -851,7 +850,7 @@ fn compose_inner(
                         .list
                         .width,
                 )
-                .saturating_sub(2 + if dirty_column { 4 } else { 0 });
+                .saturating_sub(2);
                 let tree = crate::output::render(
                     if size.0 < dashboard::COMPACT_COLUMNS {
                         crate::output::Format::CompactTasks
@@ -864,9 +863,21 @@ fn compose_inner(
                 );
                 panel::rows(&tree, list_width)
             };
-            for row in &mut rows {
-                row.dirty = row.task_id.is_some_and(|id| dirty_ids.contains(&id));
-            }
+            let displayed_views: Vec<_> = filter_views
+                .iter()
+                .filter(|task| filtered.included_ids.contains(&task.id))
+                .map(|task| panel::FilterTask {
+                    id: task.id,
+                    parent_id: task.parent_id,
+                    description: task.description,
+                })
+                .collect();
+            panel::set_dirty_markers(
+                &mut rows,
+                &displayed_views,
+                &dirty_ids,
+                size.0 >= dashboard::COMPACT_COLUMNS,
+            );
             list_row_count = rows.len();
             visible_ids = Some(panel::visible_ids(&rows));
             let popup_content = dashboard::popup_layout(
