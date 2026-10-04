@@ -15,6 +15,8 @@ retained draft or loads its current content snapshot, clears the list filter,
 focuses the editor and follows the selected row. Caret, baseline, pending images,
 child context and manual editor scroll remain part of retained drafts. Jumping
 to an archived task enables archived rows for the rest of this dashboard session.
+Jumping to a completed task enables completed rows when hidden. Other jumps and
+cancellation preserve the completed visibility preference.
 Navigation writes no task content, status or ownership metadata.
 
 Esc or Ctrl+C closes only the jump popup. Draft, selection, filter, focus and

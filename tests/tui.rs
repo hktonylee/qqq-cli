@@ -71,6 +71,11 @@ fn tui_dashboard_task_id_jump_works_in_compact_terminal() {
 }
 
 #[test]
+fn tui_dashboard_task_id_jump_reveals_hidden_completed_tasks() {
+    dashboard_scenario("jump_completed");
+}
+
+#[test]
 fn tui_dashboard_content_conflicts_preserve_local_drafts() {
     dashboard_scenario("content_conflict");
     dashboard_scenario("content_conflict_no_color");

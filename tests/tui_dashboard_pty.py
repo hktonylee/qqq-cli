@@ -212,6 +212,9 @@ with tempfile.TemporaryDirectory(prefix="qqq-dashboard-test-") as folder:
         cli("archive", "2")
         for index in range(3, 21):
             cli("add", f"Task {index}")
+    if scenario == "jump_completed":
+        cli("next", "--local", "--session", "completed", "--filter", "id == 2")
+        cli("complete", "2", "--session", "completed")
     if scenario.startswith("dirty_marker"):
         cli("edit", "1", "--description", "First " + "unchanged clean words " * 8 + "\nClean tail")
         cli("edit", "2", "--description", "Second " + "wrapped saved words " * 8 + "\nContinuation\nTail")
@@ -899,12 +902,14 @@ print(json.dumps({"result": result}))
                 send(b"\x0c")
                 wait_visible(lambda: "Go to task" in visible.text() and jump_frame_ready())
 
-            def go_to(task_id, description, cursor=None):
+            def go_to(task_id, description, cursor=None, status="New"):
                 open_jump()
                 send(str(task_id).encode() + b"\r")
-                wait_visible(lambda: f"Task #{task_id} (New)" in editor_title()
+                wait_visible(lambda: f"Task #{task_id} ({status})" in editor_title()
                              and editor_line().startswith(description)
-                             and (cursor is None or (visible.x, visible.y) == (cursor, editor_row() + 1)))
+                             and (cursor is None or (visible.x, visible.y) == (cursor, editor_row() + 1))
+                             and not visible.pending
+                             and screen.endswith(f"\x1b[{visible.y + 1};{visible.x + 1}H".encode()))
                 assert "Go to task" not in visible.text(), visible.text()
 
             if scenario in ("jump", "jump_no_color"):
@@ -982,6 +987,23 @@ print(json.dumps({"result": result}))
                 send(b"\x1b[1;2A\x1b[1;2B")
                 wait_visible(lambda: "Task #2 (New)" in editor_title()
                              and editor_line().startswith("Second"))
+            elif scenario == "jump_completed":
+                send(b"Draft" + CTRL_SLASH + b"\x14")
+                wait_frame(lambda: completed_button_text() == "[× Completed]"
+                           and "Second" not in list_text() and editor_line().startswith("Draft"))
+                open_jump()
+                send(b"2\x1b")
+                wait_frame(lambda: "Go to task" not in visible.text()
+                           and completed_button_text() == "[× Completed]"
+                           and "Second" not in list_text() and "New Task" in editor_title())
+                go_to(1, "First", 5)
+                assert completed_button_text() == "[× Completed]" and "Second" not in list_text(), visible.text()
+                go_to(2, "Second", 6, status="Completed")
+                assert "Second" in list_text(), visible.text()
+                assert not visible.text().splitlines()[0].startswith("Filter:"), visible.text()
+                send(b"\x1b[1;2B")
+                wait_frame(lambda: "New Task" in editor_title() and editor_line().startswith("Draft")
+                           and (visible.x, visible.y) == (5, editor_row() + 1))
             elif scenario == "jump_narrow":
                 wait_visible(lambda: not visible.pending and screen.endswith(b"\x1b[15;1H"))
                 clear_capture()

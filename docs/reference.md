@@ -471,8 +471,9 @@ Enter to go; invalid or missing IDs keep popup open with an error. Backspace edi
 input; Ctrl+U clears it. Esc or Ctrl+C closes popup and preserves selection,
 draft, filter and focus. Successful jump clears filter and retains unsaved
 task/new/child drafts, including caret and editor scroll. Jumping to archived
-task enables archived rows for remaining dashboard session. Navigation saves
-no content and changes no task status or ownership.
+task enables archived rows for remaining dashboard session. Jumping to completed
+task reveals completed rows when hidden; other jumps and cancellation preserve
+that setting. Navigation saves no content and changes no task status or ownership.
 
 Ctrl-H focuses selected task's live Herdr agent and opens Herdr client using
 task's linked server. `Ctrl-H Herdr` appears in the shortcut bar only when the

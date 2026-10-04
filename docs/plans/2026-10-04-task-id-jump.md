@@ -247,6 +247,7 @@ if let Some(mut ui) = jump_ui.take() {
                     &mut draft, &mut target_id, &mut target_status, &mut draft_parent_id,
                     &mut baseline, &mut top);
                 include_archived |= archived;
+                show_completed |= target_status.as_deref() == Some("completed");
                 filter_query.clear();
                 filter_focused = false;
                 list_top = 0;
@@ -283,8 +284,8 @@ if dashboard && control && key.code == KeyCode::Char('l')
 ```rust
 pub const DASHBOARD_KEYS: &str = "Ctrl-S Save  Ctrl-L Go to Task  Ctrl-P Create Child  Ctrl-G Menu  Shift-Up/Dn Switch Tasks  Ctrl+/ Filter";
 pub const DASHBOARD_HERDR_KEYS: &str = "Ctrl-S Save  Ctrl-H Herdr  Ctrl-L Go to Task  Ctrl-P Create Child  Ctrl-G Menu  Shift-Up/Dn Switch Tasks  Ctrl+/ Filter";
-pub const FILTER_KEYS: &str = "Type to Filter  Ctrl-L Go to Task  Backspace Edit  Esc Clear/Close  Tab/Enter Editor";
-pub const FILTER_HERDR_KEYS: &str = "Type to Filter  Ctrl-H Herdr  Ctrl-L Go to Task  Backspace Edit  Esc Clear/Close  Tab/Enter Editor";
+pub const FILTER_KEYS: &str = "Type to Filter  Ctrl-L Go to Task  Ctrl-T Completed  Backspace Edit  Esc Clear/Close  Tab/Enter Editor";
+pub const FILTER_HERDR_KEYS: &str = "Type to Filter  Ctrl-L Go to Task  Ctrl-T Completed  Ctrl-H Herdr  Backspace Edit  Esc Clear/Close  Tab/Enter Editor";
 ```
 - [x] Run `cargo fmt --all`, controller tests and all new PTY tests. Verify
   invalid/missing IDs do not mutate DB, cancellation preserves filter/focus,
@@ -305,7 +306,7 @@ pub const FILTER_HERDR_KEYS: &str = "Type to Filter  Ctrl-H Herdr  Ctrl-L Go to 
 - [ ] Request read-only review with exact base/head diff. Resolve concrete
   findings, commit checks and documentation, rebase and fast-forward local master.
 - [ ] Verify combined source if parent production changed. Install with
-  `cargo install --path . --locked --offline --force`. Run all six new PTY
+  `cargo install --path . --locked --offline --force`. Run all seven new PTY
   scenarios plus existing filter, retained-buffer, child, actions, compact and
   wide-layout checks against the absolute installed binary path.
 - [ ] Record truthful evidence using `qqq message 157`, complete task from root
@@ -327,3 +328,11 @@ Logs: `/tmp/qqq-task-157-full-frame.log`, `/tmp/qqq-task-157-clippy.log` and
 Integration must cover the completed-task visibility toggle added to master
 during this task: a successful jump to a hidden completed task reveals its row;
 cancellation and jumps to unfinished tasks preserve that visibility preference.
+
+Rebase preserved both Ctrl+L and Ctrl-T hints, NO_COLOR scenarios, and fixture
+exclusions. New `jump_completed` PTY regression failed before the integration
+fix because editor loaded task #2 while its completed row stayed hidden. The
+fix enables completed rows only when destination is completed. All four jump
+tests, covering seven scenarios, passed afterward. Cancel and unfinished jumps
+preserve the hidden-completed setting and retained new draft. Red/green logs:
+`/tmp/qqq-task-157-completed-red.log`, `/tmp/qqq-task-157-integrated-jump.log`.

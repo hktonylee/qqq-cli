@@ -1183,6 +1183,7 @@ fn compose_inner(
                                     &mut top,
                                 );
                                 include_archived |= archived;
+                                show_completed |= target_status.as_deref() == Some("completed");
                                 filter_query.clear();
                                 filter_focused = false;
                                 list_top = 0;
