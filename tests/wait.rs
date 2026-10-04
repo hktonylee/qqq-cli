@@ -266,7 +266,7 @@ fn wait_returns_released_task_in_human_output() {
     ] {
         assert!(!output.contains(label), "{label}: {output}");
     }
-    assert!(!output.contains("No ready tasks."));
+    assert!(!output.contains("No task available for pickup."));
     assert_eq!(ok(p, &["show", "1"])["task"]["harness_session"], "worker");
 }
 

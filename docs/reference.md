@@ -702,7 +702,7 @@ qqq next --wait
 
 `--session` overrides `QQQ_SESSION`. Each owner gets one active task; repeated
 `next` returns it. Claims never expire. `--wait` blocks until work is ready;
-without it, empty queue prints `No ready tasks.` and exits successfully. Error
+without it, empty queue prints `No task available for pickup.` and exits successfully. Error
 tasks and blocked children stay out of queue.
 
 `next --dry-run` previews queued candidate without claiming or dispatching an
@@ -711,9 +711,8 @@ Preview retains stored `new` status and metadata. Combine with `--filter`,
 `--wait`, `--local`, and `--json`. Preview does not reserve task; another worker
 can claim it afterward.
 
-Without a queued candidate, human preview prints `No queued task ready to preview.
-Run qqq status for task states.` This distinguishes the candidate preview from
-tasks already in progress; `qqq status` shows blocked, active, and error tasks.
+Without a queued candidate, human preview prints `No task available for pickup.`
+Use `qqq status` to inspect blocked, active, and error tasks.
 JSON preview returns `null` when no candidate is available.
 
 ```sh

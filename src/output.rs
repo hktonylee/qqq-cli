@@ -18,7 +18,6 @@ pub enum Format {
     Import,
     Task,
     NextTask,
-    NextPreview,
     QueueOverview,
     NextExplanation,
     Tasks,
@@ -60,7 +59,6 @@ impl From<&Commands> for Format {
             Commands::Tui { .. } => Self::Task,
             Commands::Status { .. } => Self::QueueOverview,
             Commands::Next { explain: true, .. } => Self::NextExplanation,
-            Commands::Next { dry_run: true, .. } => Self::NextPreview,
             Commands::Next { .. } => Self::NextTask,
             Commands::Edit { .. }
             | Commands::Archive { .. }
@@ -484,10 +482,9 @@ pub fn render(format: Format, value: &Value, color: bool, columns: Option<usize>
             }
             lines.join("\n")
         }
-        Format::NextPreview if value.is_null() => {
-            "No queued task ready to preview. Run qqq status for task states.".to_owned()
+        Format::Task | Format::NextTask if value.is_null() => {
+            "No task available for pickup.".to_owned()
         }
-        Format::Task | Format::NextTask if value.is_null() => "No ready tasks.".to_owned(),
         Format::AddedTask => match value.as_array() {
             Some(tasks) => tasks
                 .iter()
@@ -497,7 +494,7 @@ pub fn render(format: Format, value: &Value, color: bool, columns: Option<usize>
             None => task(value, false, false),
         },
         Format::Task => task(value, false, true),
-        Format::NextTask | Format::NextPreview => task(value, false, false),
+        Format::NextTask => task(value, false, false),
         Format::Tasks => task_tree(
             value.as_array().expect("task list is an array"),
             color,

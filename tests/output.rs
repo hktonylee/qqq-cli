@@ -56,7 +56,7 @@ fn next_dry_run_reports_stored_task_and_empty_queue() {
     let p = dir.path();
     assert_eq!(
         text(p, &["next", "--dry-run"]),
-        "No queued task ready to preview. Run qqq status for task states.\n"
+        "No task available for pickup.\n"
     );
     assert_eq!(text(p, &["next", "--dry-run", "--json"]), "null\n");
     text(p, &["add", "Preview"]);
@@ -69,7 +69,7 @@ fn next_dry_run_reports_stored_task_and_empty_queue() {
     text(p, &["next", "--local", "--session", "owner"]);
     assert_eq!(
         text(p, &["next", "--dry-run", "--session", "owner"]),
-        "No queued task ready to preview. Run qqq status for task states.\n"
+        "No task available for pickup.\n"
     );
 }
 
@@ -158,7 +158,10 @@ fn human_tasks_show_descriptions_dependencies_and_ownership() {
     let d = project();
     let p = d.path();
     assert_eq!(text(p, &["list"]), "No tasks yet.\n");
-    assert_eq!(text(p, &["next", "--session", "a"]), "No ready tasks.\n");
+    assert_eq!(
+        text(p, &["next", "--session", "a"]),
+        "No task available for pickup.\n"
+    );
     let added = text(p, &["add", "Build API\n\nFirst line\nSecond line"]);
     assert!(added.contains("#1"), "{added}");
     assert!(added.contains("Build API"), "{added}");

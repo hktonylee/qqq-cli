@@ -2,7 +2,7 @@
 
 Task 155 screenshot: `qqq next --dry-run` printed `No ready tasks.` while unfinished tasks were already in progress. Preview correctly found no queued candidate; generic empty-task copy did not explain what the command previews.
 
-Human empty preview now prints `No queued task ready to preview. Run qqq status for task states.` A separate preview format handles this message; successful previews retain stored task formatting. Existing queued-only preview contract remains intact: owned tasks are skipped, JSON empty result is `null`, ordinary claims retain their output and ownership reuse, waits emit no empty message while blocking.
+Human empty `next` and `next --dry-run` now print `No task available for pickup.` This follows the user's clarified wording preference; both commands share the existing task formatter. Successful previews retain stored task formatting. Existing queued-only preview contract remains intact: owned tasks are skipped, JSON empty result is `null`, ordinary claims retain ownership reuse, waits emit no empty message while blocking.
 
 ## Verification
 

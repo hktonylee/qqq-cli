@@ -20,7 +20,7 @@ task, without reserving it. Concurrent previews may return same task, and anothe
 worker may claim it immediately afterward.
 
 Reuse normal task output. Empty preview keeps JSON `null`; human output says
-`No queued task ready to preview. Run qqq status for task states.` Add help and
+`No task available for pickup.` Add help and
 README examples. Verify priority/ties, blocked/archived/
 error/completed exclusion, filters, skipping owned tasks, no writes despite
 overrides, dispatch bypass, waiting, and subsequent real claim. Run existing full
