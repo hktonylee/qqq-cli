@@ -303,13 +303,13 @@ pub const FILTER_HERDR_KEYS: &str = "Type to Filter  Ctrl-L Go to Task  Ctrl-T C
 - [x] Run `cargo fmt --all --check`, `git diff --check`,
   `cargo test --offline --all-targets`,
   `cargo clippy --offline --all-targets -- -D warnings`.
-- [ ] Request read-only review with exact base/head diff. Resolve concrete
+- [x] Request read-only review with exact base/head diff. Resolve concrete
   findings, commit checks and documentation, rebase and fast-forward local master.
-- [ ] Verify combined source if parent production changed. Install with
+- [x] Verify combined source if parent production changed. Install with
   `cargo install --path . --locked --offline --force`. Run all seven new PTY
   scenarios plus existing filter, retained-buffer, child, actions, compact and
   wide-layout checks against the absolute installed binary path.
-- [ ] Record truthful evidence using `qqq message 157`, complete task from root
+- [x] Record truthful evidence using `qqq message 157`, complete task from root
   workspace, remove only merged task-157 worktree/branch, resume one persistent
   `qqq next --wait --local --json` process.
 
@@ -336,3 +336,21 @@ fix enables completed rows only when destination is completed. All four jump
 tests, covering seven scenarios, passed afterward. Cancel and unfinished jumps
 preserve the hidden-completed setting and retained new draft. Red/green logs:
 `/tmp/qqq-task-157-completed-red.log`, `/tmp/qqq-task-157-integrated-jump.log`.
+
+
+Final combined checks: 593 tests across 38 binaries passed with zero failures;
+formatting, diff checks and Clippy all targets with warnings denied passed.
+Final read-only review against master `874cb4d` found no concrete issues.
+Local master fast-forwarded to `7a026ab`. Locked/offline optimized install passed.
+Installed `/Users/tonylee/.cargo/bin/qqq` passed 19 PTY scenarios: seven jump
+scenarios, filter shortcuts/query, retained navigation/manual scroll, dirty child,
+actions, compact/wide color and NO_COLOR, completed-toggle color and NO_COLOR.
+Installed SHA256 matched the verified release before and after checks:
+`be37a10a9928f3eab6ba38e5529bca0dfadf972e35a6ac249654eda7f9b5a4d2`.
+
+Evidence recorded in task message #84. Explicit `qqq complete 157 --json`
+returned `completed` at `2026-10-04T08:40:10.892Z`. Final logs:
+`/tmp/qqq-task-157-integrated-full.log`,
+`/tmp/qqq-task-157-integrated-clippy.log`, `/tmp/qqq-task-157-install.log`,
+`/tmp/qqq-task-157-installed-pty.log`. Owned checkout cleanup and one persistent
+blocking queue wait follow this documentation checkpoint.
