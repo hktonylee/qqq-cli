@@ -122,6 +122,12 @@ fn tui_dashboard_keeps_details_and_editor_layout_stable() {
 }
 
 #[test]
+fn tui_dashboard_groups_harness_assignment() {
+    dashboard_scenario("details_harness");
+    dashboard_scenario("details_harness_no_color");
+}
+
+#[test]
 fn tui_dashboard_compact_layout_hides_status_and_details() {
     dashboard_scenario("compact_layout");
     dashboard_scenario("compact_layout_no_color");

@@ -47,8 +47,7 @@ fn show_groups_description_and_aligns_complete_metadata() {
         "Parent:",
         "Created:",
         "Updated:",
-        "Harness name:",
-        "Harness session:",
+        "Harness:",
         "Orchestrator name:",
         "Orchestrator session:",
     ] {
@@ -79,6 +78,37 @@ fn show_groups_description_and_aligns_complete_metadata() {
     assert_eq!(json["task"]["description"], body);
     assert_eq!(json["task"]["parent_id"], 1);
     assert_eq!(json["task"]["harness_session"], Value::Null);
+}
+
+#[test]
+fn show_combines_harness_session_and_name_without_changing_json() {
+    let dir = project();
+    let p = dir.path();
+    cli(p, &["add", "Task"]);
+    cli(
+        p,
+        &[
+            "next",
+            "--local",
+            "--session",
+            "owner",
+            "--harness-name",
+            "codex",
+            "--harness-session",
+            "session-1",
+        ],
+    );
+    let shown = cli(p, &["show", "1"]);
+    let rows: Vec<_> = shown
+        .lines()
+        .filter(|line| line.trim_start().starts_with("Harness:"))
+        .collect();
+    assert_eq!(rows.len(), 1, "{shown}");
+    assert_eq!(&rows[0][25..], "session-1 (codex)");
+    assert!(!shown.contains("Harness name:") && !shown.contains("Harness session:"));
+    let json: Value = serde_json::from_str(&cli(p, &["show", "1", "--json"])).unwrap();
+    assert_eq!(json["task"]["harness_name"], "codex");
+    assert_eq!(json["task"]["harness_session"], "session-1");
 }
 
 #[test]

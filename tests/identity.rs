@@ -82,7 +82,7 @@ fn task_responses_use_harness_and_orchestrator_fields() {
     assert!(
         text.lines()
             .filter_map(|line| line.split_once(':'))
-            .any(|(label, value)| label.trim() == "Harness session" && value.trim() == "-")
+            .any(|(label, value)| label.trim() == "Harness" && value.trim() == "-")
     );
     assert!(!text.contains("Owner:"));
 }

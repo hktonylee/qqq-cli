@@ -225,8 +225,7 @@ mod tests {
             ("Archived:", "no"),
             ("Created:", "2026-10-02T12:00:00.000Z"),
             ("Updated:", "2026-10-02T13:00:00.000Z"),
-            ("Harness name:", "codex"),
-            ("Harness session:", "session-1"),
+            ("Harness:", "session-1 (codex)"),
             ("Orchestrator name:", "herdr"),
             ("Orchestrator session:", "default"),
         ] {
@@ -251,7 +250,7 @@ mod tests {
             "Description:Messages:Details:Assignment:Images:History:Herdr:"
         );
         let muted = styled_text(&detail_rows, DetailKind::Muted);
-        assert!(muted.contains("Harness name:"));
+        assert!(muted.contains("Harness:"));
         assert!(muted.contains("2026-10-02T14:00:00.000Z"));
         assert!(!muted.contains("reviewer"));
         assert!(!muted.contains("codex"));
@@ -289,6 +288,46 @@ mod tests {
         assert!(text(&narrow, "").contains("blocks claim"));
         value["task"]["prerequisites"][0]["status"] = "completed".into();
         assert!(!text(&rows(&value, 72), "\n").contains("blocks claim"));
+    }
+
+    #[test]
+    fn harness_grouping_preserves_values_roles_and_wrapping() {
+        for (session, name, expected) in [
+            (Some("session-1"), Some("codex"), "session-1 (codex)"),
+            (Some("session-1"), None, "session-1"),
+            (None, Some("codex"), "- (codex)"),
+            (None, None, "-"),
+            (Some("-"), Some("-"), "- (-)"),
+            (
+                Some("session\n界\x1b"),
+                Some("Co\t界"),
+                "session\\n界\\u{1b} (Co\\t界)",
+            ),
+        ] {
+            let mut value = value(&[]);
+            value["task"]["harness_session"] = serde_json::json!(session);
+            value["task"]["harness_name"] = serde_json::json!(name);
+            let wide = rows(&value, 1000);
+            let harness = wide
+                .iter()
+                .find(|row| row.text.trim_start().starts_with("Harness:"))
+                .unwrap();
+            assert_eq!(&harness.text[25..], expected);
+            let lines = rows(&value, 12);
+            let rendered = text(&lines, "");
+            assert!(rendered.contains(expected), "{rendered}");
+            assert!(!rendered.contains("Harness name:") && !rendered.contains("Harness session:"));
+            assert!(!rendered.contains('\x1b'));
+            assert!(
+                lines
+                    .iter()
+                    .all(|row| unicode_width::UnicodeWidthStr::width(row.text.as_str()) <= 12)
+            );
+            assert!(styled_text(&wide, DetailKind::Muted).contains("Harness:"));
+            if expected != "-" {
+                assert!(styled_text(&lines, DetailKind::Body).contains(expected));
+            }
+        }
     }
 
     #[test]

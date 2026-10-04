@@ -191,8 +191,7 @@ fn human_tasks_show_descriptions_dependencies_and_ownership() {
             .any(|line| line.trim_start().starts_with("Parent:") && line.ends_with("#1"))
     );
     for label in [
-        "Harness name: -",
-        "Harness session: -",
+        "Harness: -",
         "Orchestrator name: -",
         "Orchestrator session: -",
     ] {

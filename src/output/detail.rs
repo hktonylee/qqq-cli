@@ -14,6 +14,15 @@ fn row(label: &str, value: &str, color: bool) -> String {
     )
 }
 
+fn harness(task: &Value) -> String {
+    let session = field(task, "harness_session");
+    if task["harness_name"].as_str().is_some() {
+        format!("{session} ({})", field(task, "harness_name"))
+    } else {
+        session
+    }
+}
+
 fn message(value: &Value, color: bool) -> String {
     let body = block(value, "body")
         .lines()
@@ -157,14 +166,18 @@ pub(super) fn render(value: &Value, color: bool) -> String {
         )
     ));
     let assignment = [
-        ("Harness name:", "harness_name"),
-        ("Harness session:", "harness_session"),
-        ("Orchestrator name:", "orchestrator_name"),
-        ("Orchestrator session:", "orchestrator_session"),
+        row("Harness:", &harness(task), color),
+        row(
+            "Orchestrator name:",
+            &field(task, "orchestrator_name"),
+            color,
+        ),
+        row(
+            "Orchestrator session:",
+            &field(task, "orchestrator_session"),
+            color,
+        ),
     ]
-    .iter()
-    .map(|(label, key)| row(label, &field(task, key), color))
-    .collect::<Vec<_>>()
     .join("\n");
     sections.push(format!("{}\n{assignment}", heading("Assignment", color)));
     for (key, label) in [("images", "Images"), ("events", "History")] {
