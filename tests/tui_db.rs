@@ -76,6 +76,151 @@ fn composition() -> Composition {
 }
 
 #[test]
+fn force_completion_preserves_content_and_history_for_unfinished_tasks() {
+    for state in ["new", "in_progress", "error"] {
+        let (mut db, dir) = database();
+        let parent = db.add("Parent", None, &[]).unwrap();
+        db.next("parent", None).unwrap();
+        db.complete(parent.id, "parent", None).unwrap();
+        let prerequisite = db.add("Prerequisite", None, &[]).unwrap();
+        db.next("prerequisite", None).unwrap();
+        db.complete(prerequisite.id, "prerequisite", None).unwrap();
+        let task = db
+            .add_with_dependencies(
+                "Original content",
+                Some(parent.id),
+                &composition().images,
+                7,
+                &[prerequisite.id],
+            )
+            .unwrap();
+        db.message(task.id, "Keep note", Some("foreign")).unwrap();
+        if state != "new" {
+            db.next("foreign", None).unwrap();
+        }
+        let link = herdr::Link {
+            server: Some("test".into()),
+            identity: herdr::AgentSession {
+                agent: "codex".into(),
+                kind: "id".into(),
+                value: "foreign".into(),
+            },
+            pane: herdr::Pane {
+                pane_id: "w1:p1".into(),
+                workspace_id: "w1".into(),
+                tab_id: "w1:t1".into(),
+                cwd: None,
+                foreground_cwd: None,
+                agent_session: None,
+                terminal_id: None,
+                agent: None,
+            },
+        };
+        db.set_link_with_identity(task.id, &link, &identity::Identity::default(), None)
+            .unwrap();
+        if state == "error" {
+            db.edit_with_priority(
+                task.id,
+                None,
+                Some(db::EditTransition::Error {
+                    session: "foreign",
+                    reason: "Keep failure note",
+                    harness_name: None,
+                }),
+                &[],
+                None,
+                None,
+            )
+            .unwrap();
+        }
+        if state != "in_progress" {
+            db.set_archived(task.id, true, "manual").unwrap();
+        }
+        let before = db.show(task.id).unwrap();
+        let image = dir.path().join(format!("images/{}/1.png", task.id));
+        let image_bytes = std::fs::read(&image).unwrap();
+        let completed = db.force_complete(task.id, "operator").unwrap();
+        let after = db.show(task.id).unwrap();
+        assert_eq!(completed.status, "completed");
+        for field in [
+            "description",
+            "content_revision",
+            "priority",
+            "archived",
+            "parent_id",
+            "prerequisites",
+            "created_at",
+        ] {
+            assert_eq!(
+                after["task"][field], before["task"][field],
+                "{state}: {field}"
+            );
+        }
+        for field in ["messages", "images", "herdr"] {
+            assert_eq!(after[field], before[field], "{state}: {field}");
+        }
+        for field in [
+            "harness_name",
+            "harness_session",
+            "orchestrator_name",
+            "orchestrator_session",
+        ] {
+            assert!(after["task"][field].is_null(), "{state}: {field}");
+        }
+        let claim: Option<String> = db
+            .conn
+            .query_row("SELECT claim_key FROM tasks WHERE id=?", [task.id], |row| {
+                row.get(0)
+            })
+            .unwrap();
+        assert!(claim.is_none());
+        let mut events = after["events"].as_array().unwrap().clone();
+        let forced = events.pop().unwrap();
+        assert_eq!(forced["action"], "complete");
+        assert_eq!(forced["session"], "operator");
+        assert_eq!(events, *before["events"].as_array().unwrap());
+        assert_eq!(std::fs::read(image).unwrap(), image_bytes);
+    }
+}
+
+#[test]
+fn force_completion_rejects_missing_completed_and_blank_actor_without_writes() {
+    let (mut db, _dir) = database();
+    let task = db.add("Original", None, &[]).unwrap();
+    let before = db.show(task.id).unwrap();
+    assert!(db.force_complete(task.id, " ").is_err());
+    assert_eq!(db.show(task.id).unwrap(), before);
+    let missing = db.force_complete(999, "operator").err().unwrap();
+    assert!(matches!(
+        missing.downcast_ref::<errors::Info>().unwrap().code,
+        errors::Code::TaskNotFound
+    ));
+    db.force_complete(task.id, "operator").unwrap();
+    let completed = db.show(task.id).unwrap();
+    let error = db.force_complete(task.id, "operator").err().unwrap();
+    assert!(matches!(
+        error.downcast_ref::<errors::Info>().unwrap().code,
+        errors::Code::InvalidTransition
+    ));
+    assert_eq!(db.show(task.id).unwrap(), completed);
+}
+
+#[test]
+fn force_completion_rolls_back_status_and_ownership_if_audit_insert_fails() {
+    let (mut db, _dir) = database();
+    let task = db.add("Original", None, &[]).unwrap();
+    db.next("foreign", None).unwrap();
+    let before = db.show(task.id).unwrap();
+    db.conn.execute_batch("CREATE TRIGGER reject_force_complete BEFORE INSERT ON events WHEN NEW.action='complete' BEGIN SELECT RAISE(ABORT,'audit rejected'); END;").unwrap();
+    assert!(db.force_complete(task.id, "operator").is_err());
+    assert_eq!(db.show(task.id).unwrap(), before);
+    assert_eq!(
+        db.owned_with_name("foreign", None).unwrap().unwrap().id,
+        task.id
+    );
+}
+
+#[test]
 fn loaded_compositions_conflict_without_losing_local_paste_or_image_payloads() {
     let (mut db, dir) = database();
     let task = db.add("Original", None, &[]).unwrap();

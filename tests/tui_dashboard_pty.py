@@ -98,7 +98,7 @@ with tempfile.TemporaryDirectory(prefix="qqq-dashboard-test-") as folder:
         env["NO_COLOR"] = "1"
     elif scenario == "dumb":
         env["TERM"] = "dumb"
-    if scenario.startswith(("buffers_", "long_description_", "prerequisites", "dirty_marker", "completed_toggle", "jump", "menu_error_")) and scenario.endswith("no_color"):
+    if scenario.startswith(("buffers_", "long_description_", "prerequisites", "dirty_marker", "completed_toggle", "jump", "menu_error_", "force_complete")) and scenario.endswith("no_color"):
         env["NO_COLOR"] = "1"
     for name in ("EDITOR", "QQQ_SESSION", "HERDR_ENV", "HERDR_PANE_ID", "CODEX_THREAD_ID", "CODEX_SESSION_ID"):
         env.pop(name, None)
@@ -126,6 +126,23 @@ with tempfile.TemporaryDirectory(prefix="qqq-dashboard-test-") as folder:
         cli("complete", "1", "--session", "worker")
         cli("next", "--local", "--session", "worker")
         cli("edit", "2", "--set-status", "error", "--reason", "Failed", "--session", "worker")
+    elif scenario.startswith("force_complete"):
+        cli("add", "Foreign item")
+        cli("next", "--local", "--session", "foreign")
+        cli("add", "Failed item")
+        cli("next", "--local", "--session", "failed")
+        cli("edit", "2", "--set-status", "error", "--reason", "Failed", "--session", "failed")
+        cli("add", "Fresh item")
+        cli("add", "Owned item", "--priority", "10")
+        if scenario == "force_complete_native":
+            env["CODEX_THREAD_ID"] = "native-key"
+            env["CODEX_SESSION_ID"] = "native-display"
+            cli("next", "--local")
+        else:
+            cli("next", "--local", "--session", "worker")
+        cli("add", "Finished item", "--priority", "20")
+        cli("next", "--local", "--session", "finished")
+        cli("complete", "5", "--session", "finished")
     elif scenario in ("actions_basic", "actions_rejected") or scenario.startswith(("menu_retry_", "menu_error_")):
         cli("add", "Owned item")
         cli("add", "Failed item")
@@ -309,7 +326,9 @@ print(json.dumps({"result": result}))
     fcntl.ioctl(slave, termios.TIOCSCTTY, 0)
     signal.signal(signal.SIGHUP, signal.SIG_IGN)
     args = [binary, "--json", "tui"] if scenario in ("empty_json", "save_json", "handoff_json") else [binary, "tui"]
-    if scenario in ("actions_basic", "actions_rejected", "actions_narrow") or scenario.startswith(("menu_retry_", "menu_error_")):
+    if scenario == "force_complete_native":
+        args.extend(["--session", "native-display"])
+    elif scenario in ("actions_basic", "actions_rejected", "actions_narrow") or scenario.startswith(("menu_retry_", "menu_error_")) or (scenario.startswith("force_complete") and scenario != "force_complete_sessionless"):
         args.extend(["--session", "other" if scenario == "menu_error_rejected" else "worker"])
     if scenario in ("archive_included", "actions_basic", "actions_rejected"):
         args.append("--include-archived")
@@ -497,7 +516,7 @@ print(json.dumps({"result": result}))
                              and editor_line().startswith("Second"))
                 settle()
                 assert b"\x1b[38;" not in screen and b"\x1b[48;" not in screen, screen[-2000:]
-        if not scenario.startswith(("wide_layout", "menu_retry_", "menu_error_", "long_description_", "completed_toggle")) and scenario not in ("buffers_scroll", "handoff_scroll", "ctrl_c_new_scroll", "live_refresh_scroll", "tree_navigation", "scroll", "wheel", "click", "click_filter", "workflow", "workflow_empty", "workflow_status", "filter", "filter_no_color", "archive_hidden", "archive_included", "actions_basic", "actions_rejected", "actions_hidden", "jump_archived"):
+        if not scenario.startswith(("wide_layout", "menu_retry_", "menu_error_", "long_description_", "completed_toggle", "force_complete")) and scenario not in ("buffers_scroll", "handoff_scroll", "ctrl_c_new_scroll", "live_refresh_scroll", "tree_navigation", "scroll", "wheel", "click", "click_filter", "workflow", "workflow_empty", "workflow_status", "filter", "filter_no_color", "archive_hidden", "archive_included", "actions_basic", "actions_rejected", "actions_hidden", "jump_archived"):
             read_until(b"Second")
             assert "First" in visible.text() and "Second" in visible.text(), visible.text()
         assert not select.select([child.stdout], [], [], 0)[0], "TUI wrote stdout while open"
@@ -2424,7 +2443,7 @@ print(json.dumps({"result": result}))
             wait_visible(lambda: prompt_visible("Parent task"))
             close_menu()
             for index, (key, prompt) in enumerate([
-                ("c", "Complete task"), ("o", "Reopen task"), ("a", "Archive task"),
+                ("c", "Force complete task"), ("o", "Reopen task"), ("a", "Archive task"),
                 ("p", "Priority task"),
             ]):
                 open_menu()
@@ -2456,6 +2475,91 @@ print(json.dumps({"result": result}))
             assert cli("show", "2")["task"]["priority"] == 9
             assert cli("show", "2")["task"]["description"] == "Second"
             if scenario == "menu_arrows_no_color":
+                assert b"\x1b[38;" not in screen and b"\x1b[48;" not in screen, screen[-2000:]
+        elif scenario.startswith("force_complete"):
+            wait_visible(lambda: "Foreign item" in visible.text())
+            click(5, task_row("Foreign item"))
+            wait_visible(lambda: "Task #1 (In progress)" in editor_title())
+            before_force = cli("show", "1")
+            send(b"\x01X")
+            wait_visible(lambda: editor_line().startswith("XForeign item"))
+            send(b"\x07c")
+            wait_visible(lambda: "Force complete task #1?" in visible.text()
+                         and "Complete without matching task owner." in visible.text()
+                         and "Lose draft?" in visible.text())
+            assert cli("show", "1") == before_force
+            send(b"n")
+            wait_visible(lambda: "Force complete task" not in visible.text()
+                         and editor_line().startswith("XForeign item"))
+            assert cli("show", "1") == before_force
+            send(b"\x07\r")
+            wait_visible(lambda: "Force complete task #1?" in visible.text())
+            send(b"y")
+            wait_visible(lambda: "Task #1 (Completed)" in editor_title()
+                         and editor_line().startswith("Foreign item"))
+            completed = cli("show", "1")
+            assert completed["task"]["status"] == "completed"
+            assert completed["task"]["description"] == "Foreign item"
+            assert completed["task"]["content_revision"] == before_force["task"]["content_revision"]
+            assert completed["events"][-1]["action"] == "complete"
+            actor = {"force_complete_sessionless": "manual", "force_complete_native": "native-display"}.get(scenario, "worker")
+            assert completed["events"][-1]["session"] == actor
+
+            for task_id, label in ((2, "Failed item"), (3, "Fresh item")):
+                click(5, task_row(label))
+                wait_visible(lambda: f"Task #{task_id}" in editor_title())
+                task_before = cli("show", str(task_id))
+                send(b"\x07c")
+                wait_visible(lambda: f"Force complete task #{task_id}?" in visible.text())
+                send(b"\x1b")
+                wait_visible(lambda: "Force complete task" not in visible.text())
+                assert cli("show", str(task_id)) == task_before
+                send(b"\x07c")
+                wait_visible(lambda: f"Force complete task #{task_id}?" in visible.text())
+                send(b"y")
+                wait_visible(lambda: f"Task #{task_id} (Completed)" in editor_title())
+                after = cli("show", str(task_id))
+                assert after["task"]["status"] == "completed"
+                assert after["events"][-1]["action"] == "complete"
+                assert after["events"][-1]["session"] == actor
+
+            click(5, task_row("Owned item"))
+            wait_visible(lambda: "Task #4 (In progress)" in editor_title())
+            send(b"\x07c")
+            if scenario == "force_complete_sessionless":
+                wait_visible(lambda: "Force complete task #4?" in visible.text())
+            else:
+                wait_visible(lambda: "Complete task #4?" in visible.text())
+                assert "Force complete" not in visible.text(), visible.text()
+                assert "Complete without matching task owner." not in visible.text()
+            if scenario == "force_complete_race":
+                cli("edit", "4", "--set-status", "new", "--session", "worker")
+                cli("next", "--local", "--session", "new-owner")
+                transferred = cli("show", "4")
+                send(b"y")
+                wait_visible(lambda: "Action error" in visible.text()
+                             and "Task 4 is not claimed by session worker" in visible.text())
+                assert cli("show", "4") == transferred
+                send(b"\x1b")
+                wait_visible(lambda: "Action error" not in visible.text())
+                send(b"\x07c")
+                wait_visible(lambda: "Force complete task #4?" in visible.text())
+            send(b"y")
+            wait_visible(lambda: "Task #4 (Completed)" in editor_title())
+            event = cli("show", "4")["events"][-1]
+            assert event["action"] == "complete"
+
+            click(5, task_row("Finished item"))
+            wait_visible(lambda: "Task #5 (Completed)" in editor_title())
+            task_before = cli("show", "5")
+            send(b"\x07c")
+            wait_visible(lambda: "Force complete task #5?" in visible.text())
+            send(b"y")
+            wait_visible(lambda: "Task 5 must be unfinished to force complete" in visible.text())
+            assert cli("show", "5") == task_before
+            send(b"\x1b")
+            wait_visible(lambda: "Action error" not in visible.text())
+            if scenario.endswith("no_color"):
                 assert b"\x1b[38;" not in screen and b"\x1b[48;" not in screen, screen[-2000:]
         elif scenario == "actions_basic":
             wait_visible(lambda: "Owned item" in visible.text() and "Hidden item" in visible.text())
@@ -2503,12 +2607,9 @@ print(json.dumps({"result": result}))
             send(b"n")
             wait_visible(lambda: "XFresh item" in visible.text())
             assert cli("show", "4")["task"]["priority"] == 0
-            action("c", "Complete task #4?")
-            send(b"y")
-            wait_visible(lambda: "Task 4 is not claimed by session worker" in visible.text())
-            send(b"\x1b")
-            wait_visible(lambda: "XFresh item" in visible.text() and
-                         "Task 4 is not claimed by session worker" in visible.text().splitlines()[-1])
+            action("c", "Force complete task #4?")
+            send(b"n")
+            wait_visible(lambda: editor_line().startswith("XFresh item"))
             assert cli("show", "4")["task"]["status"] == "new"
             send(b"\x7f")
             wait_visible(lambda: editor_line().startswith("Fresh item"))

@@ -42,7 +42,7 @@ fn tui_dashboard_force_completion_requires_explicit_confirmation() {
 
 **Files:** `src/db.rs`, `src/tui/mod.rs`, `src/main.rs`, `tests/tui_db.rs`.
 
-- [ ] Add real database coverage for preservation across `new`, `in_progress`, and `error`; missing/completed rejection; event-trigger failure rollback. Snapshot `db.show(id)` before failures and compare afterward. For successful cases compare description, content revision, priority, archived, parent, prerequisites, messages, images and Herdr; check all claim metadata clears and exactly one `force_complete` event records actor.
+- [ ] Add real database coverage for preservation across `new`, `in_progress`, and `error`; missing/completed rejection; event-trigger failure rollback. Snapshot `db.show(id)` before failures and compare afterward. For successful cases compare description, content revision, priority, archived, parent, prerequisites, messages, images and Herdr; check all claim metadata clears and exactly one `complete` event records actor.
 - [ ] Add DB operation beside ordinary complete:
 
 ```rust
@@ -54,7 +54,7 @@ pub fn force_complete(&mut self, id: i64, actor: &str) -> Result<Task> {
         transition_error(&tx, id, &["new", "in_progress", "error"], None,
             format!("Task {id} must be unfinished to force complete"))?
     );
-    tx.execute("INSERT INTO events(task_id,session,action) VALUES (?, ?, 'force_complete')", params![id, actor])?;
+    tx.execute("INSERT INTO events(task_id,session,action) VALUES (?, ?, 'complete')", params![id, actor])?;
     let task = tx.query_row(&format!("SELECT {TASK_COLUMNS} FROM tasks WHERE id=?"), [id], task_row)?;
     tx.commit()?;
     Ok(task)
@@ -105,7 +105,7 @@ wait_visible(lambda: editor_line().startswith("XFresh item"))
 assert cli("show", "4")["task"]["status"] == "new"
 ```
 
-- [ ] Extend Ctrl-G reference with force confirmation, unfinished-state scope and `force_complete` audit semantics; describe cancellation and normal ownership race protection.
+- [ ] Extend Ctrl-G reference with force confirmation, unfinished-state scope and operator-attributed completion audit semantics; describe cancellation and normal ownership race protection.
 - [ ] Run `cargo fmt --all -- --check`, `git diff --check`, focused TUI/DB/CLI tests, full `cargo test --locked --offline --no-fail-fast`, and `cargo clippy --locked --offline --all-targets -- -D warnings`, using private target directory. Request read-only review, resolve findings, commit.
 
 ### Task 4: Local Integration and Queue Handoff

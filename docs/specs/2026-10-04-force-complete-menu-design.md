@@ -10,7 +10,7 @@ Use the existing popup styles, wrapping, keyboard handling and color opt-outs. C
 
 ## Data and ownership
 
-Add a separate database force-completion operation. In one immediate transaction, require an existing unfinished task, mark it completed, clear claim and harness/orchestrator ownership fields, update the timestamp, and append a `force_complete` event attributed to explicit session or `manual`. Preserve description, content revision, priority, archive state, parent/prerequisites, messages, images and Herdr link. Already-completed and missing tasks fail without writes. No CLI force-complete flag or schema change is needed.
+Add a separate database force-completion operation. In one immediate transaction, require an existing unfinished task, mark it completed, clear claim and harness/orchestrator ownership fields, update the timestamp, and append a standard `complete` event attributed to explicit session or `manual`. Preserve description, content revision, priority, archive state, parent/prerequisites, messages, images and Herdr link. Already-completed and missing tasks fail without writes. No CLI force-complete flag or schema change is needed.
 
 Pass a completion-action resolver into the dashboard beside the existing mutation handler. Resolve ownership at action activation, not from displayed harness metadata. Missing session discovery means no matching claim and offers the explicit force prompt. Database owner-resolution errors still surface. Ordinary completion continues checking ownership transactionally: ownership changes while its prompt is open must fail instead of silently escalating to force.
 

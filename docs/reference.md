@@ -536,6 +536,14 @@ before discarding an active dirty draft, matching other state actions.
 Arrows skip hidden actions; Enter activates displayed selection.
 Open menu refreshes Retry availability after external status changes, keeping
 selected action when available.
+Complete checks current session ownership when activated. Without a matching
+claim, popup asks `Force complete task #ID?` and warns
+`Complete without matching task owner.` Confirm with `y` to finish a New,
+In progress or Error task regardless of owner. This clears claim and ownership
+metadata, preserves task content and history, and records a standard `complete`
+event attributed to explicit session or `manual`. Already-completed tasks fail.
+Cancellation preserves draft and DB. An owned task whose claim changes while
+ordinary confirmation is open fails; open menu again to request forced completion.
 After filter clears, Esc closes menu or prompt. State changes ask for `y` before
 running; priority and parent changes ask when draft has unsaved edits. Successful
 action refreshes task and list; rejected action keeps draft and shows DB error.

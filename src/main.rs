@@ -536,6 +536,21 @@ fn execute(
                     }?;
                     Ok(task.id)
                 },
+                &mut |db, id| {
+                    let owner = resolved_owner(session_input, project_dir, db).ok();
+                    let owned = owner
+                        .as_ref()
+                        .map(|owner| {
+                            db.owned_with_name(&owner.key, overrides.harness_name.as_deref())
+                        })
+                        .transpose()?
+                        .flatten();
+                    Ok(if owned.is_some_and(|task| task.id == id) {
+                        tui::TaskAction::Complete(id)
+                    } else {
+                        tui::TaskAction::ForceComplete(id)
+                    })
+                },
                 &mut |db, action| match action {
                     tui::TaskAction::Complete(id) => {
                         let owner = resolved_owner(session_input, project_dir, db)?;
@@ -555,6 +570,9 @@ fn execute(
                             None,
                             None,
                         )
+                    }
+                    tui::TaskAction::ForceComplete(id) => {
+                        db.force_complete(id, session_input.unwrap_or("manual"))
                     }
                     tui::TaskAction::Retry(id) => db.edit_with_priority(
                         id,

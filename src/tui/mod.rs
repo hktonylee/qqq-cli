@@ -102,6 +102,7 @@ fn buffer_exit_lines(key: DraftKey, buffers: &DraftBuffers, width: usize) -> Vec
 pub enum TaskAction {
     Complete(i64),
     MarkError(i64, String),
+    ForceComplete(i64),
     Retry(i64),
     Reopen(i64),
     SetArchived(i64, bool),
@@ -114,6 +115,7 @@ impl TaskAction {
         match self {
             Self::Complete(id)
             | Self::MarkError(id, _)
+            | Self::ForceComplete(id)
             | Self::Retry(id)
             | Self::Reopen(id)
             | Self::SetArchived(id, _)
@@ -126,6 +128,7 @@ impl TaskAction {
         match self {
             Self::Complete(_) => "Complete",
             Self::MarkError(..) => "Mark error",
+            Self::ForceComplete(_) => "Force complete",
             Self::Retry(_) => "Retry",
             Self::Reopen(_) => "Reopen",
             Self::SetArchived(_, true) => "Archive",
@@ -137,7 +140,7 @@ impl TaskAction {
 
     fn success(&self) -> String {
         match self {
-            Self::Complete(id) => format!("Completed #{id}"),
+            Self::Complete(id) | Self::ForceComplete(id) => format!("Completed #{id}"),
             Self::MarkError(id, _) => format!("Marked error #{id}"),
             Self::Retry(id) => format!("Retried #{id}"),
             Self::Reopen(id) => format!("Reopened #{id}"),
@@ -318,6 +321,13 @@ fn action_confirmation_lines(
         format!("{} task #{}?", action.label(), action.id()),
         PopupKind::Heading,
     )];
+    if matches!(action, TaskAction::ForceComplete(_)) {
+        rows.extend(
+            wrap_modal("Complete without matching task owner.", width)
+                .into_iter()
+                .map(|text| PopupRow::new(text, PopupKind::Warning)),
+        );
+    }
     if let TaskAction::MarkError(_, reason) = action {
         rows.extend(
             wrap_modal(&format!("Reason: {reason}"), width)
@@ -550,17 +560,30 @@ enum Mode<'a, 'b> {
         db: &'a mut crate::db::Db,
         save: &'b mut dyn FnMut(&mut crate::db::Db, Outcome) -> Result<i64>,
         action: Option<&'b mut ActionHandler<'b>>,
+        completion: Option<&'b mut CompletionHandler<'b>>,
         dashboard: bool,
         include_archived: bool,
         after_save_new: AfterSaveNew,
     },
 }
 type ActionHandler<'a> = dyn FnMut(&mut crate::db::Db, TaskAction) -> Result<crate::db::Task> + 'a;
+type CompletionHandler<'a> = dyn FnMut(&crate::db::Db, i64) -> Result<TaskAction> + 'a;
 impl Mode<'_, '_> {
     fn db(&self) -> Option<&crate::db::Db> {
         match self {
             Self::Single(db) => *db,
             Self::Continuous { db, .. } | Self::Edit { db, .. } => Some(db),
+        }
+    }
+
+    fn completion_action(&mut self, id: i64) -> Result<TaskAction> {
+        match self {
+            Self::Continuous {
+                db,
+                completion: Some(handler),
+                ..
+            } => handler(db, id),
+            _ => bail!("Task actions require dashboard"),
         }
     }
 }
@@ -625,6 +648,7 @@ pub fn compose_continuously(
             db,
             save,
             action: None,
+            completion: None,
             dashboard: false,
             include_archived: false,
             after_save_new: AfterSaveNew::OpenNew,
@@ -638,6 +662,7 @@ pub fn compose_dashboard(
     include_archived: bool,
     after_save_new: AfterSaveNew,
     save: &mut dyn FnMut(&mut crate::db::Db, Outcome) -> Result<i64>,
+    completion: &mut CompletionHandler<'_>,
     action: &mut ActionHandler<'_>,
 ) -> Result<()> {
     compose_inner(
@@ -646,6 +671,7 @@ pub fn compose_dashboard(
             db,
             save,
             action: Some(action),
+            completion: Some(completion),
             dashboard: true,
             include_archived,
             after_save_new,
@@ -1562,7 +1588,16 @@ fn compose_inner(
                                 key.code
                             };
                             let chosen = match activation {
-                                KeyCode::Char('c') => Some(TaskAction::Complete(id)),
+                                KeyCode::Char('c') => match mode.completion_action(id) {
+                                    Ok(action) => Some(action),
+                                    Err(error) => {
+                                        action_ui = Some(ActionUi::Error {
+                                            text: format!("{error:#}"),
+                                            top: 0,
+                                        });
+                                        None
+                                    }
+                                },
                                 KeyCode::Char('r') if can_retry => Some(TaskAction::Retry(id)),
                                 KeyCode::Char('o') => Some(TaskAction::Reopen(id)),
                                 KeyCode::Char('a') => Some(TaskAction::SetArchived(id, !archived)),

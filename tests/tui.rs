@@ -435,6 +435,23 @@ fn tui_dashboard_retry_menu_action_requires_error_status() {
 }
 
 #[test]
+fn tui_dashboard_force_completion_requires_explicit_confirmation() {
+    dashboard_scenario("force_complete");
+    dashboard_scenario("force_complete_no_color");
+}
+
+#[test]
+fn tui_dashboard_force_completion_handles_session_discovery_and_claim_changes() {
+    for name in [
+        "force_complete_sessionless",
+        "force_complete_native",
+        "force_complete_race",
+    ] {
+        dashboard_scenario(name);
+    }
+}
+
+#[test]
 fn tui_dashboard_task_actions() {
     dashboard_scenario("actions_basic");
     dashboard_scenario("actions_rejected");

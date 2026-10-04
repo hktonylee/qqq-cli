@@ -1464,6 +1464,33 @@ impl Db {
         tx.commit()?;
         Ok(task)
     }
+    pub fn force_complete(&mut self, id: i64, actor: &str) -> Result<Task> {
+        nonempty(actor, "Actor")?;
+        let tx = self
+            .conn
+            .transaction_with_behavior(TransactionBehavior::Immediate)?;
+        ensure!(
+            tx.execute("UPDATE tasks SET status='completed',claim_key=NULL,harness_name=NULL,harness_session=NULL,orchestrator_name=NULL,orchestrator_session=NULL,updated_at=strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE id=? AND status IN ('new','in_progress','error')", [id])? == 1,
+            transition_error(
+                &tx,
+                id,
+                &["new", "in_progress", "error"],
+                None,
+                format!("Task {id} must be unfinished to force complete"),
+            )?
+        );
+        tx.execute(
+            "INSERT INTO events(task_id,session,action) VALUES (?, ?, 'complete')",
+            params![id, actor],
+        )?;
+        let task = tx.query_row(
+            &format!("SELECT {TASK_COLUMNS} FROM tasks WHERE id=?"),
+            [id],
+            task_row,
+        )?;
+        tx.commit()?;
+        Ok(task)
+    }
     pub fn reopen(&mut self, id: i64, actor: &str) -> Result<Task> {
         nonempty(actor, "Actor")?;
         let tx = self
