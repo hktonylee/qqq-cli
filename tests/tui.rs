@@ -443,6 +443,30 @@ fn tui_dashboard_task_actions() {
 }
 
 #[test]
+fn tui_dashboard_mark_error_requires_reason_and_confirmation() {
+    for name in ["menu_error_success", "menu_error_success_no_color"] {
+        dashboard_scenario(name);
+    }
+}
+
+#[test]
+fn tui_dashboard_mark_error_keeps_dirty_draft_until_confirmed() {
+    dashboard_scenario("menu_error_dirty");
+}
+
+#[test]
+fn tui_dashboard_mark_error_enforces_current_owner_and_state() {
+    for name in ["menu_error_rejected", "menu_error_live", "menu_error_new"] {
+        dashboard_scenario(name);
+    }
+}
+
+#[test]
+fn tui_dashboard_mark_error_keeps_full_reason_in_narrow_terminal() {
+    dashboard_scenario("menu_error_narrow");
+}
+
+#[test]
 fn tui_dashboard_complete_workflow() {
     dashboard_scenario("workflow");
 }

@@ -526,6 +526,13 @@ mode keeps marker. Letter shortcuts activate actions directly. Press `c` to comp
 `r` to retry error task, `o` to reopen completed task, `a` to archive or
 unarchive, `p` to set priority (-100..100), or `d` to set parent by positive
 task ID or `none`. Retry appears only for error tasks; non-error tasks ignore `r`.
+Press `e` for Mark error, enter a nonempty reason, then confirm with `y`.
+Only current owner of an in-progress task can mark it error; other states or
+owners show an action error and keep draft. Reason is recorded as a task message
+with an error event; claim and assignment clear while saved content stays intact.
+Error tasks stay out of worker queue until explicitly retried. Reason prompt and
+confirmation cancel without changing task. Confirmation previews reason and asks
+before discarding an active dirty draft, matching other state actions.
 Arrows skip hidden actions; Enter activates displayed selection.
 Open menu refreshes Retry availability after external status changes, keeping
 selected action when available.

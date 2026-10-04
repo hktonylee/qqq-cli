@@ -98,7 +98,7 @@ with tempfile.TemporaryDirectory(prefix="qqq-dashboard-test-") as folder:
         env["NO_COLOR"] = "1"
     elif scenario == "dumb":
         env["TERM"] = "dumb"
-    if scenario.startswith(("buffers_", "long_description_", "prerequisites", "dirty_marker", "completed_toggle", "jump")) and scenario.endswith("no_color"):
+    if scenario.startswith(("buffers_", "long_description_", "prerequisites", "dirty_marker", "completed_toggle", "jump", "menu_error_")) and scenario.endswith("no_color"):
         env["NO_COLOR"] = "1"
     for name in ("EDITOR", "QQQ_SESSION", "HERDR_ENV", "HERDR_PANE_ID", "CODEX_THREAD_ID", "CODEX_SESSION_ID"):
         env.pop(name, None)
@@ -126,7 +126,7 @@ with tempfile.TemporaryDirectory(prefix="qqq-dashboard-test-") as folder:
         cli("complete", "1", "--session", "worker")
         cli("next", "--local", "--session", "worker")
         cli("edit", "2", "--set-status", "error", "--reason", "Failed", "--session", "worker")
-    elif scenario in ("actions_basic", "actions_rejected") or scenario.startswith("menu_retry_"):
+    elif scenario in ("actions_basic", "actions_rejected") or scenario.startswith(("menu_retry_", "menu_error_")):
         cli("add", "Owned item")
         cli("add", "Failed item")
         cli("add", "Finished item")
@@ -309,8 +309,8 @@ print(json.dumps({"result": result}))
     fcntl.ioctl(slave, termios.TIOCSCTTY, 0)
     signal.signal(signal.SIGHUP, signal.SIG_IGN)
     args = [binary, "--json", "tui"] if scenario in ("empty_json", "save_json", "handoff_json") else [binary, "tui"]
-    if scenario in ("actions_basic", "actions_rejected", "actions_narrow") or scenario.startswith("menu_retry_"):
-        args.extend(["--session", "worker"])
+    if scenario in ("actions_basic", "actions_rejected", "actions_narrow") or scenario.startswith(("menu_retry_", "menu_error_")):
+        args.extend(["--session", "other" if scenario == "menu_error_rejected" else "worker"])
     if scenario in ("archive_included", "actions_basic", "actions_rejected"):
         args.append("--include-archived")
     child = subprocess.Popen(args, cwd=folder, env=env, stdin=slave,
@@ -497,7 +497,7 @@ print(json.dumps({"result": result}))
                              and editor_line().startswith("Second"))
                 settle()
                 assert b"\x1b[38;" not in screen and b"\x1b[48;" not in screen, screen[-2000:]
-        if not scenario.startswith(("wide_layout", "menu_retry_", "long_description_", "completed_toggle")) and scenario not in ("buffers_scroll", "handoff_scroll", "ctrl_c_new_scroll", "live_refresh_scroll", "tree_navigation", "scroll", "wheel", "click", "click_filter", "workflow", "workflow_empty", "workflow_status", "filter", "filter_no_color", "archive_hidden", "archive_included", "actions_basic", "actions_rejected", "actions_hidden", "jump_archived"):
+        if not scenario.startswith(("wide_layout", "menu_retry_", "menu_error_", "long_description_", "completed_toggle")) and scenario not in ("buffers_scroll", "handoff_scroll", "ctrl_c_new_scroll", "live_refresh_scroll", "tree_navigation", "scroll", "wheel", "click", "click_filter", "workflow", "workflow_empty", "workflow_status", "filter", "filter_no_color", "archive_hidden", "archive_included", "actions_basic", "actions_rejected", "actions_hidden", "jump_archived"):
             read_until(b"Second")
             assert "First" in visible.text() and "Second" in visible.text(), visible.text()
         assert not select.select([child.stdout], [], [], 0)[0], "TUI wrote stdout while open"
@@ -2170,11 +2170,11 @@ print(json.dumps({"result": result}))
             send(b"\x07")
             wait_visible(lambda: visible.text().splitlines()[7][12] == "┌"
                          and "Task actions #2" in visible.text().splitlines()[8]
-                         and visible.text().splitlines()[15][59] == "┘")
+                         and visible.text().splitlines()[16][59] == "┘")
             popup_rows = visible.text().splitlines()
             for row in range(24):
                 for column in range(72):
-                    if not (7 <= row < 16 and 12 <= column < 60):
+                    if not (7 <= row < 17 and 12 <= column < 60):
                         assert popup_rows[row][column] == before_popup[row][column], (row, column)
             send(b"\x1b[<0;6;4M\x1b[<0;6;4m\x10")
             settle()
@@ -2185,7 +2185,7 @@ print(json.dumps({"result": result}))
             os.kill(child.pid, signal.SIGWINCH)
             wait_visible(lambda: visible.text().splitlines()[10][21] == "┌"
                          and "Task actions #2" in visible.text().splitlines()[11]
-                         and visible.text().splitlines()[18][68] == "┘"
+                         and visible.text().splitlines()[19][68] == "┘"
                          and (visible.x, visible.y) == (22, 12))
             settle()
             send(b"p")
@@ -2207,6 +2207,106 @@ print(json.dumps({"result": result}))
             assert cli("list") == initial_tasks
             if scenario == "actions_popup_no_color":
                 assert b"\x1b[38;" not in screen and b"\x1b[48;" not in screen, screen[-2000:]
+        elif scenario.startswith("menu_error_"):
+            task_id = 4 if scenario == "menu_error_new" else 1
+            label = "Fresh item" if task_id == 4 else "Owned item"
+            click(5, task_row(label))
+            wait_frame(lambda: f"Task #{task_id} (" in editor_title() and editor_line().startswith(label))
+            initial_detail = cli("show", str(task_id))
+            dirty = scenario in ("menu_error_dirty", "menu_error_rejected", "menu_error_live")
+            if dirty:
+                send(b" local")
+                wait_frame(lambda: editor_line().startswith(label + " local"))
+            expected_editor = label + (" local" if dirty else "")
+
+            def modal_ready(title, hint):
+                wait_visible(lambda: title in visible.text() and hint in visible.text()
+                             and not visible.pending
+                             and screen.endswith(f"\x1b[{visible.y + 1};{visible.x + 1}H".encode()))
+
+            def error_prompt(arrows=False):
+                send(b"\x07")
+                wait_visible(lambda: f"Task actions #{task_id}" in visible.text()
+                             and "e Mark error" in visible.text())
+                send(b"\x1b[A\r" if arrows else b"e")
+                modal_ready(f"Error task #{task_id}", "Enter apply  Esc cancel")
+
+            if scenario == "menu_error_narrow":
+                clear_capture()
+                fcntl.ioctl(slave, termios.TIOCSWINSZ, struct.pack("HHHH", 12, 50, 0, 0))
+                visible.resize(50, 12)
+                os.kill(child.pid, signal.SIGWINCH)
+                wait_frame(lambda: f"Task #{task_id} (" in editor_title()
+                           and editor_line().startswith(label))
+                reason = "Reason " + "X" * 100 + " TAIL"
+            else:
+                reason = "Worker failure"
+
+            error_prompt(arrows=scenario == "menu_error_narrow")
+            if scenario.startswith("menu_error_success"):
+                send(b"\r")
+                modal_ready("Error reason cannot be empty", "Enter apply  Esc cancel")
+                assert cli("show", str(task_id)) == initial_detail
+                send(b"   \r")
+                modal_ready("Error reason cannot be empty", "Enter apply  Esc cancel")
+                send(b"\x7f\x7f\x7f\x1b[200~Worker\nfailure!\x1b[201~\x7f")
+                modal_ready("> Worker failure", "Enter apply  Esc cancel")
+            else:
+                send(reason.encode())
+            send(b"\r")
+            modal_ready(f"Mark error task #{task_id}?", "y confirm  n/Esc cancel")
+            assert "Reason:" in visible.text(), visible.text()
+            if dirty:
+                assert "Lose draft?" in visible.text(), visible.text()
+            assert cli("show", str(task_id)) == initial_detail
+            send(b"n")
+            wait_frame(lambda: "Mark error task" not in visible.text()
+                       and editor_line().startswith(expected_editor))
+            assert cli("show", str(task_id)) == initial_detail
+            error_prompt()
+            send(b"Cancelled")
+            send(b"\x1b")
+            wait_frame(lambda: f"Error task #{task_id}" not in visible.text()
+                       and editor_line().startswith(expected_editor))
+            assert cli("show", str(task_id)) == initial_detail
+            error_prompt()
+            send(reason.encode() + b"\r")
+            modal_ready(f"Mark error task #{task_id}?", "y confirm  n/Esc cancel")
+            if scenario == "menu_error_live":
+                cli("edit", "1", "--set-status", "new", "--session", "worker")
+                cli("next", "--local", "--session", "outside", "--filter", "id == 1")
+                initial_detail = cli("show", "1")
+            send(b"y")
+            if scenario in ("menu_error_rejected", "menu_error_live", "menu_error_new"):
+                modal_ready("Action error", "Up/Down Esc")
+                assert cli("show", str(task_id)) == initial_detail
+                send(b"\x1b")
+                wait_frame(lambda: "Action error" not in visible.text()
+                           and editor_line().startswith(expected_editor))
+            else:
+                wait_frame(lambda: f"Task #{task_id} (Error)" in editor_title()
+                           and visible.text().splitlines()[-1].startswith(f"Marked error #{task_id}"))
+                detail = cli("show", str(task_id))
+                task = detail["task"]
+                assert task["status"] == "error"
+                for field in ("description", "priority", "parent_id", "content_revision"):
+                    assert task[field] == initial_detail["task"][field]
+                for field in ("harness_name", "harness_session", "orchestrator_name", "orchestrator_session"):
+                    assert task[field] is None
+                assert detail["images"] == initial_detail["images"]
+                assert len(detail["events"]) == len(initial_detail["events"]) + 1
+                assert detail["events"][-1]["action"] == "error"
+                assert len(detail["messages"]) == len(initial_detail["messages"]) + 1
+                assert detail["messages"][-1]["body"] == reason
+                with sqlite3.connect(Path(folder) / ".qqq/qqq.db") as connection:
+                    assert connection.execute("SELECT claim_key FROM tasks WHERE id=?", (task_id,)).fetchone() == (None,)
+                assert cli("next", "--local", "--session", "probe", "--filter", f"id == {task_id}") is None
+                send(b"\x07")
+                wait_visible(lambda: "r Retry error" in visible.text())
+                send(b"\x1b")
+                wait_frame(lambda: "Task actions" not in visible.text() and editor_line().startswith(label))
+            if scenario.endswith("no_color"):
+                assert b"\x1b[38;" not in screen and b"\x1b[48;" not in screen
         elif scenario.startswith("menu_retry_"):
             status = scenario.removeprefix("menu_retry_").removesuffix("_no_color")
             if status == "live":
@@ -2313,7 +2413,7 @@ print(json.dumps({"result": result}))
 
             open_menu()
             send(b"\x1b[A")
-            wait_visible(lambda: selected_action("d"))
+            wait_visible(lambda: selected_action("e"))
             send(b"\x1b[B")
             wait_visible(lambda: selected_action("c"))
             for key in "oapd":
@@ -2336,7 +2436,7 @@ print(json.dumps({"result": result}))
                 close_menu()
                 assert cli("list") == initial_tasks
             open_menu()
-            send(b"\x1b[A\x1b[A")
+            send(b"\x1b[A\x1b[A\x1b[A")
             wait_visible(lambda: selected_action("p"))
             send(b"\r")
             wait_visible(lambda: prompt_visible("Priority task"))
@@ -2347,7 +2447,7 @@ print(json.dumps({"result": result}))
             send(b"\x01X")
             wait_visible(lambda: editor_line().startswith("XSecond"))
             open_menu()
-            send(b"\x1b[A\x1b[A\r")
+            send(b"\x1b[A\x1b[A\x1b[A\r")
             wait_visible(lambda: prompt_visible("Priority task"))
             send(b"8\r")
             wait_visible(lambda: "Lose draft?" in visible.text())

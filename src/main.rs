@@ -541,6 +541,21 @@ fn execute(
                         let owner = resolved_owner(session_input, project_dir, db)?;
                         db.complete(id, &owner.key, overrides.harness_name.as_deref())
                     }
+                    tui::TaskAction::MarkError(id, reason) => {
+                        let owner = resolved_owner(session_input, project_dir, db)?;
+                        db.edit_with_priority(
+                            id,
+                            None,
+                            Some(db::EditTransition::Error {
+                                session: &owner.key,
+                                reason: &reason,
+                                harness_name: overrides.harness_name.as_deref(),
+                            }),
+                            &[],
+                            None,
+                            None,
+                        )
+                    }
                     tui::TaskAction::Retry(id) => db.edit_with_priority(
                         id,
                         None,

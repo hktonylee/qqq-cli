@@ -98,9 +98,10 @@ fn buffer_exit_lines(key: DraftKey, buffers: &DraftBuffers, width: usize) -> Vec
     rows
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone)]
 pub enum TaskAction {
     Complete(i64),
+    MarkError(i64, String),
     Retry(i64),
     Reopen(i64),
     SetArchived(i64, bool),
@@ -109,20 +110,22 @@ pub enum TaskAction {
 }
 
 impl TaskAction {
-    fn id(self) -> i64 {
+    fn id(&self) -> i64 {
         match self {
             Self::Complete(id)
+            | Self::MarkError(id, _)
             | Self::Retry(id)
             | Self::Reopen(id)
             | Self::SetArchived(id, _)
             | Self::Priority(id, _)
-            | Self::Parent(id, _) => id,
+            | Self::Parent(id, _) => *id,
         }
     }
 
-    fn label(self) -> &'static str {
+    fn label(&self) -> &'static str {
         match self {
             Self::Complete(_) => "Complete",
+            Self::MarkError(..) => "Mark error",
             Self::Retry(_) => "Retry",
             Self::Reopen(_) => "Reopen",
             Self::SetArchived(_, true) => "Archive",
@@ -132,9 +135,10 @@ impl TaskAction {
         }
     }
 
-    fn success(self) -> String {
+    fn success(&self) -> String {
         match self {
             Self::Complete(id) => format!("Completed #{id}"),
+            Self::MarkError(id, _) => format!("Marked error #{id}"),
             Self::Retry(id) => format!("Retried #{id}"),
             Self::Reopen(id) => format!("Reopened #{id}"),
             Self::SetArchived(id, true) => format!("Archived #{id}"),
@@ -152,15 +156,17 @@ impl TaskAction {
 enum ActionInputKind {
     Priority,
     Parent,
+    ErrorReason,
 }
 
-const ACTION_MENU_ITEMS: [(char, &str); 6] = [
+const ACTION_MENU_ITEMS: [(char, &str); 7] = [
     ('c', "Complete"),
     ('r', "Retry error"),
     ('o', "Reopen"),
     ('a', "Archive"),
     ('p', "Priority"),
     ('d', "Parent"),
+    ('e', "Mark error"),
 ];
 
 fn action_menu_items(can_retry: bool) -> impl Iterator<Item = (char, &'static str)> {
@@ -268,6 +274,10 @@ fn action_lines(ui: &ActionUi, width: usize, height: usize) -> Vec<render::Popup
                         PopupRow::new("ID / none", PopupKind::Hint),
                     ]
                 }
+                ActionInputKind::ErrorReason => vec![
+                    PopupRow::new(format!("Error task #{id}"), PopupKind::Heading),
+                    PopupRow::new("Enter error reason", PopupKind::Hint),
+                ],
             };
             lines.push(PopupRow::new(format!("> {value}"), PopupKind::Input));
             if !error.is_empty() {
@@ -298,6 +308,32 @@ fn action_lines(ui: &ActionUi, width: usize, height: usize) -> Vec<render::Popup
     }
 }
 
+fn action_confirmation_lines(
+    action: &TaskAction,
+    dirty: bool,
+    width: usize,
+) -> Vec<render::PopupRow> {
+    use render::{PopupKind, PopupRow};
+    let mut rows = vec![PopupRow::new(
+        format!("{} task #{}?", action.label(), action.id()),
+        PopupKind::Heading,
+    )];
+    if let TaskAction::MarkError(_, reason) = action {
+        rows.extend(
+            wrap_modal(&format!("Reason: {reason}"), width)
+                .into_iter()
+                .take(3)
+                .map(|text| PopupRow::new(text, PopupKind::Hint)),
+        );
+    }
+    rows.push(PopupRow::new(
+        if dirty { "Lose draft?" } else { "" },
+        PopupKind::Warning,
+    ));
+    rows.push(PopupRow::new("y confirm  n/Esc cancel", PopupKind::Hint));
+    rows
+}
+
 fn parse_action_input(
     id: i64,
     kind: ActionInputKind,
@@ -318,6 +354,13 @@ fn parse_action_input(
             .trim()
             .parse()
             .map(|parent| TaskAction::Parent(id, parent)),
+        ActionInputKind::ErrorReason => {
+            let reason = value.trim();
+            if reason.is_empty() {
+                return Err("Error reason cannot be empty".into());
+            }
+            Ok(TaskAction::MarkError(id, reason.to_owned()))
+        }
     }
 }
 
@@ -928,17 +971,9 @@ fn compose_inner(
                         &buffers,
                         usize::from(popup_content.width),
                     )),
-                    Some(Confirmation::Action { action, dirty }) => Some(vec![
-                        render::PopupRow::new(
-                            format!("{} task #{}?", action.label(), action.id()),
-                            render::PopupKind::Heading,
-                        ),
-                        render::PopupRow::new(
-                            if *dirty { "Lose draft?" } else { "" },
-                            render::PopupKind::Warning,
-                        ),
-                        render::PopupRow::new("y confirm  n/Esc cancel", render::PopupKind::Hint),
-                    ]),
+                    Some(Confirmation::Action { action, dirty }) => Some(
+                        action_confirmation_lines(action, *dirty, usize::from(popup_content.width)),
+                    ),
                     _ => None,
                 });
             dashboard_terminal
@@ -1048,8 +1083,17 @@ fn compose_inner(
             Event::Paste(text) if confirmation.is_none() && conflict_ui.is_none() => {
                 if let Some(ui) = jump_ui.as_mut() {
                     ui.paste(&text);
-                } else if let Some(ActionUi::Input { value, error, .. }) = action_ui.as_mut() {
-                    value.extend(text.chars().filter(|ch| !ch.is_control()));
+                } else if let Some(ActionUi::Input {
+                    kind, value, error, ..
+                }) = action_ui.as_mut()
+                {
+                    value.extend(text.chars().filter_map(|ch| {
+                        if ch.is_control() {
+                            matches!(kind, ActionInputKind::ErrorReason).then_some(' ')
+                        } else {
+                            Some(ch)
+                        }
+                    }));
                     error.clear();
                 } else if action_ui.is_some() {
                     // Menu never edits draft.
@@ -1376,7 +1420,7 @@ fn compose_inner(
                                     message_is_error = false;
                                 }
                                 Confirmation::Action { action, .. } => {
-                                    match run_action(&mut mode, action, include_archived) {
+                                    match run_action(&mut mode, action.clone(), include_archived) {
                                         Ok(target) => {
                                             editor_follow_cursor = load_target(
                                                 restore_target(target, &mut buffers),
@@ -1540,6 +1584,15 @@ fn compose_inner(
                                     });
                                     None
                                 }
+                                KeyCode::Char('e') => {
+                                    action_ui = Some(ActionUi::Input {
+                                        id,
+                                        kind: ActionInputKind::ErrorReason,
+                                        value: String::new(),
+                                        error: String::new(),
+                                    });
+                                    None
+                                }
                                 KeyCode::Esc => None,
                                 _ => {
                                     action_ui = Some(ActionUi::Menu {
@@ -1590,37 +1643,41 @@ fn compose_inner(
                                 });
                             }
                             KeyCode::Enter => match parse_action_input(id, kind, &value) {
-                                Ok(action) if draft.is_dirty_against(&baseline.description) => {
+                                Ok(action)
+                                    if matches!(action, TaskAction::MarkError(..))
+                                        || draft.is_dirty_against(&baseline.description) =>
+                                {
                                     confirmation = Some(Confirmation::Action {
                                         action,
-                                        dirty: true,
+                                        dirty: draft.is_dirty_against(&baseline.description),
                                     });
                                 }
-                                Ok(action) => match run_action(&mut mode, action, include_archived)
-                                {
-                                    Ok(target) => {
-                                        editor_follow_cursor = load_target(
-                                            restore_target(target, &mut buffers),
-                                            &mut draft,
-                                            &mut target_id,
-                                            &mut target_status,
-                                            &mut draft_parent_id,
-                                            &mut baseline,
-                                            &mut top,
-                                        );
-                                        list_follow_selected = true;
-                                        message = action.success();
-                                        message_is_error = false;
+                                Ok(action) => {
+                                    match run_action(&mut mode, action.clone(), include_archived) {
+                                        Ok(target) => {
+                                            editor_follow_cursor = load_target(
+                                                restore_target(target, &mut buffers),
+                                                &mut draft,
+                                                &mut target_id,
+                                                &mut target_status,
+                                                &mut draft_parent_id,
+                                                &mut baseline,
+                                                &mut top,
+                                            );
+                                            list_follow_selected = true;
+                                            message = action.success();
+                                            message_is_error = false;
+                                        }
+                                        Err(failure) => {
+                                            message = format!("{failure:#}");
+                                            message_is_error = true;
+                                            action_ui = Some(ActionUi::Error {
+                                                text: message.clone(),
+                                                top: 0,
+                                            });
+                                        }
                                     }
-                                    Err(failure) => {
-                                        message = format!("{failure:#}");
-                                        message_is_error = true;
-                                        action_ui = Some(ActionUi::Error {
-                                            text: message.clone(),
-                                            top: 0,
-                                        });
-                                    }
-                                },
+                                }
                                 Err(problem) => {
                                     error = problem;
                                     action_ui = Some(ActionUi::Input {
