@@ -54,7 +54,10 @@ fn human_list_tty_width_shows_multiline_rows() {
 fn next_dry_run_reports_stored_task_and_empty_queue() {
     let dir = project();
     let p = dir.path();
-    assert_eq!(text(p, &["next", "--dry-run"]), "No ready tasks.\n");
+    assert_eq!(
+        text(p, &["next", "--dry-run"]),
+        "No queued task ready to preview. Run qqq status for task states.\n"
+    );
     assert_eq!(text(p, &["next", "--dry-run", "--json"]), "null\n");
     text(p, &["add", "Preview"]);
     let preview = text(p, &["next", "--dry-run"]);
@@ -66,7 +69,7 @@ fn next_dry_run_reports_stored_task_and_empty_queue() {
     text(p, &["next", "--local", "--session", "owner"]);
     assert_eq!(
         text(p, &["next", "--dry-run", "--session", "owner"]),
-        "No ready tasks.\n"
+        "No queued task ready to preview. Run qqq status for task states.\n"
     );
 }
 

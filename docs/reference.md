@@ -694,6 +694,11 @@ Preview retains stored `new` status and metadata. Combine with `--filter`,
 `--wait`, `--local`, and `--json`. Preview does not reserve task; another worker
 can claim it afterward.
 
+Without a queued candidate, human preview prints `No queued task ready to preview.
+Run qqq status for task states.` This distinguishes the candidate preview from
+tasks already in progress; `qqq status` shows blocked, active, and error tasks.
+JSON preview returns `null` when no candidate is available.
+
 ```sh
 qqq next --dry-run --json
 ```
