@@ -17,12 +17,14 @@ Wait for full footer and final editor cursor sequence before recording resized s
 - [x] Reproduce before fix; inspect precise screen difference.
 - [x] Add completed-frame predicate; rerun both color modes under concurrent stress.
 - [x] Run full tests, fmt, Clippy, read-only review.
-- [ ] Verify fixed revision in GitHub Actions on macOS and Ubuntu.
-- [ ] Rebase/merge, install, check installed PTY, explicitly complete task, cleanup, resume one blocking queue wait.
+- [x] Verify fixed revision in GitHub Actions on macOS and Ubuntu.
+- [x] Rebase/merge, install, check installed PTY, explicitly complete task.
 
 - Green stress: 64 independent PTY runs, eight concurrent processes, alternating color and NO_COLOR, 0 failures. Before fix: 2 failures in 32 runs.
 - Fresh full `cargo test --locked --no-fail-fast`: 560 tests, 38 targets, 0 failures or ignored. `/private/tmp/qqq-152-full.log`. Clippy all targets with `-D warnings`, fmt and diff checks passed.
-- Dedicated CI verification branch will carry only reviewed test fix on original `68e248b` source; keep unpublished local features off remote master.
-- Read-only review found no issues. CI branch `ci/task-152-frame` contains only test commit `bb2d5c6`; push was blocked by automatic approval review because remote source export lacked explicit destination/branch authorization. Requested approval; no remote branch created.
+- Dedicated CI verification branch carries only reviewed test fix on original `68e248b` source; unpublished local features remain local.
+- Read-only review found no issues. CI branch `ci/task-152-frame` contains only test commit `bb2d5c6`. Initial push was blocked by automatic approval review because remote source export lacked explicit destination/branch authorization. User explicitly approved pushing on October 4; approved commit pushed successfully. [CI run 37185961841](https://github.com/hktonylee/qqq-cli/actions/runs/37185961841) completed successfully on macOS and Ubuntu at `bb2d5c6f51d6e35a0fc0fbf859a8a5d5c6f0bb99`.
 - Local master advanced to `b65d344` with task 150 multiple prerequisites. Rebase completed without conflicts. Fresh rebased full suite passed: 576 tests, 38 targets, 83 TUI tests, zero failures or ignored (`/private/tmp/qqq-152-rebased-full.log`). Rebased Clippy all targets with `-D warnings`, fmt, diff checks passed. Follow-up read-only review confirmed upstream prerequisite details leave fixture geometry, footer and final cursor unchanged.
-- Local integration fast-forwarded clean master to `c7ff74c` (test fix `89042fd`). `cargo install --path . --locked --force` passed; installed `/Users/tonylee/.cargo/bin/qqq` passed both `wide_layout` and `wide_layout_no_color` PTY scenarios (`/private/tmp/qqq-152-installed-pty.log`). Task 152 stays in progress pending remote CI approval/verification; task and CI worktrees preserved.
+- Local integration fast-forwarded clean master to `c7ff74c` (test fix `89042fd`). `cargo install --path . --locked --force` passed; installed `/Users/tonylee/.cargo/bin/qqq` passed both `wide_layout` and `wide_layout_no_color` PTY scenarios (`/private/tmp/qqq-152-installed-pty.log`). Initial merged task worktree and branch cleaned.
+- [macOS job 111387800214](https://github.com/hktonylee/qqq-cli/actions/runs/37185961841/job/111387800214) and [Ubuntu job 111387800300](https://github.com/hktonylee/qqq-cli/actions/runs/37185961841/job/111387800300): 489 tests across 37 targets on each OS, zero failures. Both logs confirm `tui_dashboard_wide_layout_resizes_and_preserves_editor ... ok`. Formatting, Clippy, release builds, release smoke, packaging and archive upload all succeeded.
+- `qqq complete 152 --json` explicitly completed task at `2026-10-04T07:36:40.486Z`. Queue handoff after documentation integration and checkout cleanup: one blocking `qqq next --wait --local --json` process.
