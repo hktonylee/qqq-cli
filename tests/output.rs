@@ -128,13 +128,19 @@ fn human_next_omits_assignment_while_json_and_show_retain_it() {
     ))
     .unwrap();
     let shown = text(p, &["show", "1"]);
-    for (key, label, expected) in [
-        ("harness_name", "Harness name:", "codex"),
-        ("harness_session", "Harness session:", "visible"),
-        ("orchestrator_name", "Orchestrator name:", "herdr"),
-        ("orchestrator_session", "Orchestrator session:", "work"),
+    for (key, expected) in [
+        ("harness_name", "codex"),
+        ("harness_session", "visible"),
+        ("orchestrator_name", "herdr"),
+        ("orchestrator_session", "work"),
     ] {
         assert_eq!(json[key], expected);
+    }
+    for (label, expected) in [
+        ("Harness:", "visible (codex)"),
+        ("Orchestrator name:", "herdr"),
+        ("Orchestrator session:", "work"),
+    ] {
         assert!(
             shown
                 .lines()
