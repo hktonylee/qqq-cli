@@ -70,10 +70,11 @@ manifest1/schema9 lower bound. Read-only previews bypass migration and staging.
 - [x] Run gate/full cargo test --locked --offline; cargo fmt --check; cargo clippy
   --locked --offline --all-targets -- -D warnings; release. Record counts/log paths.
 - [x] Request independent read-only review using requesting-code-review skill.
-- [ ] Commit/rebase/local ff merge, rerun integrated gate, install qqq and run installed
+- [x] Commit/rebase/local ff merge, rerun integrated gate, install qqq and run installed
   recovery matrix; verify binary hashes and claim semantics against temp projects.
-- [ ] Record evidence, complete172, finalize docs commit, remove owned worktree/branch,
-  resume one qqq next --wait --local --json process with no repeated queue polling.
+- [x] Record queue evidence and complete172 after all implementation checks pass.
+
+Finalize evidence commit, remove owned worktree/branch, resume persistent waiter.
 
 Initial evidence: capture regression red (zero archives), preview regression red
 (successful migration instead of read-only error). Package clean removed stale
@@ -126,3 +127,10 @@ Final runtime verification:full default-parallel locked/offline suite678 tests/4
 binaries passed. Gate149/7 and32 compatibility tests passed. Final additional
 malformed-journal cases passed focused. Fresh fmt/diff, strict all-target Clippy
 and release passed; independent review findings resolved. No remote CI run/push.
+
+Local master integrated274da0f; targeted package clean ensured fresh main source
+and test fixture paths. Integrated gate149/7 and rebuilt release passed. Installed
+qqq0.5.0 passed all32 compatibility tests (original state/recovery/claim/readonly
+cases included). Installed/release SHA256 both
+`715ac5216130707a0ac60b5a16ea4bb5238760844e2c174d66c1c2aafab6db20`.
+Queue task172 completed with evidence message95. No remote CI, push, publication.
