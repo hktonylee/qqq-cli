@@ -32,10 +32,14 @@ collisions, avoiding filesystem permission assumptions and runtime network.
 ## Gate wiring
 
 `scripts/check-compatibility.sh` resolves repository root and runs locked Cargo
-compatibility, identity, images/image_storage, dependencies, tags and snapshot
-integration targets. Same command runs as named step in existing Ubuntu/macOS
+compatibility, identity, images/image_storage, dependencies, snapshot and CLI
+integration targets, including dependency/tag regressions. Same command runs
+as named step in existing Ubuntu/macOS
 CI and Ubuntu publication job before package verification/upload. Existing full
-tests, fmt, strict Clippy and build checks stay required. No new dependencies,
+tests, fmt, strict Clippy and build checks stay required. Reuse normal-open legacy-title guard and explicitly validate snapshot status/claim
+relationships before installation. Bundled SQLite integrity_check returned ok for
+injected pending rows; explicit data check rejects pending and invalid owners.
+No new dependencies,
 coverage/maintainability policies or hooks in this focused task.
 
 Inventory probes current schema and emitted format. No schema version is skipped

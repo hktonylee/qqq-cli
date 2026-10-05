@@ -69,6 +69,7 @@ retain frozen sources and provenance. Tar entries are regular files, manifest
 first, then DB and images in fixed ID order, with uid/gid/mtime=0 and mode 0600.
 
 ```sh
+./scripts/check-compatibility.sh
 cargo test --locked --test compatibility --test snapshot
 ```
 
@@ -77,3 +78,8 @@ format support without matching fixtures fails. Other checks verify hashes,
 raw integrity and foreign keys, canonical migration/restore state, queue
 readiness, ownership, sequence allocation, image bytes and original-file
 immutability, including absence of new SQLite sidecars.
+
+CI and publication require same compatibility script. Extended matrix checks
+reopen/concurrent migration idempotence, SQL/image rollback and retry, future/
+legacy/invalid DB and snapshot rejection, diagnostics/import read-only behavior,
+next preview semantics and destination preservation for failed restores.

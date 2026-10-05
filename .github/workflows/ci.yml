@@ -42,6 +42,11 @@ jobs:
       - name: Run tests
         run: cargo +stable test --locked
 
+      - name: Check upgrade compatibility
+        env:
+          RUSTUP_TOOLCHAIN: stable
+        run: ./scripts/check-compatibility.sh
+
       - name: Build release
         run: cargo +stable build --locked --release
 

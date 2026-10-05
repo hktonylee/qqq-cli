@@ -107,7 +107,7 @@ pub fn assert_file(path: &Path, bytes: u64, hash: &str) {
     assert_eq!(sha256(&data), hash, "{}", path.display());
 }
 
-pub fn tree_hashes() -> BTreeMap<PathBuf, String> {
+pub fn hashes_at(base: &Path) -> BTreeMap<PathBuf, String> {
     fn visit(base: &Path, path: &Path, hashes: &mut BTreeMap<PathBuf, String>) {
         for entry in fs::read_dir(path).unwrap() {
             let path = entry.unwrap().path();
@@ -121,10 +121,13 @@ pub fn tree_hashes() -> BTreeMap<PathBuf, String> {
             }
         }
     }
-    let base = root();
     let mut hashes = BTreeMap::new();
-    visit(&base, &base, &mut hashes);
+    visit(base, base, &mut hashes);
     hashes
+}
+
+pub fn tree_hashes() -> BTreeMap<PathBuf, String> {
+    hashes_at(&root())
 }
 
 pub fn read_only(path: &Path) -> Connection {
@@ -144,26 +147,57 @@ pub fn copy_database(entry: &DatabaseFixture) -> TempDir {
     dir
 }
 
-pub fn run(path: &Path, args: &[&str]) -> Value {
+pub fn command(path: &Path) -> Command {
     let binary = std::env::var_os("QQQ_COMPATIBILITY_BINARY")
         .unwrap_or_else(|| env!("CARGO_BIN_EXE_qqq").into());
-    let output = Command::new(binary)
-        .args(args)
-        .arg("--json")
+    let mut command = Command::new(binary);
+    command
         .current_dir(path)
         .env_remove("QQQ_SESSION")
         .env_remove("CODEX_THREAD_ID")
         .env_remove("CODEX_SESSION_ID")
         .env_remove("HERDR_ENV")
-        .env_remove("HERDR_PANE_ID")
-        .output()
-        .unwrap();
+        .env_remove("HERDR_PANE_ID");
+    command
+}
+
+pub fn run(path: &Path, args: &[&str]) -> Value {
+    let output = command(path).args(args).arg("--json").output().unwrap();
     assert!(
         output.status.success(),
         "{args:?}: {}",
         String::from_utf8_lossy(&output.stderr)
     );
     serde_json::from_slice(&output.stdout).unwrap()
+}
+
+pub fn failure(path: &Path, args: &[&str], json: bool, human: &str, code: &str) -> Value {
+    let output = command(path)
+        .args(args)
+        .arg(if json { "--json" } else { "--human" })
+        .output()
+        .unwrap();
+    assert_eq!(
+        output.status.code(),
+        Some(1),
+        "{args:?} expected {human:?}: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert!(output.stdout.is_empty(), "failure must keep stdout empty");
+    if json {
+        let error: Value = serde_json::from_slice(&output.stderr).unwrap();
+        assert_eq!(error["code"], code, "{error}");
+        assert!(error["message"].is_string());
+        assert!(error["details"].is_object());
+        error
+    } else {
+        assert!(
+            String::from_utf8_lossy(&output.stderr).contains(human),
+            "{args:?}: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+        Value::Null
+    }
 }
 
 pub fn rows(conn: &Connection, query: &str) -> Value {

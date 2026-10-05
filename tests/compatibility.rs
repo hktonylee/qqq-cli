@@ -1,6 +1,13 @@
 #[path = "common/compatibility.rs"]
 mod compatibility;
 
+#[path = "compatibility/failures.rs"]
+mod failures;
+#[path = "compatibility/snapshots.rs"]
+mod snapshots;
+#[path = "compatibility/upgrade.rs"]
+mod upgrade;
+
 use compatibility::*;
 use serde_json::{Value, json};
 use std::{collections::BTreeSet, fs};

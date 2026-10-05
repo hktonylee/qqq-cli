@@ -1,7 +1,7 @@
 use super::format::{DATABASE_NAME, FileMeta, ImageMeta, MANIFEST_NAME, Manifest, hash_reader};
 use crate::{db::Db, images::ImageStore};
 use anyhow::{Context, Result, ensure};
-use rusqlite::{Connection, OpenFlags, TransactionBehavior, params};
+use rusqlite::{Connection, OpenFlags, OptionalExtension, TransactionBehavior, params};
 use serde_json::{Value, json};
 use std::{
     fs,
@@ -175,6 +175,32 @@ pub(crate) fn validate_database(path: &Path) -> Result<i64> {
         (9..=crate::db::SCHEMA_VERSION).contains(&version),
         "Unsupported snapshot database schema version {version}"
     );
+    crate::db::ensure_description_schema(&conn)?;
+    let invalid_task = conn.query_row(
+        "SELECT id,status FROM tasks WHERE status IS NULL OR status NOT IN ('new','in_progress','completed','error')
+         OR (status='in_progress' AND claim_key IS NULL)
+         OR (status!='in_progress' AND claim_key IS NOT NULL) LIMIT 1",
+        [], |row| Ok((row.get::<_, i64>(0)?, row.get::<_, String>(1)?)),
+    ).optional()?;
+    if let Some((id, status)) = invalid_task {
+        let (message, reason) = if status == "pending" {
+            (
+                "Snapshot database contains legacy pending status; update SQLite manually before using qqq",
+                "legacy_pending_status",
+            )
+        } else {
+            (
+                "Snapshot database has invalid task status or claim",
+                "invalid_task_state",
+            )
+        };
+        anyhow::bail!(
+            crate::errors::Info::new(crate::errors::Code::DatabaseError, message)
+                .detail("reason", reason)
+                .detail("task_id", id)
+                .detail("status", status)
+        );
+    }
     if version >= 11 {
         crate::dependencies::validate_graph(&conn)?;
     }

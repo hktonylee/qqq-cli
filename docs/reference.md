@@ -1012,8 +1012,13 @@ Tests require Python 3 for real-terminal coverage on macOS and Linux.
 [Historical compatibility fixtures](../tests/fixtures/compatibility/README.md)
 cover every normal-open DB schema and accepted portable snapshot schema. Tests
 copy checked-in artifacts; regeneration uses frozen historical sources.
+Snapshot validation rejects legacy title/pending layouts and invalid status/claim
+relationships before installing DB/images. Human and JSON failures preserve
+original projects. Diagnostics and import dry-run never migrate; next dry-run
+uses normal DB-open upgrades, then previews queued candidate without claiming.
 
 ```sh
+./scripts/check-compatibility.sh
 cargo test --locked
 cargo fmt --check
 cargo clippy --locked --all-targets -- -D warnings
@@ -1021,7 +1026,12 @@ cargo build --locked --release
 ```
 
 [CI](../.github/workflows/ci.yml) checks Ubuntu 24.04 and macOS 14, builds release
-binary, uploads `qqq-<OS>-<ARCH>` archives (14-day retention).
+binary, uploads `qqq-<OS>-<ARCH>` archives (14-day retention). Both CI OSes and
+publication require `scripts/check-compatibility.sh`: immutable historical DB
+upgrade/restore matrix plus identity, image-storage, dependency/tag CLI and
+snapshot regressions. Matrix verifies repeated/concurrent opens, rollback/retry,
+field defaults, ownership/readiness and reserved ID sequences. Missing fixture
+coverage for a new schema or snapshot format fails gate.
 
 ### Publish to crates.io
 

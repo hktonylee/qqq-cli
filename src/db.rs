@@ -347,7 +347,7 @@ fn image_description(
     );
     Ok(description)
 }
-fn ensure_description_schema(conn: &Connection) -> Result<()> {
+pub(crate) fn ensure_description_schema(conn: &Connection) -> Result<()> {
     ensure!(
         !conn.query_row(
             "SELECT EXISTS(SELECT 1 FROM pragma_table_info('tasks') WHERE name='title')",

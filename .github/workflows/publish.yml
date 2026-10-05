@@ -66,6 +66,11 @@ jobs:
       - name: Run tests
         run: cargo +stable test --locked
 
+      - name: Check upgrade compatibility
+        env:
+          RUSTUP_TOOLCHAIN: stable
+        run: ./scripts/check-compatibility.sh
+
       - name: Verify crate package
         run: cargo +stable publish --locked --dry-run --registry crates-io
 
