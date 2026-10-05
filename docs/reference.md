@@ -930,16 +930,42 @@ before retry or forced release.
 
 ## Data
 
+Compatibility facts below describe current source checkout. Fixture matrix and
+runtime output enforce this table; package version and DB schema are separate.
+
+<!-- compatibility-support:start -->
+| Contract | Supported value |
+| --- | --- |
+| Current DB schema | `12` |
+| Normal-open DB schemas | `1–12` |
+| Automatic upgrade source schemas | `1–11` |
+| Portable snapshot format | `1` |
+| Portable snapshot DB schemas | `9–12` |
+| Upgrade recovery format | `2` |
+| Upgrade recovery source schemas | `1–11` |
+| Initialization-only schema | `0` |
+| Manual-conversion layouts | `title`, `pending` |
+<!-- compatibility-support:end -->
+
+Supported versions require compatible `description`/`new` layout and valid data.
+Legacy `title` columns or `pending` status layouts need manual conversion even
+when their `user_version` falls inside listed range. Schema 0 initializes an
+empty DB; existing schema-0 projects do not qualify for automatic upgrade.
+Unknown newer schemas and archive formats are rejected.
+
 Keep `.qqq/` and `.qqq-upgrades/` out of Git. Create portable snapshot while other local qqq
 writers run:
 
+<!-- compatibility-portable-example:start -->
 ```sh
 qqq backup ../project-snapshot.tar
 mkdir ../restored-project
 cd ../restored-project
 qqq restore ../project-snapshot.tar
 qqq list
+qqq doctor
 ```
+<!-- compatibility-portable-example:end -->
 
 Backup contains consistent SQLite data plus every stored image. Tar archive
 starts with `manifest.json`, then `qqq.db`, then `images/<task-id>/<image-id>.<ext>`.
@@ -954,31 +980,51 @@ Before automatically upgrading an existing supported DB, qqq saves original
 schema and required attachments in sibling `.qqq-upgrades/` directory. Human
 stderr prints `Saved pre-upgrade snapshot: <path>` before migration. JSON
 result/error shapes stay unchanged; discover archives in that directory.
-Names include source/target schemas plus unique suffix; retries never overwrite
-previous records. Snapshot is verified, synced and published before migration
-changes DB/images. Snapshot failure aborts upgrade with source intact. Successful
+Names follow `schema-<source>-to-<target>-.upgrade-<unique>.tar`; retries never
+overwrite previous records. Manifest records source/target schemas, original
+absolute project path, creation time and SHA-256 hashes/byte counts. SQLite
+write lock coordinates DB copy and required attachments before migration;
+waiting openers recheck schema after acquiring lock. One successful concurrent
+upgrade produces one archive. Snapshot is verified, synced and atomically
+published before migration changes DB/images. Snapshot failure aborts upgrade
+with source intact. Successful
 and failed migrations both retain verified snapshots. Current-schema opens,
 fresh initialization, diagnostics and dry runs create none.
 
-Upgrade recovery uses distinct manifest format2. Recover into new/empty project:
+Upgrade recovery uses distinct manifest format listed in support table. Stop qqq workers, choose
+original archive from printed absolute path or `.qqq-upgrades/` inventory.
+Example starts in original project, prompts for that path, creates fresh target.
+SQLite inspection requires `sqlite3` CLI:
 
+<!-- compatibility-recovery-example:start -->
 ```sh
-mkdir ../recovered-project
-cd ../recovered-project
-qqq restore --recovery ../original-project/.qqq-upgrades/schema-1-to-12-SUFFIX.tar
+printf 'Saved snapshot absolute path: '
+IFS= read -r recovery_archive
+test -f "$recovery_archive"
+recovery_project=$(mktemp -d "${TMPDIR:-/tmp}/qqq-recovered.XXXXXX")
+cd "$recovery_project"
+printf 'Recovered project: %s\n' "$PWD"
+qqq restore --recovery "$recovery_archive"
 # Recovery preserves original schema. Inspect data before retrying upgrade.
 sqlite3 .qqq/qqq.db 'PRAGMA user_version; PRAGMA integrity_check; PRAGMA foreign_key_check;'
 qqq list # saves new pre-upgrade snapshot, retries normal upgrade
+qqq doctor
 ```
+<!-- compatibility-recovery-example:end -->
 
 Recovery validates manifest schema/project metadata, SHA256 hashes, SQLite
 integrity/foreign keys, task status/claims and attachments before installation.
-It accepts original schemas1–11, including embedded-image schemas1–5, without
+It accepts original source schemas listed in support table, including
+embedded-image schemas 1–5, without
 migrating during restore. Pending deletion attachments are captured without
 altering live staging, then restored at canonical image paths. Populated target
-is rejected. Ordinary `restore` still accepts portable format1/schemas9–12;
+is rejected. Ordinary `restore` accepts portable format/schema range listed above;
 `--recovery` is required for automatic upgrade archives. Retain archives until
 recovered data and subsequent upgrade are verified; no automatic cleanup runs.
+Use SQLite inspection before `qqq list`, `qqq show`, backup, TUI or another
+normal DB-backed command: those commands automatically upgrade restored old DB.
+Recovery does not overwrite original project; inspect and verify fresh target
+before replacing any live project files.
 
 Preview permanent deletion before confirming it:
 
@@ -1036,22 +1082,43 @@ qqq list # run updated CLI
 Check task data before removing old DB. New CLI does not discover root-level
 `qqq.db`; `qqq init` without migration creates separate empty DB.
 
-Compatible DBs at schema versions 1–11 migrate to version 12. Version 12 adds
-tags; version 11 added extra prerequisite edges; version 10 added content
-revisions. Upgrades preserve old IDs, ownership, history and readiness, after saving
-verified original-schema recovery archive outside live store. Portable
-snapshot format 1 accepts schema-9–12 DBs: restore preserves stored schema,
-then next normal DB open migrates older versions. Version 6 moves
-existing image blobs to `.qqq/images/` before SQLite drops its `data` column.
+Compatible source schemas listed above migrate to current DB schema after saving
+verified original-schema recovery archive outside live store. Upgrade preserves
+task/message/event/image IDs, reserved SQLite ID sequences, descriptions,
+timestamps, parent/dependency edges, history, stored images and active claim
+keys. Existing queue readiness remains consistent with existing dependencies;
+new fields use defaults when source schema predates them:
+
+| Added in schema | Field/behavior | Value for older data |
+| --- | --- | --- |
+| 2 | Parent | `parent_id=NULL` |
+| 3, 5 | Ownership/identity | Owner key preserved through renames; active harness identity derives from saved Herdr link or prior claim key; orchestrator identity derives from saved link |
+| 4 | Error status | Existing status/history unchanged; no error tasks invented |
+| 7 | Priority | `0` |
+| 8 | Archived | `false` |
+| 9 | Reopen event | Existing events unchanged |
+| 10 | Content revision | `1` |
+| 11 | Extra prerequisites | Empty; existing parent edges retained |
+| 12 | Tags | Empty array `[]` |
+
+Version 6 moves existing image blobs to `.qqq/images/` before SQLite drops its
+`data` column, preserving IDs, metadata and bytes. Portable restore preserves
+stored schema; next normal DB open upgrades older versions.
 Migration tries `VACUUM` to reclaim old blob pages. If compaction warns, stop
-writers and run `sqlite3 .qqq/qqq.db 'VACUUM;'` later. Upgrade other qqq workers
-before migration; older binaries cannot open version 12. Legacy `title` or
-`pending` schemas need manual conversion; newer unknown schemas fail. Back up
-before conversion.
+writers and run `sqlite3 .qqq/qqq.db 'VACUUM;'` later.
+
+Coordinate workers sharing project: stop older workers and waiters, upgrade all
+binaries, run one normal command such as `qqq list`, verify `qqq doctor`, then
+restart workers. Older binaries reject schemas newer than their own supported
+version; do not run mixed versions after migration. Claims remain explicit:
+migration does not expire, transfer, release or replace active ownership. Original
+owner still completes/releases work explicitly; elapsed time does not free claim.
+Back up before manual conversion of unsupported legacy layouts.
 
 ## Development
 
-Tests require Python 3 for real-terminal coverage on macOS and Linux.
+Tests require Python 3 for real-terminal coverage, POSIX shell and `sqlite3` CLI
+for executable recovery documentation on macOS and Linux.
 [Historical compatibility fixtures](../tests/fixtures/compatibility/README.md)
 cover every normal-open DB schema and accepted portable snapshot schema. Tests
 copy checked-in artifacts; regeneration uses frozen historical sources.
@@ -1065,6 +1132,7 @@ records after SQL/image/commit failures, snapshot verification failure and
 metadata/claim/checksum rejection before installing restored projects.
 
 ```sh
+./scripts/check-compatibility-docs.sh
 ./scripts/check-compatibility.sh
 cargo test --locked
 cargo fmt --check
@@ -1078,9 +1146,17 @@ publication require `scripts/check-compatibility.sh`: immutable historical DB
 upgrade/restore matrix plus identity, image-storage, dependency/tag CLI and
 snapshot regressions. Matrix verifies repeated/concurrent opens, rollback/retry,
 field defaults, ownership/readiness and reserved ID sequences. Missing fixture
-coverage for a new schema or snapshot format fails gate.
+coverage for a new schema or snapshot format fails gate. Focused
+`scripts/check-compatibility-docs.sh` checks marked support table against fixture
+metadata, initialized schema and runtime archive metadata (`SCHEMA_VERSION`
+sets upgrade target). It executes documented portable/recovery examples in
+temporary historical projects. New schemas require matrix fixtures and published
+facts to change together; unrelated prose is outside contract check.
 
 ### Publish to crates.io
+
+[Release checklist](release-checklist.md) covers compatibility fixtures, recovery,
+user-visible schema notes, package/binary versions and existing publication gates.
 
 [Publish workflow](../.github/workflows/publish.yml) checks `v<version>` tag against
 `Cargo.toml`, runs checks and package dry run, then publishes `qqq-cli`. Setup:

@@ -1,6 +1,8 @@
 #[path = "common/compatibility.rs"]
 mod compatibility;
 
+#[path = "compatibility/documentation.rs"]
+mod documentation;
 #[path = "compatibility/failures.rs"]
 mod failures;
 #[path = "compatibility/recovery.rs"]

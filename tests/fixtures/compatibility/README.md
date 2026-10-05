@@ -69,6 +69,7 @@ retain frozen sources and provenance. Tar entries are regular files, manifest
 first, then DB and images in fixed ID order, with uid/gid/mtime=0 and mode 0600.
 
 ```sh
+./scripts/check-compatibility-docs.sh
 ./scripts/check-compatibility.sh
 cargo test --locked --test compatibility --test snapshot
 ```
@@ -91,3 +92,12 @@ openers/writers, WAL snapshots, SQL/image/commit rollback and repaired retry,
 snapshot write/verification failures and tampered metadata/hash/claim rejection.
 Recovery format2 is distinct from frozen portable format1; portable lower bound
 remains schema9. Initialization/current-schema/read-only commands save no archives.
+
+Published support table in [reference](../../../docs/reference.md#data) is checked
+against this catalog and emitted DB/portable/recovery archive versions. Focused
+documentation gate also executes marked shell examples against temporary copies:
+portable example on schemas 9–12, recovery example on every source schema 1–11.
+It verifies SQLite inspection happens before normal-open upgrade and canonical
+task/image/claim/readiness state survives. Both CI OSes and publication run gate.
+New schemas require fixtures, catalog support and published table to update
+together. See [release checklist](../../../docs/release-checklist.md).
