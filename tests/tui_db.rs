@@ -173,7 +173,10 @@ fn force_completion_preserves_content_and_history_for_unfinished_tasks() {
             "orchestrator_name",
             "orchestrator_session",
         ] {
-            assert!(after["task"][field].is_null(), "{state}: {field}");
+            assert_eq!(
+                after["task"][field], before["task"][field],
+                "{state}: {field}"
+            );
         }
         let claim: Option<String> = db
             .conn

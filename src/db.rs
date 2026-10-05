@@ -1592,7 +1592,7 @@ impl Db {
             .conn
             .transaction_with_behavior(TransactionBehavior::Immediate)?;
         let session = Self::owner_key(&tx, session, harness_name)?;
-        ensure!(tx.execute("UPDATE tasks SET status='completed',claim_key=NULL,harness_name=NULL,harness_session=NULL,orchestrator_name=NULL,orchestrator_session=NULL,updated_at=strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE id=? AND status='in_progress' AND claim_key=?",params![id,session])?==1,Self::transition_error_for_owner(&tx, id, &session)?);
+        ensure!(tx.execute("UPDATE tasks SET status='completed',claim_key=NULL,updated_at=strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE id=? AND status='in_progress' AND claim_key=?",params![id,session])?==1,Self::transition_error_for_owner(&tx, id, &session)?);
         tx.execute(
             "INSERT INTO events(task_id,session,action) VALUES (?, ?, 'complete')",
             params![id, session],
@@ -1611,7 +1611,7 @@ impl Db {
             .conn
             .transaction_with_behavior(TransactionBehavior::Immediate)?;
         ensure!(
-            tx.execute("UPDATE tasks SET status='completed',claim_key=NULL,harness_name=NULL,harness_session=NULL,orchestrator_name=NULL,orchestrator_session=NULL,updated_at=strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE id=? AND status IN ('new','in_progress','error')", [id])? == 1,
+            tx.execute("UPDATE tasks SET status='completed',claim_key=NULL,updated_at=strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE id=? AND status IN ('new','in_progress','error')", [id])? == 1,
             transition_error(
                 &tx,
                 id,

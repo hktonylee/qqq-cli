@@ -94,9 +94,22 @@ fn terminal_caller_identity_auto_claims_waits_completes_and_finds_moved_pane() {
         herdr(p, json!({"result":{"agents":[moved.clone()]}}), false).args(["herdr", "find", "1"]),
     );
     assert_eq!(found["pane_id"], "w2:p9");
-    let done = ok(herdr(p, json!({"result":{"pane":moved}}), true).args(["complete", "1"]));
+    let done = ok(herdr(p, json!({"result":{"pane":moved.clone()}}), true).args(["complete", "1"]));
     assert_eq!(done["status"], "completed");
-    assert!(done["harness_session"].is_null());
+    for field in [
+        "harness_name",
+        "harness_session",
+        "orchestrator_name",
+        "orchestrator_session",
+    ] {
+        assert_eq!(done[field], task[field]);
+    }
+    let completed_detail = ok(command(p).args(["show", "1"]));
+    assert_eq!(completed_detail["herdr"], detail["herdr"]);
+    moved["pane_id"] = json!("w3:p2");
+    let found =
+        ok(herdr(p, json!({"result":{"agents":[moved]}}), false).args(["herdr", "find", "1"]));
+    assert_eq!(found["pane_id"], "w3:p2");
 }
 
 #[test]

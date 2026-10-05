@@ -72,7 +72,7 @@ fn task_responses_use_harness_and_orchestrator_fields() {
         Value::Null,
     );
     assignment(&ok(&d, &["next", "--session", "b"]), json!("b"));
-    assignment(&ok(&d, &["complete", "1", "--session", "b"]), Value::Null);
+    assignment(&ok(&d, &["complete", "1", "--session", "b"]), json!("b"));
     let out = Command::new(env!("CARGO_BIN_EXE_qqq"))
         .current_dir(d.path())
         .args(["--human", "show", "1"])
@@ -82,7 +82,7 @@ fn task_responses_use_harness_and_orchestrator_fields() {
     assert!(text.lines().any(|line| {
         line.get(..25)
             .is_some_and(|label| label.trim() == "Harness")
-            && line[25..].trim() == "-"
+            && line[25..].trim() == "b"
     }));
     assert!(!text.contains("Owner:"));
 }
@@ -149,7 +149,7 @@ fn v2_upgrade_preserves_data_and_enforces_renamed_constraints() {
     assert_eq!(ok(&d, &["next", "--session", "legacy"])["id"], 1);
     assignment(
         &ok(&d, &["complete", "1", "--session", "legacy"]),
-        Value::Null,
+        json!("legacy-session"),
     );
     assert_eq!(ok(&d, &["next", "--session", "child"])["id"], 2);
 }
@@ -216,7 +216,7 @@ fn explicit_overrides_and_public_session_recover_same_claim() {
     );
     assignment(
         &ok(&d, &["complete", "1", "--harness-session", "public"]),
-        Value::Null,
+        json!("public"),
     );
     let detail = ok(&d, &["show", "1"]);
     assert_eq!(detail["events"][0]["session"], "key");
@@ -275,8 +275,132 @@ fn ambiguous_public_sessions_need_harness_name() {
                 "claude",
             ],
         ),
-        Value::Null,
+        json!("shared"),
     );
+}
+
+#[test]
+fn completed_identity_stays_visible_without_resurrecting_claims() {
+    let d = TempDir::new().unwrap();
+    ok(&d, &["init"]);
+    for description in ["First", "Second", "Third"] {
+        ok(&d, &["add", description]);
+    }
+    let conn = Connection::open(d.path().join(".qqq/qqq.db")).unwrap();
+    for (id, key) in [("1", "first-key"), ("2", "second-key")] {
+        let claimed = ok(
+            &d,
+            &[
+                "next",
+                "--local",
+                "--session",
+                key,
+                "--harness-name",
+                "codex",
+                "--harness-session",
+                "shared-log",
+                "--orchestrator-name",
+                "herdr",
+                "--orchestrator-session",
+                "named",
+            ],
+        );
+        assert_eq!(claimed["id"].as_i64().unwrap().to_string(), id);
+        let before = ok(&d, &["show", id]);
+        assert!(
+            !run(&d, &["complete", id, "--session", "wrong"])
+                .status
+                .success()
+        );
+        assert_eq!(ok(&d, &["show", id]), before);
+        let completed = ok(&d, &["complete", id, "--harness-session", "shared-log"]);
+        assert_eq!(completed["status"], "completed");
+        let shown = ok(&d, &["show", id]);
+        let listed = ok(&d, &["list", "--all"]);
+        let row = listed
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|row| row["id"] == claimed["id"])
+            .unwrap();
+        for field in [
+            "harness_name",
+            "harness_session",
+            "orchestrator_name",
+            "orchestrator_session",
+        ] {
+            assert_eq!(completed[field], claimed[field]);
+            assert_eq!(shown["task"][field], claimed[field]);
+            assert_eq!(row[field], claimed[field]);
+        }
+        assert_eq!(shown["events"][1]["session"], key);
+        let claim: Option<String> = conn
+            .query_row("SELECT claim_key FROM tasks WHERE id=?", [id], |row| {
+                row.get(0)
+            })
+            .unwrap();
+        assert!(claim.is_none());
+        let human = Command::new(env!("CARGO_BIN_EXE_qqq"))
+            .current_dir(d.path())
+            .args(["--human", "show", id])
+            .output()
+            .unwrap();
+        assert!(human.status.success());
+        let text = String::from_utf8(human.stdout).unwrap();
+        assert!(text.contains("shared-log (codex)"), "{text}");
+        assert!(text.contains("named (herdr)"), "{text}");
+    }
+    let third = ok(
+        &d,
+        &[
+            "next",
+            "--local",
+            "--session",
+            "third-key",
+            "--harness-name",
+            "codex",
+            "--harness-session",
+            "shared-log",
+        ],
+    );
+    assert_eq!(third["id"], 3);
+    assert_eq!(
+        ok(&d, &["next", "--local", "--harness-session", "shared-log"])["id"],
+        3
+    );
+    assert!(
+        !run(&d, &["complete", "1", "--harness-session", "shared-log"])
+            .status
+            .success()
+    );
+    assert_eq!(ok(&d, &["show", "3"])["task"], third);
+    let reopened = ok(&d, &["reopen", "1", "--session", "reviewer"]);
+    for field in [
+        "harness_name",
+        "harness_session",
+        "orchestrator_name",
+        "orchestrator_session",
+    ] {
+        assert!(reopened[field].is_null());
+    }
+    let replacement = ok(
+        &d,
+        &[
+            "next",
+            "--local",
+            "--session",
+            "new-worker",
+            "--harness-name",
+            "claude",
+            "--harness-session",
+            "new-log",
+        ],
+    );
+    assert_eq!(replacement["id"], 1);
+    assert_eq!(replacement["harness_name"], "claude");
+    assert_eq!(replacement["harness_session"], "new-log");
+    assert!(replacement["orchestrator_name"].is_null());
+    assert!(replacement["orchestrator_session"].is_null());
 }
 
 #[test]
@@ -390,7 +514,7 @@ fn v4_migration_preserves_error_rows_and_named_dispatched_claims() {
             &d,
             &["complete", "1", "--harness-session", "legacy-session"],
         ),
-        Value::Null,
+        json!("legacy-session"),
     );
 }
 

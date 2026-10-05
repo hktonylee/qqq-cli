@@ -2803,7 +2803,7 @@ print(json.dumps({"result": result}))
             assert completed["task"]["description"] == "Owned item"
             assert completed["task"]["content_revision"] == task_before["task"]["content_revision"]
             for field in ("harness_name", "harness_session", "orchestrator_name", "orchestrator_session"):
-                assert completed["task"][field] is None
+                assert completed["task"][field] == task_before["task"][field]
             assert completed["events"][:-1] == task_before["events"]
             assert completed["events"][-1]["action"] == "complete"
             assert completed["events"][-1]["session"] == "manual"

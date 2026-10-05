@@ -344,7 +344,8 @@ qqq reopen -1 --session reviewer
 
 `reopen` returns a completed task to `new` and records a reopen event. It keeps
 description, priority, parent, prerequisites, messages, images, creation time, and prior
-history. A task in any other status fails without changes; repeating `reopen`
+history. Reopening clears recorded assignment metadata; saved Herdr link stays
+until next claim replaces it. A task in any other status fails without changes; repeating `reopen`
 also fails. Archived completed tasks require `unarchive` first. A completed
 task with an archived unfinished parent or prerequisite cannot reopen until
 dependency is unarchived or completed, or its link removed. Completed descendants
@@ -584,8 +585,8 @@ In progress or Error task regardless of owner **after selecting** `[ ] Force com
 with Space or clicking checkbox/label. Checkbox starts unchecked on every opening;
 forced confirmation without selecting it keeps popup and changes nothing. Matching
 owner can complete normally with checkbox unchecked, or select force explicitly.
-This clears claim and ownership
-metadata, preserves task content and history, and records a standard `complete`
+This clears active claim, retains recorded harness/orchestrator metadata and Herdr
+link for log lookup, preserves task content and history, and records a standard `complete`
 event attributed to explicit session or `manual`. Already-completed tasks fail.
 Cancellation preserves draft and DB. If Herdr fails or ownership changes during
 normal confirmation, popup keeps exact error plus unchecked force checkbox.
@@ -816,6 +817,13 @@ Completion, release and error marking require owner. Use original session token
 or uniquely matching displayed `harness_session`; add `--harness-name` when
 public sessions overlap. JSON assignment fields: `harness_name`,
 `harness_session`, `orchestrator_name`, `orchestrator_session`.
+
+Normal and force completion retain these four recorded fields and saved Herdr
+link. Completion response, JSON lists, `show` and TUI details keep worker/session
+information available for log inspection; `qqq herdr find ID` still uses saved
+link to locate agent. Active claim ends, so same worker can claim next task even
+when completed tasks keep same public session. Release, error marking and reopen
+clear current assignment metadata; fresh claim records new worker identity.
 
 Human `next` output omits these four assignment fields. JSON and `show` retain
 them for ownership inspection.
