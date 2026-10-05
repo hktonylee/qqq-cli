@@ -19,7 +19,7 @@
   caller/child separation. Update ownership and dispatch docs with concise matrix.
 - [x] Verify focused/full checks, compatibility, fmt/strict Clippy/release; obtain
   independent review, commit/rebase/fast-forward locally, install and verify
-  env-only context matrix. Record evidence, queue-complete, cleanup, resume waiter.
+  env-only context matrix. Record evidence before queue completion and cleanup.
 
 ## Evidence
 
