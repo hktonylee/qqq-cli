@@ -69,7 +69,7 @@ manifest1/schema9 lower bound. Read-only previews bypass migration and staging.
   retained original schema, next preview read-only behavior and CI matrix expansion.
 - [ ] Run gate/full cargo test --locked --offline; cargo fmt --check; cargo clippy
   --locked --offline --all-targets -- -D warnings; release. Record counts/log paths.
-- [ ] Request independent read-only review using requesting-code-review skill.
+- [x] Request independent read-only review using requesting-code-review skill.
 - [ ] Commit/rebase/local ff merge, rerun integrated gate, install qqq and run installed
   recovery matrix; verify binary hashes and claim semantics against temp projects.
 - [ ] Record evidence, complete172, finalize docs commit, remove owned worktree/branch,
@@ -96,3 +96,28 @@ report actual validated DB image rows. Fresh post-fix evidence follows below.
 Post-review fixes:13 focused recovery tests and leaf gate146/7 binaries passed.
 Fresh fmt/diff, strict all-target Clippy and release build passed. Final full
 suite and independent follow-up review still running at this checkpoint.
+
+Follow-up WAL review: SQLite READ_ONLY created WAL/shm sidecars on persisted-WAL
+source despite no SQL writes. Red regression reproduced in next preview; guarded
+shared readonly opens now reject WAL/any sidecar before SQLite, reason
+unsafe_read_only. Waiting preview rechecks before transaction (transition regression
+passed). Doctor showed same sidecar mutation red; reused guard with existing doctor
+report shape/new DB_READ_ONLY_UNSAFE issue. Refusal/recovery policy documented.
+Fresh gate/full/Clippy/release required after these final changes.
+
+Gate caught over-conservative -journal rejection during legitimate concurrent
+queue transitions. Bundled SQLite pager checks readOnly and returns
+SQLITE_READONLY_ROLLBACK before hot-journal recovery writes. Shared guard now
+refuses WAL/shm + WAL header, permits rollback journals under SQLite READ_ONLY
+so existing concurrent diagnostics retain consistent committed snapshots.
+Doctor retains its existing stricter journal-sidecar deferral policy.
+
+Concurrent coherence fixture intentionally used WAL; changed fixture to supported
+DELETE mode under documented strict filesystem-readonly policy, preserving all24
+snapshot-coherence assertions and active writer transitions. WAL refusal is tested
+separately with/without sidecars and during wait. Invalid/empty DB with journal is
+also deferred before VFS-dependent journal cleanup; valid DELETE journals allowed.
+
+Final WAL/doctor guard focused16 tests, added malformed-journal cases, concurrent
+DELETE diagnostic regression, gate149/7 binaries passed. Independent review clear;
+fresh fmt/diff, strict all-target Clippy and release passed. Full suite pending.

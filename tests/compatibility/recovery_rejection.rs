@@ -231,3 +231,101 @@ fn upgrade_rejects_blank_active_owner_in_every_historical_owner_layout() {
         }
     }
 }
+
+#[test]
+fn wal_previews_and_diagnostics_never_create_or_change_source_sidecars() {
+    let catalog = catalog();
+    let entry = catalog.databases.last().unwrap();
+    for existing_sidecars in [false, true] {
+        let source = copy_database(entry);
+        let database = source.path().join(".qqq/qqq.db");
+        let mut writer = Some(Connection::open(&database).unwrap());
+        writer
+            .as_ref()
+            .unwrap()
+            .pragma_update(None, "journal_mode", "WAL")
+            .unwrap();
+        if !existing_sidecars {
+            writer = None;
+        } else {
+            // Keep writer connection alive so WAL/shm files remain present.
+            writer
+                .as_ref()
+                .unwrap()
+                .execute(
+                    "UPDATE tasks SET description=description || ' WAL' WHERE id=3",
+                    [],
+                )
+                .unwrap();
+        }
+        fs::write(
+            source.path().join("preview.json"),
+            br#"{"version":1,"tasks":[{"key":"preview","description":"Synthetic"}]}"#,
+        )
+        .unwrap();
+        let before = hashes_at(source.path());
+        for args in [
+            vec!["next", "--dry-run"],
+            vec!["next", "--dry-run", "--wait"],
+            vec!["next", "--explain"],
+            vec!["status"],
+            vec!["import", "preview.json", "--dry-run"],
+        ] {
+            for json in [false, true] {
+                let error = failure(source.path(), &args, json, "read-only", "DATABASE_ERROR");
+                if json {
+                    assert_eq!(error["details"]["reason"], "unsafe_read_only");
+                }
+                assert_eq!(hashes_at(source.path()), before);
+            }
+        }
+        assert!(!source.path().join(".qqq-upgrades").exists());
+        drop(writer);
+    }
+    for bytes in [b"".as_slice(), b"synthetic corrupt DB".as_slice()] {
+        let source = copy_database(entry);
+        fs::write(source.path().join(".qqq/qqq.db"), bytes).unwrap();
+        fs::write(
+            source.path().join(".qqq/qqq.db-journal"),
+            b"keep original journal",
+        )
+        .unwrap();
+        let before = hashes_at(source.path());
+        for json in [false, true] {
+            failure(
+                source.path(),
+                &["next", "--dry-run"],
+                json,
+                "read-only",
+                "DATABASE_ERROR",
+            );
+            assert_eq!(hashes_at(source.path()), before);
+        }
+    }
+}
+
+#[test]
+fn doctor_defers_persisted_wal_without_creating_sidecars() {
+    let catalog = catalog();
+    let source = copy_database(catalog.databases.last().unwrap());
+    let conn = Connection::open(source.path().join(".qqq/qqq.db")).unwrap();
+    conn.pragma_update(None, "journal_mode", "WAL").unwrap();
+    drop(conn);
+    let before = hashes_at(source.path());
+    let output = command(source.path())
+        .args(["doctor", "--json"])
+        .output()
+        .unwrap();
+    assert_eq!(output.status.code(), Some(1));
+    assert!(output.stderr.is_empty());
+    let report: Value = serde_json::from_slice(&output.stdout).unwrap();
+    assert_eq!(report["ok"], false);
+    assert_eq!(hashes_at(source.path()), before);
+    assert!(
+        report["issues"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|issue| issue["code"] == "DB_READ_ONLY_UNSAFE")
+    );
+}

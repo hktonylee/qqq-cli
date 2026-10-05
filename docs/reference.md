@@ -770,7 +770,11 @@ can claim it afterward.
 Preview opens DB read-only, leaves deletion staging untouched. Older schemas
 return `DATABASE_ERROR` with reason `migration_required`; run `qqq list` to
 upgrade before previewing. `--wait` keeps preview waiting for queued candidate
-without reserving it or creating upgrade snapshots.
+without reserving it or creating upgrade snapshots. Strict read-only commands
+refuse WAL mode or existing WAL sidecars with reason `unsafe_read_only`,
+because SQLite read-only opens can create WAL/shm files. Stop project writers,
+use `sqlite3 .qqq/qqq.db 'PRAGMA journal_mode=DELETE;'`, then retry. Waiting
+preview also rechecks journaling state before each read transaction.
 
 Without a queued candidate, human preview prints `No task available for pickup.`
 Use `qqq status` to inspect blocked, active, and error tasks.
@@ -1010,6 +1014,9 @@ signatures, and orphan files/directories. Healthy project exits 0. Issues print 
 actions and exit 1; JSON includes `ok`, counts, and `issues` with code, path,
 message, and action. Doctor never migrates DB. If SQLite journal/WAL sidecars
 exist, stop writers and recover or checkpoint SQLite before rerunning doctor.
+Persisted WAL mode without sidecars also defers check (`DB_READ_ONLY_UNSAFE`),
+leaving source files untouched. Stop writers, switch to journal_mode=DELETE
+through SQLite before retrying.
 For damaged DB or images, restore verified snapshot into new directory first;
 inspect recovered data before replacing damaged project files. Keep damaged
 copy until recovery is verified. For `DELETE_RECOVERY_PENDING`, follow returned

@@ -88,6 +88,15 @@ pub fn run() -> Result<Value> {
     if !report.ok {
         return Ok(serde_json::to_value(report)?);
     }
+    if let Err(error) = crate::db::ensure_read_only_safe(&db_path) {
+        report.issue(
+            "DB_READ_ONLY_UNSAFE",
+            &db_path,
+            error.to_string(),
+            "Stop project writers, use journal_mode=DELETE through SQLite, then rerun qqq doctor.",
+        );
+        return Ok(serde_json::to_value(report)?);
+    }
     let conn = match Connection::open_with_flags(&db_path, OpenFlags::SQLITE_OPEN_READ_ONLY) {
         Ok(conn) => conn,
         Err(error) => {
@@ -100,6 +109,15 @@ pub fn run() -> Result<Value> {
             return Ok(serde_json::to_value(report)?);
         }
     };
+    if let Err(error) = crate::db::ensure_read_only_safe(&db_path) {
+        report.issue(
+            "DB_READ_ONLY_UNSAFE",
+            &db_path,
+            error.to_string(),
+            "Stop project writers, use journal_mode=DELETE through SQLite, then rerun qqq doctor.",
+        );
+        return Ok(serde_json::to_value(report)?);
+    }
     if let Err(error) = conn.pragma_update(None, "query_only", "ON") {
         report.issue(
             "DB_UNREADABLE",

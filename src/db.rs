@@ -9,6 +9,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use std::{
     collections::HashSet,
+    io::Read,
     ops::Range,
     path::{Path, PathBuf},
     time::Duration,
@@ -419,6 +420,47 @@ fn database_path(init: bool) -> Result<PathBuf> {
     };
     Ok(path)
 }
+
+pub(crate) fn ensure_read_only_safe(path: &Path) -> Result<()> {
+    let unsafe_state = || {
+        crate::errors::Info::new(
+        crate::errors::Code::DatabaseError,
+        "SQLite WAL state is unsafe for read-only access; stop writers and use journal_mode=DELETE before retrying",
+    ).detail("reason", "unsafe_read_only")
+    };
+    // For valid DBs READ_ONLY returns SQLITE_READONLY_ROLLBACK before hot
+    // journal recovery. Ordinary
+    // writers' journals must remain readable for concurrent queue diagnostics.
+    for suffix in ["-wal", "-shm"] {
+        let mut sidecar = path.as_os_str().to_os_string();
+        sidecar.push(suffix);
+        ensure!(
+            std::fs::symlink_metadata(&sidecar)
+                .is_err_and(|error| error.kind() == std::io::ErrorKind::NotFound),
+            unsafe_state()
+        );
+    }
+    let mut header = [0_u8; 20];
+    let mut file = std::fs::File::open(path)?;
+    let bytes = file.read(&mut header)?;
+    let valid_header = bytes == header.len()
+        && &header[..16] == b"SQLite format 3\0"
+        && file.metadata()?.len() >= 512;
+    if valid_header {
+        ensure!(header[18] != 2 && header[19] != 2, unsafe_state());
+    } else {
+        // Defer malformed/empty DB with journal before SQLite can perform
+        // VFS-dependent cleanup; let SQLite diagnose bare corrupt DBs.
+        let mut journal = path.as_os_str().to_os_string();
+        journal.push("-journal");
+        ensure!(
+            std::fs::symlink_metadata(journal)
+                .is_err_and(|error| error.kind() == std::io::ErrorKind::NotFound),
+            unsafe_state()
+        );
+    }
+    Ok(())
+}
 impl Db {
     pub fn open(init: bool) -> Result<(Self, PathBuf)> {
         let path = database_path(init)?;
@@ -560,8 +602,13 @@ impl Db {
     }
     pub fn open_read_only() -> Result<(Self, PathBuf)> {
         let path = database_path(false)?;
+        // SQLite READ_ONLY can create WAL/shm files. Refuse that mode and
+        // existing sidecars before SQLite touches the live project.
+        ensure_read_only_safe(&path)?;
         let conn = Connection::open_with_flags(&path, OpenFlags::SQLITE_OPEN_READ_ONLY)?;
         conn.busy_timeout(Duration::from_secs(10))?;
+        ensure_read_only_safe(&path)?;
+        conn.pragma_update(None, "query_only", "ON")?;
         let version: i64 = conn.pragma_query_value(None, "user_version", |row| row.get(0))?;
         ensure!(
             (1..=SCHEMA_VERSION).contains(&version),
@@ -1392,6 +1439,14 @@ impl Db {
         }
     }
     pub fn peek_next_filtered(&mut self, filter: Option<&CompiledFilter>) -> Result<Option<Task>> {
+        if self.conn.is_readonly(rusqlite::DatabaseName::Main)? {
+            if let Some(path) = self.conn.path() {
+                // --wait may outlive a writer changing the journaling mode.
+                // Do this before beginning a read transaction (raw fd closes
+                // must not release an active SQLite POSIX lock).
+                ensure_read_only_safe(Path::new(path))?;
+            }
+        }
         let tx = self
             .conn
             .transaction_with_behavior(TransactionBehavior::Deferred)?;

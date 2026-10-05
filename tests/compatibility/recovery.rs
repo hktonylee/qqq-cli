@@ -621,3 +621,39 @@ fn read_only_preview_waits_for_candidate_without_claiming_or_recovery() {
     assert_eq!(hashes_at(project.path()), before);
     assert!(archives(project.path()).is_empty());
 }
+
+#[test]
+fn read_only_wait_rejects_later_wal_transition_without_creating_sidecars() {
+    let project = TempDir::new().unwrap();
+    run(project.path(), &["init"]);
+    let database = project.path().join(".qqq/qqq.db");
+    let mut child = command(project.path())
+        .args(["next", "--dry-run", "--wait", "--json"])
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .unwrap();
+    thread::sleep(Duration::from_millis(300));
+    assert!(child.try_wait().unwrap().is_none());
+    let writer = Connection::open(&database).unwrap();
+    writer.busy_timeout(Duration::from_secs(5)).unwrap();
+    writer.pragma_update(None, "journal_mode", "WAL").unwrap();
+    drop(writer);
+    let before = hashes_at(project.path());
+    let deadline = Instant::now() + Duration::from_secs(5);
+    while child.try_wait().unwrap().is_none() {
+        if Instant::now() > deadline {
+            child.kill().unwrap();
+            child.wait().unwrap();
+            panic!("read-only wait did not reject WAL transition");
+        }
+        thread::sleep(Duration::from_millis(20));
+    }
+    let output = child.wait_with_output().unwrap();
+    assert_eq!(output.status.code(), Some(1));
+    assert!(output.stdout.is_empty());
+    let error: Value = serde_json::from_slice(&output.stderr).unwrap();
+    assert_eq!(error["code"], "DATABASE_ERROR");
+    assert_eq!(error["details"]["reason"], "unsafe_read_only");
+    assert_eq!(hashes_at(project.path()), before);
+}

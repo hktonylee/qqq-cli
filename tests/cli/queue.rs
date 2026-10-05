@@ -611,7 +611,9 @@ fn queue_concurrent_transitions_keep_counts_blockers_selection_and_activity_cohe
     ok(p, &["add", "Child", "--parent", "1", "--priority", "20"]);
     ok(p, &["add", "Fallback"]);
     let conn = Connection::open(p.join(".qqq/qqq.db")).unwrap();
-    conn.pragma_update(None, "journal_mode", "WAL").unwrap();
+    // Strict read-only diagnostics refuse WAL; exercise concurrent committed
+    // snapshots in supported rollback-journal mode instead.
+    conn.pragma_update(None, "journal_mode", "DELETE").unwrap();
     let running = Arc::new(AtomicBool::new(true));
     let transitions = Arc::new(AtomicUsize::new(0));
     let writer_running = running.clone();

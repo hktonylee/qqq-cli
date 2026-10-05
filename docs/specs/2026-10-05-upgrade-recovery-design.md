@@ -55,6 +55,9 @@ Move next --dry-run to Db::open_read_only and return peek_next_filtered before
 normal open/deletion recovery. Old schemas report existing migration_required error;
 current schemas retain queued-candidate semantics with no session discovery/claim.
 This intentionally tightens prior preview behavior which allowed schema migration.
+SQLite read-only opens can create WAL sidecars. Reject WAL header or existing WAL/shm sidecars before opening, reason unsafe_read_only; recheck before waiting
+preview transactions. Require stopped writers/journal_mode=DELETE for strict
+read-only operations; never use immutable URI against live DB.
 
 ## Verification
 
@@ -74,3 +77,5 @@ SQLite references checked during implementation:
   qqq verifies staged archive and explicitly syncs publication before upgrade.
 - https://www.sqlite.org/lockingv3.html documents reserved write lock excluding
   competing writers while permitting readers; capture keeps lock until commit.
+
+- https://www.sqlite.org/wal.html documents read-only WAL sidecar requirements.
