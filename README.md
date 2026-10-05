@@ -113,6 +113,9 @@ task to load it, scroll each pane, or use the keyboard:
 
 Ctrl+G menu includes `e Mark error`. Enter reason, confirm with `y`; marking
 error requires ownership of an in-progress task.
+Menu groups status actions, settings (`Priority`, `Set parent`), and
+archive visibility, with an empty line between groups. Arrows skip empty rows;
+short terminals keep selected action visible while scrolling menu.
 
 Task details and `qqq show` display assignment in two aligned rows:
 `Harness session (name)` and `Orchestrator session (name)`.

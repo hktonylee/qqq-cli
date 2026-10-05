@@ -552,7 +552,11 @@ before discard.
 
 Ctrl-G opens centered actions popup for selected task; dashboard stays visible
 around it. Prompts, confirmations and errors share popup; small terminals use
-compact view. Cyan titles/shortcuts, muted help, gold prompts/warnings and soft-red
+compact view, scrolling menu to keep selected action visible.
+Actions form three groups separated by empty rows: status (`Complete`,
+`Mark error`, optional `Retry error`, `Reopen`), settings (`Priority`,
+`Set parent`), and visibility (`Archive`/`Unarchive`). Empty rows are never
+selectable. Cyan titles/shortcuts, muted help, gold prompts/warnings and soft-red
 errors distinguish popup states. Up/Down selects action, wrapping at ends;
 Enter activates selected row. Dark accent tint and `>` mark selection; plain
 mode keeps marker. Letter shortcuts activate actions directly. Press `c` to complete owned task,

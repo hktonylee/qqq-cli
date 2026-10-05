@@ -167,19 +167,22 @@ enum ActionInputKind {
     Tags,
 }
 
-const ACTION_MENU_ITEMS: [(char, &str); 7] = [
-    ('c', "Complete"),
-    ('r', "Retry error"),
-    ('o', "Reopen"),
-    ('a', "Archive"),
-    ('p', "Priority"),
-    ('d', "Parent"),
-    ('e', "Mark error"),
+const ACTION_MENU_GROUPS: [&[(char, &str)]; 3] = [
+    &[
+        ('c', "Complete"),
+        ('e', "Mark error"),
+        ('r', "Retry error"),
+        ('o', "Reopen"),
+    ],
+    &[('p', "Priority"), ('d', "Set parent")],
+    &[('a', "Archive")],
 ];
 
 fn action_menu_items(can_retry: bool) -> impl Iterator<Item = (char, &'static str)> {
-    ACTION_MENU_ITEMS
+    ACTION_MENU_GROUPS
         .into_iter()
+        .flatten()
+        .copied()
         .filter(move |(key, _)| can_retry || *key != 'r')
 }
 
@@ -244,14 +247,29 @@ fn action_lines(ui: &ActionUi, width: usize, height: usize) -> Vec<render::Popup
                 format!("Task actions #{id}"),
                 PopupKind::Heading,
             )];
-            lines.extend(action_menu_items(*can_retry).map(|(key, label)| {
-                let label = if key == 'a' && *archived {
-                    "Unarchive"
-                } else {
-                    label
-                };
-                PopupRow::new(format!("{key} {label}"), PopupKind::Action)
-            }));
+            let mut action_index = 0;
+            for (group_index, group) in ACTION_MENU_GROUPS.into_iter().enumerate() {
+                if group_index > 0 {
+                    lines.push(PopupRow::new("", PopupKind::Body));
+                }
+                for &(key, label) in group {
+                    if key == 'r' && !can_retry {
+                        continue;
+                    }
+                    let label = if key == 'a' && *archived {
+                        "Unarchive"
+                    } else {
+                        label
+                    };
+                    let kind = if action_index == *selected {
+                        PopupKind::SelectedAction
+                    } else {
+                        PopupKind::Action
+                    };
+                    lines.push(PopupRow::new(format!("{key} {label}"), kind));
+                    action_index += 1;
+                }
+            }
             lines.push(PopupRow::new(
                 if width >= "Up/Down Select  Enter Apply  Esc Cancel".len() {
                     "Up/Down Select  Enter Apply  Esc Cancel"
@@ -260,7 +278,27 @@ fn action_lines(ui: &ActionUi, width: usize, height: usize) -> Vec<render::Popup
                 },
                 PopupKind::Hint,
             ));
-            lines[1 + selected].kind = PopupKind::SelectedAction;
+            if lines.len() > height {
+                let hint = lines.pop().expect("menu has hint");
+                let heading = lines.remove(0);
+                let selected_row = lines
+                    .iter()
+                    .position(|row| row.kind == PopupKind::SelectedAction)
+                    .expect("menu selection is valid");
+                let body_height =
+                    height.saturating_sub(usize::from(height >= 2) + usize::from(height >= 3));
+                let mut start = selected_row.saturating_sub(body_height.saturating_sub(1));
+                if lines[start].text.is_empty() {
+                    start += 1;
+                }
+                lines = lines.into_iter().skip(start).take(body_height).collect();
+                if height >= 3 {
+                    lines.insert(0, heading);
+                }
+                if height >= 2 {
+                    lines.push(hint);
+                }
+            }
             lines
         }
         ActionUi::Input {
@@ -2228,6 +2266,96 @@ fn compose_inner(
 mod tests {
     use crate::output::{Format, render};
     use serde_json::json;
+
+    #[test]
+    fn grouped_action_menu_labels_separators_and_selection() {
+        use super::{ActionUi, action_lines, action_menu_items, render::PopupKind};
+        for can_retry in [false, true] {
+            for archived in [false, true] {
+                let mut expected = vec!["Task actions #1", "c Complete", "e Mark error"];
+                if can_retry {
+                    expected.push("r Retry error");
+                }
+                expected.extend([
+                    "o Reopen",
+                    "",
+                    "p Priority",
+                    "d Set parent",
+                    "",
+                    if archived { "a Unarchive" } else { "a Archive" },
+                    "Up/Down Select  Enter Apply  Esc Cancel",
+                ]);
+                for selected in 0..action_menu_items(can_retry).count() {
+                    let rows = action_lines(
+                        &ActionUi::Menu {
+                            id: 1,
+                            archived,
+                            can_retry,
+                            selected,
+                        },
+                        46,
+                        20,
+                    );
+                    assert_eq!(
+                        rows.iter().map(|row| row.text.as_str()).collect::<Vec<_>>(),
+                        expected
+                    );
+                    let selected_rows = rows
+                        .iter()
+                        .filter(|row| row.kind == PopupKind::SelectedAction)
+                        .collect::<Vec<_>>();
+                    assert_eq!(selected_rows.len(), 1);
+                    assert_eq!(
+                        selected_rows[0].text.chars().next(),
+                        Some(action_menu_items(can_retry).nth(selected).unwrap().0)
+                    );
+                    for row in rows.iter().filter(|row| row.text.is_empty()) {
+                        assert_eq!(row.kind, PopupKind::Body);
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn grouped_action_menu_keeps_selected_action_visible_at_small_heights() {
+        use super::{ActionUi, action_lines, action_menu_items, render::PopupKind};
+        for can_retry in [false, true] {
+            for height in 1..=12 {
+                for selected in 0..action_menu_items(can_retry).count() {
+                    let rows = action_lines(
+                        &ActionUi::Menu {
+                            id: 1,
+                            archived: false,
+                            can_retry,
+                            selected,
+                        },
+                        12,
+                        height,
+                    );
+                    assert!(
+                        rows.len() <= height,
+                        "height {height}, selection {selected}"
+                    );
+                    let selected_rows = rows
+                        .iter()
+                        .filter(|row| row.kind == PopupKind::SelectedAction)
+                        .collect::<Vec<_>>();
+                    assert_eq!(selected_rows.len(), 1);
+                    assert_eq!(
+                        selected_rows[0].text.chars().next(),
+                        Some(action_menu_items(can_retry).nth(selected).unwrap().0)
+                    );
+                    if height >= 2 {
+                        assert_eq!(rows.last().unwrap().kind, PopupKind::Hint);
+                    }
+                    if height >= 3 {
+                        assert_eq!(rows.first().unwrap().kind, PopupKind::Heading);
+                    }
+                }
+            }
+        }
+    }
 
     #[test]
     fn tui_preview_cap_handles_wrapped_text_and_narrow_tree_prefixes() {
