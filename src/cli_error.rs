@@ -11,17 +11,25 @@ use clap::{
 use serde_json::{Value, json};
 use std::{ffi::OsString, io::Write};
 
-pub fn requests_json(arguments: &[OsString]) -> bool {
+pub fn requests_json(arguments: &[OsString], default_json: bool) -> bool {
+    output_override(arguments).unwrap_or(default_json)
+}
+
+pub fn output_override(arguments: &[OsString]) -> Option<bool> {
     let root = Cli::command();
     let mut command = &root;
     let mut index = 1;
+    let mut human = false;
     while let Some(value) = arguments.get(index) {
         let value = value.to_string_lossy();
         if value == "--" {
             break;
         }
         if value == "--json" || value.starts_with("--json=") {
-            return true;
+            return Some(true);
+        }
+        if value == "--human" || value.starts_with("--human=") {
+            human = true;
         }
         let option = command
             .get_arguments()
@@ -50,7 +58,7 @@ pub fn requests_json(arguments: &[OsString]) -> bool {
         }
         index += 1;
     }
-    false
+    human.then_some(false)
 }
 
 pub fn command_name(command: &Commands) -> &'static str {

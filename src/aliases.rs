@@ -20,7 +20,7 @@ fn command_index(args: &[OsString]) -> Option<usize> {
         } else if takes_value.iter().any(|flag| {
             arg.strip_prefix(flag)
                 .is_some_and(|rest| rest.starts_with('='))
-        }) || arg == "--json"
+        }) || matches!(arg, "--json" | "--human")
         {
             index += 1;
         } else if arg.starts_with('-') {
@@ -32,7 +32,7 @@ fn command_index(args: &[OsString]) -> Option<usize> {
     None
 }
 
-pub fn expand(mut args: Vec<OsString>) -> Result<Vec<OsString>> {
+pub fn expand(mut args: Vec<OsString>, default_json: bool) -> Result<Vec<OsString>> {
     let cli = crate::Cli::command();
     let builtin =
         |name: &str| name == "help" || cli.get_subcommands().any(|cmd| cmd.get_name() == name);
@@ -85,7 +85,7 @@ pub fn expand(mut args: Vec<OsString>) -> Result<Vec<OsString>> {
         expanded.extend(words.into_iter().map(OsString::from));
         let mut prospective = args.clone();
         prospective.splice(index..=index, expanded.iter().skip(1).cloned());
-        crate::errors::set_json_output(crate::cli_error::requests_json(&prospective));
+        crate::errors::set_json_output(crate::cli_error::requests_json(&prospective, default_json));
         if command_index(&expanded).is_none() {
             bail!(
                 Info::invalid_argument(

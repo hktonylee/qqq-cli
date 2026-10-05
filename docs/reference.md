@@ -86,7 +86,16 @@ Default list, watch, TUI, and claim queue hide archived tasks. Use
 `--all` changes completed-task limit only; hidden archived completions do not
 consume that limit.
 
-Global `--json` works before or after commands. JSON lists stay flat, preserve
+Global `--json` and `--human` work before or after commands; they conflict.
+Without either flag, recognized agent callers receive JSON: a nonblank UTF-8
+`CODEX_THREAD_ID` or `CODEX_SESSION_ID`, or an exact current Herdr pane reporting
+an agent name/session. Detection does not discover other agents at project cwd
+or infer agents from pipes, `QQQ_SESSION`, or harness overrides. Missing Herdr,
+failed lookup, and panes without agent metadata keep readable output. Explicit
+output flags skip optional caller lookup. Use `--human` to override automatic
+JSON. Help/version remain text; TUI/editor rendering remains interactive.
+
+JSON lists stay flat, preserve
 full descriptions and `parent_id`; watch prints one array per line. Empty lists
 return `[]`; no ready task returns `null`. Errors use stderr (exit 1 for runtime,
 2 for arguments). JSON failures follow [error contract](#json-error-contract).
@@ -94,7 +103,8 @@ return `[]`; no ready task returns `null`. Errors use stderr (exit 1 for runtime
 
 ## JSON error contract
 
-Failed commands with global `--json` write one JSON object plus newline to
+Failed commands in JSON mode (global `--json` or recognized agent default)
+write one JSON object plus newline to
 stderr. Error prose and terminal UI never appear on stdout. Runtime failures
 exit 1; argument-parser failures exit 2. Existing success payloads stay unchanged.
 

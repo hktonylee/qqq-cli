@@ -39,9 +39,12 @@ use std::{
     about = "Local-first task queue for agent sessions. Project DB: .qqq/qqq.db."
 )]
 struct Cli {
-    /// Print JSON for scripts and agents instead of human-readable text.
+    /// Print JSON; default for recognized agent callers.
     #[arg(long, global = true)]
     json: bool,
+    /// Print human-readable text, overriding automatic agent JSON output.
+    #[arg(long, global = true, conflicts_with = "json")]
+    human: bool,
     /// Stable owner identity. Falls back to exact Herdr pane, Codex session, then unique Herdr agent at project root.
     #[arg(long, global = true, env = "QQQ_SESSION")]
     session: Option<String>,
@@ -1031,9 +1034,11 @@ fn run(cli: Cli) -> Result<(Option<String>, bool)> {
 }
 fn main() {
     let arguments: Vec<_> = std::env::args_os().collect();
-    let requested_json = cli_error::requests_json(&arguments);
+    let agent_caller =
+        cli_error::output_override(&arguments).is_none() && session::is_agent_caller();
+    let requested_json = cli_error::requests_json(&arguments, agent_caller);
     errors::set_json_output(requested_json);
-    let arguments = match aliases::expand(arguments) {
+    let arguments = match aliases::expand(arguments, agent_caller) {
         Ok(arguments) => arguments,
         Err(error) => {
             let error = cli_error::annotate(
@@ -1048,8 +1053,8 @@ fn main() {
             std::process::exit(1);
         }
     };
-    let requested_json = cli_error::requests_json(&arguments);
-    let cli = match Cli::try_parse_from(arguments) {
+    let requested_json = cli_error::requests_json(&arguments, agent_caller);
+    let mut cli = match Cli::try_parse_from(arguments) {
         Ok(cli) => cli,
         Err(error) if requested_json && error.use_stderr() => {
             cli_error::emit(&cli_error::parser_payload(&error));
@@ -1057,6 +1062,7 @@ fn main() {
         }
         Err(error) => error.exit(),
     };
+    cli.json = cli.json || (agent_caller && !cli.human);
     let json_output = cli.json;
     errors::set_json_output(json_output);
     let command = cli_error::command_name(&cli.command);

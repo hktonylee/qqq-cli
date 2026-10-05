@@ -67,6 +67,12 @@ Repeated `next` calls return your active task until you complete or release it.
 For your own project, run `qqq init` at its root and use the IDs returned by `add`.
 Commands also work from subdirectories. Add `.qqq/` to your `.gitignore`.
 
+Recognized agent callers get JSON by default: native Codex sessions
+(`CODEX_THREAD_ID` or `CODEX_SESSION_ID`) and exact Herdr panes reporting an
+agent. Use global `--human` for readable text, or `--json` to request JSON
+explicitly. Ordinary shells keep readable output, including when piped.
+Help and version output stay text.
+
 ## See and edit the work
 
 Pipe multiline descriptions with `qqq add --stdin`, or load a complete plan with

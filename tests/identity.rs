@@ -75,7 +75,7 @@ fn task_responses_use_harness_and_orchestrator_fields() {
     assignment(&ok(&d, &["complete", "1", "--session", "b"]), Value::Null);
     let out = Command::new(env!("CARGO_BIN_EXE_qqq"))
         .current_dir(d.path())
-        .args(["show", "1"])
+        .args(["--human", "show", "1"])
         .output()
         .unwrap();
     let text = String::from_utf8(out.stdout).unwrap();

@@ -13,6 +13,14 @@ pub struct Owner {
     pub metadata: Option<Identity>,
 }
 
+/// Output defaults use caller context without resolving ownership or opening a DB.
+pub fn is_agent_caller() -> bool {
+    ["CODEX_THREAD_ID", "CODEX_SESSION_ID"]
+        .iter()
+        .any(|name| env::var(name).is_ok_and(|value| !value.trim().is_empty()))
+        || herdr::caller_is_agent()
+}
+
 fn env_session(name: &str) -> Result<Option<String>> {
     let value = match env::var(name) {
         Ok(value) => value,

@@ -147,6 +147,19 @@ pub fn has_context() -> bool {
     std::env::var_os("HERDR_PANE_ID").is_some() || std::env::var("HERDR_ENV").as_deref() == Ok("1")
 }
 
+/// Inspect only exact caller pane; optional discovery must not break read commands.
+pub fn caller_is_agent() -> bool {
+    has_context()
+        && current_pane().is_ok_and(|pane| {
+            pane.agent_session
+                .as_ref()
+                .map(|identity| identity.agent.as_str())
+                .into_iter()
+                .chain(pane.agent.as_deref())
+                .any(|name| !name.trim().is_empty())
+        })
+}
+
 fn current_pane() -> Result<Pane> {
     ensure!(
         has_context(),
