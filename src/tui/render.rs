@@ -108,6 +108,7 @@ pub enum PopupKind {
 pub struct PopupRow {
     pub text: String,
     pub kind: PopupKind,
+    pub cursor: Option<usize>,
 }
 
 impl PopupRow {
@@ -115,6 +116,7 @@ impl PopupRow {
         Self {
             text: text.into(),
             kind,
+            cursor: None,
         }
     }
 }

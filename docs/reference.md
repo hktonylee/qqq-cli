@@ -496,10 +496,14 @@ Enter or Shift+Enter inserts newline. Navigating away retains child parent conte
 
 Ctrl+L opens tags for the selected saved task from editor or filter. Current
 labels are prefilled, one per line. Shift+Enter adds a line; Enter applies.
+Up/Down move caret between tag rows, preserving preferred display column across
+short rows. Left/Right move between characters; Home/End jump within current row.
+Typing, paste, Backspace/Delete and Shift+Enter edit at caret. Active row and
+caret stay visible when tags exceed popup height or width.
 Blank lines are ignored; blank input clears tags. Newline/CRLF paste and legacy
 comma-separated input are accepted. Ctrl-U clears input, Esc/Ctrl-C cancels.
 Shortcuts share the popup footer; narrow popups use `^U` for Ctrl-U, `S-↵` for
-Shift+Enter and `↵` for Enter. Final input line stays visible in short terminals.
+Shift+Enter and `↵` for Enter. Active input row stays visible in short terminals.
 List tags use yellow when color is enabled. Invalid labels stay in the popup. Tag saves
 retain unsaved description drafts, caret, scroll, parked buffers and filter
 focus. New unsaved tasks show “Select task to edit tags”; save first to tag.

@@ -231,6 +231,7 @@ enum ActionUi {
         kind: ActionInputKind,
         value: String,
         error: String,
+        cursor: tag_input::Cursor,
     },
     Error {
         text: String,
@@ -339,6 +340,7 @@ fn action_lines(ui: &ActionUi, width: usize, height: usize) -> Vec<render::Popup
             kind,
             value,
             error,
+            cursor,
         } => {
             let mut lines = match kind {
                 ActionInputKind::Priority => {
@@ -353,7 +355,9 @@ fn action_lines(ui: &ActionUi, width: usize, height: usize) -> Vec<render::Popup
                         PopupRow::new("ID / none", PopupKind::Hint),
                     ]
                 }
-                ActionInputKind::Tags => return tag_input::rows(*id, value, error, width, height),
+                ActionInputKind::Tags => {
+                    return tag_input::rows(*id, value, cursor, error, width, height);
+                }
                 ActionInputKind::ErrorReason => vec![
                     PopupRow::new(format!("Error task #{id}"), PopupKind::Heading),
                     PopupRow::new("Enter error reason", PopupKind::Hint),
@@ -1297,12 +1301,16 @@ fn compose_inner(
                 if let Some(ui) = jump_ui.as_mut() {
                     ui.paste(&text);
                 } else if let Some(ActionUi::Input {
-                    kind, value, error, ..
+                    kind,
+                    value,
+                    error,
+                    cursor,
+                    ..
                 }) = action_ui.as_mut()
                 {
                     if matches!(kind, ActionInputKind::Tags) {
                         // Normalize CRLF separators; preserve other controls for validation.
-                        value.push_str(&text.replace("\r\n", "\n"));
+                        cursor.insert(value, &text.replace("\r\n", "\n"));
                     } else {
                         value.extend(text.chars().filter_map(|ch| {
                             if ch.is_control() {
@@ -1792,10 +1800,12 @@ fn compose_inner(
                             kind: ActionInputKind::Tags,
                             value,
                             error,
+                            cursor,
                             ..
                         } = &mut ui
                         {
                             value.clear();
+                            *cursor = tag_input::Cursor::at_end(value);
                             error.clear();
                         }
                         action_ui = Some(ui);
@@ -1867,6 +1877,7 @@ fn compose_inner(
                                         kind: ActionInputKind::Priority,
                                         value: String::new(),
                                         error: String::new(),
+                                        cursor: tag_input::Cursor::at_end(""),
                                     });
                                     None
                                 }
@@ -1876,6 +1887,7 @@ fn compose_inner(
                                         kind: ActionInputKind::Parent,
                                         value: String::new(),
                                         error: String::new(),
+                                        cursor: tag_input::Cursor::at_end(""),
                                     });
                                     None
                                 }
@@ -1885,6 +1897,7 @@ fn compose_inner(
                                         kind: ActionInputKind::ErrorReason,
                                         value: String::new(),
                                         error: String::new(),
+                                        cursor: tag_input::Cursor::at_end(""),
                                     });
                                     None
                                 }
@@ -1911,10 +1924,45 @@ fn compose_inner(
                             kind,
                             mut value,
                             mut error,
+                            mut cursor,
                         } => match key.code {
                             KeyCode::Esc => (),
+                            KeyCode::Left
+                            | KeyCode::Right
+                            | KeyCode::Up
+                            | KeyCode::Down
+                            | KeyCode::Home
+                            | KeyCode::End
+                            | KeyCode::Delete
+                                if matches!(kind, ActionInputKind::Tags) =>
+                            {
+                                match key.code {
+                                    KeyCode::Left => cursor.left(&value),
+                                    KeyCode::Right => cursor.right(&value),
+                                    KeyCode::Up => cursor.vertical(&value, true),
+                                    KeyCode::Down => cursor.vertical(&value, false),
+                                    KeyCode::Home => cursor.home(&value),
+                                    KeyCode::End => cursor.end(&value),
+                                    KeyCode::Delete => {
+                                        cursor.delete(&mut value);
+                                        error.clear();
+                                    }
+                                    _ => unreachable!(),
+                                }
+                                action_ui = Some(ActionUi::Input {
+                                    id,
+                                    kind,
+                                    value,
+                                    error,
+                                    cursor,
+                                });
+                            }
                             KeyCode::Backspace => {
-                                if let Some((index, _)) = value.grapheme_indices(true).next_back() {
+                                if matches!(kind, ActionInputKind::Tags) {
+                                    cursor.backspace(&mut value);
+                                } else if let Some((index, _)) =
+                                    value.grapheme_indices(true).next_back()
+                                {
                                     value.truncate(index);
                                 }
                                 error.clear();
@@ -1923,11 +1971,16 @@ fn compose_inner(
                                     kind,
                                     value,
                                     error,
+                                    cursor,
                                 });
                             }
                             KeyCode::Char(ch) => {
                                 if !ch.is_control() {
-                                    value.push(ch);
+                                    if matches!(kind, ActionInputKind::Tags) {
+                                        cursor.insert(&mut value, &ch.to_string());
+                                    } else {
+                                        value.push(ch);
+                                    }
                                     error.clear();
                                 }
                                 action_ui = Some(ActionUi::Input {
@@ -1935,19 +1988,21 @@ fn compose_inner(
                                     kind,
                                     value,
                                     error,
+                                    cursor,
                                 });
                             }
                             KeyCode::Enter
                                 if matches!(kind, ActionInputKind::Tags)
                                     && key.modifiers.contains(KeyModifiers::SHIFT) =>
                             {
-                                value.push('\n');
+                                cursor.insert(&mut value, "\n");
                                 error.clear();
                                 action_ui = Some(ActionUi::Input {
                                     id,
                                     kind,
                                     value,
                                     error,
+                                    cursor,
                                 });
                             }
                             KeyCode::Enter => match parse_action_input(id, kind, &value) {
@@ -1964,6 +2019,7 @@ fn compose_inner(
                                                 kind,
                                                 value,
                                                 error,
+                                                cursor,
                                             });
                                         }
                                     }
@@ -2010,6 +2066,7 @@ fn compose_inner(
                                         kind,
                                         value,
                                         error,
+                                        cursor,
                                     });
                                 }
                             },
@@ -2019,6 +2076,7 @@ fn compose_inner(
                                     kind,
                                     value,
                                     error,
+                                    cursor,
                                 })
                             }
                         },
@@ -2046,10 +2104,12 @@ fn compose_inner(
                 {
                     match target_id.map(|id| mode.db().expect("dashboard has database").task(id)) {
                         Some(Ok(task)) => {
+                            let value = task.tags.join("\n");
                             action_ui = Some(ActionUi::Input {
                                 id: task.id,
                                 kind: ActionInputKind::Tags,
-                                value: task.tags.join("\n"),
+                                cursor: tag_input::Cursor::at_end(&value),
+                                value,
                                 error: String::new(),
                             });
                         }
@@ -2452,6 +2512,7 @@ fn compose_inner(
 
 #[cfg(test)]
 mod tests {
+    use super::tag_input;
     use crate::output::{Format, render};
     use serde_json::json;
 
@@ -2463,6 +2524,7 @@ mod tests {
             kind: ActionInputKind::Tags,
             value: "frontend\n界 面\n".into(),
             error: String::new(),
+            cursor: tag_input::Cursor::at_end("frontend\n界 面\n"),
         };
         let rows = action_lines(&ui, 46, 18);
         assert_eq!(
@@ -2512,6 +2574,7 @@ mod tests {
                 kind: ActionInputKind::Tags,
                 value: value.clone(),
                 error: error.into(),
+                cursor: tag_input::Cursor::at_end(&value),
             };
             for width in [12, 18, 28, 44, 45, 46] {
                 for height in 1..=18 {

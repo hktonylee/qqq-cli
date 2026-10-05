@@ -175,9 +175,12 @@ pub(super) fn popup(frame: &mut Frame<'_>, lines: &[render::PopupRow], color: bo
     };
     frame.render_widget(block, outer);
     let mut cursor = (content.x, content.y);
+    let mut explicit_cursor = None;
     for (index, row) in lines.iter().take(usize::from(content.height)).enumerate() {
         let width = usize::from(content.width);
-        let text = if row.kind == PopupKind::Input {
+        let text = if row.cursor.is_some() {
+            render::clipped(&row.text, width)
+        } else if row.kind == PopupKind::Input {
             let value = row.text.strip_prefix("> ").unwrap_or(&row.text);
             let safe = render::clipped(value, usize::MAX);
             let (tail, _) = text_tail(&safe, width.saturating_sub(3));
@@ -197,6 +200,12 @@ pub(super) fn popup(frame: &mut Frame<'_>, lines: &[render::PopupRow], color: bo
         } else if row.kind == PopupKind::SelectedAction {
             cursor = (content.x, content.y + index as u16);
         }
+        if let Some(column) = row.cursor {
+            explicit_cursor = Some((
+                content.x + column.min(width.saturating_sub(1)) as u16,
+                content.y + index as u16,
+            ));
+        }
         let style = popup_row_style(row.kind, index == 0, color);
         let line = popup_row_line(text, row.kind, color);
         frame.render_widget(
@@ -204,7 +213,7 @@ pub(super) fn popup(frame: &mut Frame<'_>, lines: &[render::PopupRow], color: bo
             Rect::new(content.x, content.y + index as u16, content.width, 1),
         );
     }
-    frame.set_cursor_position(cursor);
+    frame.set_cursor_position(explicit_cursor.unwrap_or(cursor));
 }
 
 pub fn panes(area: Rect) -> Panes {

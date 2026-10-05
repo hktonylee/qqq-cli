@@ -1108,6 +1108,17 @@ print(json.dumps({"result": result}))
                     rows = visible.text().splitlines()
                     first_tag = next(index for index, row in enumerate(rows) if "> frontend" in row)
                     assert "> 界 面" in rows[first_tag + 1], rows
+                    last_cursor = (visible.x, visible.y)
+                    send(b"\x1b[A")
+                    wait_visible(lambda: visible.y == first_tag and frame_ready())
+                    send(b"X")
+                    wait_visible(lambda: "> frontXend" in visible.text() and frame_ready())
+                    assert cli("show", "2") == changed
+                    send(b"\x7f\x1b[D\x1b[C\x1b[200~Z\x1b[201~")
+                    wait_visible(lambda: "> frontZend" in visible.text() and frame_ready())
+                    send(b"\x7f\x1b[B")
+                    wait_visible(lambda: (visible.x, visible.y) == last_cursor and frame_ready())
+                    assert cli("show", "2") == changed
                     send(SHIFT_ENTER)
                     wait_visible(lambda: "Tags task #2" in visible.text()
                                  and "> " in visible.text().splitlines()[visible.y]
@@ -1128,6 +1139,13 @@ print(json.dumps({"result": result}))
                                  and frame_ready())
                     assert_tag_shortcut_footer()
                     assert "> tag00" not in visible.text(), visible.text()
+                    send(b"\x1b[A" * 29)
+                    wait_visible(lambda: "> tag00" in visible.text()
+                                 and "> tag00" in visible.text().splitlines()[visible.y]
+                                 and frame_ready())
+                    send(b"\x1b[B" * 29)
+                    wait_visible(lambda: "> tag29" in visible.text().splitlines()[visible.y]
+                                 and frame_ready())
                     send(b"\x1b")
                     wait_visible(lambda: "Tags task #2" not in visible.text() and frame_ready())
                     assert cli("show", "2")["task"]["tags"] == ["frontend", "界 面", "extra"]
