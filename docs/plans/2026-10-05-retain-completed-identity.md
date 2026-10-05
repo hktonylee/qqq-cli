@@ -17,7 +17,7 @@
   migration expectations to retain saved public session on completion. Observe red.
 - [x] Remove identity clearing only from normal/force completion. Update reference
   wording, verify focused cases, owner guards, force checkbox and reopen/reset.
-- [ ] Run full locked/offline suite, compatibility gate, fmt/strict Clippy/release;
+- [x] Run full locked/offline suite, compatibility gate, fmt/strict Clippy/release;
   obtain independent review. Commit, rebase/fast-forward locally, install and verify
   installed CLI/force PTY. Record evidence before queue completion and cleanup.
 
@@ -42,4 +42,22 @@ behavior.
   (`/tmp/qqq-task-175-gate.log`). Fmt, diff check, strict all-target Clippy and
   release build passed (`/tmp/qqq-task-175-clippy.log`,
   `/tmp/qqq-task-175-release.log`).
-- Local integration and installed verification pending.
+- Fix `0786ff0` fast-forwarded to local master; clean package rebuild passed
+  focused 66/4, force 4 Rust/11 PTY and compatibility 153/7; release build and
+  `cargo install --path . --locked --offline --force` passed. Evidence:
+  `/tmp/qqq-task-175-integrated-focused.log`,
+  `/tmp/qqq-task-175-integrated-force.log`,
+  `/tmp/qqq-task-175-integrated-gate.log`, `/tmp/qqq-task-175-install.log`.
+- Installed qqq 0.5.0 passed normal completion metadata/JSON/list/human display,
+  exact saved-link byte preservation, completed-task moved-pane lookup, claim
+  release and public-session reuse (`/tmp/qqq-task-175-installed-identity.log`).
+  Temporary verifier initially compared sparse input link with normalized output;
+  corrected to compare before/after output plus raw stored bytes. Runtime unchanged.
+- Installed force PTY 11 scenarios passed (`/tmp/qqq-task-175-installed-force.log`).
+  Installed `/Users/tonylee/.cargo/bin/qqq` and fresh main release SHA256 match:
+  `6ae1dad3fccce2d13ed2297876887bbff647bf339f77d5ed60667af6853edfe5`.
+- No remote CI, push, tag or publication performed. Existing erased metadata is
+  not backfilled; currently recorded values survive future completion.
+
+After verification record integrates: complete task through qqq, verify retained
+metadata on queue task, clean owned worktree/branch, resume one silent waiter.
