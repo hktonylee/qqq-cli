@@ -43,7 +43,9 @@ human: bool,
 - [x] Document supported detection, explicit `--json`/`--human`, unchanged help/version, best-effort Herdr fallback, and JSON error contract for detected agents.
 - [x] Run `cargo fmt --check`, `cargo clippy --locked --offline --all-targets -- -D warnings`, `cargo test --locked --offline`, and `cargo build --locked --offline --release`.
 - [x] Review diff against spec, obtain independent review before merging, fix actionable issues with focused verification.
-- [ ] Commit docs, rebase onto updated master, fast-forward integrate, verify installed CLI defaults and overrides. Record evidence through `qqq message 165`, complete task, clean merged worktree, resume one persistent queue waiter.
+- [x] Commit docs, rebase onto updated master, fast-forward integrate, verify installed CLI defaults and overrides. Record evidence through `qqq message 165`, complete task.
+
+After delivery, clean merged worktree and resume one persistent queue waiter.
 
 ## Verified Results
 
@@ -52,3 +54,4 @@ human: bool,
 - Independent review found one alias/literal mode bug; failing native and Herdr regressions proved it, lazy cached resolution fixed it, re-review found no remaining concrete issues.
 - Full suite exposed inherited agent context in intentional human-format tests; those subprocesses now request `--human` explicitly.
 - Logs: `/tmp/qqq-task-165-final-full.log`, `/tmp/qqq-task-165-final-clippy.log`, `/tmp/qqq-task-165-final-release.log`.
+- Integrated into local master at `bc04ffc`; integrated focused suites passed 47 tests. Installed qqq 0.5.0 passed native/Herdr default, human override, ordinary-shell, parser/runtime error, and alias literal smoke checks. Installed/release SHA256 match: `5ee415fb93a4165db90fc68de7df6e7709035acd2a91bf1268ba88e0f7cbe5c0`. Task #165 completed through qqq.
