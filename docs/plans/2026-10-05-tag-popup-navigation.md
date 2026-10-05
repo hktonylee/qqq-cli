@@ -16,7 +16,7 @@
 - [x] Add tag caret model/rendering and integrate action input edits. Add focused
   Unicode/column/newline/viewport regressions; retain existing modal shortcuts and
   other input behavior. Update reference tag editing controls.
-- [ ] Run focused, full serial, compatibility, fmt/strict Clippy/release; review
+- [x] Run focused, full serial, compatibility, fmt/strict Clippy/release; review
   independently; locally integrate/install and verify installed tag scenarios.
   Record verification before queue completion, cleanup and next silent wait.
 
@@ -38,4 +38,14 @@ popup key/render paths confirm append-only behavior.
   153 tests across 7 binaries passed. Evidence: `/tmp/qqq-task-177-full.log`,
   `/tmp/qqq-task-177-gate.log`, `/tmp/qqq-task-177-clippy-final.log`,
   `/tmp/qqq-task-177-release.log`.
-- Local integration and installed verification pending.
+- Locally integrated 8b62998 onto master. Fresh main-checkout package rebuild:
+  4 tag PTY tests/5 scenarios, 4 cursor units and 153 compatibility checks passed.
+  Evidence: `/tmp/qqq-task-177-integrated-tags.log`,
+  `/tmp/qqq-task-177-integrated-cursor.log`,
+  `/tmp/qqq-task-177-integrated-gate.log`.
+- Fresh release built and installed as qqq 0.5.0. Installed binary passed all 5
+  tag PTY scenarios; release and installed SHA256 both
+  `231e8062fd48c3471f61444045d8d4a580470b6e119f95cdb94f9b145261ea0c`.
+  Evidence: `/tmp/qqq-task-177-integrated-release.log`,
+  `/tmp/qqq-task-177-install.log`, `/tmp/qqq-task-177-installed-tags.log`.
+- No push or remote CI run.
