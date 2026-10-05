@@ -92,7 +92,7 @@ Without either flag, recognized agent callers receive JSON: a nonblank UTF-8
 an agent name/session. Detection does not discover other agents at project cwd
 or infer agents from pipes, `QQQ_SESSION`, or harness overrides. Missing Herdr,
 failed lookup, and panes without agent metadata keep readable output. Explicit
-output flags skip optional caller lookup. Use `--human` to override automatic
+output flags supplied directly skip optional caller lookup. Use `--human` to override automatic
 JSON. Help/version remain text; TUI/editor rendering remains interactive.
 
 JSON lists stay flat, preserve
