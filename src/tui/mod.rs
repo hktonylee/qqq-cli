@@ -8,6 +8,7 @@ mod handoff;
 mod jump;
 mod panel;
 mod render;
+mod tag_input;
 
 use crate::config::AfterSaveNew;
 use anyhow::{Result, bail, ensure};
@@ -320,10 +321,7 @@ fn action_lines(ui: &ActionUi, width: usize, height: usize) -> Vec<render::Popup
                         PopupRow::new("ID / none", PopupKind::Hint),
                     ]
                 }
-                ActionInputKind::Tags => vec![
-                    PopupRow::new(format!("Tags task #{id}"), PopupKind::Heading),
-                    PopupRow::new("Comma-separated; blank clears", PopupKind::Hint),
-                ],
+                ActionInputKind::Tags => return tag_input::rows(*id, value, error, width, height),
                 ActionInputKind::ErrorReason => vec![
                     PopupRow::new(format!("Error task #{id}"), PopupKind::Heading),
                     PopupRow::new("Enter error reason", PopupKind::Hint),
@@ -337,17 +335,7 @@ fn action_lines(ui: &ActionUi, width: usize, height: usize) -> Vec<render::Popup
                         .map(|text| PopupRow::new(text, PopupKind::Error)),
                 );
             }
-            let shortcuts = if matches!(kind, ActionInputKind::Tags) {
-                let full = "Ctrl-U clear  Enter apply  Esc cancel";
-                if full.len() <= width {
-                    full
-                } else {
-                    "Ctrl-U  Enter  Esc"
-                }
-            } else {
-                "Enter apply  Esc cancel"
-            };
-            lines.push(PopupRow::new(shortcuts, PopupKind::Hint));
+            lines.push(PopupRow::new("Enter apply  Esc cancel", PopupKind::Hint));
             lines
         }
         ActionUi::Error { text, top } => {
@@ -421,7 +409,7 @@ fn parse_action_input(
             .trim()
             .parse()
             .map(|parent| TaskAction::Parent(id, parent)),
-        ActionInputKind::Tags => crate::tags::parse(value)
+        ActionInputKind::Tags => crate::tags::parse_lines(value)
             .map(|tags| TaskAction::Tags(id, tags))
             .map_err(|error| error.to_string()),
         ActionInputKind::ErrorReason => {
@@ -1187,8 +1175,8 @@ fn compose_inner(
                 }) = action_ui.as_mut()
                 {
                     if matches!(kind, ActionInputKind::Tags) {
-                        // Keep pasted labels exact so shared validation can reject controls.
-                        value.push_str(&text);
+                        // Normalize CRLF separators; preserve other controls for validation.
+                        value.push_str(&text.replace("\r\n", "\n"));
                     } else {
                         value.extend(text.chars().filter_map(|ch| {
                             if ch.is_control() {
@@ -1780,6 +1768,19 @@ fn compose_inner(
                                     error,
                                 });
                             }
+                            KeyCode::Enter
+                                if matches!(kind, ActionInputKind::Tags)
+                                    && key.modifiers.contains(KeyModifiers::SHIFT) =>
+                            {
+                                value.push('\n');
+                                error.clear();
+                                action_ui = Some(ActionUi::Input {
+                                    id,
+                                    kind,
+                                    value,
+                                    error,
+                                });
+                            }
                             KeyCode::Enter => match parse_action_input(id, kind, &value) {
                                 Ok(action @ TaskAction::Tags(..)) => {
                                     match mode.task_action(action.clone()) {
@@ -1879,7 +1880,7 @@ fn compose_inner(
                             action_ui = Some(ActionUi::Input {
                                 id: task.id,
                                 kind: ActionInputKind::Tags,
-                                value: task.tags.join(", "),
+                                value: task.tags.join("\n"),
                                 error: String::new(),
                             });
                         }
@@ -2284,6 +2285,92 @@ fn compose_inner(
 mod tests {
     use crate::output::{Format, render};
     use serde_json::json;
+
+    #[test]
+    fn multiline_tag_popup_keeps_separate_rows_and_empty_final_caret() {
+        use super::{ActionInputKind, ActionUi, action_lines, dashboard, render::PopupKind};
+        let ui = ActionUi::Input {
+            id: 1,
+            kind: ActionInputKind::Tags,
+            value: "frontend\n界 面\n".into(),
+            error: String::new(),
+        };
+        let rows = action_lines(&ui, 46, 18);
+        assert_eq!(
+            rows.iter()
+                .filter(|row| row.kind == PopupKind::Input)
+                .map(|row| row.text.as_str())
+                .collect::<Vec<_>>(),
+            ["> frontend", "> 界 面", "> "]
+        );
+        assert_eq!(
+            rows.last().unwrap().text,
+            "Ctrl-U clear Shift-Enter line Enter apply Esc"
+        );
+        for color in [true, false] {
+            let mut terminal =
+                ratatui::Terminal::new(ratatui::backend::TestBackend::new(72, 24)).unwrap();
+            terminal
+                .draw(|frame| dashboard::popup(frame, &rows, color))
+                .unwrap();
+            let content =
+                dashboard::popup_layout(ratatui::layout::Rect::new(0, 0, 72, 24), rows.len())
+                    .content;
+            let last_input = rows
+                .iter()
+                .rposition(|row| row.kind == PopupKind::Input)
+                .unwrap();
+            assert_eq!(
+                terminal.get_cursor_position().unwrap(),
+                ratatui::layout::Position::new(content.x + 2, content.y + last_input as u16)
+            );
+        }
+    }
+
+    #[test]
+    fn multiline_tag_popup_keeps_tail_input_errors_and_footer_in_short_terminals() {
+        use super::{ActionInputKind, ActionUi, action_lines, render::PopupKind};
+        let value = (0..30)
+            .map(|id| format!("tag{id:02}"))
+            .collect::<Vec<_>>()
+            .join("\n");
+        for error in [
+            "",
+            "Tags must be nonempty labels without controls, commas or square brackets",
+        ] {
+            let ui = ActionUi::Input {
+                id: 1,
+                kind: ActionInputKind::Tags,
+                value: value.clone(),
+                error: error.into(),
+            };
+            for width in [12, 18, 28, 44, 45, 46] {
+                for height in 1..=18 {
+                    let rows = action_lines(&ui, width, height);
+                    assert!(rows.len() <= height);
+                    assert_eq!(
+                        rows.iter()
+                            .rfind(|row| row.kind == PopupKind::Input)
+                            .unwrap()
+                            .text,
+                        "> tag29",
+                        "width={width} height={height}"
+                    );
+                    if height >= 2 {
+                        let footer = rows.last().unwrap();
+                        assert_eq!(footer.kind, PopupKind::Hint);
+                        assert!(
+                            unicode_width::UnicodeWidthStr::width(footer.text.as_str()) <= width
+                        );
+                        assert!(footer.text.contains("Esc"));
+                    }
+                    if !error.is_empty() && height >= 4 {
+                        assert!(rows.iter().any(|row| row.kind == PopupKind::Error));
+                    }
+                }
+            }
+        }
+    }
 
     #[test]
     fn grouped_action_menu_labels_separators_and_selection() {

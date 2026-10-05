@@ -970,7 +970,9 @@ print(json.dumps({"result": result}))
                 return not visible.pending and screen.endswith(
                     b"\x1b[?25h" + f"\x1b[{visible.y + 1};{visible.x + 1}H".encode())
 
-            def assert_tag_shortcut_footer(shortcuts="Ctrl-U clear  Enter apply  Esc cancel"):
+            TAG_SHORTCUTS = "Ctrl-U clear Shift-Enter line Enter apply Esc"
+
+            def assert_tag_shortcut_footer(shortcuts=TAG_SHORTCUTS):
                 rows = visible.text().splitlines()
                 title_row = next(index for index, row in enumerate(rows) if "Tags task #2" in row)
                 footer_row = next(index for index, row in enumerate(rows) if shortcuts in row)
@@ -982,7 +984,7 @@ print(json.dumps({"result": result}))
                 clear_capture()
                 send(b"\x0c")
                 wait_visible(lambda: "Tags task #2" in visible.text()
-                             and "Enter apply  Esc cancel" in visible.text()
+                             and TAG_SHORTCUTS in visible.text()
                              and frame_ready())
                 assert_tag_shortcut_footer()
 
@@ -1019,9 +1021,10 @@ print(json.dumps({"result": result}))
                         assert filter_text() == "Filter: Second", visible.text()
                 open_tags()
                 if scenario in ("tags", "tags_no_color"):
-                    for width in (24, 42, 43, 72):
-                        shortcuts = ("Ctrl-U clear  Enter apply  Esc cancel" if width >= 43
-                                     else "Ctrl-U  Enter  Esc")
+                    for width in (24, 42, 50, 51, 72):
+                        shortcuts = (TAG_SHORTCUTS if width >= 51
+                                     else "Ctrl-U Shift-Enter Enter Esc" if width >= 34
+                                     else "^U S-↵ ↵ Esc")
                         clear_capture()
                         fcntl.ioctl(slave, termios.TIOCSWINSZ, struct.pack("HHHH", 24, width, 0, 0))
                         visible.resize(width, 24)
@@ -1034,14 +1037,14 @@ print(json.dumps({"result": result}))
                              and "bad,,tag" in visible.text() and frame_ready())
                 assert_tag_shortcut_footer()
                 assert cli("show", "2") == tag_task_before
-                for invalid_paste in (b"front\nend", b"front\tend", b"front\x1bend"):
+                for invalid_paste in (b"front\tend", b"front\rend", b"front\x1bend"):
                     clear_capture()
                     send(b"\x15\x1b[200~" + invalid_paste + b"\x1b[201~\r")
                     wait_visible(lambda: "Tags task #2" in visible.text()
                                  and "nonempty labels" in visible.text() and frame_ready())
                     assert_tag_shortcut_footer()
                     assert cli("show", "2") == tag_task_before
-                send(b"\x15\x1b[200~frontend, " + "界 面".encode() + b", frontend\x1b[201~\r")
+                send(b"\x15\x1b[200~frontend\r\n" + "界 面".encode() + b"\r\nfrontend\x1b[201~\r")
                 wait_visible(lambda: "Tags task #2" not in visible.text()
                              and "[frontend]" in visible.text()
                              and "Tags saved #2" in visible.text()
@@ -1078,6 +1081,37 @@ print(json.dumps({"result": result}))
                     send(b"\x14")
                     wait_visible(lambda: completed_button_text() == "[× Completed]" and frame_ready())
                 else:
+                    open_tags()
+                    rows = visible.text().splitlines()
+                    first_tag = next(index for index, row in enumerate(rows) if "> frontend" in row)
+                    assert "> 界 面" in rows[first_tag + 1], rows
+                    send(SHIFT_ENTER)
+                    wait_visible(lambda: "Tags task #2" in visible.text()
+                                 and "> " in visible.text().splitlines()[visible.y]
+                                 and visible.x == 15 and frame_ready())
+                    # Backspace from empty final row rejoins previous row; newline never saves.
+                    assert cli("show", "2") == changed
+                    send(b"\x7f" + SHIFT_ENTER + b"extra")
+                    wait_visible(lambda: "> extra" in visible.text() and frame_ready())
+                    assert_tag_shortcut_footer()
+                    assert cli("show", "2") == changed
+                    send(b"\r")
+                    wait_visible(lambda: "Tags task #2" not in visible.text() and frame_ready())
+                    assert cli("show", "2")["task"]["tags"] == ["frontend", "界 面", "extra"]
+                    open_tags()
+                    paste = "\n".join(f"tag{index:02}" for index in range(30)).encode()
+                    send(b"\x15\x1b[200~" + paste + b"\x1b[201~")
+                    wait_visible(lambda: "> tag29" in visible.text()
+                                 and frame_ready())
+                    assert_tag_shortcut_footer()
+                    assert "> tag00" not in visible.text(), visible.text()
+                    send(b"\x1b")
+                    wait_visible(lambda: "Tags task #2" not in visible.text() and frame_ready())
+                    assert cli("show", "2")["task"]["tags"] == ["frontend", "界 面", "extra"]
+                    open_tags()
+                    send(b"\x15\x1b[200~legacy, comma\x1b[201~\r")
+                    wait_visible(lambda: "Tags task #2" not in visible.text() and frame_ready())
+                    assert cli("show", "2")["task"]["tags"] == ["legacy", "comma"]
                     open_tags()
                     send(b"\x15\r")
                     wait_visible(lambda: "Tags task #2" not in visible.text()

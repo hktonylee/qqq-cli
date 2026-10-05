@@ -440,6 +440,9 @@ fn hotkey_line(keys: &str, color: bool) -> Line<'static> {
                     | "Enter"
                     | "Up/Down"
                     | "Up/Dn"
+                    | "^U"
+                    | "S-↵"
+                    | "↵"
                     | "y"
                     | "n/Esc"
             );

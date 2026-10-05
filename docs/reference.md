@@ -494,10 +494,12 @@ and press Ctrl+P to continue it. Ctrl-S creates child with dependency;
 Enter or Shift+Enter inserts newline. Navigating away retains child parent context.
 
 Ctrl+L opens tags for the selected saved task from editor or filter. Current
-labels are prefilled, comma-separated. List tags use yellow when color is enabled.
-Enter applies, blank clears, Ctrl-U
-clears input, Esc/Ctrl-C cancels. Ctrl-U, Enter and Esc share the popup footer;
-narrow popups show just the keys. Invalid labels stay in the popup. Tag saves
+labels are prefilled, one per line. Shift+Enter adds a line; Enter applies.
+Blank lines are ignored; blank input clears tags. Newline/CRLF paste and legacy
+comma-separated input are accepted. Ctrl-U clears input, Esc/Ctrl-C cancels.
+Shortcuts share the popup footer; narrow popups use `^U` for Ctrl-U, `S-↵` for
+Shift+Enter and `↵` for Enter. Final input line stays visible in short terminals.
+List tags use yellow when color is enabled. Invalid labels stay in the popup. Tag saves
 retain unsaved description drafts, caret, scroll, parked buffers and filter
 focus. New unsaved tasks show “Select task to edit tags”; save first to tag.
 

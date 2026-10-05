@@ -5,8 +5,6 @@ Task #169: separate tags onto multiple popup lines.
 Prefill each saved tag on its own input row. Preserve Enter apply, Esc/Ctrl-C
 cancel and Ctrl-U clear. Shift+Enter appends newline. Existing append/backspace
 editing stays intact; backspace at empty final row rejoins previous row.
-User was offered alternate Enter/Ctrl-S behavior; absent preference, preserve
-established Enter apply contract.
 
 TUI accepts one tag per line, including CRLF paste. Ignore blank lines; reject
 other controls, commas inside labels and square brackets through shared label
