@@ -67,7 +67,7 @@ manifest1/schema9 lower bound. Read-only previews bypass migration and staging.
 
 - [x] Document automatic path, durability/failure behavior, explicit recovery example,
   retained original schema, next preview read-only behavior and CI matrix expansion.
-- [ ] Run gate/full cargo test --locked --offline; cargo fmt --check; cargo clippy
+- [x] Run gate/full cargo test --locked --offline; cargo fmt --check; cargo clippy
   --locked --offline --all-targets -- -D warnings; release. Record counts/log paths.
 - [x] Request independent read-only review using requesting-code-review skill.
 - [ ] Commit/rebase/local ff merge, rerun integrated gate, install qqq and run installed
@@ -121,3 +121,8 @@ also deferred before VFS-dependent journal cleanup; valid DELETE journals allowe
 Final WAL/doctor guard focused16 tests, added malformed-journal cases, concurrent
 DELETE diagnostic regression, gate149/7 binaries passed. Independent review clear;
 fresh fmt/diff, strict all-target Clippy and release passed. Full suite pending.
+
+Final runtime verification:full default-parallel locked/offline suite678 tests/40
+binaries passed. Gate149/7 and32 compatibility tests passed. Final additional
+malformed-journal cases passed focused. Fresh fmt/diff, strict all-target Clippy
+and release passed; independent review findings resolved. No remote CI run/push.
