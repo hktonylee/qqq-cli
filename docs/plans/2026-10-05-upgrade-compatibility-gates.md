@@ -34,8 +34,10 @@
   strict all-target Clippy and release build. Investigate any repeat PTY failure.
 - [x] Independent review of concurrency, rollback/isolation, negative contracts,
   immutable inventory and CI/publication enforcement.
-- [ ] Commit/rebase/merge local master, verify integrated gate/installed binary,
-  record queue evidence, complete171; clean owned worktree and resume wait.
+- [x] Commit/rebase/merge local master; verify integrated gate and installed binary.
+- [x] Record queue evidence and complete171 after all implementation checks pass.
+
+Finalize evidence commit, remove owned worktree/branch, resume persistent waiter.
 
 ## Evidence
 
@@ -58,3 +60,9 @@ Baseline compatibility+snapshot: 19 tests passed. Task170 full serial baseline:
   offline cargo package verification passed:319 files,3.2MiB. Normal-network
   publication dry-run also passed, explicitly aborted upload; registry cache
   write warning nonfatal. CLI regression runtime remained offline.
+
+- Local master integration: same gate passed133 tests/7 binaries; release rebuilt
+  and installed qqq0.5.0. Installed binary passed all16 historical matrix tests.
+  Installed/release SHA256 both
+  `01b736ecddd5c6a389bfecb38bd531a95baef472c0dffea7a5722b29b72a7c21`.
+  Implementation commit350bbb9; no remote CI execution, push or publication.
