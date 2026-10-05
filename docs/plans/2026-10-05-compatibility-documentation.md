@@ -55,8 +55,8 @@ exec cargo test --locked --test compatibility documentation::compatibility_docum
 - Modify: `docs/reference.md`
 
 - [x] Add checklist for schema/matrix/golden metadata, both restore modes, upgrade snapshot recovery/failure paths, defaults/claim notes, docs gate, fmt/Clippy/tests/release build, package/tag/lock/binary version checks and publish dry run. Link current workflows; no new distribution or MSRV proposal.
-- [ ] Run focused docs gate and complete compatibility leaf gate; parse workflows and verify unconditional ordering. Run `cargo fmt --check`, strict all-targets Clippy, full locked/offline suite and release build as appropriate.
-- [ ] Obtain independent read-only review through requesting-code-review skill; fix concrete findings, rerun affected checks.
+- [x] Run focused docs gate and complete compatibility leaf gate; parse workflows and verify unconditional ordering. Run `cargo fmt --check`, strict all-targets Clippy, full locked/offline suite and release build as appropriate.
+- [x] Obtain independent read-only review through requesting-code-review skill; fix concrete findings, rerun affected checks.
 - [ ] Record actual checks and stale-metadata experiments here and in qqq task message. Commit verified changes, rebase onto master, fast-forward locally, verify integrated gate, remove owned worktree/branch, complete task, resume single queue waiter.
 
 ## Validation evidence
@@ -69,4 +69,7 @@ exec cargo test --locked --test compatibility documentation::compatibility_docum
 - Complete compatibility leaf gate: 152 tests / 7 binaries passed, `/tmp/qqq-task-173-gate.log`.
 - Workflow YAML parsed; both docs gates unconditional, stable toolchain, before compatibility/package steps. Existing release metadata/tag checks unchanged. Shell syntax, formatting and diff checks passed.
 - Strict all-targets Clippy passed, `/tmp/qqq-task-173-clippy.log`.
-- Full suite, release build, independent review and integrated verification still running/pending.
+- Full default-parallel locked/offline suite: 681 tests / 40 binaries passed, `/tmp/qqq-task-173-full.log`.
+- Release build passed, `/tmp/qqq-task-173-release.log`; release and currently installed qqq0.5.0 both SHA256 `715ac5216130707a0ac60b5a16ea4bb5238760844e2c174d66c1c2aafab6db20`. Runtime unchanged; reinstall unnecessary.
+- Independent read-only review: no concrete findings; reviewer ran focused 3-test documentation suite successfully. Local SQLite CLI available, official Ubuntu runner inventory includes SQLite CLI.
+- Local integration, fresh integrated/installed checks and queue completion remain.
