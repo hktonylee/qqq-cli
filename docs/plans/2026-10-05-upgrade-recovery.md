@@ -24,31 +24,31 @@ manifest1/schema9 lower bound. Read-only previews bypass migration and staging.
 
 ## Task1: Pre-upgrade capture and original-schema recovery
 
-- [ ] Add regression for every old fixture: normal list, exactly one archive outside
+- [x] Add regression for every old fixture: normal list, exactly one archive outside
   .qqq; manifest source schema, SHA256/image hashes; recover into empty directory;
   compare all sqlite_master/table rows and allocation sequences before normal open;
   retry upgrade via existing assert_migrated helper. New/current projects save none.
   Example assertion: assert_eq!(recovered_state, original_state).
-- [ ] Run cargo test --locked --offline --test compatibility recovery; expect missing
+- [x] Run cargo test --locked --offline --test compatibility recovery; expect missing
   archive failure, preserving genuine red before runtime edits.
-- [ ] Add Upgrade metadata with source_schema,target_schema,project,created_at;
+- [x] Add Upgrade metadata with source_schema,target_schema,project,created_at;
   optional #[serde(default,skip_serializing_if="Option::is_none")] Manifest.upgrade.
   validate(): version1 requires None; version2 requires supported metadata. Existing
   manifest1 serialized bytes/fixtures remain compatible.
-- [ ] Share schema-aware validation (owner_session for1/2, assignee3/4, claim_key5+),
+- [x] Share schema-aware validation (owner_session for1/2, assignee3/4, claim_key5+),
   task status/claims, integrity/FK/dependency checks. Portable min9, recovery min1.
-- [ ] Capture with VACUUM INTO separate RO connection while BEGIN IMMEDIATE held;
+- [x] Capture with VACUUM INTO separate RO connection while BEGIN IMMEDIATE held;
   embedded DB images stay embedded, external image bytes copied from live or safe
   validated deletion stage. Verify archive via shared extraction before publication;
   fsync temp, no-clobber unique schema-prefix path, fsync recovery dir/project parent.
-- [ ] Invoke capture only if rechecked schema>0 && schema<SCHEMA_VERSION, before
+- [x] Invoke capture only if rechecked schema>0 && schema<SCHEMA_VERSION, before
   PendingFiles/image SQL. Human stderr reports saved path via errors::json_output().
-- [ ] Add restore recovery flag and explicit version2 route before any normal DB open.
-- [ ] Run focused compatibility+snapshot; commit verified capture/recovery checkpoint.
+- [x] Add restore recovery flag and explicit version2 route before any normal DB open.
+- [x] Run focused compatibility+snapshot; commit verified capture/recovery checkpoint.
 
 ## Task2: Read-only previews and failure/concurrency guarantees
 
-- [ ] Replace old next preview migration regression with no-change/error contract;
+- [x] Replace old next preview migration regression with no-change/error contract;
   snapshot root also absent. Add early read-only next dry-run route returning
   json!(db.peek_next_filtered(filter)?); skip delete::recover/session discovery.
 - [ ] Add migration SQL collision and image conflict failures: original DB/images
@@ -74,3 +74,8 @@ manifest1/schema9 lower bound. Read-only previews bypass migration and staging.
   recovery matrix; verify binary hashes and claim semantics against temp projects.
 - [ ] Record evidence, complete172, finalize docs commit, remove owned worktree/branch,
   resume one qqq next --wait --local --json process with no repeated queue polling.
+
+Initial evidence: capture regression red (zero archives), preview regression red
+(successful migration instead of read-only error). Package clean removed stale
+shared-target binary. Fresh compatibility18 + snapshot14 passed after capture,
+validated recovery, earlier legacy/FK checks and read-only next preview.

@@ -36,7 +36,7 @@ fn unsupported_versions_legacy_layouts_and_corrupt_db_fail_without_changes() {
             }
             "pending" => {
                 conn.execute_batch("PRAGMA ignore_check_constraints=ON; UPDATE tasks SET status='pending' WHERE id=13").unwrap();
-                ("CHECK constraint failed", None)
+                ("update SQLite manually", Some("legacy_pending_status"))
             }
             "corrupt" => ("file is not a database", None),
             _ => unreachable!(),
@@ -92,7 +92,7 @@ fn invalid_historical_foreign_keys_roll_back_images_and_allow_repaired_retry() {
             dir.path(),
             &["list", "--all"],
             json,
-            "invalid foreign key references",
+            "invalid foreign keys",
             "COMMAND_ERROR",
         );
         assert_eq!(hashes_at(&project), before);
@@ -127,6 +127,7 @@ fn read_only_diagnostics_and_import_preview_preserve_old_and_current_projects() 
             vec!["status"],
             vec!["next", "--explain", "--session", "fixture-preview"],
             vec!["import", import.to_str().unwrap(), "--dry-run"],
+            vec!["next", "--dry-run", "--session", "fixture-preview"],
         ];
         let staging = project.join(".delete-staging");
         fs::create_dir(&staging).unwrap();
@@ -179,22 +180,31 @@ fn read_only_diagnostics_and_import_preview_preserve_old_and_current_projects() 
 }
 
 #[test]
-fn next_dry_run_retains_normal_upgrade_semantics_without_claiming() {
+fn next_dry_run_keeps_all_source_schemas_and_images_unchanged() {
     let originals = tree_hashes();
     for entry in catalog().databases {
         let dir = copy_database(&entry);
-        let preview = run(
-            dir.path(),
-            &["next", "--dry-run", "--session", "fixture-owner-linked"],
-        );
-        assert_eq!(preview["id"], expected(&entry)["queue"]["selection_id"]);
-        let conn = read_only(&dir.path().join(".qqq/qqq.db"));
-        assert_eq!(
-            canonical(&conn),
-            expected(&entry)["canonical"],
-            "dry-run may upgrade but must not claim"
-        );
-        assert_migrated(dir.path(), &entry);
+        let before = hashes_at(&dir.path().join(".qqq"));
+        let args = ["next", "--dry-run", "--session", "fixture-owner-linked"];
+        if entry.schema_version < catalog().support.current_schema {
+            for json in [false, true] {
+                let error = failure(
+                    dir.path(),
+                    &args,
+                    json,
+                    "requires migration",
+                    "DATABASE_ERROR",
+                );
+                if json {
+                    assert_eq!(error["details"]["reason"], "migration_required");
+                }
+            }
+        } else {
+            let preview = run(dir.path(), &args);
+            assert_eq!(preview["id"], expected(&entry)["queue"]["selection_id"]);
+        }
+        assert_eq!(hashes_at(&dir.path().join(".qqq")), before);
+        assert!(!dir.path().join(".qqq-upgrades").exists());
     }
     assert_eq!(tree_hashes(), originals);
 }

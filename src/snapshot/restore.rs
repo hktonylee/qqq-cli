@@ -1,5 +1,5 @@
 use super::{
-    backup::validate_database,
+    backup::validate_database_for,
     format::{
         DATABASE_NAME, MANIFEST_NAME, MAX_MANIFEST_BYTES, Manifest, hash_reader,
         validate_image_path,
@@ -18,7 +18,7 @@ use std::{
 use tar::{Archive, Entry};
 use tempfile::TempDir;
 
-pub fn run(source: &Path) -> Result<Value> {
+pub fn run(source: &Path, recovery: bool) -> Result<Value> {
     let cwd = std::env::current_dir()?.canonicalize()?;
     let source = absolute(source, &cwd);
     let metadata = fs::symlink_metadata(&source)
@@ -54,8 +54,7 @@ pub fn run(source: &Path) -> Result<Value> {
     let staged_project = stage.path().join(".qqq");
     fs::create_dir(&staged_project)?;
     let (manifest, bytes) = extract(&source, &staged_project)?;
-    let tasks = validate_database(&staged_project.join(DATABASE_NAME))?;
-    validate_database_images(&staged_project, &manifest)?;
+    let tasks = validate_project(&staged_project, &manifest, recovery)?;
     sync_staged_tree(&staged_project, &manifest)?;
     install(&staged_project, &target, existing_empty)?;
     Ok(json!({
@@ -65,6 +64,54 @@ pub fn run(source: &Path) -> Result<Value> {
         "images": manifest.images.len(),
         "bytes": bytes,
     }))
+}
+
+pub(crate) fn verify_archive(source: &Path, stage: &Path) -> Result<()> {
+    let (manifest, _) = extract(source, stage)?;
+    validate_project(stage, &manifest, true)?;
+    Ok(())
+}
+
+fn validate_project(project: &Path, manifest: &Manifest, recovery: bool) -> Result<i64> {
+    ensure!(
+        manifest.version == if recovery { 2 } else { 1 },
+        "Snapshot kind does not match restore mode; use --recovery for upgrade snapshots"
+    );
+    let tasks = validate_database_for(&project.join(DATABASE_NAME), recovery)?;
+    let conn = Connection::open_with_flags(
+        project.join(DATABASE_NAME),
+        OpenFlags::SQLITE_OPEN_READ_ONLY,
+    )?;
+    let version: i64 = conn.pragma_query_value(None, "user_version", |row| row.get(0))?;
+    if let Some(upgrade) = &manifest.upgrade {
+        ensure!(
+            upgrade.source_schema == version && upgrade.target_schema <= crate::db::SCHEMA_VERSION,
+            "Upgrade snapshot schema metadata differs from database or supported schema"
+        );
+    }
+    if version < 6 {
+        ensure!(
+            manifest.images.is_empty(),
+            "Embedded-image recovery snapshot has external images"
+        );
+        let mut statement =
+            conn.prepare("SELECT id,task_id,media_type,data FROM images ORDER BY id")?;
+        let store = ImageStore::new(project.join("images"));
+        for row in statement.query_map([], |row| {
+            Ok((
+                row.get::<_, i64>(0)?,
+                row.get::<_, i64>(1)?,
+                row.get::<_, String>(2)?,
+                row.get::<_, Vec<u8>>(3)?,
+            ))
+        })? {
+            let (id, task, media, _data) = row?;
+            store.path(task, id, &media)?;
+        }
+    } else {
+        validate_database_images(project, manifest)?;
+    }
+    Ok(tasks)
 }
 
 fn absolute(path: &Path, cwd: &Path) -> PathBuf {

@@ -55,6 +55,7 @@ pub fn run(db: &mut Db, db_path: &Path, destination: &Path) -> Result<Value> {
     let database = hash_reader(fs::File::open(&staged_db)?)?;
     let manifest = Manifest {
         version: 1,
+        upgrade: None,
         database,
         images,
     };
@@ -113,7 +114,7 @@ fn ensure_absent(path: &Path) -> Result<()> {
     }
 }
 
-fn copy_database(source: &Path, destination: &Path) -> Result<()> {
+pub(crate) fn copy_database(source: &Path, destination: &Path) -> Result<()> {
     let conn = Connection::open_with_flags(source, OpenFlags::SQLITE_OPEN_READ_ONLY)?;
     conn.busy_timeout(Duration::from_secs(10))?;
     conn.execute(
@@ -160,6 +161,10 @@ fn copy_images(conn: &Connection, store: &ImageStore, stage: &Path) -> Result<Ve
 }
 
 pub(crate) fn validate_database(path: &Path) -> Result<i64> {
+    validate_database_for(path, false)
+}
+
+pub(crate) fn validate_database_for(path: &Path, recovery: bool) -> Result<i64> {
     let conn = Connection::open_with_flags(path, OpenFlags::SQLITE_OPEN_READ_ONLY)?;
     let integrity: String = conn.pragma_query_value(None, "integrity_check", |row| row.get(0))?;
     ensure!(
@@ -172,16 +177,36 @@ pub(crate) fn validate_database(path: &Path) -> Result<i64> {
     );
     let version: i64 = conn.pragma_query_value(None, "user_version", |row| row.get(0))?;
     ensure!(
-        (9..=crate::db::SCHEMA_VERSION).contains(&version),
+        ((if recovery { 1 } else { 9 })..=crate::db::SCHEMA_VERSION).contains(&version),
         "Unsupported snapshot database schema version {version}"
     );
     crate::db::ensure_description_schema(&conn)?;
-    let invalid_task = conn.query_row(
-        "SELECT id,status FROM tasks WHERE status IS NULL OR status NOT IN ('new','in_progress','completed','error')
-         OR (status='in_progress' AND claim_key IS NULL)
-         OR (status!='in_progress' AND claim_key IS NOT NULL) LIMIT 1",
-        [], |row| Ok((row.get::<_, i64>(0)?, row.get::<_, String>(1)?)),
-    ).optional()?;
+    let owner = match version {
+        1 | 2 => "owner_session",
+        3 | 4 => "assignee",
+        _ => "claim_key",
+    };
+    let statuses = if version < 4 {
+        "'new','in_progress','completed'"
+    } else {
+        "'new','in_progress','completed','error'"
+    };
+    let invalid_task = conn
+        .query_row(
+            &format!(
+                "SELECT id,status FROM tasks WHERE status IS NULL OR status NOT IN ({statuses})
+         OR (status='in_progress' AND {owner} IS NULL)
+         OR (status!='in_progress' AND {owner} IS NOT NULL) LIMIT 1"
+            ),
+            [],
+            |row| {
+                Ok((
+                    row.get::<_, i64>(0)?,
+                    row.get::<_, Option<String>>(1)?.unwrap_or_default(),
+                ))
+            },
+        )
+        .optional()?;
     if let Some((id, status)) = invalid_task {
         let (message, reason) = if status == "pending" {
             (
@@ -201,13 +226,19 @@ pub(crate) fn validate_database(path: &Path) -> Result<i64> {
                 .detail("status", status)
         );
     }
+    ensure!(!conn.prepare(&format!("SELECT {owner} FROM tasks WHERE status='in_progress' GROUP BY {owner} HAVING count(*)>1"))?.exists([])?,
+        "Snapshot database has duplicate active claims");
     if version >= 11 {
         crate::dependencies::validate_graph(&conn)?;
     }
     Ok(conn.query_row("SELECT count(*) FROM tasks", [], |row| row.get(0))?)
 }
 
-fn append_bytes(archive: &mut Builder<&mut fs::File>, name: &str, data: &[u8]) -> Result<()> {
+pub(crate) fn append_bytes(
+    archive: &mut Builder<&mut fs::File>,
+    name: &str,
+    data: &[u8],
+) -> Result<()> {
     let mut header = Header::new_gnu();
     header.set_size(data.len() as u64);
     header.set_mode(0o600);
@@ -217,12 +248,12 @@ fn append_bytes(archive: &mut Builder<&mut fs::File>, name: &str, data: &[u8]) -
 }
 
 #[cfg(unix)]
-fn sync_directory(path: &Path) -> Result<()> {
+pub(crate) fn sync_directory(path: &Path) -> Result<()> {
     fs::File::open(path)?.sync_all()?;
     Ok(())
 }
 
 #[cfg(not(unix))]
-fn sync_directory(_path: &Path) -> Result<()> {
+pub(crate) fn sync_directory(_path: &Path) -> Result<()> {
     Ok(())
 }

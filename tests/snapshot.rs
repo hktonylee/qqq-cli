@@ -72,6 +72,7 @@ fn digest() -> String {
 fn manifest(paths: &[&str]) -> Manifest {
     Manifest {
         version: 1,
+        upgrade: None,
         database: FileMeta {
             bytes: 4096,
             sha256: digest(),

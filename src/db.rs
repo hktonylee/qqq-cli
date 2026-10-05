@@ -469,6 +469,12 @@ impl Db {
                 .detail("reason", "unsupported_schema")
             );
             ensure_description_schema(&tx)?;
+            if version > 0 && version < SCHEMA_VERSION {
+                let saved = crate::snapshot::upgrade::capture(&tx, &path, version)?;
+                if !crate::errors::json_output() {
+                    eprintln!("Saved pre-upgrade snapshot: {}", saved.display());
+                }
+            }
             if version == 0 {
                 tx.execute_batch(include_str!("sql/schema.sql"))?;
             }

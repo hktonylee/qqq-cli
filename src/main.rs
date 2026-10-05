@@ -279,7 +279,12 @@ enum Commands {
     /// Write consistent project snapshot with database and attachments.
     Backup { destination: PathBuf },
     /// Restore snapshot into new or empty project location.
-    Restore { source: PathBuf },
+    Restore {
+        source: PathBuf,
+        /// Recover original schema from an automatic pre-upgrade snapshot.
+        #[arg(long)]
+        recovery: bool,
+    },
     /// Check project database and stored images without changing files.
     Doctor,
     /// Append message; session, when supplied, is recorded as author.
@@ -363,8 +368,8 @@ fn execute(
         orchestrator_session: cli.orchestrator_session.clone(),
     };
     overrides.validate()?;
-    if let Commands::Restore { source } = &cli.command {
-        return snapshot::restore::run(source);
+    if let Commands::Restore { source, recovery } = &cli.command {
+        return snapshot::restore::run(source, *recovery);
     }
     if let Commands::Delete { id, yes: false } = &cli.command {
         return Ok(json!(delete::preview_cli(*id)?));
@@ -390,6 +395,10 @@ fn execute(
             import_batch.as_ref().expect("import input prepared"),
             true
         )?));
+    }
+    if matches!(&cli.command, Commands::Next { dry_run: true, .. }) {
+        let (mut db, _) = db::Db::open_read_only()?;
+        return Ok(json!(db.peek_next_filtered(filter)?));
     }
     let session_input = cli.session.as_deref().or(cli.harness_session.as_deref());
     let diagnostics = match &cli.command {

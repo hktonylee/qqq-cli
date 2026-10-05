@@ -28,11 +28,36 @@ pub struct Manifest {
     pub version: u32,
     pub database: FileMeta,
     pub images: Vec<ImageMeta>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub upgrade: Option<Upgrade>,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct Upgrade {
+    pub project: String,
+    pub source_schema: i64,
+    pub target_schema: i64,
+    pub created_at: String,
 }
 
 impl Manifest {
     pub fn validate(&self) -> Result<()> {
-        ensure!(self.version == 1, "Unsupported snapshot format version");
+        match (self.version, &self.upgrade) {
+            (1, None) => (),
+            (2, Some(upgrade)) => {
+                ensure!(
+                    upgrade.source_schema > 0 && upgrade.target_schema > upgrade.source_schema,
+                    "Invalid upgrade snapshot schema metadata"
+                );
+                ensure!(
+                    std::path::Path::new(&upgrade.project).is_absolute()
+                        && !upgrade.created_at.is_empty(),
+                    "Invalid upgrade snapshot project metadata"
+                );
+            }
+            _ => anyhow::bail!("Unsupported snapshot format version"),
+        }
         ensure!(self.database.bytes > 0, "Snapshot database is empty");
         validate_hash(&self.database.sha256)?;
         let mut seen = HashSet::new();
