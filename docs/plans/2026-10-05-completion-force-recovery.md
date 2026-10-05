@@ -75,13 +75,15 @@ Evidence: `/tmp/qqq-task-174-preflight-probe.log`.
 
 - [x] Explain checkbox, `Space`/click + `y`, normal retry after Herdr failure,
   explicit force bypass and preserved draft/claim guards.
-- [ ] Run focused TUI suite, DB/render checks, full locked/offline suite,
+- [x] Run focused TUI suite, DB/render checks, full locked/offline suite,
   compatibility gate, fmt/Clippy/release build. Verify installed binary with
   focused force scenarios after local integration/install.
 - [x] Obtain independent read-only review through requesting-code-review skill;
   fix concrete findings and rerun affected checks.
-- [ ] Record fresh evidence, locally rebase/fast-forward, clean owned worktree,
-  complete task through qqq, resume exactly one silent queue waiter.
+- [x] Record fresh evidence and locally rebase/fast-forward.
+
+After verification record integrates: complete task through qqq, clean owned
+worktree, resume exactly one silent queue waiter.
 
 ## Validation evidence
 
@@ -110,7 +112,15 @@ Evidence: `/tmp/qqq-task-174-preflight-probe.log`.
   (`/tmp/qqq-task-174-gate-final.log`); fmt, strict all-target Clippy and release
   build passed (`/tmp/qqq-task-174-clippy-compact.log`,
   `/tmp/qqq-task-174-release-final.log`).
-- Integration and installed verification pending.
+- Local fast-forward integrated fix `5b37430` into master. Clean package rebuild
+  passed focused 4 Rust / 11 PTY and compatibility 152 / 7 on main; release build
+  passed; `cargo install --path . --locked --offline --force` installed qqq0.5.0.
+  Evidence: `/tmp/qqq-task-174-integrated-force.log`,
+  `/tmp/qqq-task-174-integrated-gate.log`, `/tmp/qqq-task-174-install.log`.
+- Installed `/Users/tonylee/.cargo/bin/qqq` passed all 11 force PTY scenarios
+  (`/tmp/qqq-task-174-installed-force.log`). Installed and fresh main release SHA256
+  match: `74bace82f892f044cccbfaed8c1e844881faf293724337ddc90e34150e0ef966`.
+- No remote CI, push, tag or publication performed.
 
 Version evidence: local `v0.4.0` tag (commit `5c97d0c`) predates original
 force-complete menu commit `2ad9770`. Other machine version remains unverified;
