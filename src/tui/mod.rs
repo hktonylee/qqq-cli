@@ -1,5 +1,6 @@
 mod buffers;
 mod clipboard;
+pub(crate) mod completion;
 mod conflict;
 mod dashboard;
 mod details;
@@ -68,9 +69,36 @@ enum Target {
 
 enum Confirmation {
     Exit,
-    ExitBuffers { keys: Vec<DraftKey>, index: usize },
-    Switch { target: Target, focus_editor: bool },
-    Action { action: TaskAction, dirty: bool },
+    ExitBuffers {
+        keys: Vec<DraftKey>,
+        index: usize,
+    },
+    Switch {
+        target: Target,
+        focus_editor: bool,
+    },
+    Action {
+        action: TaskAction,
+        dirty: bool,
+        force: bool,
+        error: String,
+    },
+}
+
+fn action_confirmation(action: TaskAction, dirty: bool) -> Confirmation {
+    Confirmation::Action {
+        action,
+        dirty,
+        force: false,
+        error: String::new(),
+    }
+}
+
+fn toggle_force(force: &mut bool, error: &mut String) {
+    *force = !*force;
+    if error == completion::FORCE_REQUIRED {
+        error.clear();
+    }
 }
 
 fn confirm_buffers_exit(buffers: &DraftBuffers) -> Option<Confirmation> {
@@ -113,6 +141,10 @@ pub enum TaskAction {
 }
 
 impl TaskAction {
+    fn is_completion(&self) -> bool {
+        matches!(self, Self::Complete(_) | Self::ForceComplete(_))
+    }
+
     fn id(&self) -> i64 {
         match self {
             Self::Complete(id)
@@ -359,14 +391,31 @@ fn action_lines(ui: &ActionUi, width: usize, height: usize) -> Vec<render::Popup
 fn action_confirmation_lines(
     action: &TaskAction,
     dirty: bool,
+    force: bool,
+    error: &str,
     width: usize,
+    height: usize,
 ) -> Vec<render::PopupRow> {
     use render::{PopupKind, PopupRow};
     let mut rows = vec![PopupRow::new(
-        format!("{} task #{}?", action.label(), action.id()),
+        format!(
+            "{} task #{}?",
+            if force && action.is_completion() {
+                "Force complete"
+            } else {
+                action.label()
+            },
+            action.id()
+        ),
         PopupKind::Heading,
     )];
-    if matches!(action, TaskAction::ForceComplete(_)) {
+    if action.is_completion() {
+        rows.push(PopupRow::new(
+            format!("[{}] Force complete", if force { 'x' } else { ' ' }),
+            PopupKind::Body,
+        ));
+    }
+    if force || matches!(action, TaskAction::ForceComplete(_)) {
         rows.extend(
             wrap_modal("Complete without matching task owner.", width)
                 .into_iter()
@@ -385,8 +434,64 @@ fn action_confirmation_lines(
         if dirty { "Lose draft?" } else { "" },
         PopupKind::Warning,
     ));
-    rows.push(PopupRow::new("y confirm  n/Esc cancel", PopupKind::Hint));
+    if action.is_completion() {
+        rows.truncate(height.saturating_sub(1));
+        let available = height.saturating_sub(rows.len() + 1);
+        if !error.is_empty() {
+            rows.extend(
+                wrap_modal(error, width)
+                    .into_iter()
+                    .take(available)
+                    .map(|line| PopupRow::new(line, PopupKind::Error)),
+            );
+        }
+    }
+    let hint = if action.is_completion() {
+        if width >= "Space force  y confirm  n/Esc cancel".len() {
+            "Space force  y confirm  n/Esc cancel"
+        } else if width >= "Space force  y  n/Esc".len() {
+            "Space force  y  n/Esc"
+        } else {
+            "Space y Esc"
+        }
+    } else {
+        "y confirm  n/Esc cancel"
+    };
+    rows.push(PopupRow::new(hint, PopupKind::Hint));
     rows
+}
+
+fn force_checkbox_hit(size: (u16, u16), pending: &Confirmation, column: u16, row: u16) -> bool {
+    let Confirmation::Action {
+        action,
+        dirty,
+        force,
+        error,
+    } = pending
+    else {
+        return false;
+    };
+    if !action.is_completion() {
+        return false;
+    }
+    let area = ratatui::layout::Rect::new(0, 0, size.0, size.1);
+    let capacity = dashboard::popup_layout(area, usize::MAX).content;
+    let lines = action_confirmation_lines(
+        action,
+        *dirty,
+        *force,
+        error,
+        usize::from(capacity.width),
+        usize::from(capacity.height),
+    );
+    let content = dashboard::popup_layout(area, lines.len()).content;
+    let Some(index) = lines.iter().position(|line| line.text.starts_with("[")) else {
+        return false;
+    };
+    index < usize::from(content.height)
+        && row == content.y + index as u16
+        && column >= content.x
+        && column < content.x + (lines[index].text.len() as u16).min(content.width)
 }
 
 fn parse_action_input(
@@ -1058,9 +1163,19 @@ fn compose_inner(
                         &buffers,
                         usize::from(popup_content.width),
                     )),
-                    Some(Confirmation::Action { action, dirty }) => Some(
-                        action_confirmation_lines(action, *dirty, usize::from(popup_content.width)),
-                    ),
+                    Some(Confirmation::Action {
+                        action,
+                        dirty,
+                        force,
+                        error,
+                    }) => Some(action_confirmation_lines(
+                        action,
+                        *dirty,
+                        *force,
+                        error,
+                        usize::from(popup_content.width),
+                        usize::from(popup_content.height),
+                    )),
                     _ => None,
                 });
             dashboard_terminal
@@ -1132,6 +1247,17 @@ fn compose_inner(
             }
             let input = event::read()?;
             if let Event::Mouse(mouse) = &input {
+                if dashboard
+                    && mouse.kind == MouseEventKind::Down(MouseButton::Left)
+                    && confirmation.as_ref().is_some_and(|pending| {
+                        force_checkbox_hit(size, pending, mouse.column, mouse.row)
+                    })
+                {
+                    if let Some(Confirmation::Action { force, error, .. }) = &mut confirmation {
+                        toggle_force(force, error);
+                    }
+                    break None;
+                }
                 let active = dashboard
                     && confirmation.is_none()
                     && action_ui.is_none()
@@ -1472,7 +1598,7 @@ fn compose_inner(
                     }
                     continue;
                 }
-                if let Some(pending) = confirmation.take() {
+                if let Some(mut pending) = confirmation.take() {
                     if control && key.code == KeyCode::Char('c') {
                         if dashboard {
                             confirmation = Some(pending);
@@ -1484,6 +1610,27 @@ fn compose_inner(
                         .modifiers
                         .intersects(KeyModifiers::CONTROL | KeyModifiers::ALT | KeyModifiers::SUPER)
                     {
+                        if let Confirmation::Action {
+                            action,
+                            force,
+                            error,
+                            ..
+                        } = &mut pending
+                        {
+                            if action.is_completion() && key.code == KeyCode::Char(' ') {
+                                toggle_force(force, error);
+                                confirmation = Some(pending);
+                                continue;
+                            }
+                            if matches!(action, TaskAction::ForceComplete(_))
+                                && !*force
+                                && matches!(key.code, KeyCode::Char('y' | 'Y'))
+                            {
+                                *error = completion::FORCE_REQUIRED.to_owned();
+                                confirmation = Some(pending);
+                                continue;
+                            }
+                        }
                         match key.code {
                             KeyCode::Char('y' | 'Y') => match pending {
                                 Confirmation::Exit => {
@@ -1522,8 +1669,19 @@ fn compose_inner(
                                     message.clear();
                                     message_is_error = false;
                                 }
-                                Confirmation::Action { action, .. } => {
-                                    match run_action(&mut mode, action.clone(), include_archived) {
+                                Confirmation::Action {
+                                    action,
+                                    dirty,
+                                    force,
+                                    ..
+                                } => {
+                                    let selected = if force && action.is_completion() {
+                                        TaskAction::ForceComplete(action.id())
+                                    } else {
+                                        action.clone()
+                                    };
+                                    match run_action(&mut mode, selected.clone(), include_archived)
+                                    {
                                         Ok(target) => {
                                             editor_follow_cursor = load_target(
                                                 restore_target(target, &mut buffers),
@@ -1535,16 +1693,27 @@ fn compose_inner(
                                                 &mut top,
                                             );
                                             list_follow_selected = true;
-                                            message = action.success();
+                                            message = selected.success();
                                             message_is_error = false;
                                         }
                                         Err(error) => {
                                             message = format!("{error:#}");
                                             message_is_error = true;
-                                            action_ui = Some(ActionUi::Error {
-                                                text: message.clone(),
-                                                top: 0,
-                                            });
+                                            if matches!(selected, TaskAction::Complete(_))
+                                                && completion::can_force_after_error(&error)
+                                            {
+                                                confirmation = Some(Confirmation::Action {
+                                                    action,
+                                                    dirty,
+                                                    force: false,
+                                                    error: message.clone(),
+                                                });
+                                            } else {
+                                                action_ui = Some(ActionUi::Error {
+                                                    text: message.clone(),
+                                                    top: 0,
+                                                });
+                                            }
                                         }
                                     }
                                 }
@@ -1731,10 +1900,10 @@ fn compose_inner(
                                 }
                             };
                             if let Some(action) = chosen {
-                                confirmation = Some(Confirmation::Action {
+                                confirmation = Some(action_confirmation(
                                     action,
-                                    dirty: draft.is_dirty_against(&baseline.description),
-                                });
+                                    draft.is_dirty_against(&baseline.description),
+                                ));
                             }
                         }
                         ActionUi::Input {
@@ -1803,10 +1972,10 @@ fn compose_inner(
                                     if matches!(action, TaskAction::MarkError(..))
                                         || draft.is_dirty_against(&baseline.description) =>
                                 {
-                                    confirmation = Some(Confirmation::Action {
+                                    confirmation = Some(action_confirmation(
                                         action,
-                                        dirty: draft.is_dirty_against(&baseline.description),
-                                    });
+                                        draft.is_dirty_against(&baseline.description),
+                                    ));
                                 }
                                 Ok(action) => {
                                     match run_action(&mut mode, action.clone(), include_archived) {

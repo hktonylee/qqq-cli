@@ -590,28 +590,7 @@ fn execute(
                 &mut |db, id| {
                     let owner = match resolved_owner(session_input, project_dir, db) {
                         Ok(owner) => Some(owner),
-                        Err(error)
-                            if error.downcast_ref::<errors::Info>().is_some_and(|info| {
-                                matches!(info.code, errors::Code::DispatchError)
-                                    || info
-                                        .details
-                                        .get("reason")
-                                        .and_then(Value::as_str)
-                                        .is_some_and(|reason| {
-                                            matches!(
-                                                reason,
-                                                "missing_project_agent"
-                                                    | "ambiguous_project_agent"
-                                                    | "missing_herdr_context"
-                                                    | "missing_herdr_pane"
-                                                    | "missing_agent_identity"
-                                                    | "missing_agent_kind"
-                                            )
-                                        })
-                            }) =>
-                        {
-                            None
-                        }
+                        Err(error) if tui::completion::discovery_unavailable(&error) => None,
                         Err(error) => return Err(error),
                     };
                     let owned = owner

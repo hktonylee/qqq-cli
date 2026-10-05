@@ -459,6 +459,27 @@ fn tui_dashboard_force_completion_handles_session_discovery_and_claim_changes() 
 }
 
 #[test]
+fn tui_dashboard_force_completion_recovers_from_herdr_confirmation_failure() {
+    for name in [
+        "force_complete_herdr_confirm_failure",
+        "force_complete_herdr_confirm_failure_no_color",
+    ] {
+        dashboard_scenario(name);
+    }
+}
+
+#[test]
+fn tui_dashboard_force_completion_checkbox_handles_initial_herdr_failure_and_mouse() {
+    for name in [
+        "force_complete_herdr_initial_failure",
+        "force_complete_herdr_initial_failure_narrow",
+        "force_complete_herdr_initial_failure_compact",
+    ] {
+        dashboard_scenario(name);
+    }
+}
+
+#[test]
 fn tui_dashboard_task_actions() {
     dashboard_scenario("actions_basic");
     dashboard_scenario("actions_rejected");

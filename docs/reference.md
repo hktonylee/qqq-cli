@@ -580,11 +580,18 @@ selected action when available.
 Complete checks current session ownership when activated. Without a matching
 claim, popup asks `Force complete task #ID?` and warns
 `Complete without matching task owner.` Confirm with `y` to finish a New,
-In progress or Error task regardless of owner. This clears claim and ownership
+In progress or Error task regardless of owner **after selecting** `[ ] Force complete`
+with Space or clicking checkbox/label. Checkbox starts unchecked on every opening;
+forced confirmation without selecting it keeps popup and changes nothing. Matching
+owner can complete normally with checkbox unchecked, or select force explicitly.
+This clears claim and ownership
 metadata, preserves task content and history, and records a standard `complete`
 event attributed to explicit session or `manual`. Already-completed tasks fail.
-Cancellation preserves draft and DB. An owned task whose claim changes while
-ordinary confirmation is open fails; open menu again to request forced completion.
+Cancellation preserves draft and DB. If Herdr fails or ownership changes during
+normal confirmation, popup keeps exact error plus unchecked force checkbox.
+Retry normally with `y`, or select force then confirm with `y`. Force path bypasses
+Herdr/owner lookup; it never happens automatically after failure. DB corruption,
+invalid input and other unrelated failures keep ordinary error handling.
 After filter clears, Esc closes menu or prompt. State changes ask for `y` before
 running; priority and parent changes ask when draft has unsaved edits. Successful
 action refreshes task and list; rejected action keeps draft and shows DB error.

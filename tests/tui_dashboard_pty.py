@@ -144,7 +144,7 @@ with tempfile.TemporaryDirectory(prefix="qqq-dashboard-test-") as folder:
         cli("edit", "2", "--set-status", "error", "--reason", "Failed", "--session", "failed")
         cli("add", "Fresh item")
         cli("add", "Owned item", "--priority", "10")
-        if scenario == "force_complete_native":
+        if scenario == "force_complete_native" or scenario.startswith("force_complete_herdr_"):
             env["CODEX_THREAD_ID"] = "native-key"
             env["CODEX_SESSION_ID"] = "native-display"
             cli("next", "--local")
@@ -167,6 +167,29 @@ print(json.dumps({"result": {"pane": {
             fake.chmod(0o755)
             env["PATH"] = os.pathsep.join((folder, os.defpath))
             env["HERDR_PANE_ID"] = "w1:p1"
+        if scenario.startswith("force_complete_herdr_"):
+            fake = Path(folder) / "herdr"
+            fake.write_text('''#!/usr/bin/env python3
+import json
+import sys
+from pathlib import Path
+with Path("herdr-calls").open("a") as calls:
+    calls.write(" ".join(sys.argv[1:]) + "\\n")
+if Path("herdr-fail").exists():
+    print("transport down", file=sys.stderr)
+    sys.exit(1)
+pane = {
+    "pane_id": "w1:p1", "workspace_id": "w1", "tab_id": "w1:t1",
+    "terminal_id": "test-terminal", "agent": "codex",
+    "agent_session": {"agent": "codex", "kind": "id", "value": "native-key"},
+}
+print(json.dumps({"result": {"pane": pane}}))
+''')
+            fake.chmod(0o755)
+            env["PATH"] = os.pathsep.join((folder, os.defpath))
+            env["HERDR_PANE_ID"] = "w1:p1"
+            if "initial_failure" in scenario:
+                (Path(folder) / "herdr-fail").touch()
     elif scenario in ("actions_basic", "actions_rejected") or scenario.startswith(("menu_retry_", "menu_error_")):
         cli("add", "Owned item")
         cli("add", "Failed item")
@@ -354,7 +377,7 @@ print(json.dumps({"result": result}))
     args = [binary, "--json", "tui"] if scenario in ("empty_json", "save_json", "handoff_json") else [binary, "tui"]
     if scenario == "force_complete_native":
         args.extend(["--session", "native-display"])
-    elif scenario in ("actions_basic", "actions_rejected", "actions_narrow") or scenario.startswith(("menu_retry_", "menu_error_")) or (scenario.startswith("force_complete") and scenario not in ("force_complete_sessionless", "force_complete_owner_db_error")):
+    elif scenario in ("actions_basic", "actions_rejected", "actions_narrow") or scenario.startswith(("menu_retry_", "menu_error_")) or (scenario.startswith("force_complete") and not scenario.startswith("force_complete_herdr_") and scenario not in ("force_complete_sessionless", "force_complete_owner_db_error")):
         args.extend(["--session", "other" if scenario == "menu_error_rejected" else "worker"])
     if scenario in ("archive_included", "actions_basic", "actions_rejected"):
         args.append("--include-archived")
@@ -2694,6 +2717,98 @@ print(json.dumps({"result": result}))
             assert cli("show", "2")["task"]["description"] == "Second"
             if scenario == "menu_arrows_no_color":
                 assert b"\x1b[38;" not in screen and b"\x1b[48;" not in screen, screen[-2000:]
+        elif scenario.startswith("force_complete_herdr_"):
+            compact = scenario.endswith("compact")
+            force_title = "Force complete" if compact else "Force complete task #4?"
+            required_label = "Select Force" if compact else "Select Force complete"
+            click(5, task_row("Owned item"))
+            wait_visible(lambda: "Task #4 (In progress)" in editor_title())
+            task_before = cli("show", "4")
+            send(b"\x01X")
+            wait_visible(lambda: editor_line().startswith("XOwned item"))
+            if scenario.endswith("narrow") or compact:
+                clear_capture()
+                columns, rows = (24, 14) if compact else (38, 12)
+                fcntl.ioctl(slave, termios.TIOCSWINSZ, struct.pack("HHHH", rows, columns, 0, 0))
+                visible.resize(columns, rows)
+                os.kill(child.pid, signal.SIGWINCH)
+                wait_visible(lambda: editor_line().startswith("XOwned item")
+                             and visible.text().splitlines()[-1].startswith("Ctrl-S Save")
+                             and not visible.pending and not visible.decoder.getstate()[0]
+                             and (visible.x, visible.y) == (1, editor_row() + 1)
+                             and screen.endswith(f"\x1b[{editor_row() + 2};2H".encode()))
+            send(b"\x07c")
+            if "confirm_failure" in scenario:
+                wait_visible(lambda: "Complete task #4?" in visible.text() and "Lose draft?" in visible.text())
+                (Path(folder) / "herdr-fail").touch()
+                send(b"y")
+                wait_visible(lambda: "Herdr failed: transport down" in visible.text()
+                             and "[ ] Force complete" in visible.text())
+                assert "Action error" not in visible.text(), visible.text()
+                assert cli("show", "4") == task_before
+                send(b"y")
+                wait_visible(lambda: "Herdr failed: transport down" in visible.text()
+                             and "[ ] Force complete" in visible.text())
+                assert cli("show", "4") == task_before
+            else:
+                wait_visible(lambda: force_title in visible.text()
+                             and "[ ] Force complete" in visible.text())
+                if compact:
+                    wait_visible(lambda: "Space y Esc" in visible.text())
+                send(b"y")
+                wait_visible(lambda: required_label in visible.text())
+                assert cli("show", "4") == task_before
+
+            def click_force_checkbox():
+                for row, line in enumerate(visible.text().splitlines(), 1):
+                    match = re.search(r"\[[ x]\] Force complete", line)
+                    if match:
+                        click(match.start() + 2, row)
+                        return
+                raise AssertionError(visible.text())
+
+            click_force_checkbox()
+            wait_visible(lambda: "[x] Force complete" in visible.text())
+            assert cli("show", "4") == task_before
+            send(b" ")
+            wait_visible(lambda: "[ ] Force complete" in visible.text())
+            if "confirm_failure" in scenario and not scenario.endswith("no_color"):
+                # Complete directly from retained failed-normal confirmation.
+                send(b" ")
+                wait_visible(lambda: "[x] Force complete" in visible.text()
+                             and "Herdr failed: transport down" in visible.text())
+            else:
+                send(b"n")
+                wait_visible(lambda: "Force complete" not in visible.text()
+                             and editor_line().startswith("XOwned item"))
+                assert cli("show", "4") == task_before
+                send(b"\x07c")
+                wait_visible(lambda: force_title in visible.text()
+                             and "[ ] Force complete" in visible.text())
+                click(1, 1)
+                send(b"y")
+                wait_visible(lambda: required_label in visible.text()
+                             and "[ ] Force complete" in visible.text())
+                assert cli("show", "4") == task_before
+                send(b" ")
+                wait_visible(lambda: "[x] Force complete" in visible.text()
+                             and required_label not in visible.text())
+            calls_before_force = (Path(folder) / "herdr-calls").read_bytes()
+            send(b"y")
+            wait_visible(lambda: visible.text().splitlines()[-1].startswith("Completed #4")
+                         and editor_line().startswith("Owned item"))
+            assert (Path(folder) / "herdr-calls").read_bytes() == calls_before_force
+            completed = cli("show", "4")
+            assert completed["task"]["status"] == "completed"
+            assert completed["task"]["description"] == "Owned item"
+            assert completed["task"]["content_revision"] == task_before["task"]["content_revision"]
+            for field in ("harness_name", "harness_session", "orchestrator_name", "orchestrator_session"):
+                assert completed["task"][field] is None
+            assert completed["events"][:-1] == task_before["events"]
+            assert completed["events"][-1]["action"] == "complete"
+            assert completed["events"][-1]["session"] == "manual"
+            if scenario.endswith("no_color"):
+                assert b"\x1b[38;" not in screen and b"\x1b[48;" not in screen, screen[-2000:]
         elif scenario == "force_complete_owner_db_error":
             click(5, task_row("Foreign item"))
             wait_visible(lambda: "Task #1 (In progress)" in editor_title())
@@ -2708,6 +2823,12 @@ print(json.dumps({"result": result}))
             send(b"\x7f")
             wait_visible(lambda: editor_line().startswith("Foreign item"))
         elif scenario.startswith("force_complete"):
+            def confirm_completion():
+                if "Force complete task" in visible.text():
+                    send(b" ")
+                    wait_visible(lambda: "[x] Force complete" in visible.text())
+                send(b"y")
+
             wait_visible(lambda: "Foreign item" in visible.text())
             click(5, task_row("Foreign item"))
             wait_visible(lambda: "Task #1 (In progress)" in editor_title())
@@ -2725,7 +2846,7 @@ print(json.dumps({"result": result}))
             assert cli("show", "1") == before_force
             send(b"\x07\r")
             wait_visible(lambda: "Force complete task #1?" in visible.text())
-            send(b"y")
+            confirm_completion()
             wait_visible(lambda: "Task #1 (Completed)" in editor_title()
                          and editor_line().startswith("Foreign item"))
             completed = cli("show", "1")
@@ -2747,7 +2868,7 @@ print(json.dumps({"result": result}))
                 assert cli("show", str(task_id)) == task_before
                 send(b"\x07c")
                 wait_visible(lambda: f"Force complete task #{task_id}?" in visible.text())
-                send(b"y")
+                confirm_completion()
                 wait_visible(lambda: f"Task #{task_id} (Completed)" in editor_title())
                 after = cli("show", str(task_id))
                 assert after["task"]["status"] == "completed"
@@ -2760,22 +2881,25 @@ print(json.dumps({"result": result}))
             if scenario == "force_complete_sessionless":
                 wait_visible(lambda: "Force complete task #4?" in visible.text())
             else:
-                wait_visible(lambda: "Complete task #4?" in visible.text())
-                assert "Force complete" not in visible.text(), visible.text()
-                assert "Complete without matching task owner." not in visible.text()
+                wait_visible(lambda: "Complete task #4?" in visible.text()
+                             and "[ ] Force complete" in visible.text()
+                             and "Space force" in visible.text()
+                             and "Complete without matching task owner." not in visible.text())
+                assert "Force complete task" not in visible.text(), visible.text()
             if scenario == "force_complete_race":
                 cli("edit", "4", "--set-status", "new", "--session", "worker")
                 cli("next", "--local", "--session", "new-owner")
                 transferred = cli("show", "4")
-                send(b"y")
-                wait_visible(lambda: "Action error" in visible.text()
-                             and "Task 4 is not claimed by session worker" in visible.text())
+                confirm_completion()
+                wait_visible(lambda: "Task 4 is not claimed by session worker" in visible.text()
+                             and "[ ] Force complete" in visible.text())
                 assert cli("show", "4") == transferred
                 send(b"\x1b")
-                wait_visible(lambda: "Action error" not in visible.text())
+                wait_visible(lambda: "Task 4 is not claimed by session worker" not in visible.text()
+                             and "[ ] Force complete" not in visible.text())
                 send(b"\x07c")
                 wait_visible(lambda: "Force complete task #4?" in visible.text())
-            send(b"y")
+            confirm_completion()
             wait_visible(lambda: "Task #4 (Completed)" in editor_title())
             event = cli("show", "4")["events"][-1]
             assert event["action"] == "complete"
@@ -2785,7 +2909,7 @@ print(json.dumps({"result": result}))
             task_before = cli("show", "5")
             send(b"\x07c")
             wait_visible(lambda: "Force complete task #5?" in visible.text())
-            send(b"y")
+            confirm_completion()
             wait_visible(lambda: "Task 5 must be unfinished to force complete" in visible.text())
             assert cli("show", "5") == task_before
             send(b"\x1b")
