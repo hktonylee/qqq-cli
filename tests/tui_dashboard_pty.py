@@ -143,6 +143,20 @@ with tempfile.TemporaryDirectory(prefix="qqq-dashboard-test-") as folder:
         cli("add", "Finished item", "--priority", "20")
         cli("next", "--local", "--session", "finished")
         cli("complete", "5", "--session", "finished")
+        if scenario == "force_complete_owner_db_error":
+            with sqlite3.connect(Path(folder) / ".qqq" / "qqq.db") as conn:
+                conn.execute("INSERT INTO herdr_links(task_id,link_json) VALUES (4,'broken')")
+            fake = Path(folder) / "herdr"
+            fake.write_text('''#!/usr/bin/env python3
+import json
+print(json.dumps({"result": {"pane": {
+    "pane_id": "w1:p1", "workspace_id": "w1", "tab_id": "w1:t1",
+    "terminal_id": "test-terminal", "agent": "codex"
+}}}))
+''')
+            fake.chmod(0o755)
+            env["PATH"] = os.pathsep.join((folder, os.defpath))
+            env["HERDR_PANE_ID"] = "w1:p1"
     elif scenario in ("actions_basic", "actions_rejected") or scenario.startswith(("menu_retry_", "menu_error_")):
         cli("add", "Owned item")
         cli("add", "Failed item")
@@ -328,7 +342,7 @@ print(json.dumps({"result": result}))
     args = [binary, "--json", "tui"] if scenario in ("empty_json", "save_json", "handoff_json") else [binary, "tui"]
     if scenario == "force_complete_native":
         args.extend(["--session", "native-display"])
-    elif scenario in ("actions_basic", "actions_rejected", "actions_narrow") or scenario.startswith(("menu_retry_", "menu_error_")) or (scenario.startswith("force_complete") and scenario != "force_complete_sessionless"):
+    elif scenario in ("actions_basic", "actions_rejected", "actions_narrow") or scenario.startswith(("menu_retry_", "menu_error_")) or (scenario.startswith("force_complete") and scenario not in ("force_complete_sessionless", "force_complete_owner_db_error")):
         args.extend(["--session", "other" if scenario == "menu_error_rejected" else "worker"])
     if scenario in ("archive_included", "actions_basic", "actions_rejected"):
         args.append("--include-archived")
@@ -2476,6 +2490,19 @@ print(json.dumps({"result": result}))
             assert cli("show", "2")["task"]["description"] == "Second"
             if scenario == "menu_arrows_no_color":
                 assert b"\x1b[38;" not in screen and b"\x1b[48;" not in screen, screen[-2000:]
+        elif scenario == "force_complete_owner_db_error":
+            click(5, task_row("Foreign item"))
+            wait_visible(lambda: "Task #1 (In progress)" in editor_title())
+            task_before = cli("show", "1")
+            send(b"\x01X\x07c")
+            wait_visible(lambda: "Action error" in visible.text() and "malformed JSON" in visible.text())
+            assert "Force complete" not in visible.text(), visible.text()
+            assert cli("show", "1") == task_before
+            send(b"\x1b")
+            wait_visible(lambda: "Action error" not in visible.text()
+                         and editor_line().startswith("XForeign item"))
+            send(b"\x7f")
+            wait_visible(lambda: editor_line().startswith("Foreign item"))
         elif scenario.startswith("force_complete"):
             wait_visible(lambda: "Foreign item" in visible.text())
             click(5, task_row("Foreign item"))

@@ -446,6 +446,7 @@ fn tui_dashboard_force_completion_handles_session_discovery_and_claim_changes() 
         "force_complete_sessionless",
         "force_complete_native",
         "force_complete_race",
+        "force_complete_owner_db_error",
     ] {
         dashboard_scenario(name);
     }

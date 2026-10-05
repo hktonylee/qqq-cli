@@ -75,10 +75,39 @@ Expose resolver through `compose_dashboard`, set `None` in continuous add, and c
 
 ```rust
 &mut |db, id| {
-    let owner = resolved_owner(session_input, project_dir, db).ok();
-    let owned = owner.as_ref().map(|owner| {
-        db.owned_with_name(&owner.key, overrides.harness_name.as_deref())
-    }).transpose()?.flatten();
+    let owner = match resolved_owner(session_input, project_dir, db) {
+        Ok(owner) => Some(owner),
+        Err(error)
+            if error.downcast_ref::<errors::Info>().is_some_and(|info| {
+                matches!(info.code, errors::Code::DispatchError)
+                    || info
+                        .details
+                        .get("reason")
+                        .and_then(Value::as_str)
+                        .is_some_and(|reason| {
+                            matches!(
+                                reason,
+                                "missing_project_agent"
+                                    | "ambiguous_project_agent"
+                                    | "missing_herdr_context"
+                                    | "missing_herdr_pane"
+                                    | "missing_agent_identity"
+                                    | "missing_agent_kind"
+                            )
+                        })
+            }) =>
+        {
+            None
+        }
+        Err(error) => return Err(error),
+    };
+    let owned = owner
+        .as_ref()
+        .map(|owner| {
+            db.owned_with_name(&owner.key, overrides.harness_name.as_deref())
+        })
+        .transpose()?
+        .flatten();
     Ok(if owned.is_some_and(|task| task.id == id) {
         tui::TaskAction::Complete(id)
     } else {
