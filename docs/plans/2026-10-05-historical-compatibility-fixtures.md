@@ -94,13 +94,16 @@ artifacts, canonical JSON, fixture README.
 - [x] Run `CARGO_TARGET_DIR=/app/qqq/target cargo test --locked --offline
   --test compatibility --test snapshot --test identity --test images
   --test image_storage --test priority --test archive --test reopen`.
-- [ ] Run full suite, fmt/diff checks, Clippy all targets with `-D warnings`,
+- [x] Run full suite, fmt/diff checks, Clippy all targets with `-D warnings`,
   release build; ensure no runtime source or dependency changes.
 - [x] Independent review of provenance, schema coverage, independent expected
   state, allocation/readiness assertions and immutable copy behavior.
-- [ ] Commit fixture work, refresh/rebase/merge master, verify integrated focused
+- [x] Commit fixture work, refresh/rebase/merge master, verify integrated focused
   checks. Runtime unchanged; installed binary already matches current runtime.
-  Record queue evidence, complete170, clean owned worktree/branch, resume wait.
+  Record queue evidence, complete170.
+
+Delivery follow-up: clean owned worktree/branch, resume persistent queue wait
+after evidence commit.
 
 ## Evidence
 
@@ -119,6 +122,13 @@ artifacts, canonical JSON, fixture README.
   and compatibility + schema9 regression independently.
 - Full run hit existing completed-toggle PTY timeout after resize at line3262;
   unchanged scenario passed focused rerun (both color modes). Second parallel
-  run failed same resize-click assertion. Full serial run now running; retain
+  run failed same resize-click assertion. Full serial run passed: 651 tests in 40 binaries, using
+  `cargo test --locked --offline -- --test-threads=1`; retain
   parallel failure in `/tmp/qqq-task-170-full-parallel-failure.log`. No runtime
   source, dependencies or unrelated PTY code changed.
+
+- Fresh fmt/diff checks, Clippy all targets with `-D warnings`, release build
+  passed after correction. No runtime or dependency diff.
+
+- Integrated master: 75 focused tests / 8 binaries passed. Queue message93
+  records evidence; task170 completed at content_revision1.
