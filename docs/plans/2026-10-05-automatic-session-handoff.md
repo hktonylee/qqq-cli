@@ -17,7 +17,7 @@
 - [x] Remove redundant session flags from worker prompt, preserve inherited
   QQQ_SESSION contract, child metadata and
   caller/child separation. Update ownership and dispatch docs with concise matrix.
-- [ ] Verify focused/full checks, compatibility, fmt/strict Clippy/release; obtain
+- [x] Verify focused/full checks, compatibility, fmt/strict Clippy/release; obtain
   independent review, commit/rebase/fast-forward locally, install and verify
   env-only context matrix. Record evidence, queue-complete, cleanup, resume waiter.
 
@@ -43,4 +43,20 @@ current autodetect tests.
   (`/tmp/qqq-task-176-gate.log`); fmt, strict Clippy all-targets and release passed
   (`/tmp/qqq-task-176-clippy.log`, `/tmp/qqq-task-176-release.log`). Serial full
   run uses previously documented unchanged Completed-toggle test flake workaround.
-- Local integration and installed verification pending.
+- Fix `e31910e` fast-forwarded locally; clean package rebuild passed focused 55/3
+  and compatibility 153/7, release build and install passed. Evidence:
+  `/tmp/qqq-task-176-integrated-focused.log`,
+  `/tmp/qqq-task-176-integrated-gate.log`, `/tmp/qqq-task-176-install.log`.
+- Installed qqq 0.5.0 passed 15 temporary-project automatic-context cases:
+  native Codex thread/session/thread+display; inherited owner overriding native
+  context; 4 Herdr harness names x id/terminal; unique root agent; env-only
+  dispatch retrieval/message/completion/error. Matrix uses mock Herdr CLI; current
+  real queue claims also verified exact live Herdr context without session flags.
+  No live agent spawning performed. Evidence:
+  `/tmp/qqq-task-176-installed-context.log`.
+- Installed and fresh main release SHA256 match:
+  `a0c0d116e6af57b44a7c433f732dfb5e2ffc72299f93232957396735947ec9d3`.
+- No remote CI, push, tag or publication performed.
+
+After verification record integrates: queue-complete task, retain metadata,
+clean owned worktree/branch, resume one silent waiter.
