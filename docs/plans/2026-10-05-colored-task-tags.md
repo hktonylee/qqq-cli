@@ -94,11 +94,11 @@ panel::set_tag_ranges(&mut rows, &tag_tasks);
   `CARGO_TARGET_DIR=/app/qqq/target cargo test --locked --offline`, Clippy
   `--all-targets -- -D warnings`, release build. Record test counts.
 - [x] Request independent read-only review; resolve concrete findings.
-- [ ] Commit `[Feat] Color Tags In Dashboard Task List`; refresh master,
+- [x] Commit `[Feat] Color Tags In Dashboard Task List`; refresh master,
   rebase, fast-forward merge. Install with `cargo install --path . --force
   --locked --offline`. Run five installed Tags PTY scenarios and check installed
-  binary hash matches release. Record queue evidence, complete #168, clean
-  owned worktree/branch, resume persistent queue wait.
+  binary hash matches release. Worker then records queue evidence, completes
+  #168, cleans owned worktree/branch and resumes persistent queue wait.
 
 ## Evidence
 
@@ -108,3 +108,9 @@ focused render/filter checks passed 45 tests. Tags PTY checks passed four tests,
 including color/NO_COLOR and live save redraw. Final full suite: 638 tests across
 39 binaries, zero failures. fmt, Clippy -D warnings and release build passed.
 Independent review found no concrete issues; reviewer reran 45 focused tests.
+
+Integrated source: `b3aa6e7`. Installed qqq 0.5.0 passed five Tags PTY
+scenarios, including real yellow SGR after live save and NO_COLOR redraw.
+Installed/release SHA-256 match:
+`2b1fed8a3a9e7e3a0118a256c2f1a1bb95d47eac8e3df25bc99e76de14aba716`.
+No remote push or CI run.
