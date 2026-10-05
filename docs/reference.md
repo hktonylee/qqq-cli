@@ -807,6 +807,20 @@ Explicit session IDs and native Codex ownership work without Herdr when dispatch
 disabled or `next --local` is used. Exact Herdr context takes precedence.
 `next --local` skips dispatch, still resolves owner.
 
+Automatic claims save detected harness/orchestrator fields and Herdr link when
+available. Session flags are optional in these contexts:
+
+| Context | Automatic identity | Saved metadata |
+| --- | --- | --- |
+| Herdr pane, any reported harness | Pane agent-session identity, or terminal ID plus agent kind | Reported harness name/session, Herdr server name, saved pane link |
+| Standalone Codex | `CODEX_THREAD_ID`, then `CODEX_SESSION_ID` | `codex`, displayed Codex session; no orchestrator or Herdr link |
+| Unique Herdr agent at project root | Matching pane identity | Reported harness name/session, Herdr server name, saved pane link |
+| Dispatched child | Inherited `QQQ_SESSION` resolves reserved claim | Child harness and Herdr link saved before prompt |
+
+Outside Herdr, built-in native environment discovery currently covers Codex.
+Other harnesses use reported Herdr pane identity. qqq does not guess sessions
+from unrelated environment variables. Explicit session flags remain overrides.
+
 For automatic Codex claims, displayed `harness_session` uses `CODEX_SESSION_ID`
 when set, including inside Herdr. Without it, resolved owner ID supplies display.
 Claim keys and Herdr links keep resolved identity; `--harness-session` overrides
@@ -938,6 +952,12 @@ Dispatch needs `HERDR_ENV=1` and `HERDR_WORKSPACE_ID`. It reuses caller's active
 task; otherwise reserves ready task, opens sibling tab, starts agent and submits
 prompt. Empty or blocked queues create no tab. `next --local` skips dispatch.
 Default: disabled.
+
+Dispatched child inherits `QQQ_SESSION` for reserved claim. Worker commands
+`qqq message ID ...`, `qqq complete ID` and `qqq edit ID --set-status error
+--reason ...` use that env automatically; generated prompt requires no session
+parameter. Keep inherited variable set. Child's saved harness/orchestrator fields
+identify spawned agent, separate from dispatch ownership token.
 
 Startup failure releases dispatch reservation; created tabs stay open. Prompt
 errors keep claim and link because delivery may have happened. Inspect agent

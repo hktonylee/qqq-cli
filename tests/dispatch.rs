@@ -214,9 +214,100 @@ fn dispatch_claims_for_new_agent_links_before_prompt_and_can_find_session() {
     assert_eq!(&calls[3][..3], ["agent", "prompt", owner]);
     assert!(calls[3][3].contains("show 1"));
     assert!(calls[3][3].contains("complete 1"));
-    assert!(calls[3][3].contains(owner));
+    assert!(calls[3][3].contains("inherited QQQ_SESSION"));
+    assert!(!calls[3][3].contains("--session"));
+    assert!(!calls[3][3].contains(owner));
     assert_eq!(p.ok(&["herdr", "find", "1"])["pane_id"], owner);
-    p.ok(&["complete", "1", "--session", owner]);
+    let mut inherited = p.command();
+    inherited
+        .env("QQQ_SESSION", owner)
+        .env_remove("HERDR_ENV")
+        .env_remove("HERDR_PANE_ID")
+        .env("PATH", "/no-herdr")
+        .env("CODEX_THREAD_ID", "different-child-thread")
+        .env("CODEX_SESSION_ID", "different-child-display")
+        .args(["next", "--local"]);
+    let output = inherited.output().unwrap();
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let existing: Value = serde_json::from_slice(&output.stdout).unwrap();
+    assert_eq!(existing, task);
+    let output = p
+        .command()
+        .env("QQQ_SESSION", owner)
+        .env("PATH", "/no-herdr")
+        .args(["message", "1", "Env-only worker update"])
+        .output()
+        .unwrap();
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let output = p
+        .command()
+        .env("QQQ_SESSION", owner)
+        .env("PATH", "/no-herdr")
+        .args(["complete", "1"])
+        .output()
+        .unwrap();
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let completed: Value = serde_json::from_slice(&output.stdout).unwrap();
+    assert_eq!(completed["status"], "completed");
+    for field in [
+        "harness_name",
+        "harness_session",
+        "orchestrator_name",
+        "orchestrator_session",
+    ] {
+        assert_eq!(completed[field], task[field]);
+    }
+    assert_eq!(
+        p.calls().len(),
+        5,
+        "Downstream env-only commands invoked Herdr"
+    );
+    let completed_detail = p.ok(&["show", "1"]);
+    assert_eq!(completed_detail["messages"][0]["session"], owner);
+    assert_eq!(completed_detail["events"][1]["session"], owner);
+    p.ok(&["add", "Failure case"]);
+    p.ok(&["next", "--session", "caller"]);
+    let error_detail = p.ok(&["show", "2"]);
+    let error_owner = error_detail["herdr"]["pane"]["pane_id"].as_str().unwrap();
+    let calls_before_error = p.calls().len();
+    let output = p
+        .command()
+        .env("QQQ_SESSION", error_owner)
+        .env("PATH", "/no-herdr")
+        .env("CODEX_SESSION_ID", "different-child-display")
+        .args([
+            "edit",
+            "2",
+            "--set-status",
+            "error",
+            "--reason",
+            "Env-only failure",
+        ])
+        .output()
+        .unwrap();
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let failed: Value = serde_json::from_slice(&output.stdout).unwrap();
+    assert_eq!(failed["status"], "error");
+    assert_eq!(p.calls().len(), calls_before_error);
+    let failed_detail = p.ok(&["show", "2"]);
+    assert_eq!(failed_detail["messages"][0]["body"], "Env-only failure");
+    assert_eq!(failed_detail["events"][1]["session"], error_owner);
 }
 
 #[test]

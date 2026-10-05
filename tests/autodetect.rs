@@ -199,15 +199,45 @@ fn herdr_codex_claims_display_native_session_without_changing_owner() {
 
 #[test]
 fn other_herdr_harness_ignores_codex_session_env() {
-    let dir = project();
-    let p = dir.path();
-    let mut caller = pane(p);
-    caller["agent"] = json!("claude");
-    let task = ok(herdr(p, json!({"result":{"pane":caller}}), true)
-        .env("CODEX_SESSION_ID", " ")
-        .arg("next"));
-    assert_eq!(task["harness_name"], "claude");
-    assert_eq!(task["harness_session"], "terminal-1");
+    for agent in ["claude", "opencode", "other-harness"] {
+        for kind in ["id", "terminal"] {
+            let dir = project();
+            let p = dir.path();
+            let mut caller = pane(p);
+            caller["agent"] = json!(agent);
+            let display = if kind == "id" {
+                caller["agent_session"] =
+                    json!({"agent":agent,"kind":"id","value":"reported-session"});
+                "reported-session"
+            } else {
+                "terminal-1"
+            };
+            let response = json!({"result":{"pane":caller}});
+            let task = ok(herdr(p, response.clone(), true)
+                .env("CODEX_SESSION_ID", " ")
+                .arg("next"));
+            assert_eq!(task["harness_name"], agent);
+            assert_eq!(task["harness_session"], display);
+            assert_eq!(task["orchestrator_name"], "herdr");
+            assert_eq!(task["orchestrator_session"], "default");
+            let detail = ok(command(p).args(["show", "1"]));
+            assert_eq!(
+                detail["herdr"]["identity"],
+                json!({"agent":agent,"kind":kind,"value":display})
+            );
+            assert_eq!(ok(herdr(p, response.clone(), true).arg("next")), task);
+            let completed = ok(herdr(p, response, true).args(["complete", "1"]));
+            assert_eq!(completed["status"], "completed");
+            for field in [
+                "harness_name",
+                "harness_session",
+                "orchestrator_name",
+                "orchestrator_session",
+            ] {
+                assert_eq!(completed[field], task[field]);
+            }
+        }
+    }
 }
 
 #[test]
