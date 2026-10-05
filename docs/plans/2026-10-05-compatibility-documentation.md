@@ -57,7 +57,7 @@ exec cargo test --locked --test compatibility documentation::compatibility_docum
 - [x] Add checklist for schema/matrix/golden metadata, both restore modes, upgrade snapshot recovery/failure paths, defaults/claim notes, docs gate, fmt/Clippy/tests/release build, package/tag/lock/binary version checks and publish dry run. Link current workflows; no new distribution or MSRV proposal.
 - [x] Run focused docs gate and complete compatibility leaf gate; parse workflows and verify unconditional ordering. Run `cargo fmt --check`, strict all-targets Clippy, full locked/offline suite and release build as appropriate.
 - [x] Obtain independent read-only review through requesting-code-review skill; fix concrete findings, rerun affected checks.
-- [ ] Record actual checks and stale-metadata experiments here and in qqq task message. Commit verified changes, rebase onto master, fast-forward locally, verify integrated gate, remove owned worktree/branch, complete task, resume single queue waiter.
+- [x] Record actual checks and stale-metadata experiments here. Commit verified changes, rebase onto master, fast-forward locally, verify integrated gate. Finish by recording qqq evidence, completing task, removing owned worktree/branch and resuming single queue waiter.
 
 ## Validation evidence
 
@@ -72,4 +72,7 @@ exec cargo test --locked --test compatibility documentation::compatibility_docum
 - Full default-parallel locked/offline suite: 681 tests / 40 binaries passed, `/tmp/qqq-task-173-full.log`.
 - Release build passed, `/tmp/qqq-task-173-release.log`; release and currently installed qqq0.5.0 both SHA256 `715ac5216130707a0ac60b5a16ea4bb5238760844e2c174d66c1c2aafab6db20`. Runtime unchanged; reinstall unnecessary.
 - Independent read-only review: no concrete findings; reviewer ran focused 3-test documentation suite successfully. Local SQLite CLI available, official Ubuntu runner inventory includes SQLite CLI.
-- Local integration, fresh integrated/installed checks and queue completion remain.
+- Locally rebased/fast-forwarded into master. Cleaned qqq package artifacts before rebuilding in main checkout to keep fixture paths valid after worktree removal.
+- Fresh integrated documentation gate: 3 passed, `/tmp/qqq-task-173-integrated-docs.log`; compatibility leaf gate: 152 tests / 7 binaries passed, `/tmp/qqq-task-173-integrated-gate.log`; fresh release build passed, `/tmp/qqq-task-173-integrated-release.log`.
+- Installed qqq0.5.0 compatibility matrix: 35 passed, including all documentation/example tests, `/tmp/qqq-task-173-installed.log`. Fresh release and installed SHA256 still identical to recorded hash above.
+- No final runtime/Cargo/golden DB/archive/catalog/expectation changes. No remote CI, push, tag or publication performed.
