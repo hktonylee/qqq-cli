@@ -19,6 +19,7 @@ const POPUP_ERROR_FG: Color = Color::Indexed(210);
 const POPUP_PROMPT_FG: Color = Color::Indexed(222);
 
 pub(super) const COMPACT_COLUMNS: u16 = 60;
+pub(super) const LIST_ROW_PREFIX: &str = " ";
 
 pub struct DetailsView<'a> {
     pub rows: &'a [render::DetailRow],
@@ -667,13 +668,12 @@ pub fn draw(
         .enumerate()
     {
         let is_selected = selected.is_some() && row.task_id == selected;
-        let marker = if is_selected { "> " } else { "  " };
         let style = row_style(
             row.task_id.and_then(|id| statuses.get(&id).copied()),
             is_selected,
             color,
         );
-        let mut spans = vec![Span::raw(marker)];
+        let mut spans = vec![Span::raw(LIST_ROW_PREFIX)];
         if let Some(start) = row.description_start.filter(|_| row.dirty) {
             spans.push(Span::raw(row.text[..start].to_owned()));
             let dirty_style = if color {

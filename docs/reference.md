@@ -432,7 +432,8 @@ statuses colored, labels/timestamps dim. Styles survive wrapping and scroll.
 Each task preview shows at most three wrapped lines; clipped previews end with
 `...`. Editor loads full description, including hidden lines.
 Selection fills whole row with muted blue background, including wrapped lines;
-light text stays readable. Plain mode uses `>` marker.
+light text stays readable. Task rows have one leading space. Editor header shows
+selected task ID in color and plain modes.
 Shift-Up/Down selects tasks in displayed tree order, then new-task draft.
 Switching retains unsaved drafts in memory for this TUI session. Returning restores
 text, image/paste items, caret and manual editor scroll. Dirty tasks show gold

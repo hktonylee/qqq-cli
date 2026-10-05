@@ -98,7 +98,7 @@ with tempfile.TemporaryDirectory(prefix="qqq-dashboard-test-") as folder:
         env["NO_COLOR"] = "1"
     elif scenario == "dumb":
         env["TERM"] = "dumb"
-    if scenario.startswith(("buffers_", "long_description_", "prerequisites", "dirty_marker", "completed_toggle", "jump", "menu_error_", "force_complete")) and scenario.endswith("no_color"):
+    if scenario.startswith(("buffers_", "long_description_", "prerequisites", "dirty_marker", "completed_toggle", "jump", "menu_error_", "force_complete", "list_selection")) and scenario.endswith("no_color"):
         env["NO_COLOR"] = "1"
     for name in ("EDITOR", "QQQ_SESSION", "HERDR_ENV", "HERDR_PANE_ID", "CODEX_THREAD_ID", "CODEX_SESSION_ID"):
         env.pop(name, None)
@@ -877,6 +877,36 @@ print(json.dumps({"result": result}))
             wait_visible(lambda: "Task #3 (New)" in editor_title())
             wait_end("<New text")
             assert cli("show", "3")["task"]["description"] == "<New text"
+        elif scenario.startswith("list_selection"):
+            click(5, task_row("First"))
+            wait_frame(lambda: "Task #1 (New)" in editor_title() and editor_line().startswith("First"))
+            for width in (72, 50, 150, 72):
+                if visible.width != width:
+                    clear_capture()
+                    fcntl.ioctl(slave, termios.TIOCSWINSZ, struct.pack("HHHH", 24, width, 0, 0))
+                    visible.resize(width, 24)
+                    os.kill(child.pid, signal.SIGWINCH)
+                    wait_frame(lambda: "Task #1 (New)" in editor_title()
+                               and editor_line().startswith("First"))
+                available = list_width() - (8 if width < 60 else 21)
+                description = "X" * (available - 2) + ">Z"
+                cli("edit", "2", "--description", description)
+                wait_frame(lambda: description in list_text() and "Task #1 (New)" in editor_title())
+                initial_tasks = cli("list")
+                first_row = visible.text().splitlines()[task_row("First") - 1][:list_width()]
+                second_row = visible.text().splitlines()[task_row(description) - 1][:list_width()]
+                assert first_row.startswith(" 1"), visible.text()
+                assert second_row.startswith(" 2") and second_row.endswith(">Z"), visible.text()
+                click(5, task_row(description))
+                wait_frame(lambda: "Task #2 (New)" in editor_title() and editor_line().startswith(description))
+                selected_row = visible.text().splitlines()[task_row(description) - 1][:list_width()]
+                assert selected_row == second_row, visible.text()
+                assert selected_row[1] == "2" and selected_row[-1] == "Z", visible.text()
+                assert cli("list") == initial_tasks
+                send(b"\x1b[1;2A")
+                wait_frame(lambda: "Task #1 (New)" in editor_title() and editor_line().startswith("First"))
+            if scenario.endswith("no_color"):
+                assert b"\x1b[38;" not in screen and b"\x1b[48;" not in screen
         elif scenario.startswith("dirty_marker"):
             def marker_frame_ready(cursor_x):
                 final_cursor=f"\x1b[{visible.y+1};{cursor_x+1}H".encode()
@@ -894,7 +924,7 @@ print(json.dumps({"result": result}))
                     wait_visible(lambda: marker_frame_ready(4) and "Second" in visible.text())
                 list_before=visible.text().splitlines()[:list_bottom()+1]
                 first=task_row("Second")-1
-                column=9 if width<60 else 22
+                column=8 if width<60 else 21
                 send(b"!")
                 wait_visible(lambda: marker_frame_ready(5) and "[*]" in visible.text().splitlines()[first])
                 list_after=visible.text().splitlines()[:list_bottom()+1]
@@ -2743,7 +2773,7 @@ print(json.dumps({"result": result}))
             visible.resize(12, 8)
             clear_capture()
             os.kill(child.pid, signal.SIGWINCH)
-            wait_visible(lambda: visible.text().splitlines()[0].startswith("> 1"))
+            wait_visible(lambda: visible.text().splitlines()[0].startswith(" 1"))
             wait_visible(lambda: editor_row() is not None
                          and editor_line().startswith("First")
                          and (visible.x, visible.y) == (len("First"), editor_row() + 1)
@@ -2762,12 +2792,12 @@ print(json.dumps({"result": result}))
             wait_visible(lambda: "Priority must be -100..100" in
                          " ".join(row.strip() for row in visible.text().splitlines()[3:7]))
             send(b"\x1b")
-            wait_visible(lambda: visible.text().splitlines()[0].startswith("> 1"))
+            wait_visible(lambda: visible.text().splitlines()[0].startswith(" 1"))
             send(b"\x07d0\r")
             wait_visible(lambda: "Parent must be a positive task ID or none" in
                          " ".join(row.strip() for row in visible.text().splitlines()[3:8]))
             send(b"\x1b")
-            wait_visible(lambda: visible.text().splitlines()[0].startswith("> 1"))
+            wait_visible(lambda: visible.text().splitlines()[0].startswith(" 1"))
             send(b"X\x07p-1\r")
             wait_visible(lambda: "Lose draft?" in visible.text())
             send(b"y")
@@ -3213,7 +3243,7 @@ print(json.dumps({"result": result}))
             clear_capture()
             send(b"\x1b[1;2A")
             wait_visible(lambda: 'Task #2' in editor_title())
-            assert "> 2" in visible.text(), visible.text()
+            assert list_text().splitlines()[task_row("Second") - 1].startswith(" 2"), visible.text()
             clear_capture()
             send(b"\x05 edited\x13")
             read_until(b"Saved #2")
@@ -3233,11 +3263,11 @@ print(json.dumps({"result": result}))
                 clear_capture()
                 send(b"\x1b[1;2A")
                 read_until(f"Task Editor - Task #{task_id}".encode())
-            assert "> 1" in visible.text() and "First" in visible.text(), visible.text()
+            assert list_text().splitlines()[task_row("First") - 1].startswith(" 1"), visible.text()
             clear_capture()
             send(b"\x1b[1;2B")
             wait_visible(lambda: 'Task Editor - Task #2' in editor_title())
-            assert "> 2" in visible.text(), visible.text()
+            assert list_text().splitlines()[task_row("Second") - 1].startswith(" 2"), visible.text()
         elif scenario in ("pasteboard", "pasteboard_no_color"):
             payload = "x" * 1001
             clear_capture()

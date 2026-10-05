@@ -71,6 +71,12 @@ fn tui_dashboard_task_id_jump_works_in_compact_terminal() {
 }
 
 #[test]
+fn tui_dashboard_list_selection_reclaims_one_column() {
+    dashboard_scenario("list_selection");
+    dashboard_scenario("list_selection_no_color");
+}
+
+#[test]
 fn tui_dashboard_task_id_jump_reveals_hidden_completed_tasks() {
     dashboard_scenario("jump_completed");
 }

@@ -933,7 +933,7 @@ fn compose_inner(
                         .list
                         .width,
                 )
-                .saturating_sub(2);
+                .saturating_sub(dashboard::LIST_ROW_PREFIX.len());
                 let tree = crate::output::render(
                     if size.0 < dashboard::COMPACT_COLUMNS {
                         crate::output::Format::CompactTasks

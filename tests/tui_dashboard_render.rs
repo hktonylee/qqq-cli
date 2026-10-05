@@ -23,6 +23,71 @@ fn line(buffer: &Buffer, y: u16) -> String {
 }
 
 #[test]
+fn task_list_selection_reclaims_one_column() {
+    for width in [12, 50, 72, 150] {
+        let list_width = usize::from(
+            dashboard::panes(ratatui::layout::Rect::new(0, 0, width, 24))
+                .list
+                .width,
+        );
+        let text = format!("1 {}>Z", "x".repeat(list_width - 5));
+        let rows = panel::rows(&text, list_width - 1);
+        let layout = render::Layout::new(&["Draft".into()], &[], usize::from(width));
+        let chrome = render::Chrome {
+            title: "Task Editor",
+            title_status_color: None,
+            keys: render::KEYS,
+            message: "",
+        };
+        for color in [true, false] {
+            for selected in [None, Some(1)] {
+                let mut terminal = Terminal::new(TestBackend::new(width, 24)).unwrap();
+                terminal
+                    .draw(|frame| {
+                        dashboard::draw(
+                            frame,
+                            &rows,
+                            &HashMap::new(),
+                            selected,
+                            dashboard::View {
+                                query: "",
+                                focused: false,
+                                show_completed: true,
+                                top: &mut 0,
+                                follow_selected: true,
+                                modal_lines: None,
+                                details: None,
+                            },
+                            render::DashboardEditor {
+                                layout: &layout,
+                                cursor: 0,
+                                top: &mut 0,
+                                chrome: &chrome,
+                                message_is_error: false,
+                                follow_cursor: true,
+                            },
+                            color,
+                        );
+                    })
+                    .unwrap();
+                let buffer = terminal.backend().buffer();
+                assert_eq!(&line(buffer, 0)[..list_width], format!(" {text}"));
+                assert_eq!(buffer[(1, 0)].symbol(), "1");
+                assert_eq!(buffer[(list_width as u16 - 1, 0)].symbol(), "Z");
+                assert_eq!(
+                    buffer[(1, 0)].bg,
+                    if color && selected.is_some() {
+                        Color::Rgb(15, 51, 62)
+                    } else {
+                        Color::Reset
+                    }
+                );
+            }
+        }
+    }
+}
+
+#[test]
 fn completed_filter_button_reserves_query_caret_space() {
     let layout = render::Layout::new(&["Draft".into()], &[], 72);
     let chrome = render::Chrome {
@@ -1531,7 +1596,7 @@ fn minimum_dashboard_height_still_shows_selected_task() {
             );
         })
         .unwrap();
-    assert!(line(terminal.backend().buffer(), 0).starts_with("> 1"));
+    assert!(line(terminal.backend().buffer(), 0).starts_with(" 1"));
 }
 
 #[test]
@@ -1579,7 +1644,7 @@ fn split_dashboard_keeps_list_above_editor() {
         })
         .unwrap();
     let buffer = terminal.backend().buffer();
-    assert!(line(buffer, 0).starts_with("> 1      New"));
+    assert!(line(buffer, 0).starts_with(" 1      New"));
     assert!(line(buffer, 1).contains("Second"));
     assert!(!line(buffer, 0).contains("qqq tasks"));
     assert!(line(buffer, 4).contains("Fifth"));
@@ -2101,7 +2166,7 @@ fn wide_dashboard_keeps_spacer_below_full_selected_list() {
                 .unwrap();
             assert_eq!(list_top, 8 + usize::from(focused || !query.is_empty()));
             let buffer = terminal.backend().buffer();
-            assert!(line(buffer, 11).starts_with("> 20 New Task 20"));
+            assert!(line(buffer, 11).starts_with(" 20 New Task 20"));
             for x in 0..90 {
                 let cell = &buffer[(x, 12)];
                 assert_eq!(cell.symbol(), " ");
@@ -2172,7 +2237,7 @@ fn wide_dashboard_renders_both_upper_panes_and_full_width_editor() {
         assert!(line(buffer, 0).starts_with("Filter: Selected"));
         assert_eq!(buffer[(90, 0)].symbol(), "╔");
         assert_eq!(buffer[(149, 0)].symbol(), "╗");
-        assert!(line(buffer, 1).starts_with("> 1 New Selected"));
+        assert!(line(buffer, 1).starts_with(" 1 New Selected"));
         assert!(line(buffer, 1).contains("║  Right pane"));
         assert_eq!(buffer[(90, 12)].symbol(), "╚");
         assert_eq!(buffer[(149, 12)].symbol(), "╝");
@@ -2245,7 +2310,10 @@ fn dirty_marker_is_distinct_aligned_and_keeps_task_hit_targets() {
         } else {
             "1      New          First\n                    continuation\n2      New          Literal [*]"
         };
-        let mut rows = panel::rows(tree, usize::from(width).saturating_sub(2));
+        let mut rows = panel::rows(
+            tree,
+            usize::from(width).saturating_sub(dashboard::LIST_ROW_PREFIX.len()),
+        );
         panel::set_dirty_markers(
             &mut rows,
             &[
@@ -2265,7 +2333,7 @@ fn dirty_marker_is_distinct_aligned_and_keeps_task_hit_targets() {
             &std::collections::HashSet::from([1]),
             !compact,
         );
-        let description = if compact { 9 } else { 22 };
+        let description = if compact { 8 } else { 21 };
         for color in [true, false] {
             for selected in [None, Some(1)] {
                 let mut terminal = Terminal::new(TestBackend::new(width, 24)).unwrap();
@@ -2300,12 +2368,12 @@ fn dirty_marker_is_distinct_aligned_and_keeps_task_hit_targets() {
                 let buffer = terminal.backend().buffer();
                 let first = line(buffer, 0);
                 assert_eq!(&first[description..description + 3], "[*]");
-                assert!(first[2..description].starts_with("1      "));
+                assert!(first[1..description].starts_with("1      "));
                 assert!(!line(buffer, 1).contains("[*]"));
                 let clean = if compact {
-                    "  2      Literal [*]"
+                    " 2      Literal [*]"
                 } else {
-                    "  2      New          Literal [*]"
+                    " 2      New          Literal [*]"
                 };
                 assert!(line(buffer, 2).starts_with(&clean[..usize::from(width).min(clean.len())]));
                 assert_eq!(buffer[(2, 2)].bg, Color::Reset);
