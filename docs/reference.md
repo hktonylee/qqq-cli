@@ -767,6 +767,11 @@ Preview retains stored `new` status and metadata. Combine with `--filter`,
 `--wait`, `--local`, and `--json`. Preview does not reserve task; another worker
 can claim it afterward.
 
+Preview opens DB read-only, leaves deletion staging untouched. Older schemas
+return `DATABASE_ERROR` with reason `migration_required`; run `qqq list` to
+upgrade before previewing. `--wait` keeps preview waiting for queued candidate
+without reserving it or creating upgrade snapshots.
+
 Without a queued candidate, human preview prints `No task available for pickup.`
 Use `qqq status` to inspect blocked, active, and error tasks.
 JSON preview returns `null` when no candidate is available.
@@ -921,7 +926,7 @@ before retry or forced release.
 
 ## Data
 
-Keep `.qqq/` out of Git. Create portable snapshot while other local qqq
+Keep `.qqq/` and `.qqq-upgrades/` out of Git. Create portable snapshot while other local qqq
 writers run:
 
 ```sh
@@ -940,6 +945,36 @@ overwrite destination. Restore works only from new project directory or one
 with empty `.qqq`; existing data and nested projects are rejected. Invalid
 archives leave project unchanged. Relative snapshot paths resolve from current
 directory.
+
+Before automatically upgrading an existing supported DB, qqq saves original
+schema and required attachments in sibling `.qqq-upgrades/` directory. Human
+stderr prints `Saved pre-upgrade snapshot: <path>` before migration. JSON
+result/error shapes stay unchanged; discover archives in that directory.
+Names include source/target schemas plus unique suffix; retries never overwrite
+previous records. Snapshot is verified, synced and published before migration
+changes DB/images. Snapshot failure aborts upgrade with source intact. Successful
+and failed migrations both retain verified snapshots. Current-schema opens,
+fresh initialization, diagnostics and dry runs create none.
+
+Upgrade recovery uses distinct manifest format2. Recover into new/empty project:
+
+```sh
+mkdir ../recovered-project
+cd ../recovered-project
+qqq restore --recovery ../original-project/.qqq-upgrades/schema-1-to-12-SUFFIX.tar
+# Recovery preserves original schema. Inspect data before retrying upgrade.
+sqlite3 .qqq/qqq.db 'PRAGMA user_version; PRAGMA integrity_check; PRAGMA foreign_key_check;'
+qqq list # saves new pre-upgrade snapshot, retries normal upgrade
+```
+
+Recovery validates manifest schema/project metadata, SHA256 hashes, SQLite
+integrity/foreign keys, task status/claims and attachments before installation.
+It accepts original schemas1–11, including embedded-image schemas1–5, without
+migrating during restore. Pending deletion attachments are captured without
+altering live staging, then restored at canonical image paths. Populated target
+is rejected. Ordinary `restore` still accepts portable format1/schemas9–12;
+`--recovery` is required for automatic upgrade archives. Retain archives until
+recovered data and subsequent upgrade are verified; no automatic cleanup runs.
 
 Preview permanent deletion before confirming it:
 
@@ -996,7 +1031,8 @@ Check task data before removing old DB. New CLI does not discover root-level
 
 Compatible DBs at schema versions 1–11 migrate to version 12. Version 12 adds
 tags; version 11 added extra prerequisite edges; version 10 added content
-revisions. Upgrades preserve old IDs, ownership, history and readiness. Portable
+revisions. Upgrades preserve old IDs, ownership, history and readiness, after saving
+verified original-schema recovery archive outside live store. Portable
 snapshot format 1 accepts schema-9–12 DBs: restore preserves stored schema,
 then next normal DB open migrates older versions. Version 6 moves
 existing image blobs to `.qqq/images/` before SQLite drops its `data` column.
@@ -1014,8 +1050,12 @@ cover every normal-open DB schema and accepted portable snapshot schema. Tests
 copy checked-in artifacts; regeneration uses frozen historical sources.
 Snapshot validation rejects legacy title/pending layouts and invalid status/claim
 relationships before installing DB/images. Human and JSON failures preserve
-original projects. Diagnostics and import dry-run never migrate; next dry-run
-uses normal DB-open upgrades, then previews queued candidate without claiming.
+original projects. Diagnostics and all dry runs never migrate; next dry-run
+requires current schema, previews queued candidate without claiming.
+Recovery matrix checks original-schema equality, embedded/external images, WAL
+and concurrent writer consistency, one archive per concurrent upgrade, retained
+records after SQL/image/commit failures, snapshot verification failure and
+metadata/claim/checksum rejection before installing restored projects.
 
 ```sh
 ./scripts/check-compatibility.sh

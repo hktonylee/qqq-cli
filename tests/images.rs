@@ -194,7 +194,7 @@ fn concurrent_v5_openers_migrate_files_once() {
 }
 
 #[test]
-fn failed_v6_foreign_key_check_keeps_blobs_and_removes_new_files() {
+fn invalid_v5_foreign_keys_abort_snapshot_and_keep_blob_source() {
     let dir = legacy_v5_project();
     let p = dir.path();
     let conn = Connection::open(p.join(".qqq/qqq.db")).unwrap();
@@ -204,7 +204,12 @@ fn failed_v6_foreign_key_check_keeps_blobs_and_removes_new_files() {
         [PNG],
     )
     .unwrap();
-    error(p, &["show", "1"], 1, "invalid foreign key references");
+    error(
+        p,
+        &["show", "1"],
+        1,
+        "Snapshot database has invalid foreign keys",
+    );
     assert_eq!(
         conn.pragma_query_value(None, "user_version", |r| r.get::<_, i64>(0))
             .unwrap(),

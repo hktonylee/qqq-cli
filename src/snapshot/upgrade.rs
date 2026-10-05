@@ -163,9 +163,9 @@ fn staged_image(store: &Path, task: i64, live: &Path, bytes: i64) -> Result<Vec<
             .file_name()
             .and_then(|name| name.to_str())
             .context("Invalid deletion stage name")?;
-        if !name
+        if name
             .split_once('-')
-            .is_some_and(|(id, _)| id == task.to_string())
+            .is_none_or(|(id, _)| id != task.to_string())
         {
             continue;
         }

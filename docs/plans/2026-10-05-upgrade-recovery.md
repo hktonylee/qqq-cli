@@ -51,21 +51,21 @@ manifest1/schema9 lower bound. Read-only previews bypass migration and staging.
 - [x] Replace old next preview migration regression with no-change/error contract;
   snapshot root also absent. Add early read-only next dry-run route returning
   json!(db.peek_next_filtered(filter)?); skip delete::recover/session discovery.
-- [ ] Add migration SQL collision and image conflict failures: original DB/images
+- [x] Add migration SQL collision and image conflict failures: original DB/images
   unchanged, verified archives retained, recover originals, repair then retry.
-- [ ] Add snapshot destination regular-file/symlink/missing attachment failures:
+- [x] Add snapshot destination regular-file/symlink/missing attachment failures:
   abort before migration, original hash tree unchanged; remove blocker then retry.
-- [ ] Add six concurrent openers: one archive/source, exact pre-state and upgraded
+- [x] Add six concurrent openers: one archive/source, exact pre-state and upgraded
   state; committed writer before lock acquisition reflected in both DB+attachments.
-- [ ] Add WAL snapshot with committed data, and held read-lock commit failure:
+- [x] Add WAL snapshot with committed data, and held read-lock commit failure:
   snapshot retained, upgrade rollback, release lock, retry/recover valid.
-- [ ] Add tampered recovery metadata/hash/state and populated-target rejection in
+- [x] Add tampered recovery metadata/hash/state and populated-target rejection in
   human/JSON modes; empty target unchanged, original claim ownership preserved.
-- [ ] Run focused matrix and leaf gate; commit verified failure/preview checkpoint.
+- [x] Run focused matrix and leaf gate; commit verified failure/preview checkpoint.
 
 ## Task3: Documentation, review and delivery
 
-- [ ] Document automatic path, durability/failure behavior, explicit recovery example,
+- [x] Document automatic path, durability/failure behavior, explicit recovery example,
   retained original schema, next preview read-only behavior and CI matrix expansion.
 - [ ] Run gate/full cargo test --locked --offline; cargo fmt --check; cargo clippy
   --locked --offline --all-targets -- -D warnings; release. Record counts/log paths.
@@ -79,3 +79,20 @@ Initial evidence: capture regression red (zero archives), preview regression red
 (successful migration instead of read-only error). Package clean removed stale
 shared-target binary. Fresh compatibility18 + snapshot14 passed after capture,
 validated recovery, earlier legacy/FK checks and read-only next preview.
+
+Failure/concurrency evidence: original28-test matrix +14 portable snapshot tests
+passed; gate145/7 binaries passed. Busy COMMIT test needed DB hashing before reader
+lock (closing unrelated POSIX descriptor releases SQLite locks); corrected test
+holds reader, gets DB_BUSY, retains recoverable snapshot, retries after release.
+Malformed embedded media causes snapshot verification failure with original DB and
+BLOBs unchanged. Preview --wait regression red caught early-return bug; read-only
+wait loop now passes while preserving staging and unclaimed queued task.
+Full pre-review-fix suite674/40 passed after wiring snapshot module into isolated
+tui_db harness and completing old v7 test helper's missing external attachment.
+Independent review reproduced blank active-owner acceptance and embedded recovery
+image count0. Both red; fixes reject Rust-trim-empty owners (Unicode included) and
+report actual validated DB image rows. Fresh post-fix evidence follows below.
+
+Post-review fixes:13 focused recovery tests and leaf gate146/7 binaries passed.
+Fresh fmt/diff, strict all-target Clippy and release build passed. Final full
+suite and independent follow-up review still running at this checkpoint.

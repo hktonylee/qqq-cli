@@ -20,6 +20,9 @@ mod identity;
 #[path = "../src/images.rs"]
 mod images;
 #[allow(dead_code)]
+#[path = "../src/snapshot/mod.rs"]
+mod snapshot;
+#[allow(dead_code)]
 #[path = "../src/sql_filter/mod.rs"]
 mod sql_filter;
 #[allow(dead_code)]

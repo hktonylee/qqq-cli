@@ -54,14 +54,14 @@ pub fn run(source: &Path, recovery: bool) -> Result<Value> {
     let staged_project = stage.path().join(".qqq");
     fs::create_dir(&staged_project)?;
     let (manifest, bytes) = extract(&source, &staged_project)?;
-    let tasks = validate_project(&staged_project, &manifest, recovery)?;
+    let (tasks, images) = validate_project(&staged_project, &manifest, recovery)?;
     sync_staged_tree(&staged_project, &manifest)?;
     install(&staged_project, &target, existing_empty)?;
     Ok(json!({
         "source": source,
         "destination": target,
         "tasks": tasks,
-        "images": manifest.images.len(),
+        "images": images,
         "bytes": bytes,
     }))
 }
@@ -72,7 +72,7 @@ pub(crate) fn verify_archive(source: &Path, stage: &Path) -> Result<()> {
     Ok(())
 }
 
-fn validate_project(project: &Path, manifest: &Manifest, recovery: bool) -> Result<i64> {
+fn validate_project(project: &Path, manifest: &Manifest, recovery: bool) -> Result<(i64, i64)> {
     ensure!(
         manifest.version == if recovery { 2 } else { 1 },
         "Snapshot kind does not match restore mode; use --recovery for upgrade snapshots"
@@ -111,7 +111,8 @@ fn validate_project(project: &Path, manifest: &Manifest, recovery: bool) -> Resu
     } else {
         validate_database_images(project, manifest)?;
     }
-    Ok(tasks)
+    let images = conn.query_row("SELECT count(*) FROM images", [], |row| row.get(0))?;
+    Ok((tasks, images))
 }
 
 fn absolute(path: &Path, cwd: &Path) -> PathBuf {

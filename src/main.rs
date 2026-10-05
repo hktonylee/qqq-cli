@@ -396,9 +396,20 @@ fn execute(
             true
         )?));
     }
-    if matches!(&cli.command, Commands::Next { dry_run: true, .. }) {
+    if let Commands::Next {
+        dry_run: true,
+        wait,
+        ..
+    } = &cli.command
+    {
         let (mut db, _) = db::Db::open_read_only()?;
-        return Ok(json!(db.peek_next_filtered(filter)?));
+        loop {
+            let task = db.peek_next_filtered(filter)?;
+            if task.is_some() || !wait {
+                return Ok(json!(task));
+            }
+            thread::sleep(Duration::from_millis(250));
+        }
     }
     let session_input = cli.session.as_deref().or(cli.harness_session.as_deref());
     let diagnostics = match &cli.command {

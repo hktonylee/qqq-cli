@@ -17,7 +17,8 @@ While lock excludes qqq writers and attachment staging, open separate read-only
 SQLite connection and use VACUUM INTO to create consistent original-schema DB.
 Do not copy live DB bytes or invoke Db::open/ordinary backup on source. Check
 integrity, foreign keys, supported schema, description layout, status/owner
-relationships and dependency graph where available. Copy required external image
+relationships (reject empty or Unicode-whitespace-only active owners) and
+dependency graph where available. Copy required external image
 bytes for schemas6+; schemas1..5 retain embedded BLOBs and need no external files.
 Pending deletion images may be read from validated task staging without changing
 live staging; recovery places required bytes at canonical live image paths.
@@ -66,3 +67,10 @@ original store byte preservation, read-only commands and initialized/current no-
 Recovery rejects metadata/hash/schema/claim errors before destination install.
 Required compatibility gate includes recovery tests. Run focused/gate/full locked
 suite, fmt, strict all-target Clippy, release/install tests and independent review.
+
+SQLite references checked during implementation:
+- https://www.sqlite.org/lang_vacuum.html documents VACUUM INTO as consistent
+  logical snapshot without changing source, interrupted output may be incomplete.
+  qqq verifies staged archive and explicitly syncs publication before upgrade.
+- https://www.sqlite.org/lockingv3.html documents reserved write lock excluding
+  competing writers while permitting readers; capture keeps lock until commit.

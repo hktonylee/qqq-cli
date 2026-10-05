@@ -6,6 +6,9 @@ use std::{
     fs,
     io::Read,
     path::{Path, PathBuf},
+    process::Stdio,
+    thread,
+    time::{Duration, Instant},
 };
 use tempfile::TempDir;
 
@@ -57,7 +60,7 @@ fn raw_state(conn: &Connection) -> Value {
            "schema":rows(conn,"SELECT type,name,tbl_name,sql FROM sqlite_master ORDER BY name"),"tables":state})
 }
 
-fn archives(project: &Path) -> Vec<PathBuf> {
+pub(super) fn archives(project: &Path) -> Vec<PathBuf> {
     let directory = project.join(".qqq-upgrades");
     if !directory.exists() {
         return vec![];
@@ -76,7 +79,7 @@ fn archives(project: &Path) -> Vec<PathBuf> {
     paths
 }
 
-fn archive_payload(path: &Path) -> (Value, BTreeMap<String, Vec<u8>>) {
+pub(super) fn archive_payload(path: &Path) -> (Value, BTreeMap<String, Vec<u8>>) {
     let mut payload = BTreeMap::new();
     for entry in tar::Archive::new(fs::File::open(path).unwrap())
         .entries()
@@ -151,6 +154,7 @@ fn every_upgrade_saves_original_schema_and_recovers_before_retry() {
             &["restore", "--recovery", paths[0].to_str().unwrap()],
         );
         assert_eq!(result["tasks"], 8);
+        assert_eq!(result["images"], entry.images.len());
         assert_eq!(
             raw_state(&read_only(&recovered.path().join(".qqq/qqq.db"))),
             before
@@ -189,4 +193,431 @@ fn initialization_and_current_schema_never_create_upgrade_snapshots() {
     let source = copy_database(entry);
     assert_migrated(source.path(), entry);
     assert!(!source.path().join(".qqq-upgrades").exists());
+}
+
+fn assert_original_recovery(archive: &Path, before: &Value) {
+    let target = TempDir::new().unwrap();
+    run(
+        target.path(),
+        &["restore", "--recovery", archive.to_str().unwrap()],
+    );
+    assert_eq!(
+        raw_state(&read_only(&target.path().join(".qqq/qqq.db"))),
+        *before
+    );
+}
+
+#[test]
+fn concurrent_upgrade_contenders_publish_one_matching_original_snapshot() {
+    for entry in catalog()
+        .databases
+        .iter()
+        .filter(|entry| entry.schema_version < catalog().support.current_schema)
+    {
+        let source = copy_database(entry);
+        let lock = Connection::open(source.path().join(".qqq/qqq.db")).unwrap();
+        lock.execute_batch("BEGIN IMMEDIATE").unwrap();
+        let before = raw_state(&lock);
+        let children: Vec<_> = (0..6)
+            .map(|_| {
+                command(source.path())
+                    .args(["list", "--all", "--include-archived", "--json"])
+                    .stdout(Stdio::piped())
+                    .stderr(Stdio::piped())
+                    .spawn()
+                    .unwrap()
+            })
+            .collect();
+        assert!(archives(source.path()).is_empty());
+        lock.execute_batch("ROLLBACK").unwrap();
+        for child in children {
+            let output = child.wait_with_output().unwrap();
+            assert!(
+                output.status.success(),
+                "{}",
+                String::from_utf8_lossy(&output.stderr)
+            );
+            assert!(
+                output.stderr.is_empty(),
+                "JSON result must retain clean stderr"
+            );
+            let tasks: Value = serde_json::from_slice(&output.stdout).unwrap();
+            assert_eq!(tasks.as_array().unwrap().len(), 8);
+        }
+        let paths = archives(source.path());
+        assert_eq!(paths.len(), 1, "schema {}", entry.schema_version);
+        assert_original_recovery(&paths[0], &before);
+        assert_migrated(source.path(), entry);
+    }
+}
+
+#[test]
+fn committed_writer_and_wal_data_match_original_snapshot_attachments() {
+    let catalog = catalog();
+    let entry = catalog
+        .databases
+        .iter()
+        .find(|entry| entry.schema_version == 9)
+        .unwrap();
+    for wal in [false, true] {
+        let source = copy_database(entry);
+        let project = source.path().join(".qqq");
+        let conn = Connection::open(project.join("qqq.db")).unwrap();
+        if wal {
+            conn.pragma_update(None, "journal_mode", "WAL").unwrap();
+        }
+        conn.execute_batch("BEGIN IMMEDIATE").unwrap();
+        let child = command(source.path())
+            .args(["list", "--all", "--human"])
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .spawn()
+            .unwrap();
+        conn.execute(
+            "UPDATE tasks SET description=description || ' writer commit' WHERE id=3",
+            [],
+        )
+        .unwrap();
+        let image = project.join("images/3/7.png");
+        let mut data = fs::read(&image).unwrap();
+        data.extend_from_slice(b"synthetic writer attachment");
+        fs::write(image, &data).unwrap();
+        conn.execute("UPDATE images SET bytes=? WHERE id=7", [data.len() as i64])
+            .unwrap();
+        let before = raw_state(&conn);
+        assert!(archives(source.path()).is_empty());
+        conn.execute_batch("COMMIT").unwrap();
+        let output = child.wait_with_output().unwrap();
+        assert!(
+            output.status.success(),
+            "{}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+        let paths = archives(source.path());
+        assert_eq!(paths.len(), 1);
+        assert!(String::from_utf8_lossy(&output.stderr).contains(paths[0].to_str().unwrap()));
+        let (_, payload) = archive_payload(&paths[0]);
+        assert_eq!(payload["images/3/7.png"], data);
+        assert_original_recovery(&paths[0], &before);
+        assert_eq!(fs::read(project.join("images/3/7.png")).unwrap(), data);
+    }
+}
+
+#[test]
+fn failed_sql_and_image_migrations_retain_original_recovery_records() {
+    let catalog = catalog();
+    for entry in catalog
+        .databases
+        .iter()
+        .filter(|entry| entry.schema_version < catalog.support.current_schema)
+    {
+        let source = copy_database(entry);
+        let project = source.path().join(".qqq");
+        let conn = Connection::open(project.join("qqq.db")).unwrap();
+        let (inject, remove, diagnostic) = if entry.schema_version < 11 {
+            (
+                "CREATE TABLE task_dependencies(sentinel TEXT)",
+                "DROP TABLE task_dependencies",
+                "already exists",
+            )
+        } else {
+            (
+                "ALTER TABLE tasks ADD COLUMN tags TEXT NOT NULL DEFAULT '[]'",
+                "ALTER TABLE tasks DROP COLUMN tags",
+                "duplicate column",
+            )
+        };
+        conn.execute_batch(inject).unwrap();
+        let state = raw_state(&conn);
+        drop(conn);
+        let original = hashes_at(&project);
+        for json in [false, true] {
+            failure(source.path(), &["list"], json, diagnostic, "DATABASE_ERROR");
+            assert_eq!(hashes_at(&project), original);
+        }
+        let paths = archives(source.path());
+        assert_eq!(paths.len(), 2, "both retries retain distinct records");
+        let saved: Vec<_> = paths.iter().map(|path| fs::read(path).unwrap()).collect();
+        for path in &paths {
+            assert_original_recovery(path, &state);
+        }
+        Connection::open(project.join("qqq.db"))
+            .unwrap()
+            .execute_batch(remove)
+            .unwrap();
+        assert_migrated(source.path(), entry);
+        assert_eq!(archives(source.path()).len(), 3);
+        for (path, bytes) in paths.iter().zip(saved) {
+            assert_eq!(fs::read(path).unwrap(), bytes);
+        }
+    }
+    let entry = &catalog.databases[0];
+    let source = copy_database(entry);
+    let project = source.path().join(".qqq");
+    let conflict = project.join("images/13/19.gif");
+    fs::create_dir_all(conflict.parent().unwrap()).unwrap();
+    fs::write(&conflict, b"synthetic conflict").unwrap();
+    let state = raw_state(&read_only(&project.join("qqq.db")));
+    let original = hashes_at(&project);
+    failure(
+        source.path(),
+        &["list"],
+        true,
+        "Stored image path conflicts",
+        "COMMAND_ERROR",
+    );
+    assert_eq!(hashes_at(&project), original);
+    let paths = archives(source.path());
+    assert_eq!(paths.len(), 1);
+    assert_original_recovery(&paths[0], &state);
+    fs::remove_file(conflict).unwrap();
+    assert_migrated(source.path(), entry);
+}
+
+#[test]
+fn snapshot_directory_and_attachment_failures_abort_before_source_changes() {
+    let catalog = catalog();
+    let entry = catalog
+        .databases
+        .iter()
+        .find(|entry| entry.schema_version == 9)
+        .unwrap();
+    for case in [
+        "directory-file",
+        "missing-image",
+        "wrong-size",
+        "directory-symlink",
+    ] {
+        let source = copy_database(entry);
+        let project = source.path().join(".qqq");
+        let directory = source.path().join(".qqq-upgrades");
+        let outside = TempDir::new().unwrap();
+        let image = project.join("images/3/7.png");
+        let diagnostic = match case {
+            "directory-file" => {
+                fs::write(&directory, b"keep").unwrap();
+                "real directory"
+            }
+            "missing-image" => {
+                fs::remove_file(image).unwrap();
+                "Cannot read stored image"
+            }
+            "wrong-size" => {
+                fs::write(image, b"short").unwrap();
+                "byte count differs"
+            }
+            "directory-symlink" => {
+                #[cfg(unix)]
+                std::os::unix::fs::symlink(outside.path(), &directory).unwrap();
+                "real directory"
+            }
+            _ => unreachable!(),
+        };
+        let original = hashes_at(&project);
+        for json in [false, true] {
+            failure(source.path(), &["list"], json, diagnostic, "COMMAND_ERROR");
+            assert_eq!(hashes_at(&project), original);
+            assert!(fs::read_dir(outside.path()).unwrap().next().is_none());
+        }
+        if directory.is_file()
+            || fs::symlink_metadata(&directory)
+                .unwrap()
+                .file_type()
+                .is_symlink()
+        {
+            fs::remove_file(&directory).unwrap();
+        } else {
+            assert!(archives(source.path()).is_empty());
+        }
+        fs::copy(
+            root().join(
+                &entry
+                    .files
+                    .iter()
+                    .find(|image| image.path == "images/3/7.png")
+                    .unwrap()
+                    .source,
+            ),
+            project.join("images/3/7.png"),
+        )
+        .unwrap();
+        assert_migrated(source.path(), entry);
+    }
+}
+
+#[test]
+fn busy_migration_commit_rolls_back_but_retains_verified_snapshot() {
+    let catalog = catalog();
+    let entry = catalog
+        .databases
+        .iter()
+        .find(|entry| entry.schema_version == 9)
+        .unwrap();
+    let source = copy_database(entry);
+    let project = source.path().join(".qqq");
+    // Closing any other descriptor for this DB can release this process's
+    // POSIX SQLite locks. Hash before acquiring the held reader transaction.
+    let original = hashes_at(&project);
+    let reader = read_only(&project.join("qqq.db"));
+    reader.execute_batch("BEGIN").unwrap();
+    reader
+        .query_row("SELECT count(*) FROM tasks", [], |row| row.get::<_, i64>(0))
+        .unwrap();
+    let state = raw_state(&reader);
+    failure(
+        source.path(),
+        &["list"],
+        true,
+        "Database is busy",
+        "DB_BUSY",
+    );
+    assert_eq!(hashes_at(&project), original);
+    let paths = archives(source.path());
+    assert_eq!(paths.len(), 1);
+    assert_original_recovery(&paths[0], &state);
+    reader.execute_batch("ROLLBACK").unwrap();
+    drop(reader);
+    assert_migrated(source.path(), entry);
+    assert_eq!(archives(source.path()).len(), 2);
+}
+
+#[test]
+fn pending_deletion_attachments_are_captured_without_pre_upgrade_recovery() {
+    let catalog = catalog();
+    let entry = catalog
+        .databases
+        .iter()
+        .find(|entry| entry.schema_version == 9)
+        .unwrap();
+    let source = copy_database(entry);
+    let project = source.path().join(".qqq");
+    let wrapper = project.join(".delete-staging/3-test");
+    fs::create_dir_all(&wrapper).unwrap();
+    fs::write(wrapper.join("task-id"), b"3").unwrap();
+    fs::rename(project.join("images/3"), wrapper.join("images")).unwrap();
+    let conn = Connection::open(project.join("qqq.db")).unwrap();
+    conn.execute_batch("CREATE TABLE task_dependencies(sentinel TEXT)")
+        .unwrap();
+    let state = raw_state(&conn);
+    drop(conn);
+    let original = hashes_at(&project);
+    failure(
+        source.path(),
+        &["list"],
+        true,
+        "already exists",
+        "DATABASE_ERROR",
+    );
+    assert_eq!(
+        hashes_at(&project),
+        original,
+        "capture must leave live staging unchanged"
+    );
+    let paths = archives(source.path());
+    assert_eq!(paths.len(), 1);
+    let recovered = TempDir::new().unwrap();
+    run(
+        recovered.path(),
+        &["restore", "--recovery", paths[0].to_str().unwrap()],
+    );
+    assert_eq!(
+        raw_state(&read_only(&recovered.path().join(".qqq/qqq.db"))),
+        state
+    );
+    for image in &entry.files {
+        assert_file(
+            &recovered.path().join(".qqq").join(&image.path),
+            image.bytes,
+            &image.sha256,
+        );
+    }
+    assert!(!recovered.path().join(".qqq/.delete-staging").exists());
+    Connection::open(project.join("qqq.db"))
+        .unwrap()
+        .execute_batch("DROP TABLE task_dependencies")
+        .unwrap();
+    assert_migrated(source.path(), entry);
+    assert!(!project.join(".delete-staging").exists());
+}
+
+#[test]
+fn snapshot_verification_failure_leaves_original_embedded_images_intact() {
+    let catalog = catalog();
+    let entry = &catalog.databases[0];
+    let source = copy_database(entry);
+    let project = source.path().join(".qqq");
+    Connection::open(project.join("qqq.db"))
+        .unwrap()
+        .execute(
+            "UPDATE images SET media_type='invalid/synthetic' WHERE id=19",
+            [],
+        )
+        .unwrap();
+    let original = hashes_at(&project);
+    for json in [false, true] {
+        failure(
+            source.path(),
+            &["list"],
+            json,
+            "Upgrade snapshot verification failed",
+            "COMMAND_ERROR",
+        );
+        assert_eq!(hashes_at(&project), original);
+        assert!(archives(source.path()).is_empty());
+        assert!(!project.join("images").exists());
+    }
+    Connection::open(project.join("qqq.db"))
+        .unwrap()
+        .execute("UPDATE images SET media_type='image/gif' WHERE id=19", [])
+        .unwrap();
+    assert_migrated(source.path(), entry);
+}
+
+#[test]
+fn read_only_preview_waits_for_candidate_without_claiming_or_recovery() {
+    let project = TempDir::new().unwrap();
+    run(project.path(), &["init"]);
+    let staging = project.path().join(".qqq/.delete-staging");
+    fs::create_dir(&staging).unwrap();
+    fs::write(staging.join("marker"), b"keep pending stage").unwrap();
+    let mut child = command(project.path())
+        .args(["next", "--dry-run", "--wait", "--json"])
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .unwrap();
+    thread::sleep(Duration::from_millis(300));
+    assert!(
+        child.try_wait().unwrap().is_none(),
+        "preview must wait until candidate exists"
+    );
+    let conn = Connection::open(project.path().join(".qqq/qqq.db")).unwrap();
+    conn.execute(
+        "INSERT INTO tasks(description) VALUES('Synthetic waiting preview')",
+        [],
+    )
+    .unwrap();
+    drop(conn);
+    let before = hashes_at(project.path());
+    let deadline = Instant::now() + Duration::from_secs(5);
+    while child.try_wait().unwrap().is_none() {
+        if Instant::now() > deadline {
+            child.kill().unwrap();
+            child.wait().unwrap();
+            panic!("preview did not return committed candidate");
+        }
+        thread::sleep(Duration::from_millis(20));
+    }
+    let output = child.wait_with_output().unwrap();
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let preview: Value = serde_json::from_slice(&output.stdout).unwrap();
+    assert_eq!(preview["id"], 1);
+    assert_eq!(preview["status"], "new");
+    assert!(preview["harness_session"].is_null());
+    assert_eq!(hashes_at(project.path()), before);
+    assert!(archives(project.path()).is_empty());
 }

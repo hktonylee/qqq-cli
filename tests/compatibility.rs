@@ -5,6 +5,8 @@ mod compatibility;
 mod failures;
 #[path = "compatibility/recovery.rs"]
 mod recovery;
+#[path = "compatibility/recovery_rejection.rs"]
+mod recovery_rejection;
 #[path = "compatibility/snapshots.rs"]
 mod snapshots;
 #[path = "compatibility/upgrade.rs"]

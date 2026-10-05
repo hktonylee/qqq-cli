@@ -93,6 +93,8 @@ fn v7_project() -> TempDir {
          DELETE FROM events WHERE id=20;",
     )
     .unwrap();
+    std::fs::create_dir_all(dir.path().join(".qqq/images/5")).unwrap();
+    std::fs::write(dir.path().join(".qqq/images/5/7.png"), b"png").unwrap();
     dir
 }
 

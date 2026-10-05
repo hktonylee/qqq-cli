@@ -191,7 +191,7 @@ pub(crate) fn validate_database_for(path: &Path, recovery: bool) -> Result<i64> 
     } else {
         "'new','in_progress','completed','error'"
     };
-    let invalid_task = conn
+    let mut invalid_task = conn
         .query_row(
             &format!(
                 "SELECT id,status FROM tasks WHERE status IS NULL OR status NOT IN ({statuses})
@@ -207,6 +207,21 @@ pub(crate) fn validate_database_for(path: &Path, recovery: bool) -> Result<i64> 
             },
         )
         .optional()?;
+    if invalid_task.is_none() {
+        let mut claims = conn.prepare(&format!(
+            "SELECT id,{owner} FROM tasks WHERE status='in_progress' ORDER BY id"
+        ))?;
+        for row in claims.query_map([], |row| {
+            Ok((row.get::<_, i64>(0)?, row.get::<_, String>(1)?))
+        })? {
+            let (id, claim) = row?;
+            // Match public session validation, including Unicode whitespace.
+            if claim.trim().is_empty() {
+                invalid_task = Some((id, "in_progress".to_owned()));
+                break;
+            }
+        }
+    }
     if let Some((id, status)) = invalid_task {
         let (message, reason) = if status == "pending" {
             (

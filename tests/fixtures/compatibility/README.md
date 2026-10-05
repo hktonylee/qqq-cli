@@ -82,4 +82,12 @@ immutability, including absence of new SQLite sidecars.
 CI and publication require same compatibility script. Extended matrix checks
 reopen/concurrent migration idempotence, SQL/image rollback and retry, future/
 legacy/invalid DB and snapshot rejection, diagnostics/import read-only behavior,
-next preview semantics and destination preservation for failed restores.
+read-only next preview semantics and destination preservation for failed restores.
+
+Automatic upgrade recovery matrix uses unchanged historical DB fixtures to compare
+original schema, table rows, sequences, claims and attachments before/after explicit
+`restore --recovery`. It tests all old schemas, unique retained archives, concurrent
+openers/writers, WAL snapshots, SQL/image/commit rollback and repaired retry,
+snapshot write/verification failures and tampered metadata/hash/claim rejection.
+Recovery format2 is distinct from frozen portable format1; portable lower bound
+remains schema9. Initialization/current-schema/read-only commands save no archives.
