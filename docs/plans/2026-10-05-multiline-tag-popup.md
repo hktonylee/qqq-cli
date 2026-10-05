@@ -76,10 +76,11 @@ KeyCode::Enter if matches!(kind, ActionInputKind::Tags)
   release build with `CARGO_TARGET_DIR=/app/qqq/target`, `--locked --offline`.
   Capture results in `/tmp/qqq-task-169-{full,clippy,release}.log`.
 - [x] Independent read-only review; resolve concrete findings.
-- [ ] Commit `[Feat] Edit Popup Tags On Separate Lines`, refresh master,
+- [x] Commit `[Feat] Edit Popup Tags On Separate Lines`, refresh master,
   rebase, fast-forward merge and install qqq. Run five installed Tags PTY
   scenarios, verify installed/release SHA-256 equality. Record verification
-  evidence in plan and queue. Complete #169, clean worktree, resume queue wait.
+  evidence in plan. Worker then records queue evidence, completes #169, cleans
+  owned worktree/branch and resumes queue wait.
 
 ## Evidence
 
@@ -91,3 +92,9 @@ Shift+Enter without save, backspace, overflow, legacy comma compatibility,
 color/NO_COLOR, dirty drafts/caret/buffers and filter focus.
 Full suite: 646 tests across 39 binaries, zero failures. fmt, Clippy -D warnings
 and release build passed. Independent review found no concrete issues.
+
+Integrated source: `3c45f51`. Installed qqq 0.5.0 passed five Tags PTY
+scenarios with multiline edit/paste, overflow, colors, dirty drafts and filter.
+Installed/release SHA-256 match:
+`87b48e73e8cb421bbf43151d1977de2d862ba5f6fcfa4023193f2061c4723731`.
+No remote push or CI run.
