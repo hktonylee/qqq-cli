@@ -16,6 +16,148 @@ use ratatui::{
 };
 use std::collections::HashMap;
 
+#[test]
+fn task_tags_keep_color_across_status_selection_dirty_and_compact_rows() {
+    let labels = ["界 面".into(), "bug".into()];
+    let layout = render::Layout::new(&["Draft".into()], &[], 72);
+    let chrome = render::Chrome {
+        title: "Editor",
+        title_status_color: None,
+        keys: render::KEYS,
+        message: "",
+    };
+    for width in [50, 72, 150] {
+        let compact = width < dashboard::COMPACT_COLUMNS;
+        let tree = if compact {
+            "1234567 [literal] Root\n2      └── [界 面] [bug] [literal] Child"
+        } else {
+            "1234567 New          [literal] Root\n2      New          └── [界 面] [bug] [literal] Child"
+        };
+        for status in ["new", "in_progress", "completed", "error"] {
+            for dirty in [false, true] {
+                let mut rows = panel::rows(tree, 72);
+                panel::set_dirty_markers(
+                    &mut rows,
+                    &[
+                        panel::FilterTask {
+                            id: 1_234_567,
+                            parent_id: None,
+                            status: "new",
+                            description: "[literal] Root",
+                        },
+                        panel::FilterTask {
+                            id: 2,
+                            parent_id: Some(1_234_567),
+                            status,
+                            description: "[literal] Child",
+                        },
+                    ],
+                    &if dirty {
+                        std::collections::HashSet::from([2])
+                    } else {
+                        std::collections::HashSet::new()
+                    },
+                    !compact,
+                );
+                panel::set_tag_ranges(
+                    &mut rows,
+                    &[panel::TagTask {
+                        id: 2,
+                        tags: &labels,
+                        archived: false,
+                    }],
+                );
+                let tag_x = 1 + if compact { 11 } else { 24 } + usize::from(dirty) * 4;
+                for color in [true, false] {
+                    for selected in [None, Some(2)] {
+                        let mut terminal = Terminal::new(TestBackend::new(width, 24)).unwrap();
+                        terminal
+                            .draw(|frame| {
+                                dashboard::draw(
+                                    frame,
+                                    &rows,
+                                    &HashMap::from([(1_234_567, "new"), (2, status)]),
+                                    selected,
+                                    dashboard::View {
+                                        query: "",
+                                        focused: false,
+                                        show_completed: true,
+                                        top: &mut 0,
+                                        follow_selected: true,
+                                        modal_lines: None,
+                                        details: None,
+                                    },
+                                    render::DashboardEditor {
+                                        layout: &layout,
+                                        cursor: 0,
+                                        top: &mut 0,
+                                        chrome: &chrome,
+                                        message_is_error: false,
+                                        follow_cursor: true,
+                                    },
+                                    color,
+                                )
+                            })
+                            .unwrap();
+                        let buffer = terminal.backend().buffer();
+                        let tag = &buffer[(tag_x as u16, 1)];
+                        assert_eq!(tag.symbol(), "[");
+                        assert_eq!(
+                            tag.fg,
+                            if color {
+                                Color::Indexed(222)
+                            } else {
+                                Color::Reset
+                            },
+                            "width={width} status={status} dirty={dirty} selected={selected:?}"
+                        );
+                        assert_eq!(
+                            tag.bg,
+                            if color && selected.is_some() {
+                                Color::Rgb(15, 51, 62)
+                            } else {
+                                Color::Reset
+                            }
+                        );
+                        assert_eq!(buffer[((tag_x + 12) as u16, 1)].fg, tag.fg);
+                        // Tag display width is 13 cells; next bracket belongs to description.
+                        let description = &buffer[((tag_x + 14) as u16, 1)];
+                        assert_eq!(description.symbol(), "[");
+                        let normal = if !color {
+                            Color::Reset
+                        } else if selected.is_some() {
+                            Color::Indexed(252)
+                        } else {
+                            match status {
+                                "in_progress" => Color::Indexed(81),
+                                "completed" => Color::DarkGray,
+                                "error" => Color::Red,
+                                _ => Color::Reset,
+                            }
+                        };
+                        assert_eq!(description.fg, normal);
+                        assert_ne!(
+                            buffer[(if compact { 9 } else { 22 }, 0)].fg,
+                            Color::Indexed(222)
+                        );
+                        if dirty {
+                            assert_eq!(buffer[((tag_x - 4) as u16, 1)].symbol(), "[");
+                            assert_eq!(
+                                buffer[((tag_x - 4) as u16, 1)].fg,
+                                if color {
+                                    Color::Indexed(222)
+                                } else {
+                                    Color::Reset
+                                }
+                            );
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
 fn line(buffer: &Buffer, y: u16) -> String {
     (0..buffer.area.width)
         .map(|x| buffer[(x, y)].symbol())

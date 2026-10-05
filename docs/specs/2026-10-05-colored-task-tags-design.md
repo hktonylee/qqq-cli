@@ -8,7 +8,8 @@ background. NO_COLOR and TERM=dumb retain plain text.
 
 Track tags from actual task metadata, including archived prefix. Never infer
 tags from arbitrary brackets in descriptions. Add one optional byte range to
-each list row. Populate ranges after existing description/dirty metadata;
+each list row, plus truncation boundary for preview ellipsis. Populate ranges
+after existing description/dirty metadata;
 follow tag prefix through wrapped preview rows using exact Unicode character
 matches. Stop at description or preview ellipsis. This preserves existing
 wrapping, row count, selection/hit targets and dirty marker positions.

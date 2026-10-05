@@ -5,6 +5,108 @@ mod panel;
 use panel::FilterTask;
 use std::collections::HashSet;
 
+#[test]
+fn tag_ranges_follow_real_unicode_labels_and_skip_bracket_descriptions() {
+    let tasks: Vec<_> = (1..=4)
+        .map(|id| FilterTask {
+            id,
+            parent_id: None,
+            status: "new",
+            description: "",
+        })
+        .collect();
+    let mut rows = panel::rows(
+        concat!(
+            "1      New          [界 面] \n",
+            "                    [bug] [fake]\n",
+            "                    Description\n",
+            "2      New          [fake]\n",
+            "3      New          [archived] [bug] [fake]\n",
+            "4      New          [archived] Literal",
+        ),
+        72,
+    );
+    panel::set_dirty_markers(&mut rows, &tasks, &HashSet::new(), true);
+    let labels = ["界 面".into(), "bug".into()];
+    let bug = ["bug".into()];
+    let archived_label = ["archived".into()];
+    panel::set_tag_ranges(
+        &mut rows,
+        &[
+            panel::TagTask {
+                id: 1,
+                tags: &labels,
+                archived: false,
+            },
+            panel::TagTask {
+                id: 2,
+                tags: &[],
+                archived: false,
+            },
+            panel::TagTask {
+                id: 3,
+                tags: &bug,
+                archived: true,
+            },
+            panel::TagTask {
+                id: 4,
+                tags: &archived_label,
+                archived: false,
+            },
+        ],
+    );
+    let actual: Vec<_> = rows
+        .iter()
+        .map(|row| row.tag_range.map(|(start, end)| &row.text[start..end]))
+        .collect();
+    assert_eq!(
+        actual,
+        [
+            Some("[界 面] "),
+            Some("[bug]"),
+            None,
+            None,
+            Some("[bug]"),
+            Some("[archived]")
+        ]
+    );
+    panel::set_tag_ranges(&mut rows, &[]);
+    assert!(rows.iter().all(|row| row.tag_range.is_none()));
+}
+
+#[test]
+fn tag_ranges_stop_before_preview_ellipsis() {
+    for suffix in ["012", "..."] {
+        let tree = format!(
+            "1      New          [abcdefghi\n                    jklmnopqrs\n                    tuvwxyz{suffix}\n                    345] Desc"
+        );
+        let mut rows = panel::rows(&tree, 30);
+        panel::set_dirty_markers(
+            &mut rows,
+            &[FilterTask {
+                id: 1,
+                parent_id: None,
+                status: "new",
+                description: "Desc",
+            }],
+            &HashSet::new(),
+            true,
+        );
+        panel::set_tag_ranges(
+            &mut rows,
+            &[panel::TagTask {
+                id: 1,
+                tags: &[format!("abcdefghijklmnopqrstuvwxyz{suffix}345")],
+                archived: false,
+            }],
+        );
+        assert_eq!(rows.len(), 3);
+        let (start, end) = rows[2].tag_range.unwrap();
+        assert_eq!(&rows[2].text[start..end], "tuvwxyz");
+        assert_eq!(&rows[2].text[end..], "...");
+    }
+}
+
 fn tasks() -> Vec<FilterTask<'static>> {
     vec![
         FilterTask {

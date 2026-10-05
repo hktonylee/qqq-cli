@@ -494,7 +494,8 @@ and press Ctrl+P to continue it. Ctrl-S creates child with dependency;
 Enter or Shift+Enter inserts newline. Navigating away retains child parent context.
 
 Ctrl+L opens tags for the selected saved task from editor or filter. Current
-labels are prefilled, comma-separated. Enter applies, blank clears, Ctrl-U
+labels are prefilled, comma-separated. List tags use yellow when color is enabled.
+Enter applies, blank clears, Ctrl-U
 clears input, Esc/Ctrl-C cancels. Ctrl-U, Enter and Esc share the popup footer;
 narrow popups show just the keys. Invalid labels stay in the popup. Tag saves
 retain unsaved description drafts, caret, scroll, parked buffers and filter

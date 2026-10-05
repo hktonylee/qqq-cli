@@ -1,6 +1,6 @@
 # Colored Task Tags Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task inline. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task inline. Steps use checkbox (`- [x]`) syntax for tracking.
 
 **Goal:** Color real tags in dashboard list while preserving layout and plain output.
 
@@ -15,7 +15,7 @@ Render range with indexed color 222, inheriting row background.
 **Files:** `src/tui/panel.rs`, `src/tui/dashboard.rs`,
 `tests/tui_dashboard_render.rs`, `tests/tui_filter.rs`.
 
-- [ ] Add regression for wrapped real labels, literal bracket description,
+- [x] Add regression for wrapped real labels, literal bracket description,
   archived prefix, Unicode, dirty marker, selection and NO_COLOR. Test fixtures
   use existing `panel::rows` and `set_dirty_markers`, followed by this metadata:
 
@@ -32,13 +32,14 @@ panel::set_tag_ranges(&mut rows, &[panel::TagTask {
   plain mode cells have no added tag attributes. Assert exact byte ranges only
   cover real tags across continuation rows, never description or ellipsis.
 
-- [ ] Run `CARGO_TARGET_DIR=/app/qqq/target cargo test --locked --offline
+- [x] Run `CARGO_TARGET_DIR=/app/qqq/target cargo test --locked --offline
   --test tui_dashboard_render task_tags --test tui_filter tag_ranges`.
   Missing metadata API initially fails compilation; add minimal API then
   confirm behavioral failure before implementing matcher or color.
 
-- [ ] Add optional `tag_range: Option<(usize, usize)>` to `ListRow`, initialized
-  to None in `rows`. Introduce metadata input:
+- [x] Add optional `tag_range: Option<(usize, usize)>` to `ListRow`, initialized
+  to None in `rows`. Store `preview_end: Option<usize>` before appending preview
+  ellipsis; matching excludes ellipsis bytes. Introduce metadata input:
 
 ```rust
 pub struct TagTask<'a> {
@@ -56,12 +57,12 @@ pub struct TagTask<'a> {
   Mismatch or end stops matching for that task. Reset at task boundary.
   Empty labels produce no range. Regenerate every frame so tag edits refresh.
 
-- [ ] In dashboard row rendering, retain dirty marker prefix, split remaining
+- [x] In dashboard row rendering, retain dirty marker prefix, split remaining
   original text by optional tag range. Tagged span uses
   `Style::default().fg(Color::Indexed(222))` only when color enabled. Span adds
   no background or selection modifier. Normal suffix retains inherited style.
 
-- [ ] Rerun render/filter tests. Exact command:
+- [x] Rerun render/filter tests. Exact command:
   `CARGO_TARGET_DIR=/app/qqq/target cargo test --locked --offline
   --test tui_dashboard_render --test tui_filter`. Expect zero failures.
 
@@ -69,7 +70,7 @@ pub struct TagTask<'a> {
 
 **Files:** `src/tui/mod.rs`, `tests/tui_dashboard_pty.py`, `docs/reference.md`.
 
-- [ ] After `set_dirty_markers`, feed displayed task metadata:
+- [x] After `set_dirty_markers`, feed displayed task metadata:
 
 ```rust
 let tag_tasks: Vec<_> = displayed.iter().map(|task| panel::TagTask {
@@ -80,19 +81,19 @@ let tag_tasks: Vec<_> = displayed.iter().map(|task| panel::TagTask {
 panel::set_tag_ranges(&mut rows, &tag_tasks);
 ```
 
-- [ ] Strengthen existing Tags PTY color case with rendered tag-color evidence
+- [x] Strengthen existing Tags PTY color case with rendered tag-color evidence
   after live save; NO_COLOR case must emit no foreground/background SGR.
   Keep validation, resize, dirty draft and filter assertions intact. Add
   reference sentence stating list tags use yellow when color enabled.
-- [ ] Run `CARGO_TARGET_DIR=/app/qqq/target cargo test --locked --offline
+- [x] Run `CARGO_TARGET_DIR=/app/qqq/target cargo test --locked --offline
   --test tui tui_dashboard_tags`. Expect four existing tests passing.
 
 ## Task 3: Verification and integration
 
-- [ ] Run `cargo fmt --all -- --check`, `git diff --check`, full
+- [x] Run `cargo fmt --all -- --check`, `git diff --check`, full
   `CARGO_TARGET_DIR=/app/qqq/target cargo test --locked --offline`, Clippy
   `--all-targets -- -D warnings`, release build. Record test counts.
-- [ ] Request independent read-only review; resolve concrete findings.
+- [x] Request independent read-only review; resolve concrete findings.
 - [ ] Commit `[Feat] Color Tags In Dashboard Task List`; refresh master,
   rebase, fast-forward merge. Install with `cargo install --path . --force
   --locked --offline`. Run five installed Tags PTY scenarios and check installed
@@ -101,5 +102,9 @@ panel::set_tag_ranges(&mut rows, &tag_tasks);
 
 ## Evidence
 
-Baseline, final checks and installed validation will be recorded here as each
-verification finishes.
+Baseline: 42 render/filter tests passed. New API absence first failed compilation;
+minimal API then exposed expected color failure: Reset vs Indexed(222). Initial
+focused render/filter checks passed 45 tests. Tags PTY checks passed four tests,
+including color/NO_COLOR and live save redraw. Final full suite: 638 tests across
+39 binaries, zero failures. fmt, Clippy -D warnings and release build passed.
+Independent review found no concrete issues; reviewer reran 45 focused tests.

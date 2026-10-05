@@ -6,6 +6,7 @@ import fcntl
 import json
 import os
 import pty
+import re
 import select
 import signal
 import sqlite3
@@ -1045,6 +1046,18 @@ print(json.dumps({"result": result}))
                              and "[frontend]" in visible.text()
                              and "Tags saved #2" in visible.text()
                              and (visible.x, visible.y) == tag_cursor and frame_ready())
+                if scenario in ("tags", "tags_no_color"):
+                    for width in (73, 72):
+                        clear_capture()
+                        fcntl.ioctl(slave, termios.TIOCSWINSZ, struct.pack("HHHH", 24, width, 0, 0))
+                        visible.resize(width, 24)
+                        os.kill(child.pid, signal.SIGWINCH)
+                        wait_visible(lambda: "[frontend]" in visible.text()
+                                     and "Tags saved #2" in visible.text() and frame_ready())
+                        if scenario == "tags_no_color":
+                            assert b"\x1b[38;" not in screen and b"\x1b[48;" not in screen, screen
+                        else:
+                            assert re.search(rb"\x1b\[38;5;222(?:;[0-9]+)*m(?:\x1b\[[0-9;]*m)*\[frontend\]", screen), screen
                 changed = cli("show", "2")
                 assert changed["task"]["tags"] == ["frontend", "界 面"], changed
                 for key in ("description", "content_revision", "status", "priority", "parent_id", "harness_session"):

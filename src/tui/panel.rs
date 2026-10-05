@@ -58,6 +58,76 @@ pub struct ListRow {
     pub task_id: Option<i64>,
     pub dirty: bool,
     pub description_start: Option<usize>,
+    pub tag_range: Option<(usize, usize)>,
+    pub preview_end: Option<usize>,
+}
+
+pub struct TagTask<'a> {
+    pub id: i64,
+    pub tags: &'a [String],
+    pub archived: bool,
+}
+
+/// Set tag byte ranges after description offsets; match only actual label prefixes.
+pub fn set_tag_ranges(rows: &mut [ListRow], tasks: &[TagTask<'_>]) {
+    let prefixes: HashMap<_, _> = tasks
+        .iter()
+        .filter(|task| !task.tags.is_empty())
+        .map(|task| {
+            let mut prefix = if task.archived { "[archived] " } else { "" }.to_owned();
+            let tag_start = prefix.len();
+            for (index, tag) in task.tags.iter().enumerate() {
+                if index > 0 {
+                    prefix.push(' ');
+                }
+                prefix.push('[');
+                prefix.push_str(tag);
+                prefix.push(']');
+            }
+            (task.id, (prefix, tag_start))
+        })
+        .collect();
+    let mut previous = None;
+    let mut column = 0;
+    let mut consumed = 0;
+    for row in rows {
+        row.tag_range = None;
+        if row.task_id != previous {
+            column = row
+                .description_start
+                .map_or(row.text.chars().count(), |start| {
+                    row.text[..start].chars().count()
+                });
+            consumed = 0;
+            previous = row.task_id;
+        }
+        let Some((prefix, tag_start)) = row.task_id.and_then(|id| prefixes.get(&id)) else {
+            continue;
+        };
+        let start = row
+            .text
+            .char_indices()
+            .nth(column)
+            .map_or(row.text.len(), |(index, _)| index);
+        let end = row.preview_end.unwrap_or(row.text.len());
+        let payload = row.text.get(start..end).unwrap_or("");
+        let matched: usize = payload
+            .chars()
+            .zip(prefix[consumed..].chars())
+            .take_while(|(actual, expected)| actual == expected)
+            .map(|(actual, _)| actual.len_utf8())
+            .sum();
+        let highlight_start = consumed.max(*tag_start);
+        let highlight_end = consumed + matched;
+        if highlight_start < highlight_end {
+            row.tag_range = Some((start + highlight_start - consumed, start + matched));
+        }
+        consumed = if matched < payload.len() {
+            prefix.len()
+        } else {
+            highlight_end
+        };
+    }
 }
 
 pub fn visible_ids(rows: &[ListRow]) -> Vec<i64> {
@@ -102,6 +172,7 @@ pub fn rows(tree: &str, width: usize) -> Vec<ListRow> {
                             cells <= width.saturating_sub(3)
                         })
                         .collect();
+                    last.preview_end = Some(last.text.len());
                     last.text.push_str(&".".repeat(width.min(3)));
                 }
                 continue;
@@ -112,6 +183,8 @@ pub fn rows(tree: &str, width: usize) -> Vec<ListRow> {
             task_id,
             dirty: false,
             description_start: None,
+            tag_range: None,
+            preview_end: None,
         });
     }
     rows

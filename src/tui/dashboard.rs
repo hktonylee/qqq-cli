@@ -17,6 +17,7 @@ const BODY_FG: Color = Color::Indexed(252);
 const BODY_BG: Color = Color::Indexed(236);
 const POPUP_ERROR_FG: Color = Color::Indexed(210);
 const POPUP_PROMPT_FG: Color = Color::Indexed(222);
+const TAG_FG: Color = Color::Indexed(222);
 
 pub(super) const COMPACT_COLUMNS: u16 = 60;
 pub(super) const LIST_ROW_PREFIX: &str = " ";
@@ -674,7 +675,8 @@ pub fn draw(
             color,
         );
         let mut spans = vec![Span::raw(LIST_ROW_PREFIX)];
-        if let Some(start) = row.description_start.filter(|_| row.dirty) {
+        let start = row.description_start.filter(|_| row.dirty).unwrap_or(0);
+        if row.dirty && row.description_start.is_some() {
             spans.push(Span::raw(row.text[..start].to_owned()));
             let dirty_style = if color {
                 Style::default().fg(POPUP_PROMPT_FG).bg(if is_selected {
@@ -687,9 +689,16 @@ pub fn draw(
             };
             spans.push(Span::styled("[*]", dirty_style));
             spans.push(Span::raw(" "));
-            spans.push(Span::raw(row.text[start..].to_owned()));
+        }
+        if let Some((tag_start, tag_end)) = row.tag_range.filter(|_| color) {
+            spans.push(Span::raw(row.text[start..tag_start].to_owned()));
+            spans.push(Span::styled(
+                row.text[tag_start..tag_end].to_owned(),
+                Style::default().fg(TAG_FG),
+            ));
+            spans.push(Span::raw(row.text[tag_end..].to_owned()));
         } else {
-            spans.push(Span::raw(row.text.clone()));
+            spans.push(Span::raw(row.text[start..].to_owned()));
         }
         frame.render_widget(
             Paragraph::new(Line::from(spans)).style(style),

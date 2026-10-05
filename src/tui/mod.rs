@@ -1026,6 +1026,15 @@ fn compose_inner(
                 &dirty_ids,
                 size.0 >= dashboard::COMPACT_COLUMNS,
             );
+            let tag_tasks: Vec<_> = displayed
+                .iter()
+                .map(|task| panel::TagTask {
+                    id: task.id,
+                    tags: &task.tags,
+                    archived: task.archived,
+                })
+                .collect();
+            panel::set_tag_ranges(&mut rows, &tag_tasks);
             list_row_count = rows.len();
             visible_ids = Some(panel::visible_ids(&rows));
             let popup_content = dashboard::popup_layout(
