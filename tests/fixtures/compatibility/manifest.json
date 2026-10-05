@@ -1,0 +1,647 @@
+{
+  "databases": [
+    {
+      "base_release": "v0.1.1",
+      "bytes": 49152,
+      "database": "databases/schema01/qqq.db",
+      "expected": "expected/schema01.json",
+      "expected_sha256": "eb13be0299bbc6cbc9e83409b0dab5a0a77fced18d29d5dae5eff1f07884a8e1",
+      "files": [],
+      "images": [
+        {
+          "bytes": 68,
+          "id": 7,
+          "media_type": "image/png",
+          "path": "images/3/7.png",
+          "sha256": "9572308cc0b9db8572ef20dbf4b5fa3fe8502a427a62d417322b39b1a7194b3a",
+          "task_id": 3
+        },
+        {
+          "bytes": 34,
+          "id": 19,
+          "media_type": "image/gif",
+          "path": "images/13/19.gif",
+          "sha256": "1e85ec81b9800b4c443d39caca0d0926089a3ac201120db1ceb45b93789480b8",
+          "task_id": 13
+        }
+      ],
+      "schema_version": 1,
+      "sha256": "5360a7bd002bcbd3c9538476135a47c02ec0c460e0b6ae4c133ff9246f73127f",
+      "source_kind": "released-source-definition",
+      "source_release": "v0.1.1",
+      "sql_sources": [
+        "sources/v0.1.1/schema.sql"
+      ]
+    },
+    {
+      "base_release": "v0.1.1",
+      "bytes": 49152,
+      "database": "databases/schema02/qqq.db",
+      "expected": "expected/schema02.json",
+      "expected_sha256": "ee6550c1cf3c1a9005986ae5aace71ed96fc462100f94c003af3be6a5dd59ab5",
+      "files": [],
+      "images": [
+        {
+          "bytes": 68,
+          "id": 7,
+          "media_type": "image/png",
+          "path": "images/3/7.png",
+          "sha256": "9572308cc0b9db8572ef20dbf4b5fa3fe8502a427a62d417322b39b1a7194b3a",
+          "task_id": 3
+        },
+        {
+          "bytes": 34,
+          "id": 19,
+          "media_type": "image/gif",
+          "path": "images/13/19.gif",
+          "sha256": "1e85ec81b9800b4c443d39caca0d0926089a3ac201120db1ceb45b93789480b8",
+          "task_id": 13
+        }
+      ],
+      "schema_version": 2,
+      "sha256": "15a6482471d16f01574bc878430e625d0c55a3aac2252220b9529e02164f217a",
+      "source_kind": "released-source-definition",
+      "source_release": "v0.1.1",
+      "sql_sources": [
+        "sources/v0.1.1/schema.sql",
+        "sources/v0.1.1/migrate_v2.sql"
+      ]
+    },
+    {
+      "base_release": "v0.1.1",
+      "bytes": 49152,
+      "database": "databases/schema03/qqq.db",
+      "expected": "expected/schema03.json",
+      "expected_sha256": "ee6550c1cf3c1a9005986ae5aace71ed96fc462100f94c003af3be6a5dd59ab5",
+      "files": [],
+      "images": [
+        {
+          "bytes": 68,
+          "id": 7,
+          "media_type": "image/png",
+          "path": "images/3/7.png",
+          "sha256": "9572308cc0b9db8572ef20dbf4b5fa3fe8502a427a62d417322b39b1a7194b3a",
+          "task_id": 3
+        },
+        {
+          "bytes": 34,
+          "id": 19,
+          "media_type": "image/gif",
+          "path": "images/13/19.gif",
+          "sha256": "1e85ec81b9800b4c443d39caca0d0926089a3ac201120db1ceb45b93789480b8",
+          "task_id": 13
+        }
+      ],
+      "schema_version": 3,
+      "sha256": "b60fa5950a1e3af7cddc40e84a31908b10c49153cc0f792f66b9cf1fb3bb3c1d",
+      "source_kind": "released-source-definition",
+      "source_release": "v0.1.1",
+      "sql_sources": [
+        "sources/v0.1.1/schema.sql",
+        "sources/v0.1.1/migrate_v2.sql",
+        "sources/v0.1.1/migrate_v3.sql"
+      ]
+    },
+    {
+      "base_release": "v0.1.1",
+      "bytes": 49152,
+      "database": "databases/schema04/qqq.db",
+      "expected": "expected/schema04.json",
+      "expected_sha256": "36ab5f8ba9936f593b5f29bc1bccb65a25f841153b92cda961263f1025ba7479",
+      "files": [],
+      "images": [
+        {
+          "bytes": 68,
+          "id": 7,
+          "media_type": "image/png",
+          "path": "images/3/7.png",
+          "sha256": "9572308cc0b9db8572ef20dbf4b5fa3fe8502a427a62d417322b39b1a7194b3a",
+          "task_id": 3
+        },
+        {
+          "bytes": 34,
+          "id": 19,
+          "media_type": "image/gif",
+          "path": "images/13/19.gif",
+          "sha256": "1e85ec81b9800b4c443d39caca0d0926089a3ac201120db1ceb45b93789480b8",
+          "task_id": 13
+        }
+      ],
+      "schema_version": 4,
+      "sha256": "f73e7b3bb4f04852b6c7381d57f08f4ffd61b3b6802f7a53b064c9be869d8d37",
+      "source_kind": "released-source-definition",
+      "source_release": "v0.1.1",
+      "sql_sources": [
+        "sources/v0.1.1/schema.sql",
+        "sources/v0.1.1/migrate_v2.sql",
+        "sources/v0.1.1/migrate_v3.sql",
+        "sources/v0.1.1/migrate_v4.sql"
+      ]
+    },
+    {
+      "base_release": "v0.1.1",
+      "bytes": 49152,
+      "database": "databases/schema05/qqq.db",
+      "expected": "expected/schema05.json",
+      "expected_sha256": "945e1cf4ce0d755edc8f2e9538d46f5e660144b273233afaa80e5cc23257a289",
+      "files": [],
+      "images": [
+        {
+          "bytes": 68,
+          "id": 7,
+          "media_type": "image/png",
+          "path": "images/3/7.png",
+          "sha256": "9572308cc0b9db8572ef20dbf4b5fa3fe8502a427a62d417322b39b1a7194b3a",
+          "task_id": 3
+        },
+        {
+          "bytes": 34,
+          "id": 19,
+          "media_type": "image/gif",
+          "path": "images/13/19.gif",
+          "sha256": "1e85ec81b9800b4c443d39caca0d0926089a3ac201120db1ceb45b93789480b8",
+          "task_id": 13
+        }
+      ],
+      "schema_version": 5,
+      "sha256": "9d4586ab75fd28c4d4b41a9fdce44b536bfdce475f097f122c4006eb6a7b3d96",
+      "source_kind": "released-source-definition",
+      "source_release": "v0.1.1",
+      "sql_sources": [
+        "sources/v0.1.1/schema.sql",
+        "sources/v0.1.1/migrate_v2.sql",
+        "sources/v0.1.1/migrate_v3.sql",
+        "sources/v0.1.1/migrate_v4.sql",
+        "sources/v0.1.1/migrate_v5.sql"
+      ]
+    },
+    {
+      "base_release": "v0.1.1",
+      "bytes": 49152,
+      "database": "databases/schema06/qqq.db",
+      "expected": "expected/schema06.json",
+      "expected_sha256": "c914852193af830ccb16fc35077ef5a7676aac2b39161ac4f77012a230c2d4b3",
+      "files": [
+        {
+          "bytes": 68,
+          "path": "images/3/7.png",
+          "sha256": "9572308cc0b9db8572ef20dbf4b5fa3fe8502a427a62d417322b39b1a7194b3a",
+          "source": "databases/schema06/images/3/7.png"
+        },
+        {
+          "bytes": 34,
+          "path": "images/13/19.gif",
+          "sha256": "1e85ec81b9800b4c443d39caca0d0926089a3ac201120db1ceb45b93789480b8",
+          "source": "databases/schema06/images/13/19.gif"
+        }
+      ],
+      "images": [
+        {
+          "bytes": 68,
+          "id": 7,
+          "media_type": "image/png",
+          "path": "images/3/7.png",
+          "sha256": "9572308cc0b9db8572ef20dbf4b5fa3fe8502a427a62d417322b39b1a7194b3a",
+          "task_id": 3
+        },
+        {
+          "bytes": 34,
+          "id": 19,
+          "media_type": "image/gif",
+          "path": "images/13/19.gif",
+          "sha256": "1e85ec81b9800b4c443d39caca0d0926089a3ac201120db1ceb45b93789480b8",
+          "task_id": 13
+        }
+      ],
+      "schema_version": 6,
+      "sha256": "f42ff5c85ecd4eb256ca8eaa459f28a711bbe8106df316902a6610e8ce6ed3ae",
+      "source_kind": "released-source-definition",
+      "source_release": "v0.1.1",
+      "sql_sources": [
+        "sources/v0.1.1/schema.sql",
+        "sources/v0.1.1/migrate_v2.sql",
+        "sources/v0.1.1/migrate_v3.sql",
+        "sources/v0.1.1/migrate_v4.sql",
+        "sources/v0.1.1/migrate_v5.sql",
+        "sources/v0.1.1/migrate_v6.sql"
+      ]
+    },
+    {
+      "base_release": "v0.1.1",
+      "bytes": 49152,
+      "database": "databases/schema07/qqq.db",
+      "expected": "expected/schema07.json",
+      "expected_sha256": "c15227bca36db5855a13f354e4627017ca861d0b182fd2dbf0ed55c134ac812b",
+      "files": [
+        {
+          "bytes": 68,
+          "path": "images/3/7.png",
+          "sha256": "9572308cc0b9db8572ef20dbf4b5fa3fe8502a427a62d417322b39b1a7194b3a",
+          "source": "databases/schema07/images/3/7.png"
+        },
+        {
+          "bytes": 34,
+          "path": "images/13/19.gif",
+          "sha256": "1e85ec81b9800b4c443d39caca0d0926089a3ac201120db1ceb45b93789480b8",
+          "source": "databases/schema07/images/13/19.gif"
+        }
+      ],
+      "images": [
+        {
+          "bytes": 68,
+          "id": 7,
+          "media_type": "image/png",
+          "path": "images/3/7.png",
+          "sha256": "9572308cc0b9db8572ef20dbf4b5fa3fe8502a427a62d417322b39b1a7194b3a",
+          "task_id": 3
+        },
+        {
+          "bytes": 34,
+          "id": 19,
+          "media_type": "image/gif",
+          "path": "images/13/19.gif",
+          "sha256": "1e85ec81b9800b4c443d39caca0d0926089a3ac201120db1ceb45b93789480b8",
+          "task_id": 13
+        }
+      ],
+      "schema_version": 7,
+      "sha256": "2f42d19e5c143d47bdbb28a815fe9f90a6b2e316ce143871d2bd3033f5123f75",
+      "source_kind": "released-source-definition",
+      "source_release": "v0.1.1",
+      "sql_sources": [
+        "sources/v0.1.1/schema.sql",
+        "sources/v0.1.1/migrate_v2.sql",
+        "sources/v0.1.1/migrate_v3.sql",
+        "sources/v0.1.1/migrate_v4.sql",
+        "sources/v0.1.1/migrate_v5.sql",
+        "sources/v0.1.1/migrate_v6.sql",
+        "sources/v0.1.1/migrate_v7.sql"
+      ]
+    },
+    {
+      "base_release": "v0.1.1",
+      "bytes": 49152,
+      "database": "databases/schema08/qqq.db",
+      "expected": "expected/schema08.json",
+      "expected_sha256": "d20c8b6f5a82ea8698e27dcce23b9f786af19907ba34da20679633f90f70ed8d",
+      "files": [
+        {
+          "bytes": 68,
+          "path": "images/3/7.png",
+          "sha256": "9572308cc0b9db8572ef20dbf4b5fa3fe8502a427a62d417322b39b1a7194b3a",
+          "source": "databases/schema08/images/3/7.png"
+        },
+        {
+          "bytes": 34,
+          "path": "images/13/19.gif",
+          "sha256": "1e85ec81b9800b4c443d39caca0d0926089a3ac201120db1ceb45b93789480b8",
+          "source": "databases/schema08/images/13/19.gif"
+        }
+      ],
+      "images": [
+        {
+          "bytes": 68,
+          "id": 7,
+          "media_type": "image/png",
+          "path": "images/3/7.png",
+          "sha256": "9572308cc0b9db8572ef20dbf4b5fa3fe8502a427a62d417322b39b1a7194b3a",
+          "task_id": 3
+        },
+        {
+          "bytes": 34,
+          "id": 19,
+          "media_type": "image/gif",
+          "path": "images/13/19.gif",
+          "sha256": "1e85ec81b9800b4c443d39caca0d0926089a3ac201120db1ceb45b93789480b8",
+          "task_id": 13
+        }
+      ],
+      "schema_version": 8,
+      "sha256": "e6d875045cb38ab1d311bf32bbffcace0a255e974ccfde3ec1bc1906bf4a9e7e",
+      "source_kind": "released-source-definition",
+      "source_release": "v0.1.1",
+      "sql_sources": [
+        "sources/v0.1.1/schema.sql",
+        "sources/v0.1.1/migrate_v2.sql",
+        "sources/v0.1.1/migrate_v3.sql",
+        "sources/v0.1.1/migrate_v4.sql",
+        "sources/v0.1.1/migrate_v5.sql",
+        "sources/v0.1.1/migrate_v6.sql",
+        "sources/v0.1.1/migrate_v7.sql",
+        "sources/v0.1.1/migrate_v8.sql"
+      ]
+    },
+    {
+      "base_release": "v0.1.1",
+      "bytes": 49152,
+      "database": "databases/schema09/qqq.db",
+      "expected": "expected/schema09.json",
+      "expected_sha256": "ed692ed887556113add8cc7c601436746b503fd6cf4f467835ff20af149652b0",
+      "files": [
+        {
+          "bytes": 68,
+          "path": "images/3/7.png",
+          "sha256": "9572308cc0b9db8572ef20dbf4b5fa3fe8502a427a62d417322b39b1a7194b3a",
+          "source": "databases/schema09/images/3/7.png"
+        },
+        {
+          "bytes": 34,
+          "path": "images/13/19.gif",
+          "sha256": "1e85ec81b9800b4c443d39caca0d0926089a3ac201120db1ceb45b93789480b8",
+          "source": "databases/schema09/images/13/19.gif"
+        }
+      ],
+      "images": [
+        {
+          "bytes": 68,
+          "id": 7,
+          "media_type": "image/png",
+          "path": "images/3/7.png",
+          "sha256": "9572308cc0b9db8572ef20dbf4b5fa3fe8502a427a62d417322b39b1a7194b3a",
+          "task_id": 3
+        },
+        {
+          "bytes": 34,
+          "id": 19,
+          "media_type": "image/gif",
+          "path": "images/13/19.gif",
+          "sha256": "1e85ec81b9800b4c443d39caca0d0926089a3ac201120db1ceb45b93789480b8",
+          "task_id": 13
+        }
+      ],
+      "schema_version": 9,
+      "sha256": "ba91da8e691de23f6c4be16e4ca313ad53ad3c6dba66a2e669f26de3cba84d52",
+      "source_kind": "released-source-definition",
+      "source_release": "v0.1.1",
+      "sql_sources": [
+        "sources/v0.1.1/schema.sql",
+        "sources/v0.1.1/migrate_v2.sql",
+        "sources/v0.1.1/migrate_v3.sql",
+        "sources/v0.1.1/migrate_v4.sql",
+        "sources/v0.1.1/migrate_v5.sql",
+        "sources/v0.1.1/migrate_v6.sql",
+        "sources/v0.1.1/migrate_v7.sql",
+        "sources/v0.1.1/migrate_v8.sql",
+        "sources/v0.1.1/migrate_v9.sql"
+      ]
+    },
+    {
+      "base_release": "v0.4.0",
+      "bytes": 49152,
+      "database": "databases/schema10/qqq.db",
+      "expected": "expected/schema10.json",
+      "expected_sha256": "b589fceab8db55b6b2d31b6ab1ef7b6ebcb27bd82e91e5dd2441427a3d095499",
+      "files": [
+        {
+          "bytes": 68,
+          "path": "images/3/7.png",
+          "sha256": "9572308cc0b9db8572ef20dbf4b5fa3fe8502a427a62d417322b39b1a7194b3a",
+          "source": "databases/schema10/images/3/7.png"
+        },
+        {
+          "bytes": 34,
+          "path": "images/13/19.gif",
+          "sha256": "1e85ec81b9800b4c443d39caca0d0926089a3ac201120db1ceb45b93789480b8",
+          "source": "databases/schema10/images/13/19.gif"
+        }
+      ],
+      "images": [
+        {
+          "bytes": 68,
+          "id": 7,
+          "media_type": "image/png",
+          "path": "images/3/7.png",
+          "sha256": "9572308cc0b9db8572ef20dbf4b5fa3fe8502a427a62d417322b39b1a7194b3a",
+          "task_id": 3
+        },
+        {
+          "bytes": 34,
+          "id": 19,
+          "media_type": "image/gif",
+          "path": "images/13/19.gif",
+          "sha256": "1e85ec81b9800b4c443d39caca0d0926089a3ac201120db1ceb45b93789480b8",
+          "task_id": 13
+        }
+      ],
+      "schema_version": 10,
+      "sha256": "8570be4c2e607973718c4a2d601d996800b158f91019bc502e2b9760183b5007",
+      "source_kind": "released-source-definition",
+      "source_release": "v0.4.0",
+      "sql_sources": [
+        "sources/v0.4.0/schema.sql",
+        "sources/v0.4.0/migrate_v2.sql",
+        "sources/v0.4.0/migrate_v3.sql",
+        "sources/v0.4.0/migrate_v4.sql",
+        "sources/v0.4.0/migrate_v5.sql",
+        "sources/v0.4.0/migrate_v6.sql",
+        "sources/v0.4.0/migrate_v7.sql",
+        "sources/v0.4.0/migrate_v8.sql",
+        "sources/v0.4.0/migrate_v9.sql",
+        "sources/v0.4.0/migrate_v10.sql"
+      ]
+    },
+    {
+      "base_release": "v0.4.0",
+      "bytes": 65536,
+      "database": "databases/schema11/qqq.db",
+      "expected": "expected/schema11.json",
+      "expected_sha256": "9b5d937c7195a58a8250742c0253f3effa0f207def1f20b1eb5dcc25547d1d79",
+      "files": [
+        {
+          "bytes": 68,
+          "path": "images/3/7.png",
+          "sha256": "9572308cc0b9db8572ef20dbf4b5fa3fe8502a427a62d417322b39b1a7194b3a",
+          "source": "databases/schema11/images/3/7.png"
+        },
+        {
+          "bytes": 34,
+          "path": "images/13/19.gif",
+          "sha256": "1e85ec81b9800b4c443d39caca0d0926089a3ac201120db1ceb45b93789480b8",
+          "source": "databases/schema11/images/13/19.gif"
+        }
+      ],
+      "images": [
+        {
+          "bytes": 68,
+          "id": 7,
+          "media_type": "image/png",
+          "path": "images/3/7.png",
+          "sha256": "9572308cc0b9db8572ef20dbf4b5fa3fe8502a427a62d417322b39b1a7194b3a",
+          "task_id": 3
+        },
+        {
+          "bytes": 34,
+          "id": 19,
+          "media_type": "image/gif",
+          "path": "images/13/19.gif",
+          "sha256": "1e85ec81b9800b4c443d39caca0d0926089a3ac201120db1ceb45b93789480b8",
+          "task_id": 13
+        }
+      ],
+      "schema_version": 11,
+      "sha256": "957b1ac294ef24db1575cf9fd3750d40b4a8c47c2f1c622b4d0edc6e49c92843",
+      "source_kind": "released-source-definition",
+      "source_release": "v0.4.0",
+      "sql_sources": [
+        "sources/v0.4.0/schema.sql",
+        "sources/v0.4.0/migrate_v2.sql",
+        "sources/v0.4.0/migrate_v3.sql",
+        "sources/v0.4.0/migrate_v4.sql",
+        "sources/v0.4.0/migrate_v5.sql",
+        "sources/v0.4.0/migrate_v6.sql",
+        "sources/v0.4.0/migrate_v7.sql",
+        "sources/v0.4.0/migrate_v8.sql",
+        "sources/v0.4.0/migrate_v9.sql",
+        "sources/v0.4.0/migrate_v10.sql",
+        "sources/v0.4.0/migrate_v11.sql"
+      ]
+    },
+    {
+      "base_release": "v0.4.0",
+      "bytes": 69632,
+      "database": "databases/schema12/qqq.db",
+      "expected": "expected/schema12.json",
+      "expected_sha256": "2f8c58a9cb5da41beadea6027c1f9787de0b8d1798cb894303f674d4400d3fa2",
+      "files": [
+        {
+          "bytes": 68,
+          "path": "images/3/7.png",
+          "sha256": "9572308cc0b9db8572ef20dbf4b5fa3fe8502a427a62d417322b39b1a7194b3a",
+          "source": "databases/schema12/images/3/7.png"
+        },
+        {
+          "bytes": 34,
+          "path": "images/13/19.gif",
+          "sha256": "1e85ec81b9800b4c443d39caca0d0926089a3ac201120db1ceb45b93789480b8",
+          "source": "databases/schema12/images/13/19.gif"
+        }
+      ],
+      "images": [
+        {
+          "bytes": 68,
+          "id": 7,
+          "media_type": "image/png",
+          "path": "images/3/7.png",
+          "sha256": "9572308cc0b9db8572ef20dbf4b5fa3fe8502a427a62d417322b39b1a7194b3a",
+          "task_id": 3
+        },
+        {
+          "bytes": 34,
+          "id": 19,
+          "media_type": "image/gif",
+          "path": "images/13/19.gif",
+          "sha256": "1e85ec81b9800b4c443d39caca0d0926089a3ac201120db1ceb45b93789480b8",
+          "task_id": 13
+        }
+      ],
+      "schema_version": 12,
+      "sha256": "a0daa6f4ded55481fe7dca78a49f089ac74cf53a4c24b0d81b03725ba325358c",
+      "source_kind": "pinned-development-extension",
+      "source_release": null,
+      "sql_sources": [
+        "sources/v0.4.0/schema.sql",
+        "sources/v0.4.0/migrate_v2.sql",
+        "sources/v0.4.0/migrate_v3.sql",
+        "sources/v0.4.0/migrate_v4.sql",
+        "sources/v0.4.0/migrate_v5.sql",
+        "sources/v0.4.0/migrate_v6.sql",
+        "sources/v0.4.0/migrate_v7.sql",
+        "sources/v0.4.0/migrate_v8.sql",
+        "sources/v0.4.0/migrate_v9.sql",
+        "sources/v0.4.0/migrate_v10.sql",
+        "sources/v0.4.0/migrate_v11.sql",
+        "sources/schema12/migrate_v12.sql"
+      ]
+    }
+  ],
+  "snapshots": [
+    {
+      "bytes": 61440,
+      "construction": "synthetic-source-derived-gnu-tar",
+      "emitted_by_tagged_release": true,
+      "format_source": "sources/v0.1.1/snapshot_format.rs",
+      "format_version": 1,
+      "path": "snapshots/format1-schema09.tar",
+      "schema_version": 9,
+      "sha256": "2991e354e063dbc4d92abe00035ccb607529cecbd8fac81c63a4c4872d2a4776",
+      "source_release": "v0.1.1"
+    },
+    {
+      "bytes": 61440,
+      "construction": "synthetic-source-derived-gnu-tar",
+      "emitted_by_tagged_release": false,
+      "format_source": "sources/v0.4.0/snapshot_format.rs",
+      "format_version": 1,
+      "path": "snapshots/format1-schema10.tar",
+      "schema_version": 10,
+      "sha256": "28c175182d663aa470812a08e800299469fc12d82832e69699369e209ee05c5e",
+      "source_release": "v0.4.0"
+    },
+    {
+      "bytes": 71680,
+      "construction": "synthetic-source-derived-gnu-tar",
+      "emitted_by_tagged_release": true,
+      "format_source": "sources/v0.4.0/snapshot_format.rs",
+      "format_version": 1,
+      "path": "snapshots/format1-schema11.tar",
+      "schema_version": 11,
+      "sha256": "fdba343a5dc4747f87b12e85a0eafa956c3a5eda0d289d297cdae7ef0f3788a2",
+      "source_release": "v0.4.0"
+    },
+    {
+      "bytes": 81920,
+      "construction": "synthetic-source-derived-gnu-tar",
+      "emitted_by_tagged_release": false,
+      "format_source": "sources/v0.4.0/snapshot_format.rs",
+      "format_version": 1,
+      "path": "snapshots/format1-schema12.tar",
+      "schema_version": 12,
+      "sha256": "91b64dfa0054d8462c70160cf7594524f8a3181288efaa3e26a730a4a0b7ea7f",
+      "source_release": null
+    }
+  ],
+  "source_provenance": "provenance.json",
+  "source_provenance_sha256": "2174df5fc03eb942b910a0e811735bd5b8f8256c7738025f6c870147aa3b4ae6",
+  "sqlite_generation_version": "3.53.1",
+  "support": {
+    "current_schema": 12,
+    "exclusions": [
+      "version0-initialization-only",
+      "legacy-title-manual-conversion",
+      "legacy-pending-manual-conversion",
+      "future-schema-unsupported"
+    ],
+    "normal_open_schemas": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11,
+      12
+    ],
+    "provenance_notes": [
+      "Schema10 accepted intermediate definition; tagged releases emitted9/11.",
+      "Schema12 has no release tag; released base plus pinned introducing SQL."
+    ],
+    "released_snapshot_schemas": [
+      9,
+      11
+    ],
+    "snapshot_database_schemas": [
+      9,
+      10,
+      11,
+      12
+    ],
+    "snapshot_format_versions": [
+      1
+    ]
+  },
+  "version": 1
+}

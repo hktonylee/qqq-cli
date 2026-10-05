@@ -1,0 +1,281 @@
+{
+  "canonical": {
+    "dependencies": [],
+    "events": [
+      {
+        "action": "claim",
+        "created_at": "2020-01-02T03:04:05.000Z",
+        "id": 2,
+        "session": "fixture-owner-linked",
+        "task_id": 8
+      },
+      {
+        "action": "complete",
+        "created_at": "2020-01-02T03:04:05.000Z",
+        "id": 9,
+        "session": "fixture-former-owner",
+        "task_id": 3
+      },
+      {
+        "action": "release",
+        "created_at": "2020-01-02T03:04:05.000Z",
+        "id": 17,
+        "session": "fixture-old-owner",
+        "task_id": 13
+      },
+      {
+        "action": "error",
+        "created_at": "2020-01-02T03:04:05.000Z",
+        "id": 26,
+        "session": "fixture-error-owner",
+        "task_id": 34
+      },
+      {
+        "action": "archive",
+        "created_at": "2020-01-02T03:04:05.000Z",
+        "id": 34,
+        "session": "fixture-archiver",
+        "task_id": 89
+      },
+      {
+        "action": "unarchive",
+        "created_at": "2020-01-02T03:04:05.000Z",
+        "id": 38,
+        "session": "fixture-archiver",
+        "task_id": 3
+      }
+    ],
+    "images": [
+      {
+        "bytes": 68,
+        "id": 7,
+        "media_type": "image/png",
+        "name": "pixel.png",
+        "task_id": 3
+      },
+      {
+        "bytes": 34,
+        "id": 19,
+        "media_type": "image/gif",
+        "name": "pixel.gif",
+        "task_id": 13
+      }
+    ],
+    "links": [
+      {
+        "link_json": {
+          "identity": {
+            "agent": "codex",
+            "kind": "session",
+            "value": "fixture-linked-session"
+          },
+          "pane": {
+            "agent": "codex",
+            "agent_session": {
+              "agent": "codex",
+              "kind": "session",
+              "value": "fixture-linked-session"
+            },
+            "cwd": "/synthetic/project",
+            "foreground_cwd": "/synthetic/project",
+            "pane_id": "fixture-pane",
+            "tab_id": "fixture-tab",
+            "terminal_id": "fixture-terminal",
+            "workspace_id": "fixture-workspace"
+          },
+          "server": "fixture-server"
+        },
+        "task_id": 8
+      }
+    ],
+    "messages": [
+      {
+        "body": "Synthetic progress\nSecond line",
+        "created_at": "2020-01-02T03:04:05.000Z",
+        "id": 4,
+        "session": "fixture-owner-linked",
+        "task_id": 8
+      },
+      {
+        "body": "Queued note\nUnicode 界",
+        "created_at": "2020-01-02T03:04:05.000Z",
+        "id": 19,
+        "session": null,
+        "task_id": 13
+      }
+    ],
+    "schema_version": 12,
+    "sequences": [
+      {
+        "name": "events",
+        "seq": 89
+      },
+      {
+        "name": "images",
+        "seq": 31
+      },
+      {
+        "name": "messages",
+        "seq": 37
+      },
+      {
+        "name": "tasks",
+        "seq": 233
+      }
+    ],
+    "tasks": [
+      {
+        "archived": 0,
+        "claim_key": null,
+        "content_revision": 1,
+        "created_at": "2020-01-02T03:04:05.000Z",
+        "description": "Synthetic task 3\nSecond line: 界 fixture\n![pixel](.qqq/images/3/7.png)",
+        "harness_name": null,
+        "harness_session": null,
+        "id": 3,
+        "orchestrator_name": null,
+        "orchestrator_session": null,
+        "parent_id": null,
+        "priority": 0,
+        "status": "completed",
+        "tags": [],
+        "updated_at": "2020-01-02T03:04:05.000Z"
+      },
+      {
+        "archived": 0,
+        "claim_key": "fixture-owner-linked",
+        "content_revision": 1,
+        "created_at": "2020-01-02T03:04:05.000Z",
+        "description": "Synthetic task 8\nSecond line: 界 fixture",
+        "harness_name": "codex",
+        "harness_session": "fixture-linked-session",
+        "id": 8,
+        "orchestrator_name": "herdr",
+        "orchestrator_session": "fixture-server",
+        "parent_id": null,
+        "priority": 0,
+        "status": "in_progress",
+        "tags": [],
+        "updated_at": "2020-01-02T03:04:05.000Z"
+      },
+      {
+        "archived": 0,
+        "claim_key": null,
+        "content_revision": 1,
+        "created_at": "2020-01-02T03:04:05.000Z",
+        "description": "Synthetic task 13\nSecond line: 界 fixture\n![pixel](.qqq/images/13/19.gif)",
+        "harness_name": null,
+        "harness_session": null,
+        "id": 13,
+        "orchestrator_name": null,
+        "orchestrator_session": null,
+        "parent_id": 3,
+        "priority": 37,
+        "status": "new",
+        "tags": [],
+        "updated_at": "2020-01-02T03:04:05.000Z"
+      },
+      {
+        "archived": 0,
+        "claim_key": null,
+        "content_revision": 1,
+        "created_at": "2020-01-02T03:04:05.000Z",
+        "description": "Synthetic task 21\nSecond line: 界 fixture",
+        "harness_name": null,
+        "harness_session": null,
+        "id": 21,
+        "orchestrator_name": null,
+        "orchestrator_session": null,
+        "parent_id": 8,
+        "priority": -21,
+        "status": "new",
+        "tags": [],
+        "updated_at": "2020-01-02T03:04:05.000Z"
+      },
+      {
+        "archived": 0,
+        "claim_key": null,
+        "content_revision": 1,
+        "created_at": "2020-01-02T03:04:05.000Z",
+        "description": "Synthetic task 34\nSecond line: 界 fixture",
+        "harness_name": null,
+        "harness_session": null,
+        "id": 34,
+        "orchestrator_name": null,
+        "orchestrator_session": null,
+        "parent_id": null,
+        "priority": 0,
+        "status": "error",
+        "tags": [],
+        "updated_at": "2020-01-02T03:04:05.000Z"
+      },
+      {
+        "archived": 0,
+        "claim_key": "fixture-owner-bare",
+        "content_revision": 1,
+        "created_at": "2020-01-02T03:04:05.000Z",
+        "description": "Synthetic task 55\nSecond line: 界 fixture",
+        "harness_name": "claude",
+        "harness_session": "fixture-bare-session",
+        "id": 55,
+        "orchestrator_name": null,
+        "orchestrator_session": null,
+        "parent_id": null,
+        "priority": 0,
+        "status": "in_progress",
+        "tags": [],
+        "updated_at": "2020-01-02T03:04:05.000Z"
+      },
+      {
+        "archived": 1,
+        "claim_key": null,
+        "content_revision": 1,
+        "created_at": "2020-01-02T03:04:05.000Z",
+        "description": "Synthetic task 89\nSecond line: 界 fixture",
+        "harness_name": null,
+        "harness_session": null,
+        "id": 89,
+        "orchestrator_name": null,
+        "orchestrator_session": null,
+        "parent_id": null,
+        "priority": 99,
+        "status": "new",
+        "tags": [],
+        "updated_at": "2020-01-02T03:04:05.000Z"
+      },
+      {
+        "archived": 0,
+        "claim_key": null,
+        "content_revision": 1,
+        "created_at": "2020-01-02T03:04:05.000Z",
+        "description": "Synthetic task 144\nSecond line: 界 fixture",
+        "harness_name": null,
+        "harness_session": null,
+        "id": 144,
+        "orchestrator_name": null,
+        "orchestrator_session": null,
+        "parent_id": null,
+        "priority": 5,
+        "status": "new",
+        "tags": [],
+        "updated_at": "2020-01-02T03:04:05.000Z"
+      }
+    ]
+  },
+  "queue": {
+    "blockers": {
+      "21": [
+        8
+      ]
+    },
+    "owners": {
+      "55": "fixture-owner-bare",
+      "8": "fixture-owner-linked"
+    },
+    "ready_ids": [
+      13,
+      144
+    ],
+    "selection_id": 13
+  }
+}

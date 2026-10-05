@@ -1,0 +1,260 @@
+{
+  "releases": [
+    {
+      "commit": "0ea59d1f13cd5df84d08f6ee62d88cfc996e2e9a",
+      "database_schema": 9,
+      "snapshot_database_schema": 9,
+      "snapshot_format": 1,
+      "tag": "v0.1.1"
+    },
+    {
+      "commit": "47b1b59438a5c34504e690b0bd03acbe87362bff",
+      "database_schema": 9,
+      "snapshot_database_schema": 9,
+      "snapshot_format": 1,
+      "tag": "v0.2.0"
+    },
+    {
+      "commit": "77701f5b9feee40ba56d0dd61d7bfc63a310a512",
+      "database_schema": 9,
+      "snapshot_database_schema": 9,
+      "snapshot_format": 1,
+      "tag": "v0.3.0"
+    },
+    {
+      "commit": "5c97d0c0dda62603bdd0e2be15e0f4296157220a",
+      "database_schema": 11,
+      "snapshot_database_schema": 11,
+      "snapshot_format": 1,
+      "tag": "v0.4.0"
+    }
+  ],
+  "sources": [
+    {
+      "commit": "0ea59d1f13cd5df84d08f6ee62d88cfc996e2e9a",
+      "git_blob": "cdf36c7a11c1e65f50a7eaddd8e0ffff4847791d",
+      "original_path": "src/schema.sql",
+      "package_version": "0.1.1",
+      "path": "sources/v0.1.1/schema.sql",
+      "release": "v0.1.1",
+      "sha256": "a8dce873c251f28a6c1979ef23727cdc3ac36643d58d2ae9331ed8f122c6ecf2"
+    },
+    {
+      "commit": "0ea59d1f13cd5df84d08f6ee62d88cfc996e2e9a",
+      "git_blob": "5582f979a531e8ea40c8efc061dc3d7c1cffb439",
+      "original_path": "src/migrate_v2.sql",
+      "package_version": "0.1.1",
+      "path": "sources/v0.1.1/migrate_v2.sql",
+      "release": "v0.1.1",
+      "sha256": "cc2e54644b2892b836dade9fa8d29da49638539c2268c96643682990189cd9eb"
+    },
+    {
+      "commit": "0ea59d1f13cd5df84d08f6ee62d88cfc996e2e9a",
+      "git_blob": "d6f075d65b6cfee0af4ab051a2384d15a3b64d5c",
+      "original_path": "src/migrate_v3.sql",
+      "package_version": "0.1.1",
+      "path": "sources/v0.1.1/migrate_v3.sql",
+      "release": "v0.1.1",
+      "sha256": "83c255e6cd7ae0c57f97da699014c2dc13b150c58efc5b5ab4206fc66661e9f9"
+    },
+    {
+      "commit": "0ea59d1f13cd5df84d08f6ee62d88cfc996e2e9a",
+      "git_blob": "217949c1e2879e347cf94f39cb11254495e33282",
+      "original_path": "src/migrate_v4.sql",
+      "package_version": "0.1.1",
+      "path": "sources/v0.1.1/migrate_v4.sql",
+      "release": "v0.1.1",
+      "sha256": "7b350425b23e0490699c469222d7f590911d2ad3f41d6823591e059c2c2da736"
+    },
+    {
+      "commit": "0ea59d1f13cd5df84d08f6ee62d88cfc996e2e9a",
+      "git_blob": "7544b166853729d8ea462c0cc720e4e50ab845ee",
+      "original_path": "src/migrate_v5.sql",
+      "package_version": "0.1.1",
+      "path": "sources/v0.1.1/migrate_v5.sql",
+      "release": "v0.1.1",
+      "sha256": "83354ccab8bc9864e7075e639be6e840450e2bb918a8a2602658c9084d774e69"
+    },
+    {
+      "commit": "0ea59d1f13cd5df84d08f6ee62d88cfc996e2e9a",
+      "git_blob": "f281346222f2e142b75c0de993cf677029a74ed7",
+      "original_path": "src/migrate_v6.sql",
+      "package_version": "0.1.1",
+      "path": "sources/v0.1.1/migrate_v6.sql",
+      "release": "v0.1.1",
+      "sha256": "7536743e5f3b48864b9acb2eaa7bb99cc6a37960d471b50a26f9de2d7c04340b"
+    },
+    {
+      "commit": "0ea59d1f13cd5df84d08f6ee62d88cfc996e2e9a",
+      "git_blob": "f350bd31582f4795a3a0c71d3b8b89c9e1652ecc",
+      "original_path": "src/migrate_v7.sql",
+      "package_version": "0.1.1",
+      "path": "sources/v0.1.1/migrate_v7.sql",
+      "release": "v0.1.1",
+      "sha256": "75777f79bf1f468d6fc666e935af4b33d76702f1302fe0cb3b3a562fccac1940"
+    },
+    {
+      "commit": "0ea59d1f13cd5df84d08f6ee62d88cfc996e2e9a",
+      "git_blob": "d9c786e343f84e20cd7712b4023560d11c47b6ec",
+      "original_path": "src/migrate_v8.sql",
+      "package_version": "0.1.1",
+      "path": "sources/v0.1.1/migrate_v8.sql",
+      "release": "v0.1.1",
+      "sha256": "f49d9643d4e086620f10cd0de2e6af1a62256706460c4292b9a3ec4a22143dbd"
+    },
+    {
+      "commit": "0ea59d1f13cd5df84d08f6ee62d88cfc996e2e9a",
+      "git_blob": "841216c5192a47954c3485c12bc502b1f8271f5b",
+      "original_path": "src/migrate_v9.sql",
+      "package_version": "0.1.1",
+      "path": "sources/v0.1.1/migrate_v9.sql",
+      "release": "v0.1.1",
+      "sha256": "9b6923484b06dd333870556193991a32ceb5ae39727f4a70d31ceae0bdf8ac1d"
+    },
+    {
+      "commit": "0ea59d1f13cd5df84d08f6ee62d88cfc996e2e9a",
+      "git_blob": "e8e086265f20928adeea8d05227b59629ba2d828",
+      "original_path": "src/snapshot/format.rs",
+      "package_version": "0.1.1",
+      "path": "sources/v0.1.1/snapshot_format.rs",
+      "release": "v0.1.1",
+      "sha256": "62b46d39d577de41b797bda4e10c747c347ecff54fa1c28e2d46bf0d48cc55a3"
+    },
+    {
+      "commit": "0ea59d1f13cd5df84d08f6ee62d88cfc996e2e9a",
+      "git_blob": "e5f8f8732bc6ae7280e2f9c6d8bf276289314548",
+      "original_path": "src/snapshot/backup.rs",
+      "package_version": "0.1.1",
+      "path": "sources/v0.1.1/snapshot_backup.rs",
+      "release": "v0.1.1",
+      "sha256": "336376473a067fb018cac35f99eda308bd5dc5ae1a9de1112e15b61dd2da33ca"
+    },
+    {
+      "commit": "5c97d0c0dda62603bdd0e2be15e0f4296157220a",
+      "git_blob": "cdf36c7a11c1e65f50a7eaddd8e0ffff4847791d",
+      "original_path": "src/sql/schema.sql",
+      "package_version": "0.4.0",
+      "path": "sources/v0.4.0/schema.sql",
+      "release": "v0.4.0",
+      "sha256": "a8dce873c251f28a6c1979ef23727cdc3ac36643d58d2ae9331ed8f122c6ecf2"
+    },
+    {
+      "commit": "5c97d0c0dda62603bdd0e2be15e0f4296157220a",
+      "git_blob": "5582f979a531e8ea40c8efc061dc3d7c1cffb439",
+      "original_path": "src/sql/migrate_v2.sql",
+      "package_version": "0.4.0",
+      "path": "sources/v0.4.0/migrate_v2.sql",
+      "release": "v0.4.0",
+      "sha256": "cc2e54644b2892b836dade9fa8d29da49638539c2268c96643682990189cd9eb"
+    },
+    {
+      "commit": "5c97d0c0dda62603bdd0e2be15e0f4296157220a",
+      "git_blob": "d6f075d65b6cfee0af4ab051a2384d15a3b64d5c",
+      "original_path": "src/sql/migrate_v3.sql",
+      "package_version": "0.4.0",
+      "path": "sources/v0.4.0/migrate_v3.sql",
+      "release": "v0.4.0",
+      "sha256": "83c255e6cd7ae0c57f97da699014c2dc13b150c58efc5b5ab4206fc66661e9f9"
+    },
+    {
+      "commit": "5c97d0c0dda62603bdd0e2be15e0f4296157220a",
+      "git_blob": "217949c1e2879e347cf94f39cb11254495e33282",
+      "original_path": "src/sql/migrate_v4.sql",
+      "package_version": "0.4.0",
+      "path": "sources/v0.4.0/migrate_v4.sql",
+      "release": "v0.4.0",
+      "sha256": "7b350425b23e0490699c469222d7f590911d2ad3f41d6823591e059c2c2da736"
+    },
+    {
+      "commit": "5c97d0c0dda62603bdd0e2be15e0f4296157220a",
+      "git_blob": "7544b166853729d8ea462c0cc720e4e50ab845ee",
+      "original_path": "src/sql/migrate_v5.sql",
+      "package_version": "0.4.0",
+      "path": "sources/v0.4.0/migrate_v5.sql",
+      "release": "v0.4.0",
+      "sha256": "83354ccab8bc9864e7075e639be6e840450e2bb918a8a2602658c9084d774e69"
+    },
+    {
+      "commit": "5c97d0c0dda62603bdd0e2be15e0f4296157220a",
+      "git_blob": "f281346222f2e142b75c0de993cf677029a74ed7",
+      "original_path": "src/sql/migrate_v6.sql",
+      "package_version": "0.4.0",
+      "path": "sources/v0.4.0/migrate_v6.sql",
+      "release": "v0.4.0",
+      "sha256": "7536743e5f3b48864b9acb2eaa7bb99cc6a37960d471b50a26f9de2d7c04340b"
+    },
+    {
+      "commit": "5c97d0c0dda62603bdd0e2be15e0f4296157220a",
+      "git_blob": "f350bd31582f4795a3a0c71d3b8b89c9e1652ecc",
+      "original_path": "src/sql/migrate_v7.sql",
+      "package_version": "0.4.0",
+      "path": "sources/v0.4.0/migrate_v7.sql",
+      "release": "v0.4.0",
+      "sha256": "75777f79bf1f468d6fc666e935af4b33d76702f1302fe0cb3b3a562fccac1940"
+    },
+    {
+      "commit": "5c97d0c0dda62603bdd0e2be15e0f4296157220a",
+      "git_blob": "d9c786e343f84e20cd7712b4023560d11c47b6ec",
+      "original_path": "src/sql/migrate_v8.sql",
+      "package_version": "0.4.0",
+      "path": "sources/v0.4.0/migrate_v8.sql",
+      "release": "v0.4.0",
+      "sha256": "f49d9643d4e086620f10cd0de2e6af1a62256706460c4292b9a3ec4a22143dbd"
+    },
+    {
+      "commit": "5c97d0c0dda62603bdd0e2be15e0f4296157220a",
+      "git_blob": "841216c5192a47954c3485c12bc502b1f8271f5b",
+      "original_path": "src/sql/migrate_v9.sql",
+      "package_version": "0.4.0",
+      "path": "sources/v0.4.0/migrate_v9.sql",
+      "release": "v0.4.0",
+      "sha256": "9b6923484b06dd333870556193991a32ceb5ae39727f4a70d31ceae0bdf8ac1d"
+    },
+    {
+      "commit": "5c97d0c0dda62603bdd0e2be15e0f4296157220a",
+      "git_blob": "7603f520cde727a3efbeda3acba421823798958c",
+      "original_path": "src/sql/migrate_v10.sql",
+      "package_version": "0.4.0",
+      "path": "sources/v0.4.0/migrate_v10.sql",
+      "release": "v0.4.0",
+      "sha256": "69f532bccba597d3af124ceb47dc7e8f03e9773020d513b687039e60f810bc23"
+    },
+    {
+      "commit": "5c97d0c0dda62603bdd0e2be15e0f4296157220a",
+      "git_blob": "a99580b7f30ca2802a7a5574f7f7e3a3e7b5efc3",
+      "original_path": "src/sql/migrate_v11.sql",
+      "package_version": "0.4.0",
+      "path": "sources/v0.4.0/migrate_v11.sql",
+      "release": "v0.4.0",
+      "sha256": "d252999a00f19aa5a46c02dd4824cf4f2e69755ec53e4323ee0334cb01441fe4"
+    },
+    {
+      "commit": "5c97d0c0dda62603bdd0e2be15e0f4296157220a",
+      "git_blob": "e8e086265f20928adeea8d05227b59629ba2d828",
+      "original_path": "src/snapshot/format.rs",
+      "package_version": "0.4.0",
+      "path": "sources/v0.4.0/snapshot_format.rs",
+      "release": "v0.4.0",
+      "sha256": "62b46d39d577de41b797bda4e10c747c347ecff54fa1c28e2d46bf0d48cc55a3"
+    },
+    {
+      "commit": "5c97d0c0dda62603bdd0e2be15e0f4296157220a",
+      "git_blob": "b5ba2e88e9be8f7047b29aabc9516ea11d7a506a",
+      "original_path": "src/snapshot/backup.rs",
+      "package_version": "0.4.0",
+      "path": "sources/v0.4.0/snapshot_backup.rs",
+      "release": "v0.4.0",
+      "sha256": "2ce5522eefe7cfdf9a9ac8af052bbf40dc7454f353a4651ab92bcd1236380a76"
+    },
+    {
+      "commit": "6c67d0ddac81faffceb94104d4486ceaf57cd78d",
+      "git_blob": "465c3048e18a69c01f5656326b3c9489f8013bfc",
+      "original_path": "src/sql/migrate_v12.sql",
+      "package_version": "0.4.0",
+      "path": "sources/schema12/migrate_v12.sql",
+      "release": null,
+      "sha256": "cda1c5b0f466d648aa36f4f889a26509e9564cceec7e2133ad5825f94285164c"
+    }
+  ],
+  "version": 1
+}

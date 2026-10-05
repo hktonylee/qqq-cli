@@ -994,20 +994,24 @@ qqq list # run updated CLI
 Check task data before removing old DB. New CLI does not discover root-level
 `qqq.db`; `qqq init` without migration creates separate empty DB.
 
-Compatible DBs at schema versions 1–10 migrate to version 11. Version 11 adds
-extra prerequisite edges without changing old IDs, ownership, history, content
-revisions or readiness. Version 10 added content revisions. Schema-9/10 backups
-still restore, then migrate on next normal DB open. Version 6 moves
+Compatible DBs at schema versions 1–11 migrate to version 12. Version 12 adds
+tags; version 11 added extra prerequisite edges; version 10 added content
+revisions. Upgrades preserve old IDs, ownership, history and readiness. Portable
+snapshot format 1 accepts schema-9–12 DBs: restore preserves stored schema,
+then next normal DB open migrates older versions. Version 6 moves
 existing image blobs to `.qqq/images/` before SQLite drops its `data` column.
 Migration tries `VACUUM` to reclaim old blob pages. If compaction warns, stop
 writers and run `sqlite3 .qqq/qqq.db 'VACUUM;'` later. Upgrade other qqq workers
-before migration; older binaries cannot open version 11. Legacy `title` or
+before migration; older binaries cannot open version 12. Legacy `title` or
 `pending` schemas need manual conversion; newer unknown schemas fail. Back up
 before conversion.
 
 ## Development
 
 Tests require Python 3 for real-terminal coverage on macOS and Linux.
+[Historical compatibility fixtures](../tests/fixtures/compatibility/README.md)
+cover every normal-open DB schema and accepted portable snapshot schema. Tests
+copy checked-in artifacts; regeneration uses frozen historical sources.
 
 ```sh
 cargo test --locked

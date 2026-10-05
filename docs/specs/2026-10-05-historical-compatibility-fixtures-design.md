@@ -21,10 +21,9 @@ schema12 as published release.
 
 Check in twelve populated SQLite DB fixtures, four deterministic GNU tar
 snapshots for accepted schema9..12 and canonical expected JSON per source schema.
-Freeze SQL definitions from v0.4.0 commit
-`5c97d0c0dda62603bdd0e2be15e0f4296157220a` for schemas1..11. Freeze tagged
-schema9 sources/format from v0.1.1 commit
-`0ea59d1f13cd5df84d08f6ee62d88cfc996e2e9a`. Schema12 extends released definitions
+Freeze SQL definitions and snapshot format from v0.1.1 commit
+`0ea59d1f13cd5df84d08f6ee62d88cfc996e2e9a` for schemas1..9. Freeze v0.4.0
+sources from commit `5c97d0c0dda62603bdd0e2be15e0f4296157220a` for schemas10..11. Schema12 extends released definitions
 only with SQL from introducing commit
 `6c67d0ddac81faffceb94104d4486ceaf57cd78d`.
 
