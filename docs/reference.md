@@ -495,7 +495,8 @@ Enter or Shift+Enter inserts newline. Navigating away retains child parent conte
 
 Ctrl+L opens tags for the selected saved task from editor or filter. Current
 labels are prefilled, comma-separated. Enter applies, blank clears, Ctrl-U
-clears input, Esc/Ctrl-C cancels. Invalid labels stay in the popup. Tag saves
+clears input, Esc/Ctrl-C cancels. Ctrl-U, Enter and Esc share the popup footer;
+narrow popups show just the keys. Invalid labels stay in the popup. Tag saves
 retain unsaved description drafts, caret, scroll, parked buffers and filter
 focus. New unsaved tasks show “Select task to edit tags”; save first to tag.
 

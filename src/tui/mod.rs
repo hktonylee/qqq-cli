@@ -323,7 +323,6 @@ fn action_lines(ui: &ActionUi, width: usize, height: usize) -> Vec<render::Popup
                 ActionInputKind::Tags => vec![
                     PopupRow::new(format!("Tags task #{id}"), PopupKind::Heading),
                     PopupRow::new("Comma-separated; blank clears", PopupKind::Hint),
-                    PopupRow::new("Ctrl-U clear input", PopupKind::Hint),
                 ],
                 ActionInputKind::ErrorReason => vec![
                     PopupRow::new(format!("Error task #{id}"), PopupKind::Heading),
@@ -338,7 +337,17 @@ fn action_lines(ui: &ActionUi, width: usize, height: usize) -> Vec<render::Popup
                         .map(|text| PopupRow::new(text, PopupKind::Error)),
                 );
             }
-            lines.push(PopupRow::new("Enter apply  Esc cancel", PopupKind::Hint));
+            let shortcuts = if matches!(kind, ActionInputKind::Tags) {
+                let full = "Ctrl-U clear  Enter apply  Esc cancel";
+                if full.len() <= width {
+                    full
+                } else {
+                    "Ctrl-U  Enter  Esc"
+                }
+            } else {
+                "Enter apply  Esc cancel"
+            };
+            lines.push(PopupRow::new(shortcuts, PopupKind::Hint));
             lines
         }
         ActionUi::Error { text, top } => {

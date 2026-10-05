@@ -969,12 +969,21 @@ print(json.dumps({"result": result}))
                 return not visible.pending and screen.endswith(
                     b"\x1b[?25h" + f"\x1b[{visible.y + 1};{visible.x + 1}H".encode())
 
+            def assert_tag_shortcut_footer(shortcuts="Ctrl-U clear  Enter apply  Esc cancel"):
+                rows = visible.text().splitlines()
+                title_row = next(index for index, row in enumerate(rows) if "Tags task #2" in row)
+                footer_row = next(index for index, row in enumerate(rows) if shortcuts in row)
+                assert all("Ctrl-U" not in row for row in rows[title_row:footer_row]), rows
+                assert any("> " in row for row in rows[title_row:footer_row]), rows
+                assert "└" in rows[footer_row + 1] and "┘" in rows[footer_row + 1], rows
+
             def open_tags():
                 clear_capture()
                 send(b"\x0c")
                 wait_visible(lambda: "Tags task #2" in visible.text()
                              and "Enter apply  Esc cancel" in visible.text()
                              and frame_ready())
+                assert_tag_shortcut_footer()
 
             if scenario == "tags_new":
                 send(b"New draft\x0c")
@@ -1008,15 +1017,28 @@ print(json.dumps({"result": result}))
                     if scenario == "tags_filter":
                         assert filter_text() == "Filter: Second", visible.text()
                 open_tags()
+                if scenario in ("tags", "tags_no_color"):
+                    for width in (24, 42, 43, 72):
+                        shortcuts = ("Ctrl-U clear  Enter apply  Esc cancel" if width >= 43
+                                     else "Ctrl-U  Enter  Esc")
+                        clear_capture()
+                        fcntl.ioctl(slave, termios.TIOCSWINSZ, struct.pack("HHHH", 24, width, 0, 0))
+                        visible.resize(width, 24)
+                        os.kill(child.pid, signal.SIGWINCH)
+                        wait_visible(lambda: shortcuts in visible.text()
+                                     and "> old" in visible.text() and frame_ready())
+                        assert_tag_shortcut_footer(shortcuts)
                 send(b"\x15bad,,tag\r")
                 wait_visible(lambda: "nonempty labels" in visible.text()
                              and "bad,,tag" in visible.text() and frame_ready())
+                assert_tag_shortcut_footer()
                 assert cli("show", "2") == tag_task_before
                 for invalid_paste in (b"front\nend", b"front\tend", b"front\x1bend"):
                     clear_capture()
                     send(b"\x15\x1b[200~" + invalid_paste + b"\x1b[201~\r")
                     wait_visible(lambda: "Tags task #2" in visible.text()
                                  and "nonempty labels" in visible.text() and frame_ready())
+                    assert_tag_shortcut_footer()
                     assert cli("show", "2") == tag_task_before
                 send(b"\x15\x1b[200~frontend, " + "界 面".encode() + b", frontend\x1b[201~\r")
                 wait_visible(lambda: "Tags task #2" not in visible.text()
