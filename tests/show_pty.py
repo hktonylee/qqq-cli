@@ -29,6 +29,8 @@ termios.tcsetattr(slave, termios.TCSANOW, attributes)
 args = [binary, "show", "1"]
 if mode == "json":
     args.append("--json")
+else:
+    args.append("--human")
 child = subprocess.Popen(args, cwd=folder, env=env, stdin=subprocess.DEVNULL,
     stdout=slave, stderr=subprocess.PIPE)
 os.close(slave)

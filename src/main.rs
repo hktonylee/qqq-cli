@@ -1034,11 +1034,10 @@ fn run(cli: Cli) -> Result<(Option<String>, bool)> {
 }
 fn main() {
     let arguments: Vec<_> = std::env::args_os().collect();
-    let agent_caller =
-        cli_error::output_override(&arguments).is_none() && session::is_agent_caller();
-    let requested_json = cli_error::requests_json(&arguments, agent_caller);
+    let mut agent_caller = None;
+    let requested_json = cli_error::requests_json(&arguments, &mut agent_caller);
     errors::set_json_output(requested_json);
-    let arguments = match aliases::expand(arguments, agent_caller) {
+    let arguments = match aliases::expand(arguments, &mut agent_caller) {
         Ok(arguments) => arguments,
         Err(error) => {
             let error = cli_error::annotate(
@@ -1053,7 +1052,7 @@ fn main() {
             std::process::exit(1);
         }
     };
-    let requested_json = cli_error::requests_json(&arguments, agent_caller);
+    let requested_json = cli_error::requests_json(&arguments, &mut agent_caller);
     let mut cli = match Cli::try_parse_from(arguments) {
         Ok(cli) => cli,
         Err(error) if requested_json && error.use_stderr() => {
@@ -1062,7 +1061,7 @@ fn main() {
         }
         Err(error) => error.exit(),
     };
-    cli.json = cli.json || (agent_caller && !cli.human);
+    cli.json = cli.json || (requested_json && !cli.human);
     let json_output = cli.json;
     errors::set_json_output(json_output);
     let command = cli_error::command_name(&cli.command);

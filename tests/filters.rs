@@ -102,6 +102,7 @@ fn list_combines_luau_search_status_and_parent_context() {
         .is_empty()
     );
     let human = Command::new(env!("CARGO_BIN_EXE_qqq"))
+        .arg("--human")
         .current_dir(p)
         .env("HOME", p)
         .args(["list", "--filter", "false"])

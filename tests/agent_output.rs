@@ -189,6 +189,25 @@ fn literal_output_flags_do_not_override_agent_default() {
 }
 
 #[test]
+fn aliases_consuming_output_flags_as_values_keep_agent_default() {
+    let root = project();
+    let p = root.path();
+    config(p, "[alias]\nl = 'list'\nq = 'list --query'\nn = 'add'\n");
+    for args in [
+        vec!["l", "--query", "--human"],
+        vec!["q", "--human"],
+        vec!["l", "--query", "--json"],
+    ] {
+        assert_eq!(json(agent(p).args(args)), serde_json::json!([]));
+    }
+    json_error(
+        agent(p).args(["n", "Task", "--priority", "--human"]),
+        2,
+        "INVALID_ARGUMENT",
+    );
+}
+
+#[test]
 fn no_agent_context_keeps_human_output_even_when_piped_or_session_supplied() {
     let root = project();
     let p = root.path();
@@ -328,5 +347,21 @@ mod herdr {
         let output = success(caller(p, pane).args(["--human", "list"]));
         assert!(serde_json::from_slice::<Value>(&output.stdout).is_err());
         assert!(!p.join("calls").exists());
+    }
+
+    #[test]
+    fn aliases_consuming_literal_mode_flags_still_detect_exact_herdr_agent() {
+        let root = project();
+        let p = root.path();
+        config(p, "[alias]\nq = 'list --query'\n");
+        let pane = serde_json::json!({"pane_id":"w1:p1","workspace_id":"w1","tab_id":"w1:t1","agent":"claude"});
+        assert_eq!(
+            json(caller(p, pane).args(["q", "--human"])),
+            serde_json::json!([])
+        );
+        assert_eq!(
+            fs::read_to_string(p.join("calls")).unwrap(),
+            "pane current --pane w1:p1\n"
+        );
     }
 }

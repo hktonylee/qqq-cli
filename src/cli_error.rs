@@ -11,8 +11,9 @@ use clap::{
 use serde_json::{Value, json};
 use std::{ffi::OsString, io::Write};
 
-pub fn requests_json(arguments: &[OsString], default_json: bool) -> bool {
-    output_override(arguments).unwrap_or(default_json)
+pub fn requests_json(arguments: &[OsString], agent_caller: &mut Option<bool>) -> bool {
+    output_override(arguments)
+        .unwrap_or_else(|| *agent_caller.get_or_insert_with(crate::session::is_agent_caller))
 }
 
 pub fn output_override(arguments: &[OsString]) -> Option<bool> {

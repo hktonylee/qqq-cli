@@ -31,7 +31,7 @@ human: bool,
 
 - [ ] In `session.rs`, add `is_agent_caller() -> bool`: nonblank UTF-8 native markers return true; otherwise call best-effort exact Herdr detection. In `herdr.rs`, add caller predicate using `current_pane()` only when `has_context()`; nonblank `agent_session.agent` or `agent` means agent.
 - [ ] Extend `cli_error::requests_json(arguments, default_json)` to track real `--human` while preserving existing value-skipping and `--` behavior; explicit JSON wins for structured flag-conflict errors. Return `default_json && !human` when no real JSON flag appears.
-- [ ] Resolve detection once before alias expansion; reuse default through both early error scans. After successful parse, set `cli.json = cli.json || (agent_caller && !cli.human)` before existing `run`/error paths.
+- [ ] Resolve detection lazily when arguments require automatic mode; cache caller result through alias expansion and both early error scans. Recompute real overrides after expansion, since aliases can consume apparent flags as literal option values. After successful parse, set `cli.json = cli.json || (requested_json && !cli.human)` before existing `run`/error paths.
 - [ ] Extend root alias scanning to skip `--human` like `--json`.
 - [ ] Run `cargo fmt`, focused agent-output tests, existing `output`, `json_errors`, `aliases`, `display`, `watch`, `autodetect`, `identity`, and CLI suites. Fix failures within feature scope.
 - [ ] Commit verified behavior with `[Feat] Default Agent Caller Output To JSON`.

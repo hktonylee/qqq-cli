@@ -54,6 +54,7 @@ fn project() -> TempDir {
 
 fn human(path: &Path, args: &[&str]) -> String {
     let output = Command::new(env!("CARGO_BIN_EXE_qqq"))
+        .arg("--human")
         .current_dir(path)
         .args(args)
         .output()
