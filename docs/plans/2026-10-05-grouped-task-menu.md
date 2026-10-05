@@ -15,7 +15,9 @@
 - [x] Update `tests/tui_dashboard_pty.py` popup bounds, expected action order, retry navigation, error navigation, and narrow-menu assertions. Assert actual empty rows between visible groups. Run action-popup, menu-arrows, menu-retry, task-actions, and mark-error PTY tests.
 - [x] Update README/reference menu description. Run full `cargo test --locked --offline`, `cargo fmt --check`, `cargo clippy --locked --offline --all-targets -- -D warnings`, and locked offline release build.
 - [x] Request independent review, address concrete findings with regression checks, commit verified implementation.
-- [ ] Rebase, integrate locally, install, run installed-menu PTY checks. Record evidence with `qqq message 166`, complete task. Clean worktree and resume persistent queue wait after delivery.
+- [x] Rebase, integrate locally, install, run installed-menu PTY checks. Record evidence with `qqq message 166`, complete task.
+
+After delivery, clean worktree and resume persistent queue wait.
 
 ## Verification
 
@@ -25,3 +27,4 @@
 - Full suite: 635 tests across 39 binaries, zero failures. Formatting, Clippy all-targets with warnings denied, and locked offline release build passed.
 - Independent review found no concrete issues; two grouped-menu tests passed independently.
 - Logs: `/tmp/qqq-task-166-full.log`, `/tmp/qqq-task-166-clippy.log`, `/tmp/qqq-task-166-release.log`.
+- Integrated locally at `893c87f`; installed qqq 0.5.0 passed 17 menu PTY scenarios. Installed/release SHA256 match: `116b45f9cb0a23b027094d112412c5607a2fca1e39b2e53abb580267c6bc5a8b`. Task #166 completed through qqq. Installed log: `/tmp/qqq-task-166-installed-pty.log`.
