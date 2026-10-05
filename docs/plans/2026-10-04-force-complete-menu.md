@@ -15,7 +15,7 @@
 **Files:** `tests/tui.rs`, `tests/tui_dashboard_pty.py`.
 
 - [x] Build isolated baseline at `5c97d0c`; full locked offline suite passes 593 tests across 38 targets.
-- [ ] Add force-completion scenarios to existing PTY harness. Seed a foreign active task, new task, error task, own task, and completed task; launch with session `worker` except sessionless/native variants. Initial regression checks the actual visible prompt before any database mutation:
+- [x] Add force-completion scenarios to existing PTY harness. Seed a foreign active task, new task, error task, own task, and completed task; launch with session `worker` except sessionless/native variants. Initial regression checks the actual visible prompt before any database mutation:
 
 ```python
 click(5, task_row("Foreign item"))
@@ -36,14 +36,14 @@ fn tui_dashboard_force_completion_requires_explicit_confirmation() {
 }
 ```
 
-- [ ] Run `CARGO_TARGET_DIR=/private/tmp/qqq-155-target cargo test --locked --offline --test tui tui_dashboard_force_completion_requires_explicit_confirmation -- --exact`; expect failure because old prompt says Complete rather than Force complete.
+- [x] Run `CARGO_TARGET_DIR=/private/tmp/qqq-155-target cargo test --locked --offline --test tui tui_dashboard_force_completion_requires_explicit_confirmation -- --exact`; expect failure because old prompt says Complete rather than Force complete.
 
 ### Task 2: Atomic Force Completion and Menu Routing
 
 **Files:** `src/db.rs`, `src/tui/mod.rs`, `src/main.rs`, `tests/tui_db.rs`.
 
-- [ ] Add real database coverage for preservation across `new`, `in_progress`, and `error`; missing/completed rejection; event-trigger failure rollback. Snapshot `db.show(id)` before failures and compare afterward. For successful cases compare description, content revision, priority, archived, parent, prerequisites, messages, images and Herdr; check all claim metadata clears and exactly one `complete` event records actor.
-- [ ] Add DB operation beside ordinary complete:
+- [x] Add real database coverage for preservation across `new`, `in_progress`, and `error`; missing/completed rejection; event-trigger failure rollback. Snapshot `db.show(id)` before failures and compare afterward. For successful cases compare description, content revision, priority, archived, parent, prerequisites, messages, images and Herdr; check all claim metadata clears and exactly one `complete` event records actor.
+- [x] Add DB operation beside ordinary complete:
 
 ```rust
 pub fn force_complete(&mut self, id: i64, actor: &str) -> Result<Task> {
@@ -61,7 +61,7 @@ pub fn force_complete(&mut self, id: i64, actor: &str) -> Result<Task> {
 }
 ```
 
-- [ ] Add `TaskAction::ForceComplete(i64)` to ID/success matches and use label `Force complete`. Add a separate completion resolver callback stored only for dashboard mode:
+- [x] Add `TaskAction::ForceComplete(i64)` to ID/success matches and use label `Force complete`. Add a separate completion resolver callback stored only for dashboard mode:
 
 ```rust
 type CompletionHandler<'a> = dyn FnMut(&crate::db::Db, i64) -> Result<TaskAction> + 'a;
@@ -71,7 +71,7 @@ completion: Option<&'b mut CompletionHandler<'b>>,
 
 Expose resolver through `compose_dashboard`, set `None` in continuous add, and call it on the selected `c` action. Propagate resolver errors through existing ActionUi error popup. Add force warning row before existing dirty warning and confirmation hint; wrap both with existing `wrap_modal` for compact terminals.
 
-- [ ] Wire resolver and mutation in main:
+- [x] Wire resolver and mutation in main:
 
 ```rust
 &mut |db, id| {
@@ -118,14 +118,14 @@ Expose resolver through `compose_dashboard`, set `None` in continuous add, and c
 tui::TaskAction::ForceComplete(id) => db.force_complete(id, session_input.unwrap_or("manual")),
 ```
 
-- [ ] Run regression and DB suites; expect all pass. Commit verified core feature using `[Feat] Offer Force Complete In Task Menu`.
+- [x] Run regression and DB suites; expect all pass. Commit verified core feature using `[Feat] Offer Force Complete In Task Menu`.
 
 ### Task 3: Ownership Races, Cancellation and Documentation
 
 **Files:** `tests/tui.rs`, `tests/tui_dashboard_pty.py`, `docs/reference.md`.
 
-- [ ] Extend PTY coverage for explicit acceptance/cancellation, unsaved draft preservation, New/Error completion, owned normal completion, foreign owner transfer during normal prompt, sessionless/native alias operation, repeated completion rejection, and color/plain mode. A normal prompt with changed ownership must reject; reopen menu to receive force prompt.
-- [ ] Update existing `actions_basic` unclaimed branch to cancel force prompt, retaining later priority/parent/archive coverage:
+- [x] Extend PTY coverage for explicit acceptance/cancellation, unsaved draft preservation, New/Error completion, owned normal completion, foreign owner transfer during normal prompt, sessionless/native alias operation, repeated completion rejection, and color/plain mode. A normal prompt with changed ownership must reject; reopen menu to receive force prompt.
+- [x] Update existing `actions_basic` unclaimed branch to cancel force prompt, retaining later priority/parent/archive coverage:
 
 ```python
 action("c", "Force complete task #4?")
@@ -134,11 +134,24 @@ wait_visible(lambda: editor_line().startswith("XFresh item"))
 assert cli("show", "4")["task"]["status"] == "new"
 ```
 
-- [ ] Extend Ctrl-G reference with force confirmation, unfinished-state scope and operator-attributed completion audit semantics; describe cancellation and normal ownership race protection.
-- [ ] Run `cargo fmt --all -- --check`, `git diff --check`, focused TUI/DB/CLI tests, full `cargo test --locked --offline --no-fail-fast`, and `cargo clippy --locked --offline --all-targets -- -D warnings`, using private target directory. Request read-only review, resolve findings, commit.
+- [x] Extend Ctrl-G reference with force confirmation, unfinished-state scope and operator-attributed completion audit semantics; describe cancellation and normal ownership race protection.
+- [x] Run `cargo fmt --all -- --check`, `git diff --check`, focused TUI/DB/CLI tests, full `cargo test --locked --offline --no-fail-fast`, and `cargo clippy --locked --offline --all-targets -- -D warnings`, using private target directory. Request read-only review, resolve findings, commit.
 
 ### Task 4: Local Integration and Queue Handoff
 
-- [ ] Rebase task checkout onto latest master. Rerun full checks if upstream source changed. Fast-forward only clean root master at expected base.
-- [ ] Install verified stable checkout with `CARGO_TARGET_DIR=/private/tmp/qqq-155-target cargo install --path . --locked --offline --force`; run installed force-completion PTY scenarios and ordinary CLI ownership rejection smoke.
-- [ ] Explicitly run `qqq complete 160 --json`, record actual evidence here, integrate docs, remove only clean merged task checkout/branch, resume one blocking `qqq next --wait --local --json`.
+- [x] Rebase task checkout onto latest master. Rerun full checks if upstream source changed. Fast-forward only clean root master at expected base.
+- [x] Install verified stable checkout with `CARGO_TARGET_DIR=/private/tmp/qqq-155-target cargo install --path . --locked --offline --force`; run installed force-completion PTY scenarios and ordinary CLI ownership rejection smoke.
+- [x] Explicitly run `qqq complete 160 --json` and record actual evidence here.
+
+After evidence integration, remove only the clean merged task checkout/branch and resume one blocking `qqq next --wait --local --json`.
+
+
+## Verification Evidence
+
+- Baseline at `5c97d0c`: build and 593 tests across 38 targets passed.
+- Initial real PTY regression failed on ordinary Complete prompt for a foreign claim. New force behavior passed 169 focused CLI/TUI/DB tests. Standalone source `a74db6a` passed 598 full tests across 38 targets and strict all-target Clippy.
+- Force completion uses the existing `complete` event, preserving schema constraints and completion ordering. Database tests cover every unfinished status, archived/content/revision/priority/parent/prerequisite/message/image/Herdr preservation, cleared ownership, missing/completed/blank-actor rejection, and rollback if audit insertion fails.
+- Read-only review found owner-discovery errors were suppressed. A malformed unrelated active Herdr link reproduced the incorrect force prompt; discovery fallback now permits only known missing/unavailable identity cases. Regression verifies Action error with local draft and DB unchanged. Both force test groups then passed.
+- Rebased onto concurrent Mark Error source `bcdb158` and evidence `acb71cc`, preserving its action, Clone enum, reason input, ownership checks and PTY scenarios. Force warning shares its confirmation helper. Combined source `9a0e1c7` passed 602 tests across 38 targets, zero failed or ignored (`/private/tmp/qqq-160-integrated-full.log`). Formatting, diff checks and strict all-target Clippy passed; combined read-only review found no issues.
+- Clean local master fast-forwarded to the combined source. Install from stable task checkout succeeded (`/private/tmp/qqq-160-install.log`). Installed CLI passed six force scenarios (color/plain, sessionless/native alias, ownership transfer, owner-discovery DB error), both color/plain Mark Error success scenarios, and a direct CLI wrong-owner rejection followed by proper-owner completion (`/private/tmp/qqq-160-installed.log`). Installed version remains `qqq 0.4.0`.
+- `qqq complete 160 --json` explicitly completed task at `2026-10-05T06:05:37.186Z`.
