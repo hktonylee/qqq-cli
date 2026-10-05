@@ -167,11 +167,25 @@ fully expanded aliases determine output mode.
 ```sh
 qqq add "Fix login"
 qqq add "Fix urgent login" --priority 8
+qqq add "Fix layout" --tag frontend --tag bug
 qqq add --description "Fix login"   # same input, alternative flag
 qqq edit 1 --description "Updated details"
 qqq edit 1 --priority -5             # lower future claim order
+qqq edit 1 --set-tags "frontend, bug" # replace tags; skips editor
+qqq edit 1 --set-tags ""              # clear tags
 qqq edit -1                         # edit newest task interactively
 ```
+
+Tags are ordered metadata, displayed before task names as `[frontend] [bug]`.
+Repeated `--tag` flags accept one label each; `--set-tags` accepts a comma-separated
+replacement list and conflicts with `--edit`. Surrounding spaces are trimmed;
+exact duplicates are removed while case/order remain. Labels support Unicode
+and internal spaces; empty labels, control characters, commas and square
+brackets are rejected. Blank replacement input clears tags. JSON always includes
+`tags: []` or a string array and keeps raw description unchanged. Metadata edits
+preserve content revision, attachments, status and ownership, including on
+completed/archived tasks. Combined edits commit atomically. List `--query` and
+TUI filtering continue matching descriptions.
 
 Descriptions preserve whitespace and newlines; blank-only text fails.
 Priority defaults to `0` and accepts integers from `-100` through `100`.
@@ -239,7 +253,9 @@ Version-1 batch schema:
 Each task requires a nonblank unique `key` and nonblank `description`. Keys and
 descriptions retain exact whitespace; references match exact keys. Priority
 defaults to 0 and accepts integer -100 through 100. Omitted/null parent means
-no tree parent. Omitted `depends_on` defaults to `[]`. Each prerequisite uses
+no tree parent. Omitted `tags` defaults to `[]`; supplied tag labels use the same normalization
+and validation as add. Import preview/results include normalized tags.
+Omitted `depends_on` defaults to `[]`. Each prerequisite uses
 the same reference shape as parent; for example `"depends_on": [{"key":"api"},
 {"id":12}]`. `{"key":"feature"}` references a task in the same batch,
 including one listed later. `{"id":12}` references an existing positive DB task
@@ -467,7 +483,13 @@ Current edits stay retained. Each parent has separate child draft; return to par
 and press Ctrl+P to continue it. Ctrl-S creates child with dependency;
 Enter or Shift+Enter inserts newline. Navigating away retains child parent context.
 
-Ctrl+L opens a task ID popup from editor or filter. Enter a positive ID, press
+Ctrl+L opens tags for the selected saved task from editor or filter. Current
+labels are prefilled, comma-separated. Enter applies, blank clears, Ctrl-U
+clears input, Esc/Ctrl-C cancels. Invalid labels stay in the popup. Tag saves
+retain unsaved description drafts, caret, scroll, parked buffers and filter
+focus. New unsaved tasks show “Select task to edit tags”; save first to tag.
+
+Ctrl+K opens a task ID popup from editor or filter. Enter a positive ID, press
 Enter to go; invalid or missing IDs keep popup open with an error. Backspace edits
 input; Ctrl+U clears it. Esc or Ctrl+C closes popup and preserves selection,
 draft, filter and focus. Successful jump clears filter and retains unsaved

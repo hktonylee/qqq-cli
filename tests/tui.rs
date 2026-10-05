@@ -706,3 +706,25 @@ fn tui_escape_keep_choices_preserve_pastes_images_and_ignore_modal_input() {
 fn tui_escape_confirms_unchanged_existing_content_then_resumes_editing() {
     scenario("escape_edit");
 }
+
+#[test]
+fn tui_dashboard_tags_edit_clear_cancel_color_and_paste() {
+    for name in ["tags", "tags_no_color"] {
+        dashboard_scenario(name);
+    }
+}
+
+#[test]
+fn tui_dashboard_tags_preserve_dirty_drafts_caret_and_buffers() {
+    dashboard_scenario("tags_dirty");
+}
+
+#[test]
+fn tui_dashboard_tags_preserve_filter_focus_and_completed_toggle() {
+    dashboard_scenario("tags_filter");
+}
+
+#[test]
+fn tui_dashboard_tags_require_saved_task() {
+    dashboard_scenario("tags_new");
+}

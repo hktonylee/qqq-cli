@@ -208,8 +208,8 @@ fn report_with_activity(
                 Ok((
                     task_row(row)?,
                     row.get::<_, Option<String>>(3)?,
-                    row.get::<_, bool>(15)?,
                     row.get::<_, bool>(16)?,
+                    row.get::<_, bool>(17)?,
                 ))
             },
         )?;
@@ -399,6 +399,7 @@ mod tests {
             include_str!("sql/migrate_v9.sql"),
             include_str!("sql/migrate_v10.sql"),
             include_str!("sql/migrate_v11.sql"),
+            include_str!("sql/migrate_v12.sql"),
         ] {
             conn.execute_batch(sql).unwrap();
         }

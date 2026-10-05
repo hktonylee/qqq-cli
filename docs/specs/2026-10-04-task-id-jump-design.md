@@ -1,6 +1,6 @@
-# Ctrl+L Task ID Jump
+# Ctrl+K Task ID Jump
 
-Ctrl+L opens a centered task ID input popup in the dashboard, including while
+Ctrl+K opens a centered task ID input popup in the dashboard, including while
 filtering or editing a new/child draft. Existing confirmations, action menus and
 content-conflict dialogs keep their current keyboard handling.
 
@@ -22,7 +22,7 @@ Navigation writes no task content, status or ownership metadata.
 Esc or Ctrl+C closes only the jump popup. Draft, selection, filter, focus and
 scroll state remain intact. Mouse input cannot reach the dashboard behind it.
 The popup reuses existing typed popup rows, color gates, clipping and cursor
-placement. Normal, filtered and Herdr shortcut bars advertise Ctrl+L.
+placement. Normal, filtered and Herdr shortcut bars advertise Ctrl+K.
 
 Tests cover validation, editing/paste, typed popup roles, existing/missing IDs,
 cancel from filtered and dirty states, retained task/new/child drafts, offscreen

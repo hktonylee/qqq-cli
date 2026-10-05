@@ -25,7 +25,7 @@ pub(crate) fn filter_evaluation_error() -> crate::errors::Info {
 
 pub const DB_NAME: &str = "qqq.db";
 const PROJECT_DIR_NAME: &str = ".qqq";
-pub(crate) const SCHEMA_VERSION: i64 = 11;
+pub(crate) const SCHEMA_VERSION: i64 = 12;
 pub(crate) const READY_TASK_PREDICATE: &str = "tasks.status='new' AND tasks.archived=0 AND
     (tasks.parent_id IS NULL OR EXISTS
     (SELECT 1 FROM tasks parent WHERE parent.id=tasks.parent_id AND parent.status='completed')) AND NOT EXISTS (
@@ -37,7 +37,7 @@ pub(crate) const TASK_COLUMNS: &str = "id,description,status,claim_key,created_a
         'archived',json(CASE WHEN archived IS NULL THEN NULL WHEN archived THEN 'true' ELSE 'false' END)))
      FROM (SELECT dependency.prerequisite_id, prerequisite.status, prerequisite.archived
            FROM task_dependencies dependency LEFT JOIN tasks prerequisite ON prerequisite.id=dependency.prerequisite_id
-           WHERE dependency.task_id=tasks.id ORDER BY dependency.prerequisite_id))";
+           WHERE dependency.task_id=tasks.id ORDER BY dependency.prerequisite_id)),tags";
 
 pub struct Db {
     pub conn: Connection,
@@ -59,12 +59,21 @@ pub enum EditTransition<'a> {
     },
 }
 #[derive(Default)]
+pub struct AddOptions<'a> {
+    pub parent: Option<i64>,
+    pub priority: i64,
+    pub prerequisites: &'a [i64],
+    pub tags: &'a [String],
+}
+
+#[derive(Default)]
 pub struct EditOptions<'a> {
     pub transition: Option<EditTransition<'a>>,
     pub parent: Option<ParentChange>,
     pub priority: Option<i64>,
     pub expected_revision: Option<i64>,
     pub dependencies: crate::dependencies::Changes<'a>,
+    pub tags: Option<&'a [String]>,
 }
 
 #[derive(Debug)]
@@ -146,6 +155,7 @@ pub struct Task {
     pub updated_at: String,
     pub parent_id: Option<i64>,
     pub prerequisites: Vec<Prerequisite>,
+    pub tags: Vec<String>,
     #[serde(skip_serializing_if = "is_false")]
     pub context_only: bool,
 }
@@ -173,6 +183,13 @@ pub(crate) fn task_row(r: &rusqlite::Row<'_>) -> rusqlite::Result<Task> {
         prerequisites: serde_json::from_str(&r.get::<_, String>(14)?).map_err(|error| {
             rusqlite::Error::FromSqlConversionFailure(
                 14,
+                rusqlite::types::Type::Text,
+                Box::new(error),
+            )
+        })?,
+        tags: serde_json::from_str(&r.get::<_, String>(15)?).map_err(|error| {
+            rusqlite::Error::FromSqlConversionFailure(
+                15,
                 rusqlite::types::Type::Text,
                 Box::new(error),
             )
@@ -510,6 +527,9 @@ impl Db {
             if version < 11 {
                 tx.execute_batch(include_str!("sql/migrate_v11.sql"))?;
             }
+            if version < 12 {
+                tx.execute_batch(include_str!("sql/migrate_v12.sql"))?;
+            }
             commit_with_files(tx, &mut pending)?;
             if disable_foreign_keys {
                 conn.pragma_update(None, "foreign_keys", "ON")?;
@@ -659,7 +679,14 @@ impl Db {
         parent_id: Option<i64>,
         images: &[ImageInput],
     ) -> Result<Task> {
-        self.add_with_spans(description, parent_id, images, &[], 0, &[])
+        self.add_with_options(
+            description,
+            images,
+            AddOptions {
+                parent: parent_id,
+                ..Default::default()
+            },
+        )
     }
     pub fn add_with_priority(
         &mut self,
@@ -671,7 +698,15 @@ impl Db {
         if priority == 0 {
             self.add(description, parent_id, images)
         } else {
-            self.add_with_spans(description, parent_id, images, &[], priority, &[])
+            self.add_with_options(
+                description,
+                images,
+                AddOptions {
+                    parent: parent_id,
+                    priority,
+                    ..Default::default()
+                },
+            )
         }
     }
     pub fn add_with_dependencies(
@@ -685,18 +720,40 @@ impl Db {
         if prerequisites.is_empty() {
             self.add_with_priority(description, parent, images, priority)
         } else {
-            self.add_with_spans(description, parent, images, &[], priority, prerequisites)
+            self.add_with_options(
+                description,
+                images,
+                AddOptions {
+                    parent,
+                    priority,
+                    prerequisites,
+                    ..Default::default()
+                },
+            )
         }
+    }
+    pub fn add_with_options(
+        &mut self,
+        description: &str,
+        images: &[ImageInput],
+        options: AddOptions<'_>,
+    ) -> Result<Task> {
+        self.add_with_spans(description, images, &[], options)
     }
     fn add_with_spans(
         &mut self,
         description: &str,
-        parent_id: Option<i64>,
         images: &[ImageInput],
         image_spans: &[Range<usize>],
-        priority: i64,
-        prerequisites: &[i64],
+        options: AddOptions<'_>,
     ) -> Result<Task> {
+        let AddOptions {
+            parent: parent_id,
+            priority,
+            prerequisites,
+            tags,
+        } = options;
+        let tags = serde_json::to_string(&crate::tags::normalize(tags)?)?;
         validate_description(description)?;
         validate_priority(priority)?;
         for image in images {
@@ -711,8 +768,8 @@ impl Db {
         crate::dependencies::validate_add(&tx, parent_id, prerequisites, true)?;
         let mut pending = PendingFiles::new();
         tx.execute(
-            "INSERT INTO tasks(description,parent_id,priority) VALUES (?,?,?)",
-            params![description, parent_id, priority],
+            "INSERT INTO tasks(description,parent_id,priority,tags) VALUES (?,?,?,?)",
+            params![description, parent_id, priority, tags],
         )?;
         let id = tx.last_insert_rowid();
         for prerequisite in prerequisites {
@@ -762,15 +819,30 @@ impl Db {
         priority: i64,
         prerequisites: &[i64],
     ) -> Result<Task> {
+        self.save_composition_with_options(
+            id,
+            draft,
+            AddOptions {
+                parent,
+                priority,
+                prerequisites,
+                ..Default::default()
+            },
+        )
+    }
+    pub fn save_composition_with_options(
+        &mut self,
+        id: Option<i64>,
+        draft: &crate::tui::draft::Composition,
+        options: AddOptions<'_>,
+    ) -> Result<Task> {
         match id {
             Some(id) => self.edit_composition(id, draft, None),
             None => self.add_with_spans(
                 &draft.description,
-                parent,
                 &draft.images,
                 &draft.image_spans,
-                priority,
-                prerequisites,
+                options,
             ),
         }
     }
@@ -810,6 +882,7 @@ impl Db {
                 priority,
                 expected_revision,
                 dependencies: Default::default(),
+                tags: None,
             },
         )
     }
@@ -880,7 +953,7 @@ impl Db {
         let mut statement = self.conn.prepare(&sql).context(filter_evaluation_error())?;
         let rows = statement
             .query_map(params_from_iter(values.iter()), |row| {
-                Ok((task_row(row)?, row.get::<_, bool>(15)?))
+                Ok((task_row(row)?, row.get::<_, bool>(16)?))
             })
             .context(filter_evaluation_error())?;
         let mut tasks = Vec::new();
@@ -928,6 +1001,7 @@ impl Db {
                 priority,
                 expected_revision: None,
                 dependencies: Default::default(),
+                tags: None,
             },
         )
     }
@@ -954,7 +1028,13 @@ impl Db {
             priority,
             expected_revision,
             dependencies,
+            tags,
         } = changes;
+        let tags = tags
+            .map(crate::tags::normalize)
+            .transpose()?
+            .map(|labels| serde_json::to_string(&labels))
+            .transpose()?;
         if let Some(description) = description {
             nonempty(description, "Description")?;
         }
@@ -1084,7 +1164,7 @@ impl Db {
             }
             None => {}
         }
-        ensure!(tx.execute("UPDATE tasks SET description=COALESCE(?,description),priority=COALESCE(?,priority),updated_at=strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE id=?",params![description,priority,id])?==1,crate::errors::Info::missing_task(id));
+        ensure!(tx.execute("UPDATE tasks SET description=COALESCE(?,description),priority=COALESCE(?,priority),tags=COALESCE(?,tags),updated_at=strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE id=?",params![description,priority,tags,id])?==1,crate::errors::Info::missing_task(id));
         let image_ids = Self::save_images(&tx, &self.image_store, &mut pending, id, images)?;
         if !image_spans.is_empty() {
             let source = description.context("Image references require description")?;

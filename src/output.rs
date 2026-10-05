@@ -202,6 +202,10 @@ fn task(value: &Value, color: bool, assignment: bool) -> String {
         field(value, "priority"),
         parent(value)
     );
+    let tags = crate::tags::prefix(value);
+    if !tags.is_empty() {
+        result.push_str(&format!("\nTags: {tags}"));
+    }
     if assignment {
         result.push_str(&format!(
             "\nHarness name: {}\nHarness session: {}\nOrchestrator name: {}\nOrchestrator session: {}",
@@ -350,6 +354,10 @@ fn task_tree(
                 .collect::<String>()
         );
         let mut description = task["description"].as_str().unwrap_or("").to_owned();
+        let tags = crate::tags::prefix(task);
+        if !tags.is_empty() {
+            description = format!("{tags} {description}");
+        }
         if task["context_only"].as_bool() == Some(true) {
             description = format!("[context] {description}");
         }
@@ -616,6 +624,24 @@ mod tests {
         assert!(rows[1].starts_with("\x1b[31m1"));
         assert!(rows[2].starts_with("\x1b[31m"));
         assert!(rows[2].ends_with("Second\x1b[0m"));
+    }
+
+    #[test]
+    fn tagged_names_wrap_without_splitting_unicode_or_repeating_tags() {
+        let tasks = json!([{
+            "id":1, "description":"Description\nSecond", "status":"new",
+            "parent_id":null, "tags":["front", "界界"]
+        }]);
+        let rendered = render(Format::Tasks, &tasks, false, Some(32));
+        let body: Vec<_> = rendered.lines().skip(1).collect();
+        assert!(
+            body.iter()
+                .all(|row| unicode_width::UnicodeWidthStr::width(*row) <= 32)
+        );
+        let text: String = body.iter().map(|row| &row[20..]).collect();
+        assert_eq!(text, "[front] [界界] DescriptionSecond");
+        assert_eq!(text.matches("[front]").count(), 1);
+        assert_eq!(tasks[0]["description"], "Description\nSecond");
     }
 
     #[test]

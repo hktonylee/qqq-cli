@@ -19,6 +19,7 @@ mod queue;
 mod session;
 mod snapshot;
 mod sql_filter;
+mod tags;
 mod tui;
 mod watch;
 use anyhow::{Context, Result, ensure};
@@ -113,6 +114,9 @@ enum Commands {
         /// Attach image file bytes. Repeat for multiple images.
         #[arg(long = "image", value_name = "PATH")]
         images: Vec<PathBuf>,
+        /// Tag label; repeat for multiple tags. Surrounding spaces are trimmed.
+        #[arg(long = "tag", value_name = "LABEL")]
+        tags: Vec<String>,
     },
     /// Atomically import a versioned JSON task batch; use - for stdin.
     Import {
@@ -203,6 +207,9 @@ enum Commands {
         /// Remove all extra prerequisites; combine with --depends-on to replace.
         #[arg(long, conflicts_with = "edit")]
         clear_depends_on: bool,
+        /// Replace comma-separated tags; an empty string clears tags. Skips editor.
+        #[arg(long, value_name = "TAGS", conflicts_with = "edit")]
+        set_tags: Option<String>,
         /// Claim order: -100 through 100, higher first.
         #[arg(long, allow_hyphen_values = true, value_parser = clap::value_parser!(i64).range(-100..=100))]
         priority: Option<i64>,
@@ -444,7 +451,9 @@ fn execute(
             images,
             stdin: _,
             depends_on,
+            tags,
         } => {
+            let tags = tags::normalize(&tags)?;
             if let Some(id) = parent {
                 db.task(id)?;
             }
@@ -455,13 +464,26 @@ fn execute(
                 .collect::<Result<Vec<_>>>()?;
             match stdin_description.or(text).or(description) {
                 Some(description) if !edit => {
-                    json!(db.add_with_dependencies(
-                        &description,
-                        parent,
-                        &images,
-                        priority,
-                        &depends_on
-                    )?)
+                    json!(if tags.is_empty() {
+                        db.add_with_dependencies(
+                            &description,
+                            parent,
+                            &images,
+                            priority,
+                            &depends_on,
+                        )?
+                    } else {
+                        db.add_with_options(
+                            &description,
+                            &images,
+                            db::AddOptions {
+                                parent,
+                                priority,
+                                prerequisites: &depends_on,
+                                tags: &tags,
+                            },
+                        )?
+                    })
                 }
                 None if editor::uses_builtin(edit) => {
                     let mut saved = Vec::new();
@@ -479,12 +501,15 @@ fn execute(
                                 None,
                                 outcome.expected_revision,
                             ),
-                            None => db.save_composition_with_dependencies(
+                            None => db.save_composition_with_options(
                                 None,
-                                parent,
                                 &outcome.composition,
-                                priority,
-                                &depends_on,
+                                db::AddOptions {
+                                    parent,
+                                    priority,
+                                    prerequisites: &depends_on,
+                                    tags: &tags,
+                                },
                             ),
                         }?;
                         first_images.clear();
@@ -506,12 +531,15 @@ fn execute(
                             None,
                             outcome.expected_revision
                         )?,
-                        None => db.save_composition_with_dependencies(
+                        None => db.save_composition_with_options(
                             None,
-                            parent,
                             &outcome.composition,
-                            priority,
-                            &depends_on
+                            db::AddOptions {
+                                parent,
+                                priority,
+                                prerequisites: &depends_on,
+                                tags: &tags
+                            }
                         )?,
                     })
                 }
@@ -613,6 +641,15 @@ fn execute(
                     tui::TaskAction::SetArchived(id, archived) => {
                         db.set_archived(id, archived, session_input.unwrap_or("cli"))
                     }
+                    tui::TaskAction::Tags(id, tags) => db.edit_guarded(
+                        id,
+                        None,
+                        &[],
+                        db::EditOptions {
+                            tags: Some(&tags),
+                            ..Default::default()
+                        },
+                    ),
                     tui::TaskAction::Priority(id, priority) => {
                         db.edit_with_priority(id, None, None, &[], None, Some(priority))
                     }
@@ -666,7 +703,9 @@ fn execute(
             depends_on,
             remove_depends_on,
             clear_depends_on,
+            set_tags,
         } => {
+            let tags = set_tags.as_deref().map(tags::parse).transpose()?;
             ensure!(
                 !force || matches!(set_status, Some(EditStatus::New)),
                 errors::Info::invalid_argument(
@@ -690,6 +729,7 @@ fn execute(
                     && set_status.is_none()
                     && set_parent.is_none()
                     && priority.is_none()
+                    && tags.is_none()
                     && depends_on.is_empty()
                     && remove_depends_on.is_empty()
                     && !clear_depends_on
@@ -798,6 +838,7 @@ fn execute(
                         parent: set_parent,
                         priority,
                         expected_revision,
+                        tags: tags.as_deref(),
                         dependencies: dependencies::Changes {
                             add: &depends_on,
                             remove: &remove_depends_on,

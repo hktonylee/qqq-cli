@@ -165,6 +165,10 @@ pub(super) fn render(value: &Value, color: bool) -> String {
             color
         )
     ));
+    let tags = crate::tags::prefix(task);
+    if !tags.is_empty() {
+        sections.push(format!("{}\n{}", heading("Tags", color), tags));
+    }
     let assignment = [
         row(
             "Harness",

@@ -107,6 +107,7 @@ pub enum TaskAction {
     Reopen(i64),
     SetArchived(i64, bool),
     Priority(i64, i64),
+    Tags(i64, Vec<String>),
     Parent(i64, crate::db::ParentChange),
 }
 
@@ -119,6 +120,7 @@ impl TaskAction {
             | Self::Retry(id)
             | Self::Reopen(id)
             | Self::SetArchived(id, _)
+            | Self::Tags(id, _)
             | Self::Priority(id, _)
             | Self::Parent(id, _) => *id,
         }
@@ -134,6 +136,7 @@ impl TaskAction {
             Self::SetArchived(_, true) => "Archive",
             Self::SetArchived(_, false) => "Unarchive",
             Self::Priority(_, _) => "Set priority",
+            Self::Tags(..) => "Set tags",
             Self::Parent(_, _) => "Set parent",
         }
     }
@@ -146,6 +149,7 @@ impl TaskAction {
             Self::Reopen(id) => format!("Reopened #{id}"),
             Self::SetArchived(id, true) => format!("Archived #{id}"),
             Self::SetArchived(id, false) => format!("Unarchived #{id}"),
+            Self::Tags(id, _) => format!("Tags saved #{id}"),
             Self::Priority(id, priority) => format!("Priority #{id}: {priority}"),
             Self::Parent(id, crate::db::ParentChange::Set(parent)) => {
                 format!("Parent #{id}: #{parent}")
@@ -160,6 +164,7 @@ enum ActionInputKind {
     Priority,
     Parent,
     ErrorReason,
+    Tags,
 }
 
 const ACTION_MENU_ITEMS: [(char, &str); 7] = [
@@ -277,6 +282,11 @@ fn action_lines(ui: &ActionUi, width: usize, height: usize) -> Vec<render::Popup
                         PopupRow::new("ID / none", PopupKind::Hint),
                     ]
                 }
+                ActionInputKind::Tags => vec![
+                    PopupRow::new(format!("Tags task #{id}"), PopupKind::Heading),
+                    PopupRow::new("Comma-separated; blank clears", PopupKind::Hint),
+                    PopupRow::new("Ctrl-U clear input", PopupKind::Hint),
+                ],
                 ActionInputKind::ErrorReason => vec![
                     PopupRow::new(format!("Error task #{id}"), PopupKind::Heading),
                     PopupRow::new("Enter error reason", PopupKind::Hint),
@@ -364,6 +374,9 @@ fn parse_action_input(
             .trim()
             .parse()
             .map(|parent| TaskAction::Parent(id, parent)),
+        ActionInputKind::Tags => crate::tags::parse(value)
+            .map(|tags| TaskAction::Tags(id, tags))
+            .map_err(|error| error.to_string()),
         ActionInputKind::ErrorReason => {
             let reason = value.trim();
             if reason.is_empty() {
@@ -576,6 +589,17 @@ impl Mode<'_, '_> {
         }
     }
 
+    fn task_action(&mut self, action: TaskAction) -> Result<crate::db::Task> {
+        match self {
+            Self::Continuous {
+                db,
+                action: Some(handler),
+                ..
+            } => handler(db, action),
+            _ => bail!("Task actions require dashboard"),
+        }
+    }
+
     fn completion_action(&mut self, id: i64) -> Result<TaskAction> {
         match self {
             Self::Continuous {
@@ -592,15 +616,8 @@ fn run_action(
     action: TaskAction,
     include_archived: bool,
 ) -> Result<Target> {
-    let Mode::Continuous {
-        db,
-        action: Some(handler),
-        ..
-    } = mode
-    else {
-        bail!("Task actions require dashboard");
-    };
-    let task = handler(db, action)?;
+    let task = mode.task_action(action)?;
+    let db = mode.db().expect("task actions have database");
     if task.archived && !include_archived {
         return Ok(Target::New { parent_id: None });
     }
@@ -1113,13 +1130,18 @@ fn compose_inner(
                     kind, value, error, ..
                 }) = action_ui.as_mut()
                 {
-                    value.extend(text.chars().filter_map(|ch| {
-                        if ch.is_control() {
-                            matches!(kind, ActionInputKind::ErrorReason).then_some(' ')
-                        } else {
-                            Some(ch)
-                        }
-                    }));
+                    if matches!(kind, ActionInputKind::Tags) {
+                        // Keep pasted labels exact so shared validation can reject controls.
+                        value.push_str(&text);
+                    } else {
+                        value.extend(text.chars().filter_map(|ch| {
+                            if ch.is_control() {
+                                matches!(kind, ActionInputKind::ErrorReason).then_some(' ')
+                            } else {
+                                Some(ch)
+                            }
+                        }));
+                    }
                     error.clear();
                 } else if action_ui.is_some() {
                     // Menu never edits draft.
@@ -1330,6 +1352,17 @@ fn compose_inner(
                 }
                 let control = key.modifiers.contains(KeyModifiers::CONTROL);
                 let cancel_key = control && key.code == KeyCode::Char('c');
+                if matches!(
+                    action_ui,
+                    Some(ActionUi::Input {
+                        kind: ActionInputKind::Tags,
+                        ..
+                    })
+                ) && (cancel_key || key.code == KeyCode::Esc)
+                {
+                    action_ui = None;
+                    continue;
+                }
                 if dashboard
                     && (cancel_key || key.code == KeyCode::Esc)
                     && (!filter_query.is_empty() || filter_focused)
@@ -1540,7 +1573,21 @@ fn compose_inner(
                     );
                     continue;
                 }
-                if let Some(ui) = action_ui.take() {
+                if let Some(mut ui) = action_ui.take() {
+                    if control && key.code == KeyCode::Char('u') {
+                        if let ActionUi::Input {
+                            kind: ActionInputKind::Tags,
+                            value,
+                            error,
+                            ..
+                        } = &mut ui
+                        {
+                            value.clear();
+                            error.clear();
+                        }
+                        action_ui = Some(ui);
+                        continue;
+                    }
                     if control && key.code == KeyCode::Char('c') {
                         if let Some(pending) = confirm_buffers_exit(&buffers) {
                             confirmation = Some(pending);
@@ -1678,6 +1725,23 @@ fn compose_inner(
                                 });
                             }
                             KeyCode::Enter => match parse_action_input(id, kind, &value) {
+                                Ok(action @ TaskAction::Tags(..)) => {
+                                    match mode.task_action(action.clone()) {
+                                        Ok(_) => {
+                                            message = action.success();
+                                            message_is_error = false;
+                                        }
+                                        Err(failure) => {
+                                            error = format!("{failure:#}");
+                                            action_ui = Some(ActionUi::Input {
+                                                id,
+                                                kind,
+                                                value,
+                                                error,
+                                            });
+                                        }
+                                    }
+                                }
                                 Ok(action)
                                     if matches!(action, TaskAction::MarkError(..))
                                         || draft.is_dirty_against(&baseline.description) =>
@@ -1750,6 +1814,35 @@ fn compose_inner(
                 if dashboard
                     && control
                     && key.code == KeyCode::Char('l')
+                    && !key
+                        .modifiers
+                        .intersects(KeyModifiers::ALT | KeyModifiers::SUPER)
+                {
+                    match target_id.map(|id| mode.db().expect("dashboard has database").task(id)) {
+                        Some(Ok(task)) => {
+                            action_ui = Some(ActionUi::Input {
+                                id: task.id,
+                                kind: ActionInputKind::Tags,
+                                value: task.tags.join(", "),
+                                error: String::new(),
+                            });
+                        }
+                        Some(Err(error)) => {
+                            action_ui = Some(ActionUi::Error {
+                                text: format!("{error:#}"),
+                                top: 0,
+                            });
+                        }
+                        None => {
+                            message = "Select task to edit tags".to_owned();
+                            message_is_error = false;
+                        }
+                    }
+                    continue;
+                }
+                if dashboard
+                    && control
+                    && key.code == KeyCode::Char('k')
                     && !key
                         .modifiers
                         .intersects(KeyModifiers::ALT | KeyModifiers::SUPER)

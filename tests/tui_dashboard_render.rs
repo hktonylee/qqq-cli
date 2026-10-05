@@ -1958,6 +1958,7 @@ fn hotkey_footer_colors_shortcuts_and_clears_styles_for_messages() {
                         && [
                             "Ctrl-S",
                             "Ctrl-L",
+                            "Ctrl-K",
                             "Ctrl-P",
                             "Ctrl-G",
                             "Shift-Up/Dn",

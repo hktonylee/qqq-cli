@@ -151,6 +151,7 @@ mod tests {
             priority: 8,
             parent_id: Some(2),
             prerequisites: Vec::new(),
+            tags: Vec::new(),
             archived: false,
             context_only: false,
             created_at: "2026-10-02T12:00:00.000Z".into(),

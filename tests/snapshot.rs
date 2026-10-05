@@ -365,7 +365,7 @@ fn restore_released_schema_nine_backup_then_migrate_preserves_content_and_images
     assert_eq!(
         conn.pragma_query_value(None, "user_version", |row| row.get::<_, i64>(0))
             .unwrap(),
-        11
+        12
     );
 }
 

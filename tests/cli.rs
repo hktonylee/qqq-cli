@@ -851,3 +851,6 @@ mod import;
 
 #[path = "cli/prerequisites.rs"]
 mod prerequisites;
+
+#[path = "cli/tags.rs"]
+mod tags;

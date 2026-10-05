@@ -76,6 +76,10 @@ Independent prerequisites can gate integration work while keeping its tree paren
 Manage extras with edit's `--depends-on`, `--remove-depends-on`, and
 `--clear-depends-on`; all prerequisites must complete before a new claim.
 
+Add tags with `qqq add "Fix layout" --tag frontend --tag bug`; lists show
+`[frontend] [bug] Fix layout`. Replace via `qqq edit 1 --set-tags "frontend, bug"`,
+clear via `--set-tags ""`, or edit selected task tags with Ctrl-L in TUI.
+
 See [batch schema and piping examples](docs/reference.md#atomic-batch-import).
 
 Inspect readiness, owners and blockers with `qqq status`. Preview selection reasons
@@ -93,7 +97,8 @@ task to load it, scroll each pane, or use the keyboard:
 | --- | --- |
 | Shift+Up / Shift+Down | Move between tasks and a blank draft |
 | Ctrl+S | Save |
-| Ctrl+L | Go to task ID; retain unsaved drafts |
+| Ctrl+L | Edit selected task tags; retain unsaved drafts |
+| Ctrl+K | Go to task ID; retain unsaved drafts |
 | Ctrl+P | Create a child of the selected task |
 | Ctrl+/ | Filter tasks |
 | Ctrl+G | Open task actions |

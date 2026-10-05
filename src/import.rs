@@ -27,6 +27,8 @@ struct InputTask {
     parent: Option<Parent>,
     #[serde(default)]
     depends_on: Vec<Parent>,
+    #[serde(default)]
+    tags: Vec<String>,
 }
 
 #[derive(Clone, Deserialize, Serialize)]
@@ -59,6 +61,7 @@ pub struct ValidatedBatch {
 struct ResultTask {
     key: String,
     description: String,
+    tags: Vec<String>,
     priority: i64,
     parent: Option<Parent>,
     id: Option<i64>,
@@ -98,7 +101,7 @@ pub fn read(path: &Path) -> Result<ValidatedBatch> {
     validate(batch)
 }
 
-fn validate(batch: Batch) -> Result<ValidatedBatch> {
+fn validate(mut batch: Batch) -> Result<ValidatedBatch> {
     ensure!(
         batch.version == 1,
         Info::invalid_argument(
@@ -109,6 +112,10 @@ fn validate(batch: Batch) -> Result<ValidatedBatch> {
         .detail("expected_version", 1)
         .detail("actual_version", batch.version)
     );
+    for task in &mut batch.tasks {
+        task.tags = crate::tags::normalize(&task.tags)
+            .with_context(|| format!("Batch task {:?}", task.key))?;
+    }
     let mut keys = HashMap::new();
     for (index, task) in batch.tasks.iter().enumerate() {
         nonempty(&task.key, "Batch task key")?;
@@ -256,7 +263,7 @@ pub fn run(conn: &mut Connection, batch: &ValidatedBatch, dry_run: bool) -> Resu
     let mut mapping = BTreeMap::new();
     if !dry_run {
         let mut insert =
-            tx.prepare("INSERT INTO tasks(description,parent_id,priority) VALUES (?,?,?)")?;
+            tx.prepare("INSERT INTO tasks(description,parent_id,priority,tags) VALUES (?,?,?,?)")?;
         for index in &batch.order {
             let task = &batch.tasks[*index];
             let resolved_parent = parent_id(task.parent.as_ref(), &mapping);
@@ -266,7 +273,12 @@ pub fn run(conn: &mut Connection, batch: &ValidatedBatch, dry_run: bool) -> Resu
                 task.key
             );
             insert
-                .execute(params![task.description, resolved_parent, task.priority])
+                .execute(params![
+                    task.description,
+                    resolved_parent,
+                    task.priority,
+                    serde_json::to_string(&task.tags)?
+                ])
                 .with_context(|| format!("Failed to import task {:?}", task.key))?;
             let id = tx.last_insert_rowid();
             mapping.insert(task.key.clone(), id);
@@ -286,6 +298,7 @@ pub fn run(conn: &mut Connection, batch: &ValidatedBatch, dry_run: bool) -> Resu
         .map(|task| ResultTask {
             key: task.key.clone(),
             description: task.description.clone(),
+            tags: task.tags.clone(),
             priority: task.priority,
             parent: task.parent.clone(),
             id: mapping.get(&task.key).copied(),

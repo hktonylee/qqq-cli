@@ -22,6 +22,9 @@ mod images;
 #[allow(dead_code)]
 #[path = "../src/sql_filter/mod.rs"]
 mod sql_filter;
+#[allow(dead_code)]
+#[path = "../src/tags.rs"]
+mod tags;
 mod tui {
     pub use crate::draft;
 }
@@ -55,6 +58,8 @@ fn database() -> (Db, tempfile::TempDir) {
     conn.execute_batch(include_str!("../src/sql/migrate_v10.sql"))
         .unwrap();
     conn.execute_batch(include_str!("../src/sql/migrate_v11.sql"))
+        .unwrap();
+    conn.execute_batch(include_str!("../src/sql/migrate_v12.sql"))
         .unwrap();
     (
         Db {

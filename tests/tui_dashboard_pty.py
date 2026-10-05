@@ -16,6 +16,7 @@ import tempfile
 import termios
 import threading
 import time
+import unicodedata
 from pathlib import Path
 
 
@@ -58,14 +59,22 @@ class TerminalScreen:
             elif char == "\n":
                 self.y = min(self.height - 1, self.y + 1)
             elif char >= " ":
-                # Task tree adds single-cell box drawing glyphs. Other wide
-                # Unicode needs a fuller screen emulator.
-                assert char.isascii() or char in "┌┐└┘├─│╔╗╚╝═║·✓×", f"Unsupported screen character {char!r}"
-                if self.x >= self.width:
-                    self.x = 0
-                    self.y = min(self.height - 1, self.y + 1)
-                self.cells[self.y][self.x] = char
-                self.x += 1
+                assert char.isprintable(), f"Unsupported screen character {char!r}"
+                if unicodedata.combining(char):
+                    previous = min(self.x - 1, self.width - 1)
+                    while previous > 0 and self.cells[self.y][previous] == "":
+                        previous -= 1
+                    if previous >= 0:
+                        self.cells[self.y][previous] += char
+                else:
+                    width = 2 if unicodedata.east_asian_width(char) in ("W", "F") else 1
+                    if self.x + width > self.width:
+                        self.x = 0
+                        self.y = min(self.height - 1, self.y + 1)
+                    self.cells[self.y][self.x] = char
+                    if width == 2 and self.x + 1 < self.width:
+                        self.cells[self.y][self.x + 1] = ""
+                    self.x += width
             index += 1
         self.pending = text[index:]
 
@@ -98,7 +107,7 @@ with tempfile.TemporaryDirectory(prefix="qqq-dashboard-test-") as folder:
         env["NO_COLOR"] = "1"
     elif scenario == "dumb":
         env["TERM"] = "dumb"
-    if scenario.startswith(("buffers_", "long_description_", "prerequisites", "dirty_marker", "completed_toggle", "jump", "menu_error_", "force_complete", "list_selection")) and scenario.endswith("no_color"):
+    if scenario.startswith(("buffers_", "long_description_", "prerequisites", "dirty_marker", "completed_toggle", "jump", "menu_error_", "force_complete", "list_selection", "tags")) and scenario.endswith("no_color"):
         env["NO_COLOR"] = "1"
     for name in ("EDITOR", "QQQ_SESSION", "HERDR_ENV", "HERDR_PANE_ID", "CODEX_THREAD_ID", "CODEX_SESSION_ID"):
         env.pop(name, None)
@@ -239,6 +248,8 @@ print(json.dumps({"result": {"pane": {
         cli("add", "\n".join(f"Line{index:02}" for index in range(1, 13)))
     if scenario in ("prerequisites", "prerequisites_no_color"):
         cli("edit", "2", "--depends-on", "1")
+    if scenario.startswith("tags"):
+        cli("edit", "2", "--set-tags", "old")
     if scenario == "jump_archived":
         cli("archive", "2")
         for index in range(3, 21):
@@ -781,7 +792,7 @@ print(json.dumps({"result": result}))
                              and (width < 150 or not visible.text().splitlines()[12][:split].strip())
                              and (not selected or editor_line().startswith("Changed Second"))
                              and visible.text().splitlines()[-1].rstrip() ==
-                             "Ctrl-S Save  Ctrl-L Go to Task  Ctrl-P Create Child  Ctrl-G Menu  Shift-Up/Dn Switch Tasks  Ctrl+/ Filter"
+                             "Ctrl-S Save  Ctrl-L Tags  Ctrl-K Go to Task  Ctrl-P Create Child  Ctrl-G Menu  Shift-Up/Dn Switch Tasks  Ctrl+/ Filter"
                              and (visible.x, visible.y) == (8 if selected else 0, 14)
                              and not visible.pending and screen.endswith(final_cursor))
                 settle()
@@ -952,6 +963,92 @@ print(json.dumps({"result": result}))
             wait_visible(lambda: "#1 · new · blocks claim" in details_text())
             if scenario == "prerequisites_no_color":
                 assert b"\x1b[38;" not in screen
+        elif scenario.startswith("tags"):
+            tag_tasks_before = cli("list")
+            def frame_ready():
+                return not visible.pending and screen.endswith(
+                    b"\x1b[?25h" + f"\x1b[{visible.y + 1};{visible.x + 1}H".encode())
+
+            def open_tags():
+                clear_capture()
+                send(b"\x0c")
+                wait_visible(lambda: "Tags task #2" in visible.text()
+                             and "Enter apply  Esc cancel" in visible.text()
+                             and frame_ready())
+
+            if scenario == "tags_new":
+                send(b"New draft\x0c")
+                wait_visible(lambda: "Select task to edit tags" in visible.text()
+                             and editor_line().startswith("New draft") and frame_ready())
+                assert cli("list") == tag_tasks_before
+            else:
+                if scenario == "tags_dirty":
+                    send(b"New draft")
+                    wait_visible(lambda: editor_line().startswith("New draft"))
+                send(b"\x1b[1;2A")
+                wait_visible(lambda: "Task #2 (New)" in editor_title()
+                             and editor_line().startswith("Second") and frame_ready())
+                if scenario == "tags_dirty":
+                    send(b" dirty\x1b[D\x1b[D")
+                    wait_visible(lambda: editor_line().startswith("Second dirty")
+                                 and visible.x == 10 and frame_ready())
+                if scenario == "tags_filter":
+                    send(CTRL_SLASH + b"Second")
+                    wait_visible(lambda: filter_text() == "Filter: Second" and frame_ready())
+                tag_task_before = cli("show", "2")
+                tag_cursor = (visible.x, visible.y)
+                for cancel_key in (b"\x1b", b"\x03"):
+                    open_tags()
+                    assert "> old" in visible.text(), visible.text()
+                    send(cancel_key)
+                    wait_visible(lambda: "Tags task #2" not in visible.text()
+                                 and (visible.x, visible.y) == tag_cursor and frame_ready())
+                    assert child.poll() is None
+                    assert cli("show", "2") == tag_task_before
+                    if scenario == "tags_filter":
+                        assert filter_text() == "Filter: Second", visible.text()
+                open_tags()
+                send(b"\x15bad,,tag\r")
+                wait_visible(lambda: "nonempty labels" in visible.text()
+                             and "bad,,tag" in visible.text() and frame_ready())
+                assert cli("show", "2") == tag_task_before
+                for invalid_paste in (b"front\nend", b"front\tend", b"front\x1bend"):
+                    clear_capture()
+                    send(b"\x15\x1b[200~" + invalid_paste + b"\x1b[201~\r")
+                    wait_visible(lambda: "Tags task #2" in visible.text()
+                                 and "nonempty labels" in visible.text() and frame_ready())
+                    assert cli("show", "2") == tag_task_before
+                send(b"\x15\x1b[200~frontend, " + "界 面".encode() + b", frontend\x1b[201~\r")
+                wait_visible(lambda: "Tags task #2" not in visible.text()
+                             and "[frontend]" in visible.text()
+                             and "Tags saved #2" in visible.text()
+                             and (visible.x, visible.y) == tag_cursor and frame_ready())
+                changed = cli("show", "2")
+                assert changed["task"]["tags"] == ["frontend", "界 面"], changed
+                for key in ("description", "content_revision", "status", "priority", "parent_id", "harness_session"):
+                    assert changed["task"][key] == tag_task_before["task"][key], key
+                for key in ("images", "messages", "events"):
+                    assert changed[key] == tag_task_before[key], key
+                if scenario == "tags_dirty":
+                    assert editor_line().startswith("Second dirty"), visible.text()
+                    send(b"!\x13")
+                    wait_visible(lambda: "Saved #2" in visible.text() and frame_ready())
+                    assert cli("show", "2")["task"]["description"] == "Second dir!ty"
+                    assert cli("show", "2")["task"]["tags"] == ["frontend", "界 面"]
+                    send(b"\x1b[1;2B")
+                    wait_visible(lambda: "New Task" in editor_title()
+                                 and editor_line().startswith("New draft") and frame_ready())
+                elif scenario == "tags_filter":
+                    assert filter_text() == "Filter: Second", visible.text()
+                    send(b"\x14")
+                    wait_visible(lambda: completed_button_text() == "[× Completed]" and frame_ready())
+                else:
+                    open_tags()
+                    send(b"\x15\r")
+                    wait_visible(lambda: "Tags task #2" not in visible.text()
+                                 and "[frontend]" not in visible.text()
+                                 and "Tags saved #2" in visible.text() and frame_ready())
+                    assert cli("show", "2")["task"]["tags"] == []
         elif scenario.startswith("jump"):
             initial_tasks = cli("list")
 
@@ -962,7 +1059,7 @@ print(json.dumps({"result": result}))
                         and screen.endswith(f"\x1b[{visible.y + 1};{visible.x + 1}H".encode()))
 
             def open_jump():
-                send(b"\x0c")
+                send(b"\x0b")
                 wait_visible(lambda: "Go to task" in visible.text() and jump_frame_ready())
 
             def go_to(task_id, description, cursor=None, status="New"):
@@ -3142,7 +3239,7 @@ print(json.dumps({"result": result}))
                              and (visible.x, visible.y) == (len("Draft/path"), editor_row() + 1)
                              and "Second" in visible.text())
                 wait_visible(lambda: visible.text().splitlines()[-1].startswith("Ctrl-S Save")
-                             and "Ctrl-L Go to Task" in visible.text().splitlines()[-1]
+                             and "Ctrl-L Tags  Ctrl-K Go to Task" in visible.text().splitlines()[-1]
                              and "Ctrl-P Create Child" in visible.text().splitlines()[-1])
             send(b"\x13")
             read_until(b"Saved #3")

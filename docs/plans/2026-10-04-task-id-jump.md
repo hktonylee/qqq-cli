@@ -1,5 +1,8 @@
 # Ctrl+L Task ID Jump Implementation Plan
 
+Task162 moved task jump to Ctrl+K; Ctrl+L now edits tags. Original implementation
+evidence below uses former binding. See task tags spec for current behavior.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task inline. Steps use checkbox (`- [x]`) syntax for tracking.
 
 **Goal:** Ctrl+L opens a task ID popup and navigates safely without saving or discarding drafts.
