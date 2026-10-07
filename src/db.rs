@@ -170,6 +170,14 @@ pub struct TaskMessage {
     pub session: Option<String>,
     pub created_at: String,
 }
+
+#[derive(Deserialize, Serialize)]
+struct StoredLink {
+    #[serde(flatten)]
+    link: crate::herdr::Link,
+    #[serde(default)]
+    claim_key: Option<String>,
+}
 pub(crate) fn task_row(r: &rusqlite::Row<'_>) -> rusqlite::Result<Task> {
     Ok(Task {
         id: r.get(0)?,
@@ -1646,7 +1654,7 @@ impl Db {
             .optional()?
             .with_context(|| crate::errors::Info::missing_task(id))?;
         ensure!(
-            task.status == "completed",
+            task.status == "completed" || task.status == "in_progress",
             crate::errors::Info::transition(
                 id,
                 &task.status,
@@ -1666,6 +1674,9 @@ impl Db {
             .detail("expected_archived", false)
         );
         crate::dependencies::ensure_all_available(&tx, id)?;
+        if task.status == "in_progress" {
+            Self::ensure_orphaned_claim(&tx, &task)?;
+        }
         tx.execute(
             "UPDATE tasks SET status='new',claim_key=NULL,harness_name=NULL,harness_session=NULL,orchestrator_name=NULL,orchestrator_session=NULL,updated_at=strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE id=?",
             [id],
@@ -1681,6 +1692,49 @@ impl Db {
         )?;
         tx.commit()?;
         Ok(task)
+    }
+    fn ensure_orphaned_claim(conn: &Connection, task: &Task) -> Result<()> {
+        let (claim, encoded): (Option<String>, Option<String>) = conn.query_row(
+            "SELECT tasks.claim_key,herdr_links.link_json FROM tasks
+             LEFT JOIN herdr_links ON herdr_links.task_id=tasks.id WHERE tasks.id=?",
+            [task.id],
+            |row| Ok((row.get(0)?, row.get(1)?)),
+        )?;
+        let invalid = |reason| {
+            crate::errors::Info::transition(
+                task.id,
+                &task.status,
+                &["completed"],
+                format!(
+                    "Task {} must be completed to reopen; cannot verify absent Herdr owner",
+                    task.id
+                ),
+            )
+            .detail("reason", reason)
+        };
+        let encoded = encoded.with_context(|| invalid("missing_owner_link"))?;
+        let stored: StoredLink = serde_json::from_str(&encoded)?;
+        // Fresh claims replace saved links, including before claim bindings existed.
+        // Preserve recovery for legacy dispatched/explicit owners with opaque keys.
+        ensure!(
+            claim.is_some()
+                && stored
+                    .claim_key
+                    .as_ref()
+                    .is_none_or(|expected| claim.as_ref() == Some(expected)),
+            invalid("owner_link_mismatch")
+        );
+        ensure!(
+            !crate::herdr::owner_is_live(&stored.link)?,
+            crate::errors::Info::transition(
+                task.id,
+                &task.status,
+                &["completed"],
+                format!("Task {} owning Herdr agent session is still live", task.id),
+            )
+            .detail("reason", "owner_still_live")
+        );
+        Ok(())
     }
     pub fn message(&self, id: i64, body: &str, session: Option<&str>) -> Result<Value> {
         nonempty(body, "Message")?;
@@ -1765,7 +1819,14 @@ impl Db {
         Ok(json!({"id":id,"path":path,"bytes":data.len()}))
     }
     fn save_link(conn: &Connection, id: i64, link: &crate::herdr::Link) -> Result<()> {
-        conn.execute("INSERT INTO herdr_links(task_id,link_json) VALUES (?,?) ON CONFLICT(task_id) DO UPDATE SET link_json=excluded.link_json",params![id,serde_json::to_string(link)?])?;
+        let claim_key = conn.query_row("SELECT claim_key FROM tasks WHERE id=?", [id], |row| {
+            row.get(0)
+        })?;
+        let stored = StoredLink {
+            link: link.clone(),
+            claim_key,
+        };
+        conn.execute("INSERT INTO herdr_links(task_id,link_json) VALUES (?,?) ON CONFLICT(task_id) DO UPDATE SET link_json=excluded.link_json",params![id,serde_json::to_string(&stored)?])?;
         Ok(())
     }
     pub fn set_link_with_identity(

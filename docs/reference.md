@@ -7,7 +7,7 @@ Detailed behavior and flags for qqq. For a first run, start with the
 
 - [Install from source](#install-from-source)
 - [List and search](#list-and-show) · [Add and edit](#add-and-edit)
-- [Archive](#archive-and-unarchive) · [Reopen](#reopen-completed-work)
+- [Archive](#archive-and-unarchive) · [Reopen](#reopen-work)
 - [Editor](#built-in-editor) · [TUI](#task-tui)
 - [Dependencies and images](#dependencies-and-images)
 - [Ownership and recovery](#agents-and-recovery)
@@ -335,18 +335,27 @@ while a visible unfinished task depends on it. Adding links or unarchiving
 unfinished dependents under archived unfinished dependencies also fails.
 Archived completed dependencies still release tasks.
 
-## Reopen completed work
+## Reopen work
 
 ```sh
 qqq reopen 12
 qqq reopen -1 --session reviewer
 ```
 
-`reopen` returns a completed task to `new` and records a reopen event. It keeps
+`reopen` returns a completed task to `new` and records a reopen event. An
+in-progress task can also reopen when its owning Herdr agent is absent from a
+successful lookup on its saved server. Exact session identity or same terminal
+with same agent kind counts as live, including moved panes and changed session
+reports. Missing links, mismatched claim associations, failed commands and
+invalid responses cannot establish absence; task stays unchanged. Legacy links
+remain usable because fresh claims replace saved links. New links privately
+record current claim association. CLI and TUI Reopen use same checks.
+
+Reopening keeps
 description, priority, parent, prerequisites, messages, images, creation time, and prior
 history. Reopening clears recorded assignment metadata; saved Herdr link stays
-until next claim replaces it. A task in any other status fails without changes; repeating `reopen`
-also fails. Archived completed tasks require `unarchive` first. A completed
+until next claim replaces it. New and error tasks fail without changes; repeating
+`reopen` also fails. Archived tasks require `unarchive` first. A
 task with an archived unfinished parent or prerequisite cannot reopen until
 dependency is unarchived or completed, or its link removed. Completed descendants
 stay completed; new dependents wait for reopened prerequisite to complete again. Reopened tasks return to default
@@ -574,7 +583,7 @@ selectable. Cyan titles/shortcuts, muted help, gold prompts/warnings and soft-re
 errors distinguish popup states. Up/Down selects action, wrapping at ends;
 Enter activates selected row. Dark accent tint and `>` mark selection; plain
 mode keeps marker. Letter shortcuts activate actions directly. Press `c` to complete owned task,
-`r` to retry error task, `o` to reopen completed task, `a` to archive or
+`r` to retry error task, `o` to reopen completed task or absent Herdr owner's active task, `a` to archive or
 unarchive, `p` to set priority (-100..100), or `d` to set parent by positive
 task ID or `none`. Retry appears only for error tasks; non-error tasks ignore `r`.
 Press `e` for Mark error, enter a nonempty reason, then confirm with `y`.

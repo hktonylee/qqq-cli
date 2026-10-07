@@ -270,7 +270,7 @@ enum Commands {
     },
     /// Mark task completed; supplied or discovered session ID must match recorded owner.
     Complete { id: i64 },
-    /// Return completed, unarchived task to new while keeping its history.
+    /// Return completed task or in-progress task with absent Herdr owner to new; keep history.
     Reopen {
         /// Task ID, or negative creation index: -1 is newest.
         #[arg(allow_negative_numbers = true)]

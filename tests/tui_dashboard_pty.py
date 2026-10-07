@@ -108,7 +108,7 @@ with tempfile.TemporaryDirectory(prefix="qqq-dashboard-test-") as folder:
         env["NO_COLOR"] = "1"
     elif scenario == "dumb":
         env["TERM"] = "dumb"
-    if scenario.startswith(("buffers_", "long_description_", "prerequisites", "dirty_marker", "completed_toggle", "jump", "menu_error_", "force_complete", "list_selection", "tags")) and scenario.endswith("no_color"):
+    if scenario.startswith(("buffers_", "long_description_", "prerequisites", "dirty_marker", "completed_toggle", "jump", "menu_error_", "force_complete", "list_selection", "tags", "orphan_reopen")) and scenario.endswith("no_color"):
         env["NO_COLOR"] = "1"
     for name in ("EDITOR", "QQQ_SESSION", "HERDR_ENV", "HERDR_PANE_ID", "CODEX_THREAD_ID", "CODEX_SESSION_ID"):
         env.pop(name, None)
@@ -138,6 +138,30 @@ with tempfile.TemporaryDirectory(prefix="qqq-dashboard-test-") as folder:
         cli("complete", "1", "--session", "worker")
         cli("next", "--local", "--session", "worker")
         cli("edit", "2", "--set-status", "error", "--reason", "Failed", "--session", "worker")
+    elif scenario.startswith("orphan_reopen"):
+        fake = Path(folder) / "herdr"
+        response_path = Path(folder) / "orphan-response.json"
+        fake.write_text('''#!/bin/sh
+[ "$1" = --session ] && shift 2
+case "$1 $2" in
+'pane current'|'agent list') /bin/cat "$QQQ_TEST_RESPONSE";;
+*) exit 1;;
+esac
+''')
+        fake.chmod(0o755)
+        env["PATH"] = os.pathsep.join((folder, os.defpath))
+        env["QQQ_TEST_RESPONSE"] = str(response_path)
+        env.pop("HERDR_SOCKET_PATH", None)
+        owner_pane = {"pane_id": "w1:p1", "workspace_id": "w1", "tab_id": "w1:t1",
+                      "agent": "codex", "terminal_id": "orphan-terminal"}
+        response_path.write_text(json.dumps({"result": {"pane": owner_pane, "agents": [owner_pane]}}))
+        cli("add", "Orphan item\nPreserve body", "--tag", "recover")
+        env["HERDR_ENV"] = "1"
+        env["HERDR_PANE_ID"] = "w1:p1"
+        cli("next", "--local")
+        env.pop("HERDR_ENV")
+        env.pop("HERDR_PANE_ID")
+        response_path.write_text(json.dumps({"result": {"agents": []}}))
     elif scenario.startswith("force_complete"):
         cli("add", "Foreign item")
         cli("next", "--local", "--session", "foreign")
@@ -379,6 +403,8 @@ print(json.dumps({"result": result}))
     args = [binary, "--json", "tui"] if scenario in ("empty_json", "save_json", "handoff_json") else [binary, "tui"]
     if scenario == "force_complete_native":
         args.extend(["--session", "native-display"])
+    elif scenario.startswith("orphan_reopen"):
+        args.extend(["--session", "reviewer"])
     elif scenario in ("actions_basic", "actions_rejected", "actions_narrow") or scenario.startswith(("menu_retry_", "menu_error_")) or (scenario.startswith("force_complete") and not scenario.startswith("force_complete_herdr_") and scenario not in ("force_complete_sessionless", "force_complete_owner_db_error")):
         args.extend(["--session", "other" if scenario == "menu_error_rejected" else "worker"])
     if scenario in ("archive_included", "actions_basic", "actions_rejected"):
@@ -567,7 +593,7 @@ print(json.dumps({"result": result}))
                              and editor_line().startswith("Second"))
                 settle()
                 assert b"\x1b[38;" not in screen and b"\x1b[48;" not in screen, screen[-2000:]
-        if not scenario.startswith(("wide_layout", "menu_retry_", "menu_error_", "long_description_", "completed_toggle", "force_complete")) and scenario not in ("buffers_scroll", "handoff_scroll", "ctrl_c_new_scroll", "live_refresh_scroll", "tree_navigation", "scroll", "wheel", "click", "click_filter", "workflow", "workflow_empty", "workflow_status", "filter", "filter_no_color", "archive_hidden", "archive_included", "actions_basic", "actions_rejected", "actions_hidden", "jump_archived"):
+        if not scenario.startswith(("wide_layout", "menu_retry_", "menu_error_", "long_description_", "completed_toggle", "force_complete", "orphan_reopen")) and scenario not in ("buffers_scroll", "handoff_scroll", "ctrl_c_new_scroll", "live_refresh_scroll", "tree_navigation", "scroll", "wheel", "click", "click_filter", "workflow", "workflow_empty", "workflow_status", "filter", "filter_no_color", "archive_hidden", "archive_included", "actions_basic", "actions_rejected", "actions_hidden", "jump_archived"):
             read_until(b"Second")
             assert "First" in visible.text() and "Second" in visible.text(), visible.text()
         assert not select.select([child.stdout], [], [], 0)[0], "TUI wrote stdout while open"
@@ -2696,6 +2722,48 @@ print(json.dumps({"result": result}))
                 wait_visible(lambda: "r Retry error" in visible.text())
                 send(b"\x1b")
                 wait_frame(lambda: "Task actions" not in visible.text() and editor_line().startswith(label))
+            if scenario.endswith("no_color"):
+                assert b"\x1b[38;" not in screen and b"\x1b[48;" not in screen
+        elif scenario.startswith("orphan_reopen"):
+            wait_visible(lambda: "Orphan item" in visible.text())
+            click(5, task_row("Orphan item"))
+            wait_visible(lambda: "Task #1 (In progress)" in editor_title())
+            initial_detail = cli("show", "1")
+            send(b"\x07")
+            wait_visible(lambda: "o Reopen" in visible.text())
+            send(b"o")
+            wait_visible(lambda: "Reopen task #1?" in visible.text())
+            send(b"n")
+            wait_visible(lambda: "Reopen task" not in visible.text()
+                         and "Task #1 (In progress)" in editor_title())
+            assert cli("show", "1") == initial_detail
+            send(b"\x07")
+            wait_visible(lambda: "o Reopen" in visible.text())
+            send(b"o")
+            wait_visible(lambda: "Reopen task #1?" in visible.text())
+            if scenario == "orphan_reopen_live":
+                response_path.write_text(json.dumps({"result": {"agents": [owner_pane]}}))
+            send(b"y")
+            if scenario == "orphan_reopen_live":
+                wait_visible(lambda: "Action error" in visible.text()
+                             and "still live" in visible.text())
+                assert cli("show", "1") == initial_detail
+                send(b"\x1b")
+                wait_visible(lambda: "Action error" not in visible.text())
+            else:
+                wait_visible(lambda: "Task #1 (New)" in editor_title()
+                             and "Reopened #1" in visible.text()
+                             and editor_line().startswith("Orphan item")
+                             and visible.cursor_visible and not visible.pending
+                             and not visible.decoder.getstate()[0]
+                             and (visible.x, visible.y) == (len("Preserve body"), editor_row() + 2))
+                detail = cli("show", "1")
+                assert detail["task"]["status"] == "new"
+                assert detail["task"]["description"] == initial_detail["task"]["description"]
+                assert detail["task"]["tags"] == ["recover"]
+                assert detail["herdr"] == initial_detail["herdr"]
+                assert [event["action"] for event in detail["events"]] == ["claim", "reopen"]
+                assert detail["events"][-1]["session"] == "reviewer"
             if scenario.endswith("no_color"):
                 assert b"\x1b[38;" not in screen and b"\x1b[48;" not in screen
         elif scenario.startswith("menu_retry_"):

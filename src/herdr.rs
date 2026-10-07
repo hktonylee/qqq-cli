@@ -78,15 +78,10 @@ pub(crate) fn call<T: DeserializeOwned>(server: Option<&str>, args: &[&str]) -> 
 }
 pub fn find(identity: &AgentSession, server: Option<&str>) -> Result<Pane> {
     let agents: Agents = call(server, &["agent", "list"])?;
-    let mut matches = agents.agents.into_iter().filter(|pane| {
-        if identity.kind == "terminal" {
-            return pane.terminal_id.as_deref() == Some(&identity.value)
-                && pane.agent.as_deref() == Some(&identity.agent);
-        }
-        pane.agent_session.as_ref().is_some_and(|s| {
-            s.agent == identity.agent && s.kind == identity.kind && s.value == identity.value
-        })
-    });
+    let mut matches = agents
+        .agents
+        .into_iter()
+        .filter(|pane| identity_matches(pane, identity));
     let pane = matches.next().context(
         Info::new(
             Code::DispatchError,
@@ -103,6 +98,30 @@ pub fn find(identity: &AgentSession, server: Option<&str>) -> Result<Pane> {
         .detail("reason", "ambiguous_agent")
     );
     Ok(pane)
+}
+
+fn identity_matches(pane: &Pane, identity: &AgentSession) -> bool {
+    if identity.kind == "terminal" {
+        return pane.terminal_id.as_deref() == Some(&identity.value)
+            && pane.agent.as_deref() == Some(&identity.agent);
+    }
+    pane.agent_session.as_ref().is_some_and(|session| {
+        session.agent == identity.agent
+            && session.kind == identity.kind
+            && session.value == identity.value
+    })
+}
+
+pub fn owner_is_live(link: &Link) -> Result<bool> {
+    let agents: Agents = call(link.server.as_deref(), &["agent", "list"])?;
+    Ok(agents.agents.iter().any(|pane| {
+        identity_matches(pane, &link.identity)
+            // Active claims survive changed or temporarily missing session reports.
+            || link.pane.terminal_id.as_deref().is_some_and(|terminal| {
+                pane.terminal_id.as_deref() == Some(terminal)
+                    && pane.agent.as_deref() == Some(&link.identity.agent)
+            })
+    }))
 }
 
 pub fn pane_identity(pane: &Pane) -> Result<AgentSession> {

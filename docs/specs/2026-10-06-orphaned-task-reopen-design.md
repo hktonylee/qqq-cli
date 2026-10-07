@@ -11,10 +11,10 @@ guards.
 
 In-progress recovery requires a saved Herdr link associated with current claim.
 Record private claim association in existing `herdr_links.link_json` when saving
-links; public Link serialization stays unchanged. Existing automatic links can
-be associated by their serialized `(agent, kind, value)` claim identity. Legacy
-links for opaque owners without association cannot prove ownership and reject.
-Automatic, dispatched, and explicitly linked future claims all gain association.
+links; public Link serialization stays unchanged. Legacy links without private
+association remain recoverable, including opaque dispatched owners: fresh claims
+always replace saved links. Automatic, dispatched, and explicitly linked future
+claims all gain explicit association.
 Linking associates current claim with pane without transferring ownership.
 
 Query saved server's `agent list`. Exact agent identity or same saved terminal

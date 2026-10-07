@@ -56,7 +56,7 @@ let mut encoded = serde_json::to_value(link)?;
 encoded["claim_key"] = serde_json::to_value(claim)?;
 ```
 
-- [ ] In `Db::reopen`, keep completed handling. For in-progress task, load current claim/link under immediate transaction, accept matching recorded claim or legacy automatic tuple, reject absent/stale association and live owner. Existing update/event/content/dependency behavior remains shared.
+- [ ] In `Db::reopen`, keep completed handling. For in-progress task, load current claim/link under immediate transaction, accept matching recorded claim or legacy saved link (fresh claims always replace links), reject absent/stale association and live owner. Existing update/event/content/dependency behavior remains shared.
 - [ ] Update CLI help to mention absent Herdr owner. Run focused tests with `cargo test --locked --offline --test reopen_orphan --test reopen --test autodetect --test dispatch --test identity --test json_errors --test dependencies --test tui`; expect zero failures. Commit verified feature.
 
 ### Task 3: TUI, docs, verification and integration

@@ -488,6 +488,17 @@ fn tui_dashboard_task_actions() {
 }
 
 #[test]
+fn tui_dashboard_reopen_recovers_absent_herdr_owner_and_checks_current_liveness() {
+    for scenario in [
+        "orphan_reopen",
+        "orphan_reopen_no_color",
+        "orphan_reopen_live",
+    ] {
+        dashboard_scenario(scenario);
+    }
+}
+
+#[test]
 fn tui_dashboard_mark_error_requires_reason_and_confirmation() {
     for name in ["menu_error_success", "menu_error_success_no_color"] {
         dashboard_scenario(name);
