@@ -12,7 +12,7 @@
 
 **Files:** Create `tests/reopen_orphan.rs`; existing `tests/reopen.rs` stays regression coverage.
 
-- [ ] Add fake Herdr executable with real qqq subprocesses and response files. Claim using `next --local` in exact pane context. Exercise terminal and reported-session identities.
+- [x] Add fake Herdr executable with real qqq subprocesses and response files. Claim using `next --local` in exact pane context. Exercise terminal and reported-session identities.
 
 ```rust
 let before = fixture.show();
@@ -23,47 +23,53 @@ assert_eq!(reopened["content_revision"], before["task"]["content_revision"]);
 assert_eq!(fixture.show()["events"][1]["action"], "reopen");
 ```
 
-- [ ] Verify red with `cargo test --locked --offline --test reopen_orphan`; expected current `Task 1 must be completed to reopen` rejects recovery.
-- [ ] Cover live/moved terminals, changed reporting, same ID under another agent kind, missing/stale/unassociated links, malformed/failed lookup, concurrent recovery, dependency guard, preserved task fields and stale-owner completion rejection after reclaim.
+- [x] Verify red with `cargo test --locked --offline --test reopen_orphan`; expected current `Task 1 must be completed to reopen` rejects recovery.
+- [x] Cover live/moved terminals, changed reporting, same ID under another agent kind, missing/stale links, missing server metadata, legacy associations, malformed/failed lookup, concurrent recovery, dependency guard, preserved task fields and stale-owner completion rejection after reclaim.
 
 ### Task 2: Transactional recovery
 
 **Files:** Modify `src/herdr.rs`, `src/db.rs`, `src/main.rs`.
 
-- [ ] Introduce `herdr::owner_is_live(link: &Link) -> Result<bool>` using typed `agent list` response. Match exact identity or same saved terminal and agent kind; propagate lookup errors.
+- [x] Introduce `herdr::owner_is_live(link: &Link) -> Result<bool>` using typed `agent list` response. Require saved server. Match exact identity or same saved terminal and agent kind; propagate lookup errors.
 
 ```rust
 pub fn owner_is_live(link: &Link) -> Result<bool> {
-    let agents: Agents = call(link.server.as_deref(), &["agent", "list"])?;
+    let server = link.server.as_deref().context(
+        Info::new(Code::DispatchError, "Cannot verify owning Herdr agent without saved server")
+            .detail("reason", "missing_owner_server"),
+    )?;
+    let agents: Agents = call(Some(server), &["agent", "list"])?;
     Ok(agents.agents.iter().any(|pane| {
         identity_matches(pane, &link.identity)
             || link.pane.terminal_id.as_deref().is_some_and(|terminal| {
                 pane.terminal_id.as_deref() == Some(terminal)
-                    && pane.agent.as_deref() == Some(&link.identity.agent)
+                    && (pane.agent.as_deref() == Some(&link.identity.agent)
+                        || pane.agent_session.as_ref()
+                            .is_some_and(|session| session.agent == link.identity.agent))
             })
     }))
 }
 ```
 
-- [ ] Extract existing `find` matching into `identity_matches(pane: &Pane, identity: &AgentSession) -> bool`; keep `find` ambiguity handling unchanged.
-- [ ] Save current claim as private `claim_key` property in `herdr_links.link_json`. Continue deserializing public `Link` without that property; all link-writing paths share `Db::save_link`.
+- [x] Extract existing `find` matching into `identity_matches(pane: &Pane, identity: &AgentSession) -> bool`; keep `find` ambiguity handling unchanged.
+- [x] Save current claim as private `claim_key` property in `herdr_links.link_json`. Continue deserializing public `Link` without that property; all link-writing paths share `Db::save_link`.
 
 ```rust
-let claim: Option<String> = conn.query_row(
+let claim_key: Option<String> = conn.query_row(
     "SELECT claim_key FROM tasks WHERE id=?", [id], |row| row.get(0),
 )?;
-let mut encoded = serde_json::to_value(link)?;
-encoded["claim_key"] = serde_json::to_value(claim)?;
+let stored = StoredLink { link: link.clone(), claim_key };
+let encoded = serde_json::to_string(&stored)?;
 ```
 
-- [ ] In `Db::reopen`, keep completed handling. For in-progress task, load current claim/link under immediate transaction, accept matching recorded claim or legacy saved link (fresh claims always replace links), reject absent/stale association and live owner. Existing update/event/content/dependency behavior remains shared.
+- [x] In `Db::reopen`, keep completed handling. For in-progress task, load current claim/link under immediate transaction, accept matching recorded claim or legacy saved link (fresh claims always replace links), reject absent/stale association and live owner. Existing update/event/content/dependency behavior remains shared.
 - [ ] Update CLI help to mention absent Herdr owner. Run focused tests with `cargo test --locked --offline --test reopen_orphan --test reopen --test autodetect --test dispatch --test identity --test json_errors --test dependencies --test tui`; expect zero failures. Commit verified feature.
 
 ### Task 3: TUI, docs, verification and integration
 
 **Files:** Modify `tests/tui_dashboard_pty.py`, `tests/tui.rs`, `docs/reference.md`, this plan.
 
-- [ ] Add rendered TUI recovery scenario using fake Herdr and same real claim setup. Select in-progress task, Ctrl-G then `o`, confirm `y`; wait for `Reopened #1` before checking DB and history. Add Rust PTY scenario entry.
-- [ ] Extend reference reopen section: absent owner condition, claim association, successful lookup requirement, terminal fallback and unchanged preservation/guards.
+- [x] Add rendered TUI recovery scenario using fake Herdr and same real claim setup. Select in-progress task, Ctrl-G then `o`, confirm `y`; wait for `Reopened #1` before checking DB and history. Add Rust PTY scenario entry.
+- [x] Extend reference reopen section: absent owner condition, claim association, successful lookup requirement, terminal fallback and unchanged preservation/guards.
 - [ ] Run `cargo fmt --check`, `cargo clippy --locked --offline --all-targets -- -D warnings`, full `cargo test --locked --offline`, `scripts/check-compatibility-docs.sh`, `scripts/check-compatibility.sh`, `cargo build --locked --offline --release`, `git diff --check`. Inspect actual results before committing.
 - [ ] Use finishing-a-development-branch: rebase, fast-forward master, verify integration, install locked release, smoke-test installed recovery. Record evidence in task #179, complete with current owner, remove worktree/branch, resume one `qqq next --wait --local --json` process.
