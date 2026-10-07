@@ -63,7 +63,7 @@ let encoded = serde_json::to_string(&stored)?;
 ```
 
 - [x] In `Db::reopen`, keep completed handling. For in-progress task, load current claim/link under immediate transaction, accept matching recorded claim or legacy saved link (fresh claims always replace links), reject absent/stale association and live owner. Existing update/event/content/dependency behavior remains shared.
-- [ ] Update CLI help to mention absent Herdr owner. Run focused tests with `cargo test --locked --offline --test reopen_orphan --test reopen --test autodetect --test dispatch --test identity --test json_errors --test dependencies --test tui`; expect zero failures. Commit verified feature.
+- [x] Update CLI help to mention absent Herdr owner. Run focused CLI/ownership tests, `cargo test --locked --offline --test reopen_orphan --test reopen --test autodetect`, and TUI recovery scenarios; expect zero failures. Commit verified feature.
 
 ### Task 3: TUI, docs, verification and integration
 
@@ -71,5 +71,24 @@ let encoded = serde_json::to_string(&stored)?;
 
 - [x] Add rendered TUI recovery scenario using fake Herdr and same real claim setup. Select in-progress task, Ctrl-G then `o`, confirm `y`; wait for `Reopened #1` before checking DB and history. Add Rust PTY scenario entry.
 - [x] Extend reference reopen section: absent owner condition, claim association, successful lookup requirement, terminal fallback and unchanged preservation/guards.
-- [ ] Run `cargo fmt --check`, `cargo clippy --locked --offline --all-targets -- -D warnings`, full `cargo test --locked --offline`, `scripts/check-compatibility-docs.sh`, `scripts/check-compatibility.sh`, `cargo build --locked --offline --release`, `git diff --check`. Inspect actual results before committing.
-- [ ] Use finishing-a-development-branch: rebase, fast-forward master, verify integration, install locked release, smoke-test installed recovery. Record evidence in task #179, complete with current owner, remove worktree/branch, resume one `qqq next --wait --local --json` process.
+- [x] Run `cargo fmt --check`, `cargo clippy --locked --offline --all-targets -- -D warnings`, full `cargo test --locked --offline -- --test-threads=1`, `scripts/check-compatibility-docs.sh`, `scripts/check-compatibility.sh`, `cargo build --locked --offline --release`, `git diff --check`. Inspect actual results before committing.
+- [ ] Use finishing-a-development-branch: rebase, fast-forward master, verify integration, install locked release, smoke-test installed recovery. Record evidence in task #179 and complete with current owner. Worker cleanup and next persistent wait follow completion.
+
+## Verification
+
+- Rebased onto `8dfe93a`, preserving concurrent task #180 tag changes.
+- Full serial suite: 705 passed across 41 binaries, zero failures; 106 TUI tests.
+- Focused ownership/CLI suite: 97 passed before review fixes; final recovery,
+  reopen and autodetection suite: 47 passed, including 12 recovery tests.
+- New PTY scenarios cover recovery with color/plain output, cancellation and
+  owner returning before confirmation; old installed binary failed recovery
+  scenario at completed-only guard.
+- Review reproduced missing saved-server and optional agent-kind bugs. Both
+  regressions failed before fixes, then passed; independent reviewer verified
+  exact named-server recovery and unchanged DB on both rejected cases.
+- Fmt, Clippy, compatibility docs (3 tests), compatibility gate (153 tests),
+  release build and diff checks passed on rebased code. Logs use
+  `/tmp/qqq-task-179-integrated-*.log`.
+- Two parallel default suite runs hit PTY timing failures in Ctrl+/ cleanup
+  (`KeyboardInterrupt`) and Completed toggle. Ctrl+/ focused rerun passed;
+  complete serial run passed. CI was not run.
