@@ -27,6 +27,7 @@ pub fn compose(
 fn compose_external_outcome(description: &str) -> Result<crate::tui::Outcome> {
     let description = compose_external(description)?;
     Ok(crate::tui::Outcome {
+        tags: Vec::new(),
         composition: crate::tui::draft::Composition {
             description,
             images: Vec::new(),

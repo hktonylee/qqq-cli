@@ -133,7 +133,7 @@ fn focused_row(value: &str, byte: usize, width: usize) -> PopupRow {
 }
 
 pub(super) fn rows(
-    id: i64,
+    id: Option<i64>,
     value: &str,
     cursor: &Cursor,
     error: &str,
@@ -162,7 +162,10 @@ pub(super) fn rows(
     let mut rows = Vec::new();
     if heading > 0 {
         rows.push(PopupRow::new(
-            format!("Tags task #{id}"),
+            id.map_or_else(
+                || "Tags new task".to_owned(),
+                |id| format!("Tags task #{id}"),
+            ),
             PopupKind::Heading,
         ));
     }
@@ -289,7 +292,7 @@ mod tests {
                 let area = ratatui::layout::Rect::new(0, 0, width, height);
                 let capacity = super::super::dashboard::popup_layout(area, usize::MAX).content;
                 let lines = rows(
-                    7,
+                    Some(7),
                     &value,
                     &cursor,
                     "",

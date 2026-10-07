@@ -746,6 +746,23 @@ fn tui_dashboard_tags_preserve_filter_focus_and_completed_toggle() {
 }
 
 #[test]
-fn tui_dashboard_tags_require_saved_task() {
-    dashboard_scenario("tags_new");
+fn tui_dashboard_tags_stage_new_task_before_atomic_creation() {
+    for name in [
+        "tags_new",
+        "tags_new_no_color",
+        "tags_new_wait",
+        "tags_new_open_new",
+    ] {
+        dashboard_scenario(name);
+    }
+}
+
+#[test]
+fn tui_dashboard_tags_preserve_general_and_child_drafts() {
+    dashboard_scenario("tags_new_child");
+}
+
+#[test]
+fn tui_dashboard_tags_only_draft_can_cancel_clear_and_confirm_discard() {
+    dashboard_scenario("tags_new_empty");
 }

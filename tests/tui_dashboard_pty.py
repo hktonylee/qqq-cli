@@ -122,6 +122,8 @@ with tempfile.TemporaryDirectory(prefix="qqq-dashboard-test-") as folder:
     cli("init")
     if scenario == "child_open_new":
         cli("config", "tui.after_save_new", "open_new")
+    if scenario == "tags_new_open_new":
+        cli("config", "tui.after_save_new", "open_new")
     if scenario.startswith("after_save_"):
         cli("config", "tui.after_save_new", "open_saved" if scenario == "after_save_open_saved" else "open_new")
         if scenario == "after_save_default_restored":
@@ -1011,11 +1013,122 @@ print(json.dumps({"result": result}))
                              and frame_ready())
                 assert_tag_shortcut_footer()
 
-            if scenario == "tags_new":
-                send(b"New draft\x0c")
-                wait_visible(lambda: "Select task to edit tags" in visible.text()
-                             and editor_line().startswith("New draft") and frame_ready())
-                assert cli("list") == tag_tasks_before
+            if scenario.startswith("tags_new"):
+                def open_draft_tags():
+                    send(b"\x0c")
+                    wait_visible(lambda: "Tags new task" in visible.text()
+                                 and TAG_SHORTCUTS in visible.text() and frame_ready())
+
+                def apply_draft_tags(value):
+                    open_draft_tags()
+                    send(b"\x15\x1b[200~" + value.encode() + b"\x1b[201~\r")
+                    wait_visible(lambda: "Tags new task" not in visible.text()
+                                 and "Draft tags saved" in visible.text() and frame_ready())
+                    assert cli("list") == tag_tasks_before
+
+                if scenario == "tags_new_empty":
+                    open_draft_tags()
+                    send(b"cancelled\x1b")
+                    wait_visible(lambda: "Tags new task" not in visible.text() and frame_ready())
+                    apply_draft_tags("frontend")
+                    assert "[*]" in editor_title(), visible.text()
+                    send(b"\x13")
+                    wait_visible(lambda: "cannot be empty" in visible.text() and frame_ready())
+                    assert cli("list") == tag_tasks_before
+                    send(b"\x03")
+                    wait_visible(lambda: "Discard draft?" in visible.text() and frame_ready())
+                    send(b"n")
+                    wait_visible(lambda: "Discard draft?" not in visible.text() and frame_ready())
+                    open_draft_tags()
+                    assert "> frontend" in visible.text(), visible.text()
+                    send(b"\x15\r")
+                    wait_visible(lambda: "Draft tags saved" in visible.text()
+                                 and "Tags new task" not in visible.text() and frame_ready())
+                    assert "[*]" not in editor_title(), visible.text()
+                    assert cli("list") == tag_tasks_before
+                elif scenario == "tags_new_child":
+                    apply_draft_tags("general")
+                    send(b"\x1b[1;2A")
+                    wait_visible(lambda: "Task #2 (" in editor_title() and frame_ready())
+                    send(CTRL_P + b"Child draft")
+                    wait_visible(lambda: "New Task (parent #2)" in editor_title()
+                                 and editor_line().startswith("Child draft") and frame_ready())
+                    apply_draft_tags("child\n界 面")
+                    send(b"\x1b[1;2A")
+                    wait_visible(lambda: "Task #2 (" in editor_title() and frame_ready())
+                    send(CTRL_P)
+                    wait_visible(lambda: editor_line().startswith("Child draft") and frame_ready())
+                    open_draft_tags()
+                    assert "> child" in visible.text() and "> 界 面" in visible.text(), visible.text()
+                    send(b"\x03")
+                    wait_visible(lambda: "Tags new task" not in visible.text() and frame_ready())
+                    send(b"\x13")
+                    wait_visible(lambda: "Task #3 (" in editor_title() and frame_ready())
+                    child_task = cli("show", "3")["task"]
+                    assert child_task["parent_id"] == 2 and child_task["tags"] == ["child", "界 面"]
+                    send(b"\x1b[1;2B")
+                    wait_visible(lambda: "New Task" in editor_title()
+                                 and "parent #" not in editor_title() and frame_ready())
+                    open_draft_tags()
+                    assert "> general" in visible.text(), visible.text()
+                    send(b"\x1b")
+                    wait_visible(lambda: "Tags new task" not in visible.text() and frame_ready())
+                    send(b"General draft\x13")
+                    wait_visible(lambda: "Task #4 (" in editor_title() and frame_ready())
+                    general_task = cli("show", "4")["task"]
+                    assert general_task["parent_id"] is None and general_task["tags"] == ["general"]
+                else:
+                    send(b"New draft\x1b[D")
+                    wait_visible(lambda: editor_line().startswith("New draft")
+                                 and visible.x == 8 and frame_ready())
+                    draft_cursor = (visible.x, visible.y)
+                    open_draft_tags()
+                    send(b"bad,,tag\r")
+                    wait_visible(lambda: "nonempty labels" in visible.text() and frame_ready())
+                    assert cli("list") == tag_tasks_before
+                    send("\x15\x1b[200~frontend\r\n界 面\nfrontend\x1b[201~\r".encode())
+                    wait_visible(lambda: "Tags new task" not in visible.text()
+                                 and "Draft tags saved" in visible.text()
+                                 and (visible.x, visible.y) == draft_cursor and frame_ready())
+                    assert cli("list") == tag_tasks_before
+                    for cancel_key in (b"\x1b", b"\x03"):
+                        open_draft_tags()
+                        assert "> frontend" in visible.text() and "> 界 面" in visible.text(), visible.text()
+                        send(b"\x15cancelled" + cancel_key)
+                        wait_visible(lambda: "Tags new task" not in visible.text()
+                                     and (visible.x, visible.y) == draft_cursor and frame_ready())
+                    worker = None
+                    try:
+                        if scenario == "tags_new_wait":
+                            worker = subprocess.Popen(
+                                [binary, "--json", "next", "--wait", "--local", "--session",
+                                 "draft-tags-worker", "--filter", "id >= 3"],
+                                cwd=folder, env=env, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+                            assert worker.poll() is None
+                        send(b"\x13")
+                        wait_visible(lambda: visible.text().splitlines()[-1].startswith("Saved #3")
+                                     and frame_ready())
+                        task = cli("show", "3")["task"]
+                        assert task["description"] == "New draft" and task["tags"] == ["frontend", "界 面"]
+                        if worker is not None:
+                            output, errors = worker.communicate(timeout=5)
+                            assert worker.returncode == 0, errors.decode()
+                            claimed = json.loads(output)
+                            assert claimed["id"] == 3 and claimed["tags"] == ["frontend", "界 面"], claimed
+                        if scenario == "tags_new_open_new":
+                            open_draft_tags()
+                            assert "> frontend" not in visible.text() and "> 界 面" not in visible.text()
+                            send(b"\x1b")
+                            wait_visible(lambda: "Tags new task" not in visible.text() and frame_ready())
+                            send(b"Next draft\x13")
+                            wait_visible(lambda: "Saved #4" in visible.text() and frame_ready())
+                            assert cli("show", "4")["task"]["tags"] == []
+                        if scenario.endswith("no_color"):
+                            assert b"\x1b[38;" not in screen
+                    finally:
+                        if worker is not None and worker.poll() is None:
+                            worker.terminate()
+                            worker.communicate(timeout=5)
             else:
                 if scenario == "tags_dirty":
                     send(b"New draft")

@@ -85,6 +85,8 @@ Manage extras with edit's `--depends-on`, `--remove-depends-on`, and
 Add tags with `qqq add "Fix layout" --tag frontend --tag bug`; lists show
 `[frontend] [bug] Fix layout`. Replace via `qqq edit 1 --set-tags "frontend, bug"`,
 clear via `--set-tags ""`, or edit selected task tags with Ctrl-L in TUI.
+On a new draft, Ctrl-L stages tags before Ctrl-S creates the task. Workers see
+the description and tags together when the task enters the queue.
 
 See [batch schema and piping examples](docs/reference.md#atomic-batch-import).
 
@@ -103,7 +105,7 @@ task to load it, scroll each pane, or use the keyboard:
 | --- | --- |
 | Shift+Up / Shift+Down | Move between tasks and a blank draft |
 | Ctrl+S | Save |
-| Ctrl+L | Edit selected task tags; retain unsaved drafts |
+| Ctrl+L | Edit task or new draft tags; retain unsaved drafts |
 | Ctrl+K | Go to task ID; retain unsaved drafts |
 | Ctrl+P | Create a child of the selected task |
 | Ctrl+/ | Filter tasks |

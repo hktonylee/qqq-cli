@@ -494,7 +494,7 @@ Current edits stay retained. Each parent has separate child draft; return to par
 and press Ctrl+P to continue it. Ctrl-S creates child with dependency;
 Enter or Shift+Enter inserts newline. Navigating away retains child parent context.
 
-Ctrl+L opens tags for the selected saved task from editor or filter. Current
+Ctrl+L opens tags for the selected task or new draft from editor or filter. Current
 labels are prefilled, one per line. Shift+Enter adds a line; Enter applies.
 Up/Down move caret between tag rows, preserving preferred display column across
 short rows. Left/Right move between characters; Home/End jump within current row.
@@ -506,7 +506,12 @@ Shortcuts share the popup footer; narrow popups use `^U` for Ctrl-U, `S-↵` for
 Shift+Enter and `↵` for Enter. Active input row stays visible in short terminals.
 List tags use yellow when color is enabled. Invalid labels stay in the popup. Tag saves
 retain unsaved description drafts, caret, scroll, parked buffers and filter
-focus. New unsaved tasks show “Select task to edit tags”; save first to tag.
+focus. On a new general or child draft, applying tags only changes the draft;
+no task enters the DB or queue until Ctrl-S creates it with description, parent,
+images and tags in one transaction. Draft tags survive navigation independently
+for each buffer. A draft containing only tags is unsaved work and requires discard
+confirmation; Ctrl-S still requires a nonempty description. Fresh drafts start
+without tags after a save.
 
 Ctrl+K opens a task ID popup from editor or filter. Enter a positive ID, press
 Enter to go; invalid or missing IDs keep popup open with an error. Backspace edits

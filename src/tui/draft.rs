@@ -154,6 +154,7 @@ pub struct Draft {
     atoms: Vec<Atom>,
     cursor: usize,
     next_image: usize,
+    pub(super) tags: Vec<String>,
 }
 impl Draft {
     pub fn new(description: &str) -> Self {
@@ -161,6 +162,7 @@ impl Draft {
             atoms: Vec::new(),
             cursor: 0,
             next_image: 1,
+            tags: Vec::new(),
         };
         draft.insert(description);
         draft
@@ -380,7 +382,7 @@ impl Draft {
         }
     }
     pub fn is_empty(&self) -> bool {
-        self.atoms.is_empty()
+        self.atoms.is_empty() && self.tags.is_empty()
     }
     pub fn cursor(&self) -> usize {
         self.cursor
@@ -404,9 +406,11 @@ impl Draft {
             .collect()
     }
     pub fn is_dirty_against(&self, baseline: &str) -> bool {
-        self.atoms
-            .iter()
-            .any(|atom| matches!(atom, Atom::Image { .. }))
+        !self.tags.is_empty()
+            || self
+                .atoms
+                .iter()
+                .any(|atom| matches!(atom, Atom::Image { .. }))
             || self.contents(false).description != baseline
     }
     fn contents(&self, normalize_legacy: bool) -> Composition {

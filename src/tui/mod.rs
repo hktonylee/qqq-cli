@@ -38,6 +38,7 @@ use unicode_width::UnicodeWidthStr;
 
 pub struct Outcome {
     pub composition: Composition,
+    pub tags: Vec<String>,
     pub target_id: Option<i64>,
     pub parent_id: Option<i64>,
     pub expected_revision: Option<i64>,
@@ -227,7 +228,7 @@ enum ActionUi {
         selected: usize,
     },
     Input {
-        id: i64,
+        id: Option<i64>,
         kind: ActionInputKind,
         value: String,
         error: String,
@@ -342,16 +343,17 @@ fn action_lines(ui: &ActionUi, width: usize, height: usize) -> Vec<render::Popup
             error,
             cursor,
         } => {
+            let task_label = id.map(|id| format!("#{id}")).unwrap_or_default();
             let mut lines = match kind {
                 ActionInputKind::Priority => {
                     vec![
-                        PopupRow::new(format!("Priority task #{id}"), PopupKind::Heading),
+                        PopupRow::new(format!("Priority task {task_label}"), PopupKind::Heading),
                         PopupRow::new("Enter -100..100", PopupKind::Hint),
                     ]
                 }
                 ActionInputKind::Parent => {
                     vec![
-                        PopupRow::new(format!("Parent task #{id}"), PopupKind::Heading),
+                        PopupRow::new(format!("Parent task {task_label}"), PopupKind::Heading),
                         PopupRow::new("ID / none", PopupKind::Hint),
                     ]
                 }
@@ -359,7 +361,7 @@ fn action_lines(ui: &ActionUi, width: usize, height: usize) -> Vec<render::Popup
                     return tag_input::rows(*id, value, cursor, error, width, height);
                 }
                 ActionInputKind::ErrorReason => vec![
-                    PopupRow::new(format!("Error task #{id}"), PopupKind::Heading),
+                    PopupRow::new(format!("Error task {task_label}"), PopupKind::Heading),
                     PopupRow::new("Enter error reason", PopupKind::Hint),
                 ],
             };
@@ -1873,7 +1875,7 @@ fn compose_inner(
                                 KeyCode::Char('a') => Some(TaskAction::SetArchived(id, !archived)),
                                 KeyCode::Char('p') => {
                                     action_ui = Some(ActionUi::Input {
-                                        id,
+                                        id: Some(id),
                                         kind: ActionInputKind::Priority,
                                         value: String::new(),
                                         error: String::new(),
@@ -1883,7 +1885,7 @@ fn compose_inner(
                                 }
                                 KeyCode::Char('d') => {
                                     action_ui = Some(ActionUi::Input {
-                                        id,
+                                        id: Some(id),
                                         kind: ActionInputKind::Parent,
                                         value: String::new(),
                                         error: String::new(),
@@ -1893,7 +1895,7 @@ fn compose_inner(
                                 }
                                 KeyCode::Char('e') => {
                                     action_ui = Some(ActionUi::Input {
-                                        id,
+                                        id: Some(id),
                                         kind: ActionInputKind::ErrorReason,
                                         value: String::new(),
                                         error: String::new(),
@@ -2005,7 +2007,33 @@ fn compose_inner(
                                     cursor,
                                 });
                             }
-                            KeyCode::Enter => match parse_action_input(id, kind, &value) {
+                            KeyCode::Enter
+                                if id.is_none() && matches!(kind, ActionInputKind::Tags) =>
+                            {
+                                match crate::tags::parse_lines(&value) {
+                                    Ok(tags) => {
+                                        draft.tags = tags;
+                                        message =
+                                            "Draft tags saved; Ctrl-S creates task".to_owned();
+                                        message_is_error = false;
+                                    }
+                                    Err(failure) => {
+                                        error = failure.to_string();
+                                        action_ui = Some(ActionUi::Input {
+                                            id,
+                                            kind,
+                                            value,
+                                            error,
+                                            cursor,
+                                        });
+                                    }
+                                }
+                            }
+                            KeyCode::Enter => match parse_action_input(
+                                id.expect("task input has selected task"),
+                                kind,
+                                &value,
+                            ) {
                                 Ok(action @ TaskAction::Tags(..)) => {
                                     match mode.task_action(action.clone()) {
                                         Ok(_) => {
@@ -2106,7 +2134,7 @@ fn compose_inner(
                         Some(Ok(task)) => {
                             let value = task.tags.join("\n");
                             action_ui = Some(ActionUi::Input {
-                                id: task.id,
+                                id: Some(task.id),
                                 kind: ActionInputKind::Tags,
                                 cursor: tag_input::Cursor::at_end(&value),
                                 value,
@@ -2120,8 +2148,14 @@ fn compose_inner(
                             });
                         }
                         None => {
-                            message = "Select task to edit tags".to_owned();
-                            message_is_error = false;
+                            let value = draft.tags.join("\n");
+                            action_ui = Some(ActionUi::Input {
+                                id: None,
+                                kind: ActionInputKind::Tags,
+                                cursor: tag_input::Cursor::at_end(&value),
+                                value,
+                                error: String::new(),
+                            });
                         }
                     }
                     continue;
@@ -2338,6 +2372,7 @@ fn compose_inner(
                                         || after_save_new == AfterSaveNew::OpenSaved);
                                 let outcome = Outcome {
                                     composition,
+                                    tags: draft.tags.clone(),
                                     target_id,
                                     parent_id: draft_parent_id,
                                     expected_revision: save_revision_override
@@ -2520,7 +2555,7 @@ mod tests {
     fn multiline_tag_popup_keeps_separate_rows_and_empty_final_caret() {
         use super::{ActionInputKind, ActionUi, action_lines, dashboard, render::PopupKind};
         let ui = ActionUi::Input {
-            id: 1,
+            id: Some(1),
             kind: ActionInputKind::Tags,
             value: "frontend\n界 面\n".into(),
             error: String::new(),
@@ -2570,7 +2605,7 @@ mod tests {
             "Tags must be nonempty labels without controls, commas or square brackets",
         ] {
             let ui = ActionUi::Input {
-                id: 1,
+                id: Some(1),
                 kind: ActionInputKind::Tags,
                 value: value.clone(),
                 error: error.into(),

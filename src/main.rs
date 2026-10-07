@@ -583,7 +583,18 @@ fn execute(
                             None,
                             outcome.expected_revision,
                         ),
-                        None => db.save_composition(None, outcome.parent_id, &outcome.composition),
+                        None if outcome.tags.is_empty() => {
+                            db.save_composition(None, outcome.parent_id, &outcome.composition)
+                        }
+                        None => db.save_composition_with_options(
+                            None,
+                            &outcome.composition,
+                            db::AddOptions {
+                                parent: outcome.parent_id,
+                                tags: &outcome.tags,
+                                ..Default::default()
+                            },
+                        ),
                     }?;
                     Ok(task.id)
                 },
