@@ -346,7 +346,7 @@ qqq reopen -1 --session reviewer
 in-progress task can also reopen when its owning Herdr agent is absent from a
 successful lookup on its saved server. Exact session identity or same terminal
 with same agent kind counts as live, including moved panes and changed session
-reports. Missing links, mismatched claim associations, failed commands and
+reports. Missing links or saved servers, mismatched claim associations, failed commands and
 invalid responses cannot establish absence; task stays unchanged. Legacy links
 remain usable because fresh claims replace saved links. New links privately
 record current claim association. CLI and TUI Reopen use same checks.

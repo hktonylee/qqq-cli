@@ -234,6 +234,35 @@ fn exact_reported_session_remains_live_without_saved_terminal() {
 }
 
 #[test]
+fn same_terminal_with_reported_agent_kind_keeps_owner_live() {
+    let fixture = Fixture::new(true);
+    let mut changed = fixture.pane.clone();
+    changed["agent_session"] = json!({"agent":"codex","kind":"id","value":"changed-report"});
+    changed["agent"] = Value::Null;
+    fixture.respond(json!({"result":{"agents":[changed]}}));
+    fixture.reject("INVALID_TRANSITION", Some("owner_still_live"));
+}
+
+#[test]
+fn missing_saved_server_cannot_use_callers_empty_default_server() {
+    let fixture = Fixture::new(true);
+    fixture
+        .db()
+        .execute(
+            "UPDATE herdr_links SET link_json=json_set(link_json,'$.server',NULL)",
+            [],
+        )
+        .unwrap();
+    fixture.respond(json!({"result":{"agents":[]}}));
+    fixture.reject("DISPATCH_ERROR", Some("missing_owner_server"));
+    assert!(
+        fs::read_to_string(fixture.dir.path().join("calls"))
+            .unwrap()
+            .is_empty()
+    );
+}
+
+#[test]
 fn legacy_automatic_and_opaque_claim_links_can_recover_existing_work() {
     for opaque in [false, true] {
         let fixture = Fixture::new(true);

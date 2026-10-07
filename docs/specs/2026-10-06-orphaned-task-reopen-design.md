@@ -17,9 +17,12 @@ always replace saved links. Automatic, dispatched, and explicitly linked future
 claims all gain explicit association.
 Linking associates current claim with pane without transferring ownership.
 
+Require saved server name; missing server metadata cannot select caller's server.
 Query saved server's `agent list`. Exact agent identity or same saved terminal
 with same agent kind means owner remains live, including moved panes and changed
-session reporting. No matching agent or terminal in a successful response proves
+session reporting. Terminal agent kind can come from either top-level agent
+field or reported session; either matching report retains live claim.
+No matching agent or terminal in a successful response proves
 absence. Failed commands, malformed responses, missing links and mismatched
 claim associations reject without changing task. A failed server lookup is
 unknown liveness, not proof of absence.

@@ -113,13 +113,21 @@ fn identity_matches(pane: &Pane, identity: &AgentSession) -> bool {
 }
 
 pub fn owner_is_live(link: &Link) -> Result<bool> {
-    let agents: Agents = call(link.server.as_deref(), &["agent", "list"])?;
+    let server = link.server.as_deref().context(
+        Info::new(
+            Code::DispatchError,
+            "Cannot verify owning Herdr agent without saved server",
+        )
+        .detail("reason", "missing_owner_server"),
+    )?;
+    let agents: Agents = call(Some(server), &["agent", "list"])?;
     Ok(agents.agents.iter().any(|pane| {
         identity_matches(pane, &link.identity)
             // Active claims survive changed or temporarily missing session reports.
             || link.pane.terminal_id.as_deref().is_some_and(|terminal| {
                 pane.terminal_id.as_deref() == Some(terminal)
-                    && pane.agent.as_deref() == Some(&link.identity.agent)
+                    && (pane.agent.as_deref() == Some(&link.identity.agent)
+                        || pane.agent_session.as_ref().is_some_and(|session| session.agent == link.identity.agent))
             })
     }))
 }
