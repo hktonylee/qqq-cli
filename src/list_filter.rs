@@ -33,18 +33,7 @@ pub fn filter_tasks(
         return tasks;
     }
 
-    let needle = query.map(str::to_lowercase);
-    let direct: Vec<bool> = tasks
-        .iter()
-        .map(|task| {
-            needle
-                .as_ref()
-                .is_none_or(|needle| task.description.to_lowercase().contains(needle))
-                && (statuses.is_empty()
-                    || statuses.iter().any(|status| status.as_str() == task.status))
-                && matches.is_none_or(|matches| matches.contains(&task.id))
-        })
-        .collect();
+    let direct = direct_flags(&tasks, query, statuses, matches);
     let positions: HashMap<i64, usize> = tasks
         .iter()
         .enumerate()
@@ -78,5 +67,40 @@ pub fn filter_tasks(
                 task
             })
         })
+        .collect()
+}
+
+fn direct_flags(
+    tasks: &[Task],
+    query: Option<&str>,
+    statuses: &[ListStatus],
+    matches: Option<&HashSet<i64>>,
+) -> Vec<bool> {
+    let needle = query.map(str::to_lowercase);
+    tasks
+        .iter()
+        .map(|task| {
+            needle
+                .as_ref()
+                .is_none_or(|needle| task.description.to_lowercase().contains(needle))
+                && (statuses.is_empty()
+                    || statuses.iter().any(|status| status.as_str() == task.status))
+                && matches.is_none_or(|matches| matches.contains(&task.id))
+        })
+        .collect()
+}
+
+/// Match rows themselves, without contextual ancestor expansion.
+pub(crate) fn direct_tasks(
+    tasks: Vec<Task>,
+    query: Option<&str>,
+    statuses: &[ListStatus],
+    matches: Option<&HashSet<i64>>,
+) -> Vec<Task> {
+    let direct = direct_flags(&tasks, query, statuses, matches);
+    tasks
+        .into_iter()
+        .zip(direct)
+        .filter_map(|(task, matched)| matched.then_some(task))
         .collect()
 }

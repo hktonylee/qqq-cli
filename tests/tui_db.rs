@@ -1,4 +1,7 @@
 #[allow(dead_code)]
+#[path = "../src/archive.rs"]
+mod archive;
+#[allow(dead_code)]
 #[path = "../src/db.rs"]
 mod db;
 #[allow(dead_code)]

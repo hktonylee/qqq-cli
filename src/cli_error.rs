@@ -69,6 +69,7 @@ pub fn command_name(command: &Commands) -> &'static str {
         Commands::Init => "init",
         Commands::Add { .. } => "add",
         Commands::Import { .. } => "import",
+        Commands::Bulk(_) => "bulk",
         Commands::Tui { .. } => "tui",
         Commands::List { .. } => "list",
         Commands::Show { .. } => "show",

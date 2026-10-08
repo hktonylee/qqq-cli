@@ -74,7 +74,7 @@ from connection.path(); do not allocate data elsewhere.
 
 ## Task 1: CLI Frozen Preview And Basic Apply
 
-- [ ] Create TempDir CLI fixture removing agent/Herdr env, PATH isolated, init,
+- [x] Create TempDir CLI fixture removing agent/Herdr env, PATH isolated, init,
   DB bytes helper and command JSON parser. First regression:
 
 ```rust
@@ -96,16 +96,16 @@ assert_eq!(applied["applied"], true);
 assert_eq!(f.ok(&["show","1"])["task"]["priority"], 5);
 ```
 
-- [ ] Run `cargo test --locked --offline --test bulk -- --test-threads=1`;
+- [x] Run `cargo test --locked --offline --test bulk -- --test-threads=1`;
   require expected unknown bulk subcommand failure before production changes.
-- [ ] Add Args and Commands::Bulk; require ID/selector/all selection and at least
+- [x] Add Args and Commands::Bulk; require ID/selector/all selection and at least
   one action unless apply; enforce conflicts with Clap and pre-open validation.
   Normalize actions: trim/dedupe tags, reject add/remove overlap, bounds check,
   reject set+add/remove and archive+unarchive. No-op actions still valid.
-- [ ] Implement typed report and read file/stdin with strict JSON; direct selector
+- [x] Implement typed report and read file/stdin with strict JSON; direct selector
   function shares List query/status matches without expanding ancestors. Integrate
   Bulk tags/filter into existing run compile path before liveness preflight.
-- [ ] Implement basic preview/read/apply using transaction, exact IDs/metadata,
+- [x] Implement basic preview/read/apply using transaction, exact IDs/metadata,
   fingerprint and structural report validation. Basic metadata writes update
   only tags/priority/archived/updated_at, preserve content_revision.
 - [ ] Add safe human renderer with every ID and before/after/count fields;
@@ -238,3 +238,10 @@ Base6ba310c: fresh full combined suite761 tests/44 binaries already passed for
 prior recipe delivery. New worktree build and fresh CLI/archive/priority/TUI DB
 baseline111 tests/4 binaries pass. Design self-review complete; one shared bulk
 transaction, no migration, no unresolved material choices. Implementation pending.
+
+First checkpoint RED: bulk4 and archive graph1 rejected missing bulk subcommand.
+GREEN: bulk5 plus CLI/archive/priority/TUI DB/list/filter suites pass132 tests
+across7 binaries; fmt/diff checks and strict all-targets Clippy pass. Shared
+archive extraction included early because graph/active-row test precedes core
+archive exposure. Human renderer exists; dedicated human/default-output checks,
+broader validation/rollback/concurrency and TUI implementation remain pending.

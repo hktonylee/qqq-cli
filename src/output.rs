@@ -1,3 +1,4 @@
+mod bulk;
 mod detail;
 mod import;
 mod queue;
@@ -18,6 +19,7 @@ pub enum Format {
     Database,
     AddedTask,
     Import,
+    Bulk,
     Recipe,
     Task,
     NextTask,
@@ -59,6 +61,7 @@ impl From<&Commands> for Format {
             } => Self::Recipe,
             Commands::Add { .. } => Self::AddedTask,
             Commands::Import { .. } => Self::Import,
+            Commands::Bulk(_) => Self::Bulk,
             Commands::Backup { .. } => Self::Backup,
             Commands::Restore { .. } => Self::Restore,
             Commands::Doctor => Self::Doctor,
@@ -412,6 +415,7 @@ fn task_tree(
 pub fn render(format: Format, value: &Value, color: bool, columns: Option<usize>) -> String {
     match format {
         Format::Import => import::render(value),
+        Format::Bulk => bulk::render(value),
         Format::Recipe => recipe::render(value),
         Format::Views => crate::views::render(value),
         Format::QueueOverview => queue::render(value, color, false),

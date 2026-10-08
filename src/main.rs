@@ -1,4 +1,6 @@
 mod aliases;
+mod archive;
+mod bulk;
 mod cli_error;
 mod config;
 mod config_cli;
@@ -142,6 +144,8 @@ enum Commands {
         #[arg(long)]
         dry_run: bool,
     },
+    /// Preview metadata changes; explicitly apply exact saved JSON preview.
+    Bulk(bulk::Args),
     /// Browse tasks above a continuous interactive editor.
     Tui {
         /// Include archived tasks in dashboard browsing.
@@ -424,6 +428,21 @@ fn execute(
             ViewCommand::Remove { name } => json!(views::remove(&path, name)?),
         });
     }
+    if let Commands::Bulk(args) = &cli.command {
+        return if let Some(path) = &args.apply {
+            let report = bulk::read(path)?;
+            let (mut db, _) = db::Db::open(false)?;
+            Ok(json!(bulk::apply(
+                &mut db,
+                &report,
+                cli.session.as_deref().unwrap_or("cli")
+            )?))
+        } else {
+            let actions = args.actions()?;
+            let (db, _) = db::Db::open_read_only()?;
+            Ok(json!(bulk::preview(&db, args.selection(filter), actions)?))
+        };
+    }
     if let Commands::Config {
         list,
         get,
@@ -561,6 +580,7 @@ fn execute(
         Commands::View { .. } => unreachable!("views handled before database lookup"),
         Commands::Init => json!({"database":path}),
         Commands::Status { .. } => unreachable!("diagnostics handled before database writes"),
+        Commands::Bulk(_) => unreachable!("bulk handled before writable database open"),
         Commands::Import { .. } => json!(import::run(
             &mut db.conn,
             import_batch.as_ref().expect("import input prepared"),
@@ -1114,6 +1134,17 @@ fn run(cli: Cli) -> Result<(Option<String>, bool)> {
         .map(|(selectors, _, visibility)| selection::prepare(None, selectors, visibility))
         .transpose()?
         .unwrap_or_default();
+    if let Commands::Bulk(args) = &cli.command {
+        prepared = selection::prepare(
+            None,
+            &selection::Selectors {
+                tags: args.tags.clone(),
+                filter: args.filter.clone(),
+                ..Default::default()
+            },
+            selection::Visibility::default(),
+        )?;
+    }
     let mut view_context = None;
     if let Some((selectors, name, visibility)) = inputs {
         if name.is_some() || matches!(&cli.command, Commands::Tui { .. }) {

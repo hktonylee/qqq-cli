@@ -26,6 +26,7 @@ pub enum Code {
     InvalidFilter,
     DbBusy,
     ContentConflict,
+    BulkConflict,
     ProjectNotFound,
     ConfigError,
     IoError,

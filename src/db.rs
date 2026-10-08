@@ -697,36 +697,7 @@ impl Db {
             tx.commit()?;
             return Ok(task);
         }
-        if archived {
-            ensure!(
-                task.status != "in_progress",
-                crate::errors::Info::transition(
-                    id,
-                    &task.status,
-                    &["new", "error", "completed"],
-                    format!("Task {id} is in progress and cannot be archived")
-                )
-            );
-            if task.status != "completed" {
-                let unfinished_child: bool = tx.query_row(
-                    "SELECT EXISTS(SELECT 1 FROM tasks WHERE (parent_id=?1 OR id IN (SELECT task_id FROM task_dependencies WHERE prerequisite_id=?1)) AND archived=0 AND status!='completed')",
-                    [id],
-                    |row| row.get(0),
-                )?;
-                ensure!(
-                    !unfinished_child,
-                    crate::errors::Info::transition(
-                        id,
-                        &task.status,
-                        &["completed"],
-                        format!("Task {id} has non-archived unfinished child or dependent")
-                    )
-                    .detail("reason", "unfinished_child")
-                );
-            }
-        } else if task.status != "completed" {
-            crate::dependencies::ensure_all_available(&tx, id)?;
-        }
+        crate::archive::validate(&tx, &task, archived, &std::collections::BTreeMap::new())?;
         tx.execute(
             "UPDATE tasks SET archived=?,updated_at=strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE id=?",
             params![archived, id],
