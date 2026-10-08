@@ -218,11 +218,13 @@ conn.execute_batch("CREATE TRIGGER fail_second BEFORE INSERT ON tasks
 - [x] Request focused code review per skill; fix important findings with
   regression tests and rerun affected checks. Confirm DB schema stays13 and
   historical artifact hashes unchanged through compatibility suite.
-- [ ] Rebase onto current master, preserve concurrent work, fast-forward locally.
+- [x] Rebase onto current master, preserve concurrent work, fast-forward locally.
   Rebuild root package paths as needed, offline install, verify installed recipe
   examples, literal inputs, preview and ordinary add/import plus binary hash.
-- [ ] Record verified evidence, update plan, complete #183, remove merged
-  worktree/branch, resume one persistent queue waiter.
+- [x] Record verified evidence and update plan.
+
+Queue handoff after final docs integration: complete #183, remove merged
+worktree/branch, resume one persistent queue waiter.
 
 ## Progress
 
@@ -249,3 +251,14 @@ Focused review found no important issues. Rebased cleanly onto bee72ab, preservi
 full serial suite pass:761 tests across44 binaries, including107 TUI tests and35
 compatibility checks. Schema remains13; historical artifacts unchanged. Local
 integration, root rebuild/install and installed-binary verification remain pending.
+
+Delivery: master fast-forwarded to8133996. Root install rebuilt qqq0.5.0 from
+integrated source. Root recipe14 plus tag-routing8 checks pass. Installed binary
+passes all35 historical compatibility checks, actual documented bug/release CLI
+examples from root/subdir, byte-identical previews, full human preview, exact
+literal multiline Unicode/default/escaped parameters, validation and insertion
+rollback, ordinary add/import and composed tag routing. Isolated local claim smoke
+uses explicit --session because agent/Herdr identity is removed from test env.
+Root doctor reports ok, schema13, no issues. Installed/root release SHA256:
+52e59301d551a7509a96da811936bce879a5e72fe40dbdefa4217f36beebe2b8.
+No CI, push or publication run for this task.
