@@ -64,6 +64,20 @@ impl Project {
 }
 
 #[test]
+fn named_tag_view_composes_with_appended_selectors() {
+    let p = Project::new(
+        r#"[alias]
+ui = "list --filter 'has_tag(\"frontend\") and status == \"new\"'"
+"#,
+    );
+    p.ok(&["add", "UI", "--tag", "frontend", "--tag", "bug"]);
+    p.ok(&["add", "Other UI", "--tag", "frontend"]);
+    let tasks = p.ok(&["ui", "--tag", "bug"]);
+    assert_eq!(tasks.as_array().unwrap().len(), 1);
+    assert_eq!(tasks[0]["id"], 1);
+}
+
+#[test]
 fn aliases_expand_quotes_and_append_literal_arguments() {
     let p = Project::new(
         "[alias]\nnew = \"add --description 'two words'\"\nliteral = 'add'\ns = 'show'\n",

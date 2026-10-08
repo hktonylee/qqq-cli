@@ -1,7 +1,9 @@
 use serde_json::{Value, json};
 use std::{
     path::Path,
-    process::{Command, Output},
+    process::{Child, Command, Output, Stdio},
+    thread,
+    time::{Duration, Instant},
 };
 use tempfile::TempDir;
 
@@ -410,4 +412,118 @@ fn tag_selectors_preserve_human_and_agent_default_output() {
         .unwrap();
     assert!(!human.status.success());
     assert!(String::from_utf8_lossy(&human.stderr).contains("Tags must be nonempty labels"));
+}
+
+struct Waiter(Option<Child>);
+impl Drop for Waiter {
+    fn drop(&mut self) {
+        if let Some(child) = &mut self.0 {
+            let _ = child.kill();
+            let _ = child.wait();
+        }
+    }
+}
+
+#[test]
+fn tag_wait_and_dry_run_wait_ignore_partial_matches_until_tag_edit() {
+    for dry_run in [false, true] {
+        let dir = project();
+        let p = dir.path();
+        let mut cmd = command(p);
+        cmd.args([
+            "--json",
+            "next",
+            "--local",
+            "--wait",
+            "--session",
+            "waiter",
+            "--tag",
+            "UI",
+            "--tag",
+            "界 面",
+            "--filter",
+            "has_tag('UI') and priority > 0",
+        ]);
+        if dry_run {
+            cmd.arg("--dry-run");
+        }
+        let mut waiter = Waiter(Some(
+            cmd.stdout(Stdio::piped())
+                .stderr(Stdio::piped())
+                .spawn()
+                .unwrap(),
+        ));
+        ok(p, &["add", "[UI] [界 面] Text only", "--priority", "100"]);
+        ok(p, &["add", "Partial", "--tag", "UI", "--priority", "5"]);
+        thread::sleep(Duration::from_millis(400));
+        assert!(waiter.0.as_mut().unwrap().try_wait().unwrap().is_none());
+        ok(p, &["edit", "2", "--set-tags", "UI, 界 面"]);
+        let deadline = Instant::now() + Duration::from_secs(5);
+        while waiter.0.as_mut().unwrap().try_wait().unwrap().is_none() {
+            assert!(Instant::now() < deadline, "tag waiter did not return");
+            thread::sleep(Duration::from_millis(25));
+        }
+        let output = waiter.0.take().unwrap().wait_with_output().unwrap();
+        assert!(
+            output.status.success(),
+            "{}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+        let task: Value = serde_json::from_slice(&output.stdout).unwrap();
+        assert_eq!(task["id"], 2);
+        assert_eq!(task["status"], if dry_run { "new" } else { "in_progress" });
+        assert_eq!(ok(p, &["show", "1"])["task"]["status"], "new");
+        assert_eq!(ok(p, &["show", "2"])["task"]["status"], task["status"]);
+    }
+}
+
+#[test]
+fn concurrent_tag_claims_are_distinct_and_preserve_unmatched_tasks() {
+    let dir = project();
+    let p = dir.path();
+    ok(p, &["add", "Unmatched", "--tag", "UI"]);
+    for description in ["First", "Second"] {
+        ok(p, &["add", description, "--tag", "UI", "--tag", "bug"]);
+    }
+    let children: Vec<_> = ["a", "b", "c"]
+        .into_iter()
+        .map(|owner| {
+            command(p)
+                .args([
+                    "--json",
+                    "next",
+                    "--local",
+                    "--session",
+                    owner,
+                    "--tag",
+                    "UI",
+                    "--tag",
+                    "bug",
+                ])
+                .stdout(Stdio::piped())
+                .stderr(Stdio::piped())
+                .spawn()
+                .unwrap()
+        })
+        .collect();
+    let mut claimed = Vec::new();
+    let mut empty = 0;
+    for child in children {
+        let output = child.wait_with_output().unwrap();
+        assert!(
+            output.status.success(),
+            "{}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+        let task: Value = serde_json::from_slice(&output.stdout).unwrap();
+        if task.is_null() {
+            empty += 1;
+        } else {
+            claimed.push(task["id"].as_i64().unwrap());
+        }
+    }
+    claimed.sort();
+    assert_eq!(claimed, [2, 3]);
+    assert_eq!(empty, 1);
+    assert_eq!(ok(p, &["show", "1"])["task"]["status"], "new");
 }

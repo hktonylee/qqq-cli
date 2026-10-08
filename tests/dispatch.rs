@@ -154,6 +154,89 @@ fn dispatch_dry_run_never_starts_agent_or_returns_owned_task() {
 }
 
 #[test]
+fn dispatch_tags_match_preflight_claim_and_preview_without_empty_tabs() {
+    let p = Project::new();
+    p.ok(&["add", "[UI] Text only", "--priority", "100"]);
+    p.ok(&["add", "Partial", "--tag", "UI", "--priority", "90"]);
+    assert!(p.ok(&["next", "--tag", "UI", "--tag", "bug"]).is_null());
+    assert!(
+        !p.calls()
+            .iter()
+            .any(|call| call.first().map(String::as_str) == Some("tab"))
+    );
+    p.ok(&[
+        "add",
+        "Matched",
+        "--tag",
+        "UI",
+        "--tag",
+        "bug",
+        "--priority",
+        "1",
+    ]);
+    let preview = p.ok(&[
+        "next",
+        "--dry-run",
+        "--tag",
+        "UI",
+        "--tag",
+        "bug",
+        "--filter",
+        "has_tag('UI')",
+    ]);
+    assert_eq!(preview["id"], 3);
+    assert_eq!(preview["status"], "new");
+    assert!(
+        !p.calls()
+            .iter()
+            .any(|call| call.first().map(String::as_str) == Some("tab"))
+    );
+    assert_eq!(
+        p.ok(&[
+            "next",
+            "--tag",
+            "UI",
+            "--tag",
+            "bug",
+            "--filter",
+            "has_tag('UI')"
+        ])["id"],
+        3
+    );
+    assert_eq!(
+        p.calls()
+            .iter()
+            .filter(|call| call.first().map(String::as_str) == Some("tab"))
+            .count(),
+        1
+    );
+    assert_eq!(p.ok(&["show", "1"])["task"]["status"], "new");
+    assert_eq!(p.ok(&["show", "2"])["task"]["status"], "new");
+    assert_eq!(
+        p.ok(&[
+            "next",
+            "--local",
+            "--session",
+            "caller",
+            "--filter",
+            "id == 1"
+        ])["id"],
+        1
+    );
+    assert_eq!(
+        p.ok(&["next", "--session", "caller", "--tag", "absent"])["id"],
+        1
+    );
+    assert_eq!(
+        p.calls()
+            .iter()
+            .filter(|call| call.first().map(String::as_str) == Some("tab"))
+            .count(),
+        1
+    );
+}
+
+#[test]
 fn dispatch_filters_preflight_and_atomic_claim() {
     let p = Project::new();
     p.ok(&["add", "Other", "--priority", "100"]);

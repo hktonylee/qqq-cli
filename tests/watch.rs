@@ -93,6 +93,37 @@ impl Drop for Watcher {
 }
 
 #[test]
+fn watch_rechecks_all_tag_selectors_and_luau_on_each_commit() {
+    let dir = project();
+    let p = dir.path();
+    let mut watch = Watcher::start(
+        p,
+        &[
+            "list",
+            "--watch",
+            "--json",
+            "--tag",
+            "frontend",
+            "--tag",
+            "界 面",
+            "--filter",
+            "has_tag('frontend') and priority > 0",
+        ],
+    );
+    assert_eq!(watch.snapshot(), serde_json::json!([]));
+    ok(
+        p,
+        &["add", "Partial", "--tag", "frontend", "--priority", "5"],
+    );
+    assert_eq!(watch.snapshot(), serde_json::json!([]));
+    ok(p, &["edit", "1", "--set-tags", "frontend, 界 面"]);
+    assert_eq!(watch.snapshot()[0]["id"], 1);
+    ok(p, &["edit", "1", "--set-tags", "界 面"]);
+    assert_eq!(watch.snapshot(), serde_json::json!([]));
+    watch.idle();
+}
+
+#[test]
 fn watch_applies_luau_filter_to_each_commit() {
     let dir = project();
     let p = dir.path();
