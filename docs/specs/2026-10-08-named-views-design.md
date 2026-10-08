@@ -18,11 +18,13 @@ Version 1 format:
   "views": [
     {
       "name": "Ready backend",
-      "tags": ["backend"],
-      "filter": "priority >= 5",
-      "query": null,
-      "statuses": ["new"],
-      "readiness": "ready",
+      "criteria": {
+        "tags": ["backend"],
+        "filter": "priority >= 5",
+        "query": null,
+        "statuses": ["new"],
+        "readiness": "ready"
+      },
       "include_archived": false,
       "max_completed": 0
     }
