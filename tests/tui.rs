@@ -613,6 +613,19 @@ fn tui_dashboard_mark_error_requires_reason_and_confirmation() {
 }
 
 #[test]
+fn tui_dashboard_force_error_uses_explicit_uppercase_confirmation() {
+    for name in ["force_error", "force_error_no_color", "force_error_narrow"] {
+        dashboard_scenario(name);
+    }
+}
+
+#[test]
+fn tui_dashboard_error_confirmation_preserves_filter_and_dirty_caret() {
+    dashboard_scenario("force_error_cursor");
+    dashboard_scenario("force_error_cursor_no_color");
+}
+
+#[test]
 fn tui_dashboard_mark_error_keeps_dirty_draft_until_confirmed() {
     dashboard_scenario("menu_error_dirty");
 }

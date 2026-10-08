@@ -35,7 +35,7 @@ with tempfile.TemporaryDirectory(prefix="qqq-dashboard-test-") as folder:
         env["NO_COLOR"] = "1"
     elif scenario == "dumb":
         env["TERM"] = "dumb"
-    if scenario.startswith(("buffers_", "long_description_", "prerequisites", "dirty_marker", "completed_toggle", "jump", "menu_error_", "force_complete", "force_reopen", "list_selection", "tags", "orphan_reopen", "views", "graph")) and scenario.endswith("no_color"):
+    if scenario.startswith(("buffers_", "long_description_", "prerequisites", "dirty_marker", "completed_toggle", "jump", "menu_error_", "force_complete", "force_reopen", "force_error", "list_selection", "tags", "orphan_reopen", "views", "graph")) and scenario.endswith("no_color"):
         env["NO_COLOR"] = "1"
     for name in ("EDITOR", "QQQ_SESSION", "HERDR_ENV", "HERDR_PANE_ID", "CODEX_THREAD_ID", "CODEX_SESSION_ID"):
         env.pop(name, None)
@@ -90,7 +90,7 @@ esac
         env.pop("HERDR_PANE_ID")
         if not scenario.endswith("live"):
             response_path.write_text(json.dumps({"result": {"agents": []}}))
-    elif scenario.startswith(("force_complete", "force_reopen")):
+    elif scenario.startswith(("force_complete", "force_reopen", "force_error")):
         cli("add", "Foreign item")
         cli("next", "--local", "--session", "foreign")
         cli("add", "Failed item")
@@ -347,7 +347,7 @@ print(json.dumps({"result": result}))
         args.extend(["--session", "native-display"])
     elif scenario.startswith("orphan_reopen"):
         args.extend(["--session", "reviewer"])
-    elif scenario in ("actions_basic", "actions_rejected", "actions_narrow") or scenario.startswith(("menu_retry_", "menu_error_", "force_reopen")) or (scenario.startswith("force_complete") and not scenario.startswith("force_complete_herdr_") and scenario not in ("force_complete_sessionless", "force_complete_owner_db_error")):
+    elif scenario in ("actions_basic", "actions_rejected", "actions_narrow") or scenario.startswith(("menu_retry_", "menu_error_", "force_reopen", "force_error")) or (scenario.startswith("force_complete") and not scenario.startswith("force_complete_herdr_") and scenario not in ("force_complete_sessionless", "force_complete_owner_db_error")):
         args.extend(["--session", "other" if scenario == "menu_error_rejected" else "worker"])
     if scenario in ("archive_included", "actions_basic", "actions_rejected"):
         args.append("--include-archived")
@@ -545,7 +545,7 @@ print(json.dumps({"result": result}))
                              and editor_line().startswith("Second"))
                 settle()
                 assert b"\x1b[38;" not in screen and b"\x1b[48;" not in screen, screen[-2000:]
-        if not scenario.startswith(("wide_layout", "menu_retry_", "menu_error_", "long_description_", "completed_toggle", "force_complete", "force_reopen", "orphan_reopen", "views_startup", "views_visibility")) and scenario not in ("buffers_scroll", "handoff_scroll", "ctrl_c_new_scroll", "live_refresh_scroll", "tree_navigation", "scroll", "wheel", "click", "click_filter", "workflow", "workflow_empty", "workflow_status", "filter", "filter_no_color", "archive_hidden", "archive_included", "actions_basic", "actions_rejected", "actions_hidden", "jump_archived"):
+        if not scenario.startswith(("wide_layout", "menu_retry_", "menu_error_", "long_description_", "completed_toggle", "force_complete", "force_reopen", "force_error", "orphan_reopen", "views_startup", "views_visibility")) and scenario not in ("buffers_scroll", "handoff_scroll", "ctrl_c_new_scroll", "live_refresh_scroll", "tree_navigation", "scroll", "wheel", "click", "click_filter", "workflow", "workflow_empty", "workflow_status", "filter", "filter_no_color", "archive_hidden", "archive_included", "actions_basic", "actions_rejected", "actions_hidden", "jump_archived"):
             read_until(b"Second")
             assert "First" in visible.text() and "Second" in visible.text(), visible.text()
         assert not select.select([child.stdout], [], [], 0)[0], "TUI wrote stdout while open"
@@ -2947,7 +2947,8 @@ print(json.dumps({"result": result}))
             def modal_ready(title, hint):
                 wait_visible(lambda: title in visible.text() and hint in visible.text()
                              and not visible.pending
-                             and screen.endswith(f"\x1b[{visible.y + 1};{visible.x + 1}H".encode()))
+                             and (not visible.cursor_visible if title.startswith("Mark error task")
+                                  else screen.endswith(f"\x1b[{visible.y + 1};{visible.x + 1}H".encode())))
 
             def error_prompt(arrows=False):
                 send(b"\x07")
@@ -2979,7 +2980,7 @@ print(json.dumps({"result": result}))
             else:
                 send(reason.encode())
             send(b"\r")
-            modal_ready(f"Mark error task #{task_id}?", "y confirm  n/Esc cancel")
+            modal_ready(f"Mark error task #{task_id}?", "y confirm  Y force  n/Esc cancel")
             assert "Reason:" in visible.text(), visible.text()
             if dirty:
                 assert "Lose draft?" in visible.text(), visible.text()
@@ -2996,7 +2997,7 @@ print(json.dumps({"result": result}))
             assert cli("show", str(task_id)) == initial_detail
             error_prompt()
             send(reason.encode() + b"\r")
-            modal_ready(f"Mark error task #{task_id}?", "y confirm  n/Esc cancel")
+            modal_ready(f"Mark error task #{task_id}?", "y confirm  Y force  n/Esc cancel")
             if scenario == "menu_error_live":
                 cli("edit", "1", "--set-status", "new", "--session", "worker")
                 cli("next", "--local", "--session", "outside", "--filter", "id == 1")
@@ -3030,6 +3031,78 @@ print(json.dumps({"result": result}))
                 wait_visible(lambda: "r Retry error" in visible.text())
                 send(b"\x1b")
                 wait_frame(lambda: "Task actions" not in visible.text() and editor_line().startswith(label))
+            if scenario.endswith("no_color"):
+                assert b"\x1b[38;" not in screen and b"\x1b[48;" not in screen
+        elif scenario.startswith("force_error"):
+            send(b"\x0b1\r")
+            wait_frame(lambda: "Task #1 (In progress)" in editor_title())
+            send(b" retained\x1b[D\x1b[D")
+            caret = (len("Foreign item retained") - 2, editor_row() + 1)
+            wait_caret(lambda: editor_line().startswith("Foreign item retained"), caret)
+            original = cli("show", "1")
+            reason = "Forced worker failure"
+
+            def error_confirmation(task_id):
+                send(b"\x07")
+                wait_visible(lambda: "e Mark error" in visible.text())
+                send(b"e")
+                wait_visible(lambda: f"Error task #{task_id}" in visible.text()
+                             and visible.cursor_visible)
+                send(reason.encode() + b"\r")
+                wait_visible(lambda: f"Mark error task #{task_id}?" in visible.text())
+
+            if "cursor" in scenario:
+                send(CTRL_SLASH + b"Foreign\t")
+                wait_caret(lambda: filter_text() == "Filter: Foreign", caret)
+                error_confirmation(1)
+                wait_visible(lambda: not visible.cursor_visible and not visible.pending)
+                send(b"\x03z123\x1b[D\x1b[B\x13\x1b[200~ignored\x1b[201~")
+                click(5, 2)
+                settle()
+                assert "Mark error task #1?" in visible.text() and not visible.cursor_visible
+                assert filter_text() == "Filter: Foreign"
+                assert cli("show", "1") == original
+                fcntl.ioctl(slave, termios.TIOCSWINSZ, struct.pack("HHHH", 8, 12, 0, 0))
+                visible.resize(12, 8)
+                wait_visible(lambda: "Lose draft" in visible.text() and not visible.cursor_visible)
+                fcntl.ioctl(slave, termios.TIOCSWINSZ, struct.pack("HHHH", 24, 72, 0, 0))
+                visible.resize(72, 24)
+                wait_visible(lambda: "Mark error task #1?" in visible.text() and not visible.cursor_visible)
+                send(b"\x1b")
+                wait_visible(lambda: editor_line().startswith("Foreign item retained")
+                             and visible.cursor_visible)
+                wait_caret(lambda: filter_text() == "Filter: Foreign", caret)
+                assert cli("show", "1") == original
+            else:
+                if scenario.endswith("narrow"):
+                    fcntl.ioctl(slave, termios.TIOCSWINSZ, struct.pack("HHHH", 12, 32, 0, 0))
+                    visible.resize(32, 12)
+                    wait_visible(lambda: editor_line().startswith("Foreign item retained"))
+                for task_id in [1, 3, 5]:
+                    if task_id != 1:
+                        send(f"\x0b{task_id}\r".encode())
+                        wait_visible(lambda: f"Task #{task_id} (" in editor_title())
+                    before_error = cli("show", str(task_id))
+                    error_confirmation(task_id)
+                    send(b"y")
+                    wait_visible(lambda: "Action error" in visible.text())
+                    assert cli("show", str(task_id)) == before_error
+                    send(b"\x1b")
+                    wait_visible(lambda: "Action error" not in visible.text())
+                    error_confirmation(task_id)
+                    send(b"Y")
+                    wait_frame(lambda: f"Task #{task_id} (Error)" in editor_title()
+                               and f"Marked error #{task_id}" in visible.text())
+                    after_error = cli("show", str(task_id))
+                    assert after_error["task"]["description"] == before_error["task"]["description"]
+                    assert after_error["events"][:-1] == before_error["events"]
+                    assert after_error["events"][-1]["action"] == "error"
+                    assert after_error["events"][-1]["session"] == "worker"
+                    assert after_error["messages"][:-1] == before_error["messages"]
+                    assert after_error["messages"][-1]["body"] == reason
+                    for field in ("harness_name", "harness_session", "orchestrator_name", "orchestrator_session"):
+                        assert after_error["task"][field] is None
+                    assert cli("next", "--local", "--session", "probe", "--filter", f"id == {task_id}") is None
             if scenario.endswith("no_color"):
                 assert b"\x1b[38;" not in screen and b"\x1b[48;" not in screen
         elif scenario.startswith("force_reopen"):

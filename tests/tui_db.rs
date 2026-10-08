@@ -398,6 +398,136 @@ fn force_reopen_rolls_back_assignment_when_audit_fails() {
 }
 
 #[test]
+fn force_error_preserves_content_links_and_records_reason_with_actor() {
+    for state in ["new", "in_progress", "completed"] {
+        let (mut db, dir) = database();
+        let task = db
+            .add_with_dependencies("Original", None, &composition().images, 7, &[])
+            .unwrap();
+        if state != "new" {
+            db.next("foreign", None).unwrap();
+        }
+        if state == "completed" {
+            db.complete(task.id, "foreign", None).unwrap();
+        }
+        db.message(task.id, "Keep note", Some("foreign")).unwrap();
+        let link: herdr::Link = serde_json::from_value(serde_json::json!({
+            "server": "saved", "identity": {"agent": "codex", "kind": "id", "value": "foreign"},
+            "pane": {"pane_id": "w1:p1", "workspace_id": "w1", "tab_id": "w1:t1"}
+        }))
+        .unwrap();
+        db.set_link_with_identity(task.id, &link, &identity::Identity::default(), None)
+            .unwrap();
+        db.conn
+            .execute(
+                "UPDATE tasks SET harness_name='codex',harness_session='foreign',
+            orchestrator_name='herdr',orchestrator_session='saved' WHERE id=?",
+                [task.id],
+            )
+            .unwrap();
+        if state == "completed" {
+            db.set_archived(task.id, true, "operator").unwrap();
+        }
+        let before = db.show(task.id).unwrap();
+        let image = dir.path().join(format!("images/{}/1.png", task.id));
+        let bytes = std::fs::read(&image).unwrap();
+        assert_eq!(
+            db.force_error(task.id, "operator", "  Forced failure  ")
+                .unwrap()
+                .status,
+            "error"
+        );
+        let after = db.show(task.id).unwrap();
+        for field in [
+            "description",
+            "content_revision",
+            "priority",
+            "archived",
+            "parent_id",
+            "prerequisites",
+            "tags",
+            "created_at",
+        ] {
+            assert_eq!(
+                after["task"][field], before["task"][field],
+                "{state}: {field}"
+            );
+        }
+        for field in ["images", "herdr"] {
+            assert_eq!(after[field], before[field]);
+        }
+        for field in [
+            "harness_name",
+            "harness_session",
+            "orchestrator_name",
+            "orchestrator_session",
+        ] {
+            assert!(after["task"][field].is_null());
+        }
+        assert!(db.owned_with_name("foreign", None).unwrap().is_none());
+        let mut events = after["events"].as_array().unwrap().clone();
+        let event = events.pop().unwrap();
+        assert_eq!(event["action"], "error");
+        assert_eq!(event["session"], "operator");
+        assert_eq!(events, *before["events"].as_array().unwrap());
+        let mut messages = after["messages"].as_array().unwrap().clone();
+        let message = messages.pop().unwrap();
+        assert_eq!(message["body"], "Forced failure");
+        assert_eq!(message["session"], "operator");
+        assert_eq!(messages, *before["messages"].as_array().unwrap());
+        assert_eq!(std::fs::read(image).unwrap(), bytes);
+    }
+}
+
+#[test]
+fn force_error_rejects_invalid_reason_actor_missing_and_error_tasks() {
+    let (mut db, _dir) = database();
+    let task = db.add("Original", None, &[]).unwrap();
+    let before = db.show(task.id).unwrap();
+    assert!(db.force_error(task.id, " ", "Failure").is_err());
+    assert!(db.force_error(task.id, "operator", " \n ").is_err());
+    assert_eq!(db.show(task.id).unwrap(), before);
+    assert!(matches!(
+        db.force_error(999, "operator", "Failure")
+            .err()
+            .unwrap()
+            .downcast_ref::<errors::Info>()
+            .unwrap()
+            .code,
+        errors::Code::TaskNotFound
+    ));
+    db.force_error(task.id, "operator", "Failure").unwrap();
+    let failed = db.show(task.id).unwrap();
+    assert!(
+        db.force_error(task.id, "operator", "Another failure")
+            .is_err()
+    );
+    assert_eq!(db.show(task.id).unwrap(), failed);
+}
+
+#[test]
+fn force_error_rolls_back_status_assignment_and_audit_when_insert_fails() {
+    for table in ["events", "messages"] {
+        let (mut db, _dir) = database();
+        let task = db.add("Original", None, &[]).unwrap();
+        db.next("foreign", None).unwrap();
+        let before = db.show(task.id).unwrap();
+        db.conn
+            .execute_batch(&format!(
+                "CREATE TRIGGER reject_force_error BEFORE INSERT ON {table}
+            BEGIN SELECT RAISE(ABORT,'audit rejected'); END;"
+            ))
+            .unwrap();
+        assert!(db.force_error(task.id, "operator", "Failure").is_err());
+        assert_eq!(db.show(task.id).unwrap(), before);
+        assert_eq!(
+            db.owned_with_name("foreign", None).unwrap().unwrap().id,
+            task.id
+        );
+    }
+}
+
+#[test]
 fn loaded_compositions_conflict_without_losing_local_paste_or_image_payloads() {
     let (mut db, dir) = database();
     let task = db.add("Original", None, &[]).unwrap();

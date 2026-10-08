@@ -126,6 +126,7 @@ fn buffer_exit_lines(key: DraftKey, buffers: &DraftBuffers, width: usize) -> Vec
 pub enum TaskAction {
     Complete(i64),
     MarkError(i64, String),
+    ForceMarkError(i64, String),
     ForceComplete(i64),
     Retry(i64),
     Reopen(i64),
@@ -144,11 +145,15 @@ impl TaskAction {
     fn is_reopening(&self) -> bool {
         matches!(self, Self::Reopen(_) | Self::ForceReopen(_))
     }
+    fn is_error_marking(&self) -> bool {
+        matches!(self, Self::MarkError(..) | Self::ForceMarkError(..))
+    }
 
     fn id(&self) -> i64 {
         match self {
             Self::Complete(id)
             | Self::MarkError(id, _)
+            | Self::ForceMarkError(id, _)
             | Self::ForceComplete(id)
             | Self::Retry(id)
             | Self::Reopen(id)
@@ -164,6 +169,7 @@ impl TaskAction {
         match self {
             Self::Complete(_) => "Complete",
             Self::MarkError(..) => "Mark error",
+            Self::ForceMarkError(..) => "Force mark error",
             Self::ForceComplete(_) => "Force complete",
             Self::Retry(_) => "Retry",
             Self::Reopen(_) => "Reopen",
@@ -179,7 +185,7 @@ impl TaskAction {
     fn success(&self) -> String {
         match self {
             Self::Complete(id) | Self::ForceComplete(id) => format!("Completed #{id}"),
-            Self::MarkError(id, _) => format!("Marked error #{id}"),
+            Self::MarkError(id, _) | Self::ForceMarkError(id, _) => format!("Marked error #{id}"),
             Self::Retry(id) => format!("Retried #{id}"),
             Self::Reopen(id) | Self::ForceReopen(id) => format!("Reopened #{id}"),
             Self::SetArchived(id, true) => format!("Archived #{id}"),
@@ -407,7 +413,10 @@ fn action_confirmation_lines(
         format!("{} task #{}?", action.label(), action.id()),
         PopupKind::Heading,
     )];
-    if action.is_reopening() {
+    if action.is_error_marking() && dirty {
+        rows.push(PopupRow::new("Lose draft?", PopupKind::Warning));
+    }
+    if action.is_reopening() || action.is_error_marking() {
         rows.extend(
             wrap_modal("Y ignores owner checks.", width)
                 .into_iter()
@@ -421,7 +430,7 @@ fn action_confirmation_lines(
                 .map(|text| PopupRow::new(text, PopupKind::Warning)),
         );
     }
-    if let TaskAction::MarkError(_, reason) = action {
+    if let TaskAction::MarkError(_, reason) | TaskAction::ForceMarkError(_, reason) = action {
         rows.extend(
             wrap_modal(&format!("Reason: {reason}"), width)
                 .into_iter()
@@ -429,10 +438,12 @@ fn action_confirmation_lines(
                 .map(|text| PopupRow::new(text, PopupKind::Hint)),
         );
     }
-    rows.push(PopupRow::new(
-        if dirty { "Lose draft?" } else { "" },
-        PopupKind::Warning,
-    ));
+    if !action.is_error_marking() || !dirty {
+        rows.push(PopupRow::new(
+            if dirty { "Lose draft?" } else { "" },
+            PopupKind::Warning,
+        ));
+    }
     if action.is_completion() {
         rows.truncate(height.saturating_sub(1));
         let available = height.saturating_sub(rows.len() + 1);
@@ -454,7 +465,8 @@ fn action_confirmation_lines(
         } else {
             "y/Y Esc"
         }
-    } else if action.is_completion() {
+    } else if action.is_completion() || action.is_error_marking() {
+        rows.truncate(height.saturating_sub(1));
         if width >= "y confirm  Y force  n/Esc cancel".len() {
             "y confirm  Y force  n/Esc cancel"
         } else if width >= "y Y force Esc".len() {
@@ -1085,6 +1097,9 @@ fn compose_inner(
             Some(Confirmation::Action { action, .. }) if action.is_reopening() => {
                 "y Reopen  Y Force reopen  n/Esc Cancel"
             }
+            Some(Confirmation::Action { action, .. }) if action.is_error_marking() => {
+                "y Mark error  Y Force  n/Esc Cancel"
+            }
             Some(Confirmation::Action { .. }) => "Confirm action? (y/N)",
             None => &message,
         };
@@ -1323,7 +1338,7 @@ fn compose_inner(
                             hide_cursor: matches!(
                                 &confirmation,
                                 Some(Confirmation::Action { action, .. })
-                                    if action.is_completion() || action.is_reopening()
+                                    if action.is_completion() || action.is_reopening() || action.is_error_marking()
                             ),
                             details: target_id.map(|_| dashboard::DetailsView {
                                 rows: &details_rows,
@@ -1796,8 +1811,8 @@ fn compose_inner(
                     continue;
                 }
                 let cancel_key = control && key.code == KeyCode::Char('c');
-                let reopening = matches!(&confirmation,
-                    Some(Confirmation::Action { action, .. }) if action.is_reopening());
+                let passive_action = matches!(&confirmation,
+                    Some(Confirmation::Action { action, .. }) if action.is_reopening() || action.is_error_marking());
                 if matches!(
                     action_ui,
                     Some(ActionUi::Input {
@@ -1811,7 +1826,7 @@ fn compose_inner(
                 }
                 if dashboard
                     && (cancel_key || key.code == KeyCode::Esc)
-                    && !reopening
+                    && !passive_action
                     && (!filter_query.is_empty() || filter_focused)
                 {
                     if key.code == KeyCode::Esc || filter_query.is_empty() {
@@ -1840,7 +1855,8 @@ fn compose_inner(
                 }
                 let editor_escape =
                     key.code == KeyCode::Esc && confirmation.is_none() && action_ui.is_none();
-                if dashboard && (editor_escape || (target_id.is_some() && cancel_key && !reopening))
+                if dashboard
+                    && (editor_escape || (target_id.is_some() && cancel_key && !passive_action))
                 {
                     if target_id.is_none() && draft.is_empty() && draft_parent_id.is_none() {
                         if let Some(pending) = confirm_buffers_exit(&buffers) {
@@ -1937,6 +1953,12 @@ fn compose_inner(
                                         && action.is_reopening()
                                     {
                                         TaskAction::ForceReopen(action.id())
+                                    } else if let TaskAction::MarkError(id, reason) = &action {
+                                        if key.code == KeyCode::Char('Y') {
+                                            TaskAction::ForceMarkError(*id, reason.clone())
+                                        } else {
+                                            action.clone()
+                                        }
                                     } else {
                                         action.clone()
                                     };

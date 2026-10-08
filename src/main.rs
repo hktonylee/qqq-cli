@@ -787,6 +787,9 @@ fn execute(
                     tui::TaskAction::ForceComplete(id) => {
                         db.force_complete(id, session_input.unwrap_or("manual"))
                     }
+                    tui::TaskAction::ForceMarkError(id, reason) => {
+                        db.force_error(id, session_input.unwrap_or("manual"), &reason)
+                    }
                     tui::TaskAction::Retry(id) => db.edit_with_priority(
                         id,
                         None,

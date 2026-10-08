@@ -828,13 +828,17 @@ mode keeps marker. Letter shortcuts activate actions directly. Press `c` to comp
 `r` to retry error task, `o` to open Reopen confirmation (`y` normal, `Y` force), `a` to archive or
 unarchive, `p` to set priority (-100..100), or `d` to set parent by positive
 task ID or `none`. Retry appears only for error tasks; non-error tasks ignore `r`.
-Press `e` for Mark error, enter a nonempty reason, then confirm with `y`.
-Only current owner of an in-progress task can mark it error; other states or
-owners show an action error and keep draft. Reason is recorded as a task message
+Press `e` for Mark error and enter a nonempty reason. Lowercase `y` keeps current
+owner checks: only an in-progress task owned by the current session can fail.
+Uppercase `Y` forces a New, In progress or Completed task to Error without owner
+or Herdr lookup; already-Error tasks reject either action. Archive state, saved
+content, dependency edges and Herdr links stay intact. Reason is recorded as a task message
 with an error event; claim and assignment clear while saved content stays intact.
 Error tasks stay out of worker queue until explicitly retried. Reason prompt and
 confirmation cancel without changing task. Confirmation previews reason and asks
-before discarding an active dirty draft, matching other state actions.
+before discarding an active dirty draft, including at minimum terminal size.
+Reason input keeps its caret; confirmation hides it and ignores editing,
+navigation and Ctrl-C. `n`, Enter or Esc cancels, preserving filter and dirty caret.
 Arrows skip hidden actions; Enter activates displayed selection.
 Open menu refreshes Retry availability after external status changes, keeping
 selected action when available.
@@ -853,7 +857,8 @@ normal confirmation, popup keeps exact error plus both confirmation keys.
 Retry normally with `y`, or force explicitly with `Y`. Force path bypasses
 Herdr/owner lookup; it never happens automatically after failure. DB corruption,
 invalid input and other unrelated failures keep ordinary error handling.
-Other menus/prompts close with Esc after the active filter clears. State changes
+Reopen and Mark error confirmations preserve filters on Esc. Other menus/prompts
+close with Esc after the active filter clears. State changes
 require confirmation before running; priority and parent changes ask when draft has unsaved edits. Successful
 action refreshes task and list; rejected action keeps draft and shows DB error.
 Error view wraps long messages; Up/Down scrolls, Esc closes it.
