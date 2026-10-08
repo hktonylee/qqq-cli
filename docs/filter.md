@@ -11,13 +11,28 @@ qqq next --local --session worker-1 --filter 'priority >= 5'
 qqq next --local --wait --session worker-1 --filter 'like(description, "%Rust%")'
 qqq list --filter 'datetime(created_time) >= datetime("now", "-7 days")'
 qqq list --filter '(if parent_id == nil then priority else priority + 1) >= 5'
+qqq list --tag frontend --tag "UI review" --query layout --status new
+qqq list --filter 'has_tag("frontend") and priority >= 5'
+qqq next --local --wait --tag frontend --tag bug
+qqq next --explain --tag "界 面"
 ```
 
 See [all variables](filter-variables.md), [all functions](filter-functions.md).
 
 ## List behavior
 
-`--filter`, `--query`, and `--status` combine with AND. Repeated statuses still combine with OR. Archive visibility and completed-task limits apply before matching. Use `--all` to bypass configured completed limit, `--include-archived` to include archived rows.
+`--tag`, `--filter`, `--query`, and `--status` combine with AND. Every repeated `--tag LABEL` must match; repeated statuses combine with OR. Archive visibility and completed-task limits apply before matching. Use `--all` to bypass configured completed limit, `--include-archived` to include archived rows.
+
+Tags match whole stored labels with exact case and Unicode, never description text or substrings. Surrounding spaces are trimmed; exact duplicate selectors are removed. Quote labels with internal spaces. Empty labels, controls, commas and square brackets fail before project preflight or DB access. Case and Unicode normalization remain unchanged: `UI` differs from `ui`, and composed/decomposed Unicode spellings remain distinct. For a label starting with `-`, use `--tag="-label"`.
+
+`has_tag("LABEL")` returns boolean under the same matching and validation rules. It accepts exactly one string literal, including a parenthesized literal; dynamic text expressions and nil fail during compilation. It composes with `and`, `or`, `not`, priority/status predicates and named views using config aliases:
+
+```toml
+[alias]
+ui = "list --filter 'has_tag(\"frontend\") and status == \"new\"'"
+```
+
+`qqq ui --tag bug` requires both the configured expression and the appended tag selector.
 
 Visible ancestors of direct matches remain as context rows, even when predicate is false for parent. Human output marks `[context]`; JSON marks `context_only: true`. Ancestors excluded by archive/completed limits remain excluded. Task order, complete descriptions, JSON fields stay unchanged. No matches -> `[]` in JSON, `No matching tasks.` in human output.
 
@@ -27,11 +42,13 @@ Visible ancestors of direct matches remain as context rows, even when predicate 
 
 `next` applies predicate to **new candidates** inside atomic claim transaction. Candidates must also be unarchived, ready, unclaimed. Completed parent dependency remains required. Highest priority wins, oldest ID breaks ties.
 
-Without `--dry-run`, existing owned task always returns, even when predicate no longer matches. Changing filter never releases ownership. Complete or explicitly release current task before choosing another.
+Without `--dry-run`, existing owned task always returns, even when predicate or tag selectors no longer match. Changing selectors never releases or transfers ownership. Complete or explicitly release current task before choosing another.
 
 `next --dry-run --filter EXPR` previews matching queued candidate using same readiness/priority rules. Existing claims are skipped. Preview uses read-only snapshot; `--wait` waits for matching candidate without claiming or dispatching it. No session or Herdr identity required.
 
 No match -> JSON `null` or human `No task available for pickup.`. `--wait` blocks until matching ready candidate exists, reevaluating predicate on each claim attempt. Herdr dispatch uses same filter for readiness and atomic claim; no matching candidate creates no tab.
+
+`--tag` uses the same matching in normal/waiting claims, dry-run, explain, list watch and Herdr dispatch. `next --explain --tag LABEL` reports `tag_excluded` when explicit tags fail, alongside any parent/prerequisite blockers. If tags match but the Luau expression fails, the reason is `filter_excluded`. Tag predicates inside arbitrary Luau expressions retain `filter_excluded`, since OR/NOT expressions cannot attribute failure to individual positive tags. `matches_filter` represents all combined selectors; readiness remains independent.
 
 ## Supported expression language
 

@@ -147,6 +147,17 @@ Native Codex session discovery can supply identity automatically. Optional
 [Herdr integration](docs/reference.md#herdr) links live agents or opens new agent
 tabs. Explicit sessions and `--local` work independently.
 
+Route specialist workers by stored tags:
+
+```sh
+qqq next --local --wait --tag frontend --tag bug
+qqq list --tag "UI review" --filter 'has_tag("frontend") and priority >= 5'
+```
+
+Repeated tags require every exact label; case and Unicode stay distinct.
+Existing owned tasks return even after selectors change.
+See [tag matching and filter examples](docs/filter.md).
+
 ## Keep going
 
 - [Commands, filters, and JSON](docs/reference.md#list-and-show)

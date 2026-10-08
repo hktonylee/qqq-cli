@@ -1,6 +1,6 @@
 # Tag Worker Routing Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task inline. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task inline. Steps use checkbox (`- [x]`) syntax for tracking.
 
 **Goal:** Route workers and task lists using exact stored tag labels.
 
@@ -14,7 +14,7 @@
 
 Files: modify `src/sql_filter/mod.rs`, `src/sql_filter/functions.rs`, `tests/sql_filter.rs`.
 
-- [ ] Add source modules `tags` and `errors` to compiler test harness, add `tags TEXT` column to fixture with `["frontend","界 面"]`. Add tests:
+- [x] Add source modules `tags` and `errors` to compiler test harness, add `tags TEXT` column to fixture with `["frontend","界 面"]`. Add tests:
 
 ```rust
 #[test]
@@ -39,8 +39,8 @@ fn has_tag_rejects_nonliteral_or_invalid_labels() {
 }
 ```
 
-- [ ] Run `CARGO_INCREMENTAL=0 cargo test --locked --offline --test sql_filter has_tag`; expect unknown-function failures for valid predicate.
-- [ ] Add shared SQL helper in `src/sql_filter/functions.rs`:
+- [x] Run `CARGO_INCREMENTAL=0 cargo test --locked --offline --test sql_filter has_tag`; expect unknown-function failures for valid predicate.
+- [x] Add shared SQL helper in `src/sql_filter/functions.rs`:
 
 ```rust
 pub(super) fn tag_sql(parameter: &str) -> String {
@@ -48,7 +48,7 @@ pub(super) fn tag_sql(parameter: &str) -> String {
 }
 ```
 
-- [ ] In compiler function-call branch, compile arguments as before, route `has_tag` through method below, other names through current function allowlist:
+- [x] In compiler function-call branch, compile arguments as before, route `has_tag` through method below, other names through current function allowlist:
 
 ```rust
 fn has_tag(&mut self, args: Vec<Expr>) -> Result<Expr> {
@@ -66,13 +66,13 @@ fn has_tag(&mut self, args: Vec<Expr>) -> Result<Expr> {
 }
 ```
 
-- [ ] Run complete compiler tests, formatting; commit `[Feat] Add Typed Stored Tag Predicate`.
+- [x] Run complete compiler tests, formatting; commit `[Feat] Add Typed Stored Tag Predicate`.
 
 ## Task 2: CLI Selectors And Diagnostics
 
 Files: modify `src/main.rs`, `src/sql_filter/mod.rs`, `src/queue.rs`; create `tests/tag_filters.rs`.
 
-- [ ] Add integration harness using isolated tempfile projects and binary commands with HOME redirected, ambient QQQ_SESSION/CODEX_THREAD_ID/CODEX_SESSION_ID/HERDR_ENV/HERDR_PANE_ID removed. Add initial failing test:
+- [x] Add integration harness using isolated tempfile projects and binary commands with HOME redirected, ambient QQQ_SESSION/CODEX_THREAD_ID/CODEX_SESSION_ID/HERDR_ENV/HERDR_PANE_ID removed. Add initial failing test:
 
 ```rust
 #[test]
@@ -88,8 +88,8 @@ fn tag_selectors_require_all_exact_labels() {
 }
 ```
 
-- [ ] Run `CARGO_INCREMENTAL=0 cargo test --locked --offline --test tag_filters`; expect unsupported `--tag`.
-- [ ] Add identical fields to List and Next variants:
+- [x] Run `CARGO_INCREMENTAL=0 cargo test --locked --offline --test tag_filters`; expect unsupported `--tag`.
+- [x] Add identical fields to List and Next variants:
 
 ```rust
 /// Require exact stored tag; repeat to require every label.
@@ -97,7 +97,7 @@ fn tag_selectors_require_all_exact_labels() {
 tags: Vec<String>,
 ```
 
-- [ ] Extend `CompiledFilter` with `required_tags: Vec<String>`, initialized empty by normal compiler. Add methods:
+- [x] Extend `CompiledFilter` with `required_tags: Vec<String>`, initialized empty by normal compiler. Add methods:
 
 ```rust
 pub fn all() -> Self {
@@ -117,8 +117,8 @@ pub fn matches_tags(&self, tags: &[String]) -> bool {
 }
 ```
 
-- [ ] At start of `run`, extract List/Next tag fields, call `tags::normalize`, map failures to `Info::invalid_argument("--tag", error.to_string())`. Compile current filter unchanged, append tags using `get_or_insert_with(CompiledFilter::all).require_tags(tags)`. Both operations precede project preflight. Existing downstream filter plumbing stays intact.
-- [ ] Add `TagExcluded` variant to queue reason; replace current excluded-reason branch:
+- [x] At start of `run`, extract List/Next tag fields, call `tags::normalize`, map failures to `Info::invalid_argument("--tag", error.to_string())`. Compile current filter unchanged, append tags using `get_or_insert_with(CompiledFilter::all).require_tags(tags)`. Both operations precede project preflight. Existing downstream filter plumbing stays intact.
+- [x] Add `TagExcluded` variant to queue reason; replace current excluded-reason branch:
 
 ```rust
 if !matches_filter {
@@ -131,18 +131,18 @@ if !matches_filter {
 }
 ```
 
-- [ ] Extend CLI tests with invalid flags/predicates before project discovery and owner recovery; exact case/Unicode/SQL binding, query/status/filter composition, visible ancestors, archive/completed limits, owned reuse, dependency readiness and priority ties, explain exclusions. Verify `[]`, `null`, human no-match strings and default-agent JSON errors. For readiness tests create separate parent and prerequisite, then assert blocked task stays new until both complete. For diagnostics assert both `tag_excluded` and dependency reasons on same row, Luau-only exclusions stay `filter_excluded`.
-- [ ] Run `CARGO_INCREMENTAL=0 cargo test --locked --offline --test tag_filters --test filters --test sql_filter --test cli`; run formatting; commit `[Feat] Route CLI Selection By Stored Tags`.
+- [x] Extend CLI tests with invalid flags/predicates before project discovery and owner recovery; exact case/Unicode/SQL binding, query/status/filter composition, visible ancestors, archive/completed limits, owned reuse, dependency readiness and priority ties, explain exclusions. Verify `[]`, `null`, human no-match strings and default-agent JSON errors. For readiness tests create separate parent and prerequisite, then assert blocked task stays new until both complete. For diagnostics assert both `tag_excluded` and dependency reasons on same row, Luau-only exclusions stay `filter_excluded`.
+- [x] Run `CARGO_INCREMENTAL=0 cargo test --locked --offline --test tag_filters --test filters --test sql_filter --test cli`; run formatting; commit `[Feat] Route CLI Selection By Stored Tags`.
 
 ## Task 3: Wait, Watch, Dispatch And Aliases
 
 Files: modify `tests/tag_filters.rs`, `tests/watch.rs`, `tests/dispatch.rs`, `tests/aliases.rs`.
 
-- [ ] Add wait test: start tag-filtered waiter; commit untagged task and assert child remains running; commit matching tags and assert claimed ID. Add dry-run waiter with same steps and assert final task stays new. Use bounded deadline, kill/join on timeout.
-- [ ] Add concurrent claims test: start three sessions against two matching tagged tasks plus unmatched task; collect IDs, assert exactly two distinct matching IDs and one null; unmatched status remains new.
-- [ ] Add watch test with existing Watcher harness: initial empty array, untagged commit remains empty, edit `--set-tags "frontend, 界 面"` makes matching row appear, removal clears result, idle emits no repeats.
-- [ ] Add dispatch test with existing fake Herdr harness: no matching tag -> null and zero tab creation; partial match stays new; complete match creates exactly one tab and claims matching task. Verify changed selectors reuse locally owned caller task without new tab.
-- [ ] Add configured alias composition:
+- [x] Add wait test: start tag-filtered waiter; commit untagged task and assert child remains running; commit matching tags and assert claimed ID. Add dry-run waiter with same steps and assert final task stays new. Use bounded deadline, kill/join on timeout.
+- [x] Add concurrent claims test: start three sessions against two matching tagged tasks plus unmatched task; collect IDs, assert exactly two distinct matching IDs and one null; unmatched status remains new.
+- [x] Add watch test with existing Watcher harness: initial empty array, untagged commit remains empty, edit `--set-tags "frontend, 界 面"` makes matching row appear, removal clears result, idle emits no repeats.
+- [x] Add dispatch test with existing fake Herdr harness: no matching tag -> null and zero tab creation; partial match stays new; complete match creates exactly one tab and claims matching task. Verify changed selectors reuse locally owned caller task without new tab.
+- [x] Add configured alias composition:
 
 ```rust
 let p = Project::new("[alias]\nui = \"list --filter 'has_tag(\\\"frontend\\\") and status == \\\"new\\\"'\"\n");
@@ -151,13 +151,13 @@ p.ok(&["add", "UI other", "--tag", "frontend"]);
 assert_eq!(p.ok(&["ui", "--tag", "bug"]).as_array().unwrap().len(), 1);
 ```
 
-- [ ] Run `CARGO_INCREMENTAL=0 cargo test --locked --offline --test tag_filters --test watch --test dispatch --test aliases`; formatting; commit `[Test] Verify Tag Routing Across Worker Modes`.
+- [x] Run `CARGO_INCREMENTAL=0 cargo test --locked --offline --test tag_filters --test watch --test dispatch --test aliases`; formatting; commit `[Test] Verify Tag Routing Across Worker Modes`.
 
 ## Task 4: Docs And Delivery
 
 Files: modify `README.md`, `docs/filter.md`, `docs/filter-functions.md`, `docs/reference.md`, this plan.
 
-- [ ] Add repeatable tag examples, exact label and AND rules, spaced/Unicode labels, has_tag literal/boolean semantics, alias example, explain reasons and owned-task reuse. Examples:
+- [x] Add repeatable tag examples, exact label and AND rules, spaced/Unicode labels, has_tag literal/boolean semantics, alias example, explain reasons and owned-task reuse. Examples:
 
 ```sh
 qqq list --tag frontend --tag "UI review" --query layout --status new
@@ -166,8 +166,20 @@ qqq list --filter 'has_tag("frontend") and priority >= 5'
 qqq next --explain --tag "界 面"
 ```
 
-- [ ] Run `cargo fmt --check`, `git diff --check`, `CARGO_INCREMENTAL=0 cargo test --locked --offline`, `CARGO_INCREMENTAL=0 cargo clippy --locked --offline --all-targets -- -D warnings`; require zero failures.
-- [ ] Request independent review through requesting-code-review skill; fix verified findings with regression tests, rerun affected/full checks if code changes.
-- [ ] Build release `CARGO_INCREMENTAL=0 cargo build --release --locked --offline`; run isolated CLI script covering multiple exact tags, has_tag composition, owned reuse, no-match, explain and pre-DB invalid errors. Record results.
+- [x] Run `cargo fmt --check`, `git diff --check`, `CARGO_INCREMENTAL=0 cargo test --locked --offline`, `CARGO_INCREMENTAL=0 cargo clippy --locked --offline --all-targets -- -D warnings`; require zero failures.
+- [x] Request independent review through requesting-code-review skill; fix verified findings with regression tests, rerun affected/full checks if code changes.
+- [x] Build release `CARGO_INCREMENTAL=0 cargo build --release --locked --offline`; run isolated CLI script covering multiple exact tags, has_tag composition, owned reuse, no-match, explain and pre-DB invalid errors. Record results.
 - [ ] Mark plan completed, commit `[Docs] Document Tag Routing And Verification`. Follow finishing-a-development-branch skill: rebase onto master, full tests, fast-forward locally, full integrated verification. Install `CARGO_INCREMENTAL=0 cargo install --path . --locked --offline --force`; run isolated checks against installed binary, compare release/installed SHA256.
 - [ ] Record evidence with `qqq message 182`, complete task, read back status; remove own worktree and safely delete merged branch. Start one persistent `qqq next --wait --local --json`, retain live session without status polling.
+
+## Verification Evidence
+
+- Baseline native-owner tests: three failures under sandbox process restrictions; all 15 preflight tests passed with process access. No baseline code changes.
+- Predicate RED: valid `has_tag` failed as unknown function; compiler GREEN: 13 tests passed.
+- Selector RED: list/next rejected `--tag`; selector GREEN plus filter/CLI/compiler regressions passed.
+- Active-owner preflight rejection test passed: DB bytes and probe log unchanged.
+- Full locked offline suite: 747 tests across 43 binaries, zero failures.
+- Formatting, diff check, strict all-targets Clippy passed.
+- Independent review: no findings requiring changes; reviewer CLI probes passed.
+- Release build passed; 29 isolated release CLI checks passed.
+- Local integration and installed-binary checks pending delivery steps below.

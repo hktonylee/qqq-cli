@@ -1,9 +1,10 @@
 # Filter functions
 
-Exact allowlist for [Luau filters](filter.md). Names are case-sensitive. Functions require parentheses. `text` means string, `number` means numeric value; nil is accepted for either. Boolean arguments are accepted only by `coalesce`/`nullif`. SQLite NULL returns become nil, except nil LIKE/GLOB inputs return false.
+Exact allowlist for [Luau filters](filter.md). Names are case-sensitive. Functions require parentheses. `text` means string, `number` means numeric value; nil is accepted for either, except `has_tag` requires a string literal. Boolean arguments are accepted only by `coalesce`/`nullif`. SQLite NULL returns become nil, except nil LIKE/GLOB inputs return false.
 
 | Function | Result | Behavior |
 | --- | --- | --- |
+| `has_tag("LABEL")` | boolean | Exact whole stored tag membership; trim surrounding spaces, preserve case/Unicode. One valid string literal required; nil/dynamic expressions rejected before DB access. |
 | `like(text, pattern[, escape])` | boolean | `text LIKE pattern [ESCAPE escape]`; text first. `%` matches any sequence, `_` one character. Escape must be one character. |
 | `glob(text, pattern)` | boolean | `text GLOB pattern`; text first. Case-sensitive, shell-style `*`, `?`, bracket classes. |
 | `lower(text)` | string or nil | ASCII lowercase. |
@@ -32,6 +33,8 @@ Date/time `value` accepts string, number, nil. Modifiers and `strftime` format r
 
 ```sh
 qqq list --filter 'like(task_name, "%auth%")'
+qqq list --filter 'has_tag("UI review") and status == "new"'
+qqq next --local --filter 'has_tag("frontend") or has_tag("界 面")'
 qqq list --filter 'like(description, "%a!_b%", "!")'
 qqq list --filter 'glob(task_name, "Fix*")'
 qqq list --filter 'length(description) > 100 and instr(description, "TODO") > 0'

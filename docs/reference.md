@@ -43,6 +43,7 @@ qqq list --query "parser error"     # search full descriptions, ignoring case
 qqq list --status new --status error
 qqq list --query "parser" --status in_progress --all
 qqq list --filter 'like(task_name, "%auth%") and priority > 0'
+qqq list --tag frontend --tag "UI review"
 qqq list --watch
 qqq list --watch --json
 qqq list --include-archived
@@ -75,6 +76,13 @@ to SQLite with bound values. List filters combine with query/status and retain
 visible ancestor context. See [filter guide](filter.md),
 [default variables](filter-variables.md),
 [SQLite functions](filter-functions.md).
+
+`list --tag LABEL` and `next --tag LABEL` match whole stored labels with exact
+case/Unicode. Repeat to require every label; tags combine with other filters
+using AND. Boundary whitespace is trimmed. Invalid labels fail before project
+preflight or DB access. `has_tag("LABEL")` offers the same membership test in
+Luau expressions; exactly one valid string literal is required. See
+[tag selectors and named views](filter.md#list-behavior).
 
 `--watch` prints initial list, then refreshes after DB commits. Terminal output
 redraws; pipes, `TERM=dumb` and JSON append snapshots. Ctrl-C stops watching.
@@ -685,6 +693,7 @@ qqq status
 qqq status --include-archived --json
 qqq next --explain
 qqq next --explain --filter 'priority >= 5' --json
+qqq next --explain --tag frontend --tag bug
 qqq next --explain --session worker-1
 ```
 
@@ -747,7 +756,7 @@ Each row contains the normal `task` object plus:
 | Field | Meaning |
 | --- | --- |
 | `ready` | Shared readiness predicate, independent of filter |
-| `matches_filter` | Filter result, independent of readiness; true without a filter |
+| `matches_filter` | Combined Luau/tag selector result, independent of readiness; true without selectors |
 | `queue_rank` | One-based rank among all ready tasks by priority/ID; null otherwise |
 | `reasons` | Zero or more eligibility/exclusion codes |
 | `owner` | Recorded claim key for an active task; null otherwise |
@@ -755,7 +764,10 @@ Each row contains the normal `task` object plus:
 | `latest_activity` | Latest task update, message or event: `at`, `source`, `id`, `session`, `action` |
 
 Reason codes: `archived`, `parent_not_completed`, `prerequisite_not_completed`, `in_progress`, `error`,
-`completed`, `filter_excluded`. A ready matching task has no reasons.
+`completed`, `filter_excluded`, `tag_excluded`. Explicit tag exclusion may appear
+alongside dependency blockers. When tags match but Luau fails, reason remains
+`filter_excluded`; predicates inside arbitrary Luau expressions use that reason
+too. A ready matching task has no reasons.
 Latest activity compares task `updated_at` with message/event `created_at`.
 Timestamp ties prefer message, then event, then task; higher IDs break ties
 within one source. Task activity has null ID/session/action; messages have null
@@ -817,6 +829,8 @@ qqq next --dry-run --json
 `next --filter 'priority >= 5'` selects matching new candidates using same
 priority/readiness rules. Without `--dry-run`, existing owned task still returns
 regardless of filter.
+`--tag LABEL` uses the same selection rules; repeated labels require all tags.
+Changed selectors never release or transfer existing ownership.
 Combine with `--wait` or Herdr dispatch; no matching ready candidate yields no claim.
 
 Without `--session` or `QQQ_SESSION`, owner discovery uses:
