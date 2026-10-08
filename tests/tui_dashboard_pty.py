@@ -3228,7 +3228,15 @@ print(json.dumps({"result": result}))
         elif scenario.startswith("force_complete_herdr_"):
             compact = scenario.endswith("compact")
             force_title = "Force complete" if compact else "Force complete task #4?"
-            required_label = "Select Force" if compact else "Select Force complete"
+
+            def passive_popup(title):
+                wait_visible(lambda: title in visible.text() and "Y force" in visible.text()
+                             and not visible.cursor_visible and not visible.pending
+                             and not visible.decoder.getstate()[0]
+                             and screen.endswith(b"\x1b[?25l"))
+                assert "[ ] Force complete" not in visible.text(), visible.text()
+                assert "[x] Force complete" not in visible.text(), visible.text()
+
             click(5, task_row("Owned item"))
             wait_visible(lambda: "Task #4 (In progress)" in editor_title())
             task_before = cli("show", "4")
@@ -3247,64 +3255,51 @@ print(json.dumps({"result": result}))
                              and screen.endswith(f"\x1b[{editor_row() + 2};2H".encode()))
             send(b"\x07c")
             if "confirm_failure" in scenario:
-                wait_visible(lambda: "Complete task #4?" in visible.text() and "Lose draft?" in visible.text())
+                passive_popup("Complete task #4?")
+                assert "Lose draft?" in visible.text()
                 (Path(folder) / "herdr-fail").touch()
-                send(b"y")
-                wait_visible(lambda: "Herdr failed: transport down" in visible.text()
-                             and "[ ] Force complete" in visible.text())
-                assert "Action error" not in visible.text(), visible.text()
-                assert cli("show", "4") == task_before
-                send(b"y")
-                wait_visible(lambda: "Herdr failed: transport down" in visible.text()
-                             and "[ ] Force complete" in visible.text())
-                assert cli("show", "4") == task_before
             else:
-                wait_visible(lambda: force_title in visible.text()
-                             and "[ ] Force complete" in visible.text())
-                if compact:
-                    wait_visible(lambda: "Space y Esc" in visible.text())
-                send(b"y")
-                wait_visible(lambda: required_label in visible.text())
+                passive_popup(force_title)
+            if compact:
+                for columns, rows, label in ((12, 8, "y Y Esc"), (11, 7, "Resize term"), (24, 14, "Y force")):
+                    clear_capture()
+                    fcntl.ioctl(slave, termios.TIOCSWINSZ, struct.pack("HHHH", rows, columns, 0, 0))
+                    visible.resize(columns, rows)
+                    os.kill(child.pid, signal.SIGWINCH)
+                    wait_visible(lambda: label in visible.text() and not visible.cursor_visible
+                                 and not visible.pending and not visible.decoder.getstate()[0]
+                                 and screen.endswith(b"\x1b[?25l"))
                 assert cli("show", "4") == task_before
-
-            def click_force_checkbox():
-                for row, line in enumerate(visible.text().splitlines(), 1):
-                    match = re.search(r"\[[ x]\] Force complete", line)
-                    if match:
-                        click(match.start() + 2, row)
-                        return
-                raise AssertionError(visible.text())
-
-            click_force_checkbox()
-            wait_visible(lambda: "[x] Force complete" in visible.text())
+            clear_capture()
+            send(b"y")
+            passive_popup("Herdr failed:" if compact else "Herdr failed: transport down")
+            assert "Action error" not in visible.text(), visible.text()
             assert cli("show", "4") == task_before
-            send(b" ")
-            wait_visible(lambda: "[ ] Force complete" in visible.text())
-            if "confirm_failure" in scenario and not scenario.endswith("no_color"):
-                # Complete directly from retained failed-normal confirmation.
-                send(b" ")
-                wait_visible(lambda: "[x] Force complete" in visible.text()
-                             and "Herdr failed: transport down" in visible.text())
-            else:
+            clear_capture()
+            send(b"y")
+            passive_popup("Herdr failed:" if compact else "Herdr failed: transport down")
+            assert cli("show", "4") == task_before
+
+            # Space, navigation, and clicks cannot select force or alter draft.
+            clear_capture()
+            send(b" \x1b[A\x1b[B\x19\x1bY")
+            click(1, 1)
+            click(visible.width // 2, visible.height // 2)
+            passive_popup("Herdr failed:" if compact else "Herdr failed: transport down")
+            assert cli("show", "4") == task_before
+            if "confirm_failure" not in scenario or scenario.endswith("no_color"):
                 send(b"n")
-                wait_visible(lambda: "Force complete" not in visible.text()
-                             and editor_line().startswith("XOwned item"))
+                wait_visible(lambda: "Y force" not in visible.text()
+                             and editor_line().startswith("XOwned item")
+                             and visible.cursor_visible
+                             and (visible.x, visible.y) == (1, editor_row() + 1))
                 assert cli("show", "4") == task_before
                 send(b"\x07c")
-                wait_visible(lambda: force_title in visible.text()
-                             and "[ ] Force complete" in visible.text())
-                click(1, 1)
-                send(b"y")
-                wait_visible(lambda: required_label in visible.text()
-                             and "[ ] Force complete" in visible.text())
-                assert cli("show", "4") == task_before
-                send(b" ")
-                wait_visible(lambda: "[x] Force complete" in visible.text()
-                             and required_label not in visible.text())
+                passive_popup(force_title)
             calls_before_force = (Path(folder) / "herdr-calls").read_bytes()
-            send(b"y")
+            send(b"Y")
             wait_visible(lambda: visible.text().splitlines()[-1].startswith("Completed #4")
-                         and editor_line().startswith("Owned item"))
+                         and editor_line().startswith("Owned item") and visible.cursor_visible)
             assert (Path(folder) / "herdr-calls").read_bytes() == calls_before_force
             completed = cli("show", "4")
             assert completed["task"]["status"] == "completed"
@@ -3331,11 +3326,13 @@ print(json.dumps({"result": result}))
             send(b"\x7f")
             wait_visible(lambda: editor_line().startswith("Foreign item"))
         elif scenario.startswith("force_complete"):
-            def confirm_completion():
-                if "Force complete task" in visible.text():
-                    send(b" ")
-                    wait_visible(lambda: "[x] Force complete" in visible.text())
-                send(b"y")
+            def passive_popup(title):
+                wait_visible(lambda: title in visible.text() and "y confirm" in visible.text()
+                             and "Y force" in visible.text() and not visible.cursor_visible
+                             and not visible.pending and not visible.decoder.getstate()[0]
+                             and screen.endswith(b"\x1b[?25l"))
+                assert "[ ] Force complete" not in visible.text(), visible.text()
+                assert "[x] Force complete" not in visible.text(), visible.text()
 
             wait_visible(lambda: "Foreign item" in visible.text())
             click(5, task_row("Foreign item"))
@@ -3344,19 +3341,31 @@ print(json.dumps({"result": result}))
             send(b"\x01X")
             wait_visible(lambda: editor_line().startswith("XForeign item"))
             send(b"\x07c")
-            wait_visible(lambda: "Force complete task #1?" in visible.text()
-                         and "Complete without matching task owner." in visible.text()
-                         and "Lose draft?" in visible.text())
+            passive_popup("Force complete task #1?")
+            assert "Complete without matching task owner." in visible.text()
+            assert "Lose draft?" in visible.text()
+            clear_capture()
+            send(b" \x1b[A\x1b[B\x19\x1bY")
+            click(visible.width // 2, visible.height // 2)
+            clear_capture()
+            popup_before_normal = visible.text()
+            send(b"y")
+            wait_visible(lambda: visible.text() != popup_before_normal
+                         and "Y force" in visible.text() and not visible.cursor_visible)
+            passive_popup("Force complete task #1?")
             assert cli("show", "1") == before_force
+            if scenario != "force_complete_sessionless":
+                assert "not claimed" in visible.text(), visible.text()
             send(b"n")
-            wait_visible(lambda: "Force complete task" not in visible.text()
-                         and editor_line().startswith("XForeign item"))
+            wait_visible(lambda: "Y force" not in visible.text()
+                         and editor_line().startswith("XForeign item") and visible.cursor_visible
+                         and (visible.x, visible.y) == (1, editor_row() + 1))
             assert cli("show", "1") == before_force
             send(b"\x07\r")
-            wait_visible(lambda: "Force complete task #1?" in visible.text())
-            confirm_completion()
+            passive_popup("Force complete task #1?")
+            send(b"Y")
             wait_visible(lambda: "Task #1 (Completed)" in editor_title()
-                         and editor_line().startswith("Foreign item"))
+                         and editor_line().startswith("Foreign item") and visible.cursor_visible)
             completed = cli("show", "1")
             assert completed["task"]["status"] == "completed"
             assert completed["task"]["description"] == "Foreign item"
@@ -3370,13 +3379,13 @@ print(json.dumps({"result": result}))
                 wait_visible(lambda: f"Task #{task_id}" in editor_title())
                 task_before = cli("show", str(task_id))
                 send(b"\x07c")
-                wait_visible(lambda: f"Force complete task #{task_id}?" in visible.text())
+                passive_popup(f"Force complete task #{task_id}?")
                 send(b"\x1b")
-                wait_visible(lambda: "Force complete task" not in visible.text())
+                wait_visible(lambda: "Y force" not in visible.text() and visible.cursor_visible)
                 assert cli("show", str(task_id)) == task_before
                 send(b"\x07c")
-                wait_visible(lambda: f"Force complete task #{task_id}?" in visible.text())
-                confirm_completion()
+                passive_popup(f"Force complete task #{task_id}?")
+                send(b"Y")
                 wait_visible(lambda: f"Task #{task_id} (Completed)" in editor_title())
                 after = cli("show", str(task_id))
                 assert after["task"]["status"] == "completed"
@@ -3387,37 +3396,36 @@ print(json.dumps({"result": result}))
             wait_visible(lambda: "Task #4 (In progress)" in editor_title())
             send(b"\x07c")
             if scenario == "force_complete_sessionless":
-                wait_visible(lambda: "Force complete task #4?" in visible.text())
+                passive_popup("Force complete task #4?")
             else:
-                wait_visible(lambda: "Complete task #4?" in visible.text()
-                             and "[ ] Force complete" in visible.text()
-                             and "Space force" in visible.text()
-                             and "Complete without matching task owner." not in visible.text())
+                passive_popup("Complete task #4?")
+                assert "Complete without matching task owner." not in visible.text()
                 assert "Force complete task" not in visible.text(), visible.text()
             if scenario == "force_complete_race":
                 cli("edit", "4", "--set-status", "new", "--session", "worker")
                 cli("next", "--local", "--session", "new-owner")
                 transferred = cli("show", "4")
-                confirm_completion()
-                wait_visible(lambda: "Task 4 is not claimed by session worker" in visible.text()
-                             and "[ ] Force complete" in visible.text())
+                clear_capture()
+                send(b"y")
+                passive_popup("Task 4 is not claimed by session worker")
                 assert cli("show", "4") == transferred
                 send(b"\x1b")
                 wait_visible(lambda: "Task 4 is not claimed by session worker" not in visible.text()
-                             and "[ ] Force complete" not in visible.text())
+                             and "Y force" not in visible.text() and visible.cursor_visible)
                 send(b"\x07c")
-                wait_visible(lambda: "Force complete task #4?" in visible.text())
-            confirm_completion()
+                passive_popup("Force complete task #4?")
+            send(b"Y" if scenario in ("force_complete_sessionless", "force_complete_race", "force_complete_native") else b"y")
             wait_visible(lambda: "Task #4 (Completed)" in editor_title())
             event = cli("show", "4")["events"][-1]
             assert event["action"] == "complete"
+            assert event["session"] == actor
 
             click(5, task_row("Finished item"))
             wait_visible(lambda: "Task #5 (Completed)" in editor_title())
             task_before = cli("show", "5")
             send(b"\x07c")
-            wait_visible(lambda: "Force complete task #5?" in visible.text())
-            confirm_completion()
+            passive_popup("Force complete task #5?")
+            send(b"Y")
             wait_visible(lambda: "Task 5 must be unfinished to force complete" in visible.text())
             assert cli("show", "5") == task_before
             send(b"\x1b")

@@ -87,6 +87,7 @@ fn task_tags_keep_color_across_status_selection_dirty_and_compact_rows() {
                                         top: &mut 0,
                                         follow_selected: true,
                                         modal_lines: None,
+                                        hide_cursor: false,
                                         details: None,
                                     },
                                     render::DashboardEditor {
@@ -201,6 +202,7 @@ fn task_list_selection_reclaims_one_column() {
                                 top: &mut 0,
                                 follow_selected: true,
                                 modal_lines: None,
+                                hide_cursor: false,
                                 details: None,
                             },
                             render::DashboardEditor {
@@ -257,6 +259,7 @@ fn completed_filter_button_reserves_query_caret_space() {
                     top: &mut 0,
                     follow_selected: true,
                     modal_lines: None,
+                    hide_cursor: false,
                     details: None,
                 },
                 render::DashboardEditor {
@@ -305,6 +308,7 @@ fn completed_filter_button_render_and_hit_cells_agree_at_every_layout() {
                                 top: &mut 0,
                                 follow_selected: true,
                                 modal_lines: None,
+                                hide_cursor: false,
                                 details: None,
                             },
                             render::DashboardEditor {
@@ -433,6 +437,7 @@ fn hidden_completed_state_keeps_empty_unfocused_filter_bar_visible() {
                     top: &mut 0,
                     follow_selected: true,
                     modal_lines: None,
+                    hide_cursor: false,
                     details: None,
                 },
                 render::DashboardEditor {
@@ -538,6 +543,7 @@ fn action_popup_preserves_background_and_clears_overlaid_styles() {
                             top: &mut 0,
                             follow_selected: true,
                             modal_lines,
+                            hide_cursor: false,
                             details: None,
                         },
                         render::DashboardEditor {
@@ -689,6 +695,7 @@ fn action_popup_input_errors_and_warnings_keep_roles_and_plain_styles() {
                             top: &mut 0,
                             follow_selected: true,
                             modal_lines: Some(modal),
+                            hide_cursor: false,
                             details: None,
                         },
                         render::DashboardEditor {
@@ -784,6 +791,7 @@ fn blank_draft_keeps_details_pane_and_editor_position() {
                     top: &mut 0,
                     follow_selected: true,
                     modal_lines: None,
+                    hide_cursor: false,
                     details: None,
                 },
                 render::DashboardEditor {
@@ -921,6 +929,7 @@ fn selected_task_renders_details_between_list_and_editor() {
                             top: &mut 0,
                             follow_selected: true,
                             modal_lines: None,
+                            hide_cursor: false,
                             details: Some(dashboard::DetailsView {
                                 rows: &detail_rows,
                                 top: &mut details_top,
@@ -1028,6 +1037,7 @@ fn details_scroll_clamps_without_moving_editor() {
                     top: &mut 0,
                     follow_selected: true,
                     modal_lines: None,
+                    hide_cursor: false,
                     details: Some(dashboard::DetailsView {
                         rows: &detail_rows,
                         top: &mut details_top,
@@ -1256,6 +1266,7 @@ fn manual_list_scroll_does_not_snap_to_selected_task() {
                     top: &mut top,
                     follow_selected: false,
                     modal_lines: None,
+                    hide_cursor: false,
                     details: None,
                 },
                 render::DashboardEditor {
@@ -1287,6 +1298,7 @@ fn manual_list_scroll_does_not_snap_to_selected_task() {
                     top: &mut top,
                     follow_selected: true,
                     modal_lines: None,
+                    hide_cursor: false,
                     details: None,
                 },
                 render::DashboardEditor {
@@ -1345,6 +1357,7 @@ fn manual_editor_scroll_keeps_viewport_then_keyboard_reveals_caret() {
                     top: &mut 0,
                     follow_selected: true,
                     modal_lines: None,
+                    hide_cursor: false,
                     details: None,
                 },
                 render::DashboardEditor {
@@ -1377,6 +1390,7 @@ fn manual_editor_scroll_keeps_viewport_then_keyboard_reveals_caret() {
                     top: &mut 0,
                     follow_selected: true,
                     modal_lines: None,
+                    hide_cursor: false,
                     details: None,
                 },
                 render::DashboardEditor {
@@ -1436,6 +1450,7 @@ fn manual_offsets_clamp_after_resize() {
                     top: &mut list_top,
                     follow_selected: false,
                     modal_lines: None,
+                    hide_cursor: false,
                     details: None,
                 },
                 render::DashboardEditor {
@@ -1525,6 +1540,7 @@ fn empty_filter_reserves_list_row_while_focused() {
                         top: &mut top,
                         follow_selected: true,
                         modal_lines: None,
+                        hide_cursor: false,
                         details: None,
                     },
                     render::DashboardEditor {
@@ -1579,6 +1595,7 @@ fn filter_bar_shows_empty_result_and_takes_cursor_only_while_focused() {
                                 top: &mut 0,
                                 follow_selected: true,
                                 modal_lines: None,
+                                hide_cursor: false,
                                 details: None,
                             },
                             render::DashboardEditor {
@@ -1691,6 +1708,7 @@ fn small_dashboard_keeps_filter_row_and_plain_style() {
                     top: &mut 0,
                     follow_selected: true,
                     modal_lines: None,
+                    hide_cursor: false,
                     details: None,
                 },
                 render::DashboardEditor {
@@ -1744,6 +1762,7 @@ fn minimum_dashboard_height_still_shows_selected_task() {
                     top: &mut 0,
                     follow_selected: true,
                     modal_lines: None,
+                    hide_cursor: false,
                     details: None,
                 },
                 render::DashboardEditor {
@@ -1792,6 +1811,7 @@ fn split_dashboard_keeps_list_above_editor() {
                     top: &mut list_top,
                     follow_selected: true,
                     modal_lines: None,
+                    hide_cursor: false,
                     details: None,
                 },
                 render::DashboardEditor {
@@ -1847,6 +1867,7 @@ fn narrow_dashboard_shows_plain_resize_hint() {
                     top: &mut 0,
                     follow_selected: true,
                     modal_lines: None,
+                    hide_cursor: false,
                     details: None,
                 },
                 render::DashboardEditor {
@@ -1893,6 +1914,7 @@ fn no_color_dashboard_keeps_default_cell_styles() {
                     top: &mut 0,
                     follow_selected: true,
                     modal_lines: None,
+                    hide_cursor: false,
                     details: None,
                 },
                 render::DashboardEditor {
@@ -1956,6 +1978,7 @@ fn status_selection_and_editor_images_use_distinct_colors() {
                         top: &mut 0,
                         follow_selected: true,
                         modal_lines: None,
+                        hide_cursor: false,
                         details: None,
                     },
                     render::DashboardEditor {
@@ -2047,6 +2070,7 @@ fn dashboard_paste_label_uses_gold_while_body_stays_neutral() {
                     top: &mut 0,
                     follow_selected: true,
                     modal_lines: None,
+                    hide_cursor: false,
                     details: None,
                 },
                 render::DashboardEditor {
@@ -2105,6 +2129,7 @@ fn hotkey_footer_colors_shortcuts_and_clears_styles_for_messages() {
                                 top: &mut 0,
                                 follow_selected: true,
                                 modal_lines: None,
+                                hide_cursor: false,
                                 details: None,
                             },
                             render::DashboardEditor {
@@ -2326,6 +2351,7 @@ fn wide_dashboard_keeps_spacer_below_full_selected_list() {
                             top: &mut list_top,
                             follow_selected: true,
                             modal_lines: None,
+                            hide_cursor: false,
                             details: None,
                         },
                         render::DashboardEditor {
@@ -2389,6 +2415,7 @@ fn wide_dashboard_renders_both_upper_panes_and_full_width_editor() {
                         top: &mut 0,
                         follow_selected: true,
                         modal_lines: None,
+                        hide_cursor: false,
                         details: Some(dashboard::DetailsView {
                             rows: &detail_rows,
                             top: &mut 0,
@@ -2455,6 +2482,7 @@ fn failed_save_footer_uses_error_color() {
                     top: &mut 0,
                     follow_selected: true,
                     modal_lines: None,
+                    hide_cursor: false,
                     details: None,
                 },
                 render::DashboardEditor {
@@ -2530,6 +2558,7 @@ fn dirty_marker_is_distinct_aligned_and_keeps_task_hit_targets() {
                                 top: &mut 0,
                                 follow_selected: true,
                                 modal_lines: None,
+                                hide_cursor: false,
                                 details: None,
                             },
                             render::DashboardEditor {

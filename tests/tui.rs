@@ -558,7 +558,7 @@ fn tui_dashboard_force_completion_recovers_from_herdr_confirmation_failure() {
 }
 
 #[test]
-fn tui_dashboard_force_completion_checkbox_handles_initial_herdr_failure_and_mouse() {
+fn tui_dashboard_force_completion_keys_handle_initial_herdr_failure_and_ignore_mouse() {
     for name in [
         "force_complete_herdr_initial_failure",
         "force_complete_herdr_initial_failure_narrow",

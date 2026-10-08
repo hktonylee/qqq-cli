@@ -204,7 +204,9 @@ mod tests {
                 let content = popup_layout(area, lines.len()).content;
                 for color in [false, true] {
                     let mut terminal = Terminal::new(TestBackend::new(width, 24)).unwrap();
-                    terminal.draw(|frame| popup(frame, &lines, color)).unwrap();
+                    terminal
+                        .draw(|frame| popup(frame, &lines, color, true))
+                        .unwrap();
                     let buffer = terminal.backend().buffer();
                     let row: String = (content.x..content.x + content.width)
                         .map(|x| buffer[(x, content.y + 2)].symbol())

@@ -556,7 +556,7 @@ mod tests {
                     ratatui::Terminal::new(ratatui::backend::TestBackend::new(width, height))
                         .unwrap();
                 terminal
-                    .draw(|frame| super::super::dashboard::popup(frame, &lines, color))
+                    .draw(|frame| super::super::dashboard::popup(frame, &lines, color, true))
                     .unwrap();
                 let content = super::super::dashboard::popup_layout(area, lines.len()).content;
                 assert_eq!(

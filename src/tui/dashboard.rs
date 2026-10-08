@@ -35,6 +35,7 @@ pub struct View<'a> {
     pub top: &'a mut usize,
     pub follow_selected: bool,
     pub modal_lines: Option<&'a [render::PopupRow]>,
+    pub hide_cursor: bool,
     pub details: Option<DetailsView<'a>>,
 }
 
@@ -154,7 +155,12 @@ fn popup_row_line(text: String, kind: render::PopupKind, color: bool) -> Line<'s
     }
 }
 
-pub(super) fn popup(frame: &mut Frame<'_>, lines: &[render::PopupRow], color: bool) {
+pub(super) fn popup(
+    frame: &mut Frame<'_>,
+    lines: &[render::PopupRow],
+    color: bool,
+    show_cursor: bool,
+) {
     use render::PopupKind;
     let PopupLayout {
         outer,
@@ -214,7 +220,9 @@ pub(super) fn popup(frame: &mut Frame<'_>, lines: &[render::PopupRow], color: bo
             Rect::new(content.x, content.y + index as u16, content.width, 1),
         );
     }
-    frame.set_cursor_position(explicit_cursor.unwrap_or(cursor));
+    if show_cursor {
+        frame.set_cursor_position(explicit_cursor.unwrap_or(cursor));
+    }
 }
 
 pub fn panes(area: Rect) -> Panes {
@@ -604,7 +612,9 @@ pub fn draw(
             )),
             area,
         );
-        frame.set_cursor_position((area.x, area.y));
+        if !list_view.hide_cursor {
+            frame.set_cursor_position((area.x, area.y));
+        }
         return;
     }
     let Panes {
@@ -665,7 +675,7 @@ pub fn draw(
             filter_style
         };
         frame.render_widget(Paragraph::new(label).style(button_style), button);
-        if list_view.focused {
+        if list_view.focused && !list_view.hide_cursor {
             frame.set_cursor_position((list.x + filter_cursor, list.y));
         }
     }
@@ -737,10 +747,10 @@ pub fn draw(
         details(frame, details_area, details_view, color);
     }
     let editor_cursor = editor(frame, editor_area, editor_state, color);
-    if let Some(cursor) = editor_cursor.filter(|_| !list_view.focused) {
+    if let Some(cursor) = editor_cursor.filter(|_| !list_view.focused && !list_view.hide_cursor) {
         frame.set_cursor_position(cursor);
     }
     if let Some(lines) = list_view.modal_lines {
-        popup(frame, lines, color);
+        popup(frame, lines, color, !list_view.hide_cursor);
     }
 }

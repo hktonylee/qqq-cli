@@ -831,17 +831,17 @@ Open menu refreshes Retry availability after external status changes, keeping
 selected action when available.
 Complete checks current session ownership when activated. Without a matching
 claim, popup asks `Force complete task #ID?` and warns
-`Complete without matching task owner.` Confirm with `y` to finish a New,
-In progress or Error task regardless of owner **after selecting** `[ ] Force complete`
-with Space or clicking checkbox/label. Checkbox starts unchecked on every opening;
-forced confirmation without selecting it keeps popup and changes nothing. Matching
-owner can complete normally with checkbox unchecked, or select force explicitly.
+`Complete without matching task owner.` In every completion popup, `y` confirms
+normal completion with current ownership checks; uppercase `Y` explicitly confirms
+force completion of a New, In progress or Error task regardless of owner. Popup
+has no checkbox or caret; Space, arrows and mouse clicks do not select a mode.
+`n`, Enter or Esc cancel. Matching owners can also force explicitly with `Y`.
 This clears active claim, retains recorded harness/orchestrator metadata and Herdr
 link for log lookup, preserves task content and history, and records a standard `complete`
 event attributed to explicit session or `manual`. Already-completed tasks fail.
 Cancellation preserves draft and DB. If Herdr fails or ownership changes during
-normal confirmation, popup keeps exact error plus unchecked force checkbox.
-Retry normally with `y`, or select force then confirm with `y`. Force path bypasses
+normal confirmation, popup keeps exact error plus both confirmation keys.
+Retry normally with `y`, or force explicitly with `Y`. Force path bypasses
 Herdr/owner lookup; it never happens automatically after failure. DB corruption,
 invalid input and other unrelated failures keep ordinary error handling.
 After filter clears, Esc closes menu or prompt. State changes ask for `y` before

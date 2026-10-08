@@ -1,8 +1,6 @@
 use crate::errors::{Code, Info};
 use anyhow::Error;
 
-pub(super) const FORCE_REQUIRED: &str = "Select Force complete before confirming.";
-
 pub(crate) fn discovery_unavailable(error: &Error) -> bool {
     error.downcast_ref::<Info>().is_some_and(|info| {
         matches!(info.code, Code::DispatchError)
