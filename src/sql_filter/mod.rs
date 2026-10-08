@@ -133,6 +133,30 @@ impl Compiler {
             kind,
         }
     }
+    fn has_tag(&mut self, args: Vec<Expr>) -> Result<Expr> {
+        ensure!(
+            args.len() == 1,
+            "has_tag expects exactly one string literal"
+        );
+        let arg = &args[0];
+        ensure!(arg.kind == Kind::Text, "has_tag requires a string literal");
+        // Only a literal (including parentheses) compiles to one bound parameter.
+        let index = arg
+            .sql
+            .strip_prefix('?')
+            .and_then(|value| value.parse::<usize>().ok());
+        let label = index
+            .and_then(|index| index.checked_sub(1))
+            .and_then(|index| self.params.get_mut(index));
+        let Some(Value::Text(label)) = label else {
+            bail!("has_tag requires a string literal");
+        };
+        *label = crate::tags::normalize(std::slice::from_ref(label))?.remove(0);
+        Ok(Expr {
+            sql: functions::tag_sql(&arg.sql),
+            kind: Kind::Boolean,
+        })
+    }
     fn expression(&mut self, expression: &Expression, depth: usize) -> Result<Expr> {
         ensure!(depth <= 32, "expression exceeds 32 AST levels");
         self.nodes += 1;
@@ -229,7 +253,11 @@ impl Compiler {
                     .iter()
                     .map(|arg| self.expression(arg, next))
                     .collect::<Result<Vec<_>>>()?;
-                functions::compile(identifier.as_str(), args)?
+                if identifier.as_str() == "has_tag" {
+                    self.has_tag(args)?
+                } else {
+                    functions::compile(identifier.as_str(), args)?
+                }
             }
             Expression::IfExpression(value) => {
                 ensure!(value.binding().is_none(), "if bindings are unavailable");

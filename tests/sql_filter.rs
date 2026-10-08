@@ -1,19 +1,66 @@
 #[allow(dead_code)]
+#[path = "../src/errors.rs"]
+mod errors;
+#[allow(dead_code)]
 #[path = "../src/sql_filter/mod.rs"]
 mod sql_filter;
+#[allow(dead_code)]
+#[path = "../src/tags.rs"]
+mod tags;
 
 use rusqlite::{Connection, params_from_iter, types::Value};
 
 fn evaluate(source: &str) -> bool {
     let filter = sql_filter::compile(source).unwrap();
     let db = Connection::open_in_memory().unwrap();
-    db.execute_batch("CREATE TABLE tasks(id INTEGER,description TEXT,status TEXT,priority INTEGER,archived INTEGER,parent_id INTEGER,created_at TEXT,updated_at TEXT,harness_name TEXT,harness_session TEXT,orchestrator_name TEXT,orchestrator_session TEXT); INSERT INTO tasks VALUES(1,'Fix auth','new',3,0,NULL,'2026-10-02T00:00:00Z','2026-10-02T00:00:00Z',NULL,NULL,NULL,NULL)").unwrap();
+    db.execute_batch("CREATE TABLE tasks(id INTEGER,description TEXT,status TEXT,priority INTEGER,archived INTEGER,parent_id INTEGER,created_at TEXT,updated_at TEXT,harness_name TEXT,harness_session TEXT,orchestrator_name TEXT,orchestrator_session TEXT,tags TEXT); INSERT INTO tasks VALUES(1,'Fix auth','new',3,0,NULL,'2026-10-02T00:00:00Z','2026-10-02T00:00:00Z',NULL,NULL,NULL,NULL,'[\"frontend\",\"界 面\"]')").unwrap();
     db.query_row(
         &format!("SELECT {} FROM tasks", filter.sql()),
         params_from_iter(filter.params()),
         |row| row.get(0),
     )
     .unwrap()
+}
+
+#[test]
+fn has_tag_matches_exact_normalized_literals() {
+    for expression in [
+        "has_tag('frontend')",
+        "has_tag(' frontend ')",
+        "has_tag('界 面') and priority == 3 and status == 'new'",
+        "has_tag(('frontend'))",
+        "not has_tag('Frontend')",
+        "not has_tag('front')",
+        "not has_tag('auth')",
+        "has_tag('absent') or has_tag('frontend')",
+        "(if has_tag('frontend') then priority else 0) == 3",
+    ] {
+        assert!(evaluate(expression), "{expression}");
+    }
+    let filter = sql_filter::compile("has_tag(\"' OR 1=1 --\")").unwrap();
+    assert!(!filter.sql().contains("OR 1=1"));
+    assert_eq!(filter.params(), &[Value::Text("' OR 1=1 --".into())]);
+}
+
+#[test]
+fn has_tag_rejects_nonliteral_or_invalid_labels() {
+    for expression in [
+        "has_tag()",
+        "has_tag('a','b')",
+        "has_tag(nil)",
+        "has_tag(1)",
+        "has_tag(description)",
+        "has_tag(lower('UI'))",
+        "has_tag('UI' .. ' review')",
+        "has_tag('')",
+        "has_tag(' ')",
+        "has_tag('a,b')",
+        "has_tag('[ui]')",
+        r"has_tag('a\nb')",
+        "has_tag('frontend') + 1",
+    ] {
+        assert!(sql_filter::compile(expression).is_err(), "{expression}");
+    }
 }
 
 #[test]

@@ -1,6 +1,13 @@
 use super::{Expr, Kind, compatible};
 use anyhow::{Result, bail, ensure};
 
+pub(super) fn tag_sql(parameter: &str) -> String {
+    format!(
+        "EXISTS (SELECT 1 FROM json_each(tasks.tags) AS task_tag
+         WHERE task_tag.value COLLATE BINARY = {parameter})"
+    )
+}
+
 fn arity(name: &str, args: &[Expr], min: usize, max: usize) -> Result<()> {
     ensure!(
         (min..=max).contains(&args.len()),
