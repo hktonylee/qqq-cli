@@ -50,6 +50,9 @@ impl From<&Commands> for Format {
                 HerdrCommand::Link { .. } => Self::Link,
                 HerdrCommand::Find { .. } => Self::Pane,
             },
+            Commands::Add {
+                template: Some(_), ..
+            } => Self::Import,
             Commands::Add { .. } => Self::AddedTask,
             Commands::Import { .. } => Self::Import,
             Commands::Backup { .. } => Self::Backup,

@@ -26,7 +26,7 @@ import remains sole graph validator and transaction writer.
 
 ## Task 1: Recipe Happy Path And Shared Import Entry
 
-- [ ] Add CLI test fixture invoking binary in TempDir, removing inherited agent
+- [x] Add CLI test fixture invoking binary in TempDir, removing inherited agent
   context, initializing project and writing `.qqq-recipes/bug.json`.
   Test required component plus default severity; preview then commit exact Unicode
   multiline description, normalized tags, priority and key mapping.
@@ -46,9 +46,9 @@ assert_eq!(applied["mapping"], json!({"bug":1}));
 assert_eq!(fixture.ok(&["show","1"])["task"]["tags"], json!(["bug","authλ"]));
 ```
 
-- [ ] Run `cargo test --locked --offline --test recipes -- --test-threads=1`.
+- [x] Run `cargo test --locked --offline --test recipes -- --test-threads=1`.
   Expect parser failure for unknown `--template`.
-- [ ] Add template/vars/dry_run fields to Add. Use Clap conflicts to reject
+- [x] Add template/vars/dry_run fields to Add. Use Clap conflicts to reject
   ordinary task fields with template; require template for vars/dry_run.
 
 ```rust
@@ -61,7 +61,7 @@ vars: Vec<String>,
 dry_run: bool,
 ```
 
-- [ ] Make InputTask crate-visible, with description/tags crate-visible for
+- [x] Make InputTask crate-visible, with description/tags crate-visible for
   expansion. Keep its other fields and Parent type private. Expose existing
   database_path within crate. Add import entry point:
 
@@ -71,7 +71,7 @@ pub(crate) fn prepare(version: u32, tasks: Vec<InputTask>) -> Result<ValidatedBa
 }
 ```
 
-- [ ] Implement typed Recipe/Parameter and `recipe::read(name, assignments)`.
+- [x] Implement typed Recipe/Parameter and `recipe::read(name, assignments)`.
   Recipe version required, parameters default empty, tasks exact InputTask array.
   Require string defaults when present; custom deserializer rejects explicit null.
 
@@ -97,7 +97,7 @@ fn string_default<'de, D: serde::Deserializer<'de>>(d: D)
 }
 ```
 
-- [ ] Define `identifier` and `recipe_name` using ASCII byte predicates. Read
+- [x] Define `identifier` and `recipe_name` using ASCII byte predicates. Read
   `<database_path(false).parent().parent()>/.qqq-recipes/NAME.json`; reject invalid
   names before read. Parse UTF-8 with typed serde, attach template error context
   and JSON line/column. Enforce version1. Build BTreeMap of declarations, reject
@@ -117,7 +117,7 @@ fn recipe_name(name: &str) -> bool {
 }
 ```
 
-- [ ] Define expansion as one-pass scan; never rescan inserted values. Use
+- [x] Define expansion as one-pass scan; never rescan inserted values. Use
   structured InvalidArgument errors for unclosed/invalid/unknown placeholders.
 
 ```rust
@@ -148,7 +148,7 @@ fn expand(text: &str, values: &BTreeMap<String, String>) -> Result<String> {
 }
 ```
 
-- [ ] Expand every description/tag, then `import::prepare(recipe.version,
+- [x] Expand every description/tag, then `import::prepare(recipe.version,
   recipe.tasks)`. Prepare alongside ordinary import before writable DB open:
 
 ```rust
@@ -158,7 +158,7 @@ Commands::Add { template: Some(name), vars, .. } => Some(recipe::read(name, vars
   Route template dry-run through current read-only import branch; route real
   template Add arm to `import::run(..., false)`. Keep ordinary Add arm beneath
   template arm, ignoring prepared-only fields with `..`. Add recipe module.
-- [ ] Run happy-path recipe tests plus CLI baseline; expect both green. Commit
+- [x] Run happy-path recipe tests plus CLI baseline; expect both green. Commit
   `[Feat] Apply Parameterized Recipes Through Atomic Import`.
 
 ## Task 2: Validation, Graphs And Atomicity
@@ -229,3 +229,7 @@ conn.execute_batch("CREATE TRIGGER fail_second BEFORE INSERT ON tasks
 Base d4f4443: prior full suite730/42 binaries, no code changes since verification.
 Fresh worktree baseline CLI68 plus dependencies7 pass. Design self-review clear:
 one importer, fixed structural types, no schema migration, no unresolved choices.
+
+Task1 RED: three real CLI tests rejected unknown --template. GREEN: recipe3
+plus existing CLI68 pass. Loader shares typed import tasks/validator/transaction;
+no DB schema change. Human full preview and broader acceptance remain pending.

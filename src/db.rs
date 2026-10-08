@@ -401,7 +401,7 @@ fn commit_with_files(tx: Transaction<'_>, pending: &mut PendingFiles) -> Result<
         }
     }
 }
-fn database_path(init: bool) -> Result<PathBuf> {
+pub(crate) fn database_path(init: bool) -> Result<PathBuf> {
     let cwd = std::env::current_dir()?;
     let path = if init {
         let directory = cwd.join(PROJECT_DIR_NAME);

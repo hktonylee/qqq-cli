@@ -19,16 +19,16 @@ struct Batch {
 
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
-struct InputTask {
+pub(crate) struct InputTask {
     key: String,
-    description: String,
+    pub(crate) description: String,
     #[serde(default)]
     priority: i64,
     parent: Option<Parent>,
     #[serde(default)]
     depends_on: Vec<Parent>,
     #[serde(default)]
-    tags: Vec<String>,
+    pub(crate) tags: Vec<String>,
 }
 
 #[derive(Clone, Deserialize, Serialize)]
@@ -98,7 +98,11 @@ pub fn read(path: &Path) -> Result<ValidatedBatch> {
             .detail("column", error.column());
         anyhow::Error::new(error).context(info)
     })?;
-    validate(batch)
+    prepare(batch.version, batch.tasks)
+}
+
+pub(crate) fn prepare(version: u32, tasks: Vec<InputTask>) -> Result<ValidatedBatch> {
+    validate(Batch { version, tasks })
 }
 
 fn validate(mut batch: Batch) -> Result<ValidatedBatch> {

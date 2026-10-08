@@ -18,6 +18,7 @@ mod output;
 mod preflight;
 mod process;
 mod queue;
+mod recipe;
 mod session;
 mod snapshot;
 mod sql_filter;
@@ -122,6 +123,15 @@ enum Commands {
         /// Tag label; repeat for multiple tags. Surrounding spaces are trimmed.
         #[arg(long = "tag", value_name = "LABEL")]
         tags: Vec<String>,
+        /// Apply project-local .qqq-recipes/NAME.json instead of ordinary add.
+        #[arg(long, value_name = "NAME", conflicts_with_all = ["text", "description", "edit", "stdin", "parent", "depends_on", "priority", "images", "tags"])]
+        template: Option<String>,
+        /// Literal recipe parameter; repeat for multiple parameters.
+        #[arg(long = "var", value_name = "NAME=VALUE", requires = "template")]
+        vars: Vec<String>,
+        /// Expand and validate recipe without creating tasks or reserving IDs.
+        #[arg(long, requires = "template")]
+        dry_run: bool,
     },
     /// Atomically import a versioned JSON task batch; use - for stdin.
     Import {
@@ -394,9 +404,22 @@ fn execute(
     };
     let import_batch = match &cli.command {
         Commands::Import { path, .. } => Some(import::read(path)?),
+        Commands::Add {
+            template: Some(name),
+            vars,
+            ..
+        } => Some(recipe::read(name, vars)?),
         _ => None,
     };
-    if matches!(&cli.command, Commands::Import { dry_run: true, .. }) {
+    if matches!(
+        &cli.command,
+        Commands::Import { dry_run: true, .. }
+            | Commands::Add {
+                template: Some(_),
+                dry_run: true,
+                ..
+            }
+    ) {
         let (mut db, _) = db::Db::open_read_only()?;
         return Ok(json!(import::run(
             &mut db.conn,
@@ -474,6 +497,13 @@ fn execute(
             false
         )?),
         Commands::Add {
+            template: Some(_), ..
+        } => json!(import::run(
+            &mut db.conn,
+            import_batch.as_ref().expect("recipe input prepared"),
+            false
+        )?),
+        Commands::Add {
             text,
             description,
             edit,
@@ -483,6 +513,7 @@ fn execute(
             stdin: _,
             depends_on,
             tags,
+            ..
         } => {
             let tags = tags::normalize(&tags)?;
             if let Some(id) = parent {
