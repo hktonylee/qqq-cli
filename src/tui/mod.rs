@@ -1796,6 +1796,8 @@ fn compose_inner(
                     continue;
                 }
                 let cancel_key = control && key.code == KeyCode::Char('c');
+                let reopening = matches!(&confirmation,
+                    Some(Confirmation::Action { action, .. }) if action.is_reopening());
                 if matches!(
                     action_ui,
                     Some(ActionUi::Input {
@@ -1809,6 +1811,7 @@ fn compose_inner(
                 }
                 if dashboard
                     && (cancel_key || key.code == KeyCode::Esc)
+                    && !reopening
                     && (!filter_query.is_empty() || filter_focused)
                 {
                     if key.code == KeyCode::Esc || filter_query.is_empty() {
@@ -1837,7 +1840,8 @@ fn compose_inner(
                 }
                 let editor_escape =
                     key.code == KeyCode::Esc && confirmation.is_none() && action_ui.is_none();
-                if dashboard && (editor_escape || (target_id.is_some() && cancel_key)) {
+                if dashboard && (editor_escape || (target_id.is_some() && cancel_key && !reopening))
+                {
                     if target_id.is_none() && draft.is_empty() && draft_parent_id.is_none() {
                         if let Some(pending) = confirm_buffers_exit(&buffers) {
                             confirmation = Some(pending);

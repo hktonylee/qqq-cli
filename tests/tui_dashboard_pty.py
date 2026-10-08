@@ -3040,6 +3040,10 @@ print(json.dumps({"result": result}))
             caret = (len("Foreign item retained") - 2, editor_row() + 1)
             wait_caret(lambda: editor_line().startswith("Foreign item retained"), caret)
             initial_detail = cli("show", "1")
+            if "cursor" in scenario:
+                send(CTRL_SLASH + b"Foreign\t")
+                wait_caret(lambda: filter_text() == "Filter: Foreign"
+                           and editor_line().startswith("Foreign item retained"), caret)
 
             def open_reopen():
                 send(b"\x07")
@@ -3051,6 +3055,9 @@ print(json.dumps({"result": result}))
             open_reopen()
             if "cursor" in scenario:
                 wait_visible(lambda: not visible.cursor_visible and not visible.pending)
+                send(b"\x03")
+                settle()
+                assert "Reopen task #1?" in visible.text() and filter_text() == "Filter: Foreign"
                 send(b"z123\x1b[D\x1b[B\x13\x1b[200~ignored\x1b[201~")
                 click(5, 2)
                 settle()
@@ -3065,6 +3072,7 @@ print(json.dumps({"result": result}))
                              and visible.cursor_visible)
                 wait_caret(lambda: editor_line().startswith("Foreign item retained")
                            and visible.cursor_visible, (caret[0], editor_row() + 1))
+                assert filter_text() == "Filter: Foreign"
                 assert cli("show", "1") == initial_detail
             else:
                 if scenario.endswith("narrow"):
@@ -3089,6 +3097,12 @@ print(json.dumps({"result": result}))
                 assert detail["events"][-1]["session"] == "worker"
                 for field in ("harness_name", "harness_session", "orchestrator_name", "orchestrator_session"):
                     assert detail["task"][field] is None
+                open_reopen()
+                send(b"\x03")
+                settle()
+                assert "Reopen task #1?" in visible.text() and not visible.cursor_visible
+                send(b"n")
+                wait_frame(lambda: "Task #1 (New)" in editor_title())
                 for task_id, status, key in [(2, "Error", b"Y"), (5, "Completed", b"y")]:
                     send(f"\x0b{task_id}\r".encode())
                     wait_visible(lambda: f"Task #{task_id} ({status}" in editor_title())
