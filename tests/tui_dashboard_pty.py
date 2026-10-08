@@ -35,7 +35,7 @@ with tempfile.TemporaryDirectory(prefix="qqq-dashboard-test-") as folder:
         env["NO_COLOR"] = "1"
     elif scenario == "dumb":
         env["TERM"] = "dumb"
-    if scenario.startswith(("buffers_", "long_description_", "prerequisites", "dirty_marker", "completed_toggle", "jump", "menu_error_", "force_complete", "list_selection", "tags", "orphan_reopen", "views")) and scenario.endswith("no_color"):
+    if scenario.startswith(("buffers_", "long_description_", "prerequisites", "dirty_marker", "completed_toggle", "jump", "menu_error_", "force_complete", "list_selection", "tags", "orphan_reopen", "views", "graph")) and scenario.endswith("no_color"):
         env["NO_COLOR"] = "1"
     for name in ("EDITOR", "QQQ_SESSION", "HERDR_ENV", "HERDR_PANE_ID", "CODEX_THREAD_ID", "CODEX_SESSION_ID"):
         env.pop(name, None)
@@ -226,6 +226,11 @@ print(json.dumps({"result": {"pane": pane}}))
         cli("add", "\n".join(f"Line{index:02}" for index in range(1, 13)))
     if scenario in ("prerequisites", "prerequisites_no_color"):
         cli("edit", "2", "--depends-on", "1")
+    if scenario.startswith("graph"):
+        cli("add", "Integration", "--depends-on", "1", "--depends-on", "2")
+        cli("add", "Later", "--parent", "3")
+        cli("edit", "3", "--set-tags", "inspect")
+        cli("view", "save", "Inspect", "--tag", "inspect")
     if scenario.startswith("tags"):
         cli("edit", "2", "--set-tags", "first, middle, last" if scenario.startswith("tags_editor") else "old")
     if scenario.startswith("views"):
@@ -417,6 +422,11 @@ print(json.dumps({"result": result}))
             if writable:
                 remaining = remaining[os.write(master, remaining):]
 
+    def wait_caret(predicate, caret):
+        wait_visible(lambda: predicate() and not visible.pending and not visible.decoder.getstate()[0]
+                     and (visible.x, visible.y) == caret
+                     and screen.endswith(f"\x1b[{caret[1] + 1};{caret[0] + 1}H".encode()))
+
     def click(column, row):
         send(f"\x1b[<0;{column};{row}M\x1b[<0;{column};{row}m".encode())
 
@@ -539,7 +549,126 @@ print(json.dumps({"result": result}))
             read_until(b"Second")
             assert "First" in visible.text() and "Second" in visible.text(), visible.text()
         assert not select.select([child.stdout], [], [], 0)[0], "TUI wrote stdout while open"
-        if scenario == "views_visibility":
+        if scenario.startswith("graph"):
+            initial = cli("list", "--all")
+            send(b"\x0b3\r")
+            wait_frame(lambda: "Task #3 (New)" in editor_title() and editor_line().startswith("Integration"))
+            send(b" retained\x1b[D\x1b[D")
+            wait_caret(lambda: editor_line().startswith("Integration retained"), (18, editor_row() + 1))
+            caret = (visible.x, visible.y)
+            send(b"\x0f")
+            wait_visible(lambda: "Dependency graph #3" in visible.text() and "Immediately ready: 1" in visible.text())
+            send(b"\x1b")
+            wait_caret(lambda: "Dependency graph #3" not in visible.text()
+                       and editor_line().startswith("Integration retained"), caret)
+            assert cli("list", "--all") == initial
+            # Direction/depth/scroll belong to popup, never editor.
+            send(b"\x0fu")
+            wait_visible(lambda: "upstream · depth 8" in visible.text())
+            send(b"\x1b[F")
+            wait_visible(lambda: "#3 <- #1 (prerequisite" in visible.text()
+                         and "#3 <- #2 (prerequisite" in visible.text())
+            send(b"d-")
+            wait_visible(lambda: "downstream · depth 7" in visible.text())
+            send(b"b+\x1b[6~")
+            wait_visible(lambda: "both · depth 8" in visible.text() and "Downstream dependents" in visible.text())
+            send(b"\x1b[5~\x1b[H")
+            wait_visible(lambda: "If only #3 were completed" in visible.text())
+            # Paste/mouse/Ctrl-S while modal open cannot touch or save draft.
+            send(b"\x1b[200~DO NOT INSERT\x1b[201~\x13")
+            click(2, 1)
+            send(b"\x03")
+            wait_caret(lambda: "Dependency graph #3" not in visible.text()
+                       and editor_line().startswith("Integration retained"), caret)
+            assert cli("list", "--all") == initial
+            # Park dirty saved task plus independent new-task/tag draft.
+            send(b"\x1b[1;2B\x1b[1;2B")
+            wait_frame(lambda: "New Task" in editor_title())
+            send(b"Unsaved\x0c")
+            wait_visible(lambda: "Tags new task" in visible.text())
+            send(b"staged\x13")
+            wait_frame(lambda: editor_line().startswith("Unsaved"))
+            send(b"\x0b3\r")
+            wait_caret(lambda: editor_line().startswith("Integration retained"), caret)
+            send(b"\x02")
+            wait_visible(lambda: "Choose view" in visible.text())
+            send(b"\x1b[B\r")
+            wait_caret(lambda: "View: Inspect" in editor_title()
+                       and editor_line().startswith("Integration retained"), caret)
+            # Filter focus/query and saved view survive cancel.
+            send(CTRL_SLASH + b"Integration\x0f")
+            wait_visible(lambda: "Dependency graph #3" in visible.text())
+            send(b"\x03")
+            wait_frame(lambda: filter_text() == "Filter: Integration"
+                       and "View: Inspect" in editor_title() and editor_line().startswith("Integration retained"))
+            send(b"\t\x0f")
+            wait_visible(lambda: "Dependency graph #3" in visible.text())
+            for width, height in [(32, 12), (150, 24), (72, 24)]:
+                fcntl.ioctl(slave, termios.TIOCSWINSZ, struct.pack("HHHH", height, width, 0, 0))
+                visible.resize(width, height)
+                os.kill(child.pid, signal.SIGWINCH)
+                wait_visible(lambda: "Dependency graph #3" in visible.text() and "u/d/b" in visible.text())
+                settle()
+            send(b"\x1b")
+            wait_caret(lambda: "View: Inspect" in editor_title() and filter_text() == "Filter: Integration", caret)
+            # Browse without key input while prerequisites complete externally.
+            send(b"\x0f")
+            wait_visible(lambda: "#3 Integration [prerequisite unfinished]" in visible.text())
+            send(b"\x1b[F")
+            wait_visible(lambda: "#3 <- #1 (prerequisite, unfinished)" in visible.text())
+            cli("next", "--local", "--session", "other", "--filter", "id == 1")
+            cli("complete", "1", "--session", "other")
+            wait_visible(lambda: "#3 <- #1 (prerequisite, completed)" in visible.text()
+                         and "#3 <- #2 (prerequisite, unfinished)" in visible.text())
+            send(b"\x1b[H")
+            wait_visible(lambda: "#3 Integration [prerequisite unfinished]" in visible.text())
+            cli("next", "--local", "--session", "other", "--filter", "id == 2")
+            cli("complete", "2", "--session", "other")
+            wait_visible(lambda: "#3 Integration [ready]" in visible.text())
+            send(b"\x1b")
+            wait_caret(lambda: editor_line().startswith("Integration retained"), caret)
+            # Manual editor scroll survives popup and refresh too.
+            send(b"\x1b[F")
+            body = "\n" + "\n".join(f"Row{index:02}" for index in range(1, 21))
+            send(b"\x1b[200~" + body.encode() + b"\x1b[201~")
+            wait_visible(lambda: "Row20" in visible.text())
+            wheel_editor(False, 20)
+            wait_visible(lambda: editor_line().startswith("Integration retained"))
+            wheel_editor(True, 2)
+            wait_visible(lambda: editor_line().startswith("Row06") and not visible.cursor_visible
+                         and not visible.pending and screen.endswith(b"\x1b[?25l"))
+            before_lines = [editor_line(i) for i in range(4)]
+            send(b"\x0f")
+            wait_visible(lambda: "Dependency graph #3" in visible.text())
+            cli("message", "3", "External refresh")
+            send(b"\x1b")
+            wait_visible(lambda: [editor_line(i) for i in range(4)] == before_lines
+                         and not visible.cursor_visible and screen.endswith(b"\x1b[?25l"))
+            # No mutation from inspector; DB still stores original text.
+            assert cli("show", "3")["task"]["description"] == "Integration"
+            send(b"\x1b")  # Clear live query before restoring new buffer.
+            wait_visible(lambda: not filter_text().startswith("Filter:"))
+            send(b"\x1b[1;2B")
+            wait_frame(lambda: "New Task" in editor_title() and editor_line().startswith("Unsaved"))
+            send(b"\x0c")
+            wait_visible(lambda: "Tags new task" in visible.text() and "staged" in visible.text())
+            send(b"\x1b")
+            wait_frame(lambda: "Tags new task" not in visible.text() and editor_line().startswith("Unsaved"))
+            send(b"\x0b3\r")
+            wait_visible(lambda: "Task #3" in editor_title() and [editor_line(i) for i in range(4)] == before_lines)
+            send(b"\x0f")
+            wait_visible(lambda: "Dependency graph #3" in visible.text())
+            # Deleted-task error stays inside popup; local and parked drafts survive.
+            with sqlite3.connect(Path(folder) / ".qqq" / "qqq.db") as db:
+                db.execute("DELETE FROM tasks WHERE id=3")
+            wait_visible(lambda: "Task 3 not found" in visible.text())
+            send(b"\x03")
+            wait_visible(lambda: "Dependency graph #3" not in visible.text()
+                         and [editor_line(i) for i in range(4)] == before_lines)
+            assert cli("show", "4")["task"]["description"] == "Later"
+            if scenario.endswith("no_color"):
+                assert b"\x1b[38;" not in screen and b"\x1b[48;" not in screen, screen[-2000:]
+        elif scenario == "views_visibility":
             wait_frame(lambda: "View: Backend" in editor_title() and completed_button_text() == "[× Completed]"
                        and "First" not in list_text() and "Second" not in list_text())
             assert cli("list", "--view", "Backend") == []
@@ -924,7 +1053,7 @@ print(json.dumps({"result": result}))
                              and (width < 150 or not visible.text().splitlines()[12][:split].strip())
                              and (not selected or editor_line().startswith("Changed Second"))
                              and visible.text().splitlines()[-1].rstrip() ==
-                             ("Ctrl-S Save  Ctrl-D Select  Ctrl-G Menu  Ctrl-L Tags  Ctrl-K Go to Task  Ctrl-P Create Child  Ctrl-B Views  Shift-Up/Dn Switch Tasks  Ctrl+/ Filter"
+                             ("Ctrl-S Save  Ctrl-D Select  Ctrl-G Menu  Ctrl-L Tags  Ctrl-K Go to Task  Ctrl-P Create Child  Ctrl-B Views  Shift-Up/Dn Switch Tasks  Ctrl+/ Filter  Ctrl-O Graph"
                               if selected else "Ctrl-S Save  Ctrl-L Tags  Ctrl-K Go to Task  Ctrl-P Create Child  Ctrl-B Views  Ctrl-G Menu  Shift-Up/Dn Switch Tasks  Ctrl+/ Filter")
                              and (visible.x, visible.y) == (8 if selected else 0, 14)
                              and not visible.pending and screen.endswith(final_cursor))

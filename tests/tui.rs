@@ -117,6 +117,12 @@ fn tui_bulk_selection_and_confirmation_support_compact_and_no_color() {
 }
 
 #[test]
+fn tui_dashboard_graph_inspector_preserves_drafts() {
+    dashboard_scenario("graph");
+    dashboard_scenario("graph_no_color");
+}
+
+#[test]
 fn tui_dashboard_named_views_preserve_open_dirty_task() {
     dashboard_scenario("views");
     dashboard_scenario("views_no_color");

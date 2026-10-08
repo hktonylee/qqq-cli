@@ -2069,7 +2069,7 @@ fn dashboard_paste_label_uses_gold_while_body_stays_neutral() {
 
 #[test]
 fn hotkey_footer_colors_shortcuts_and_clears_styles_for_messages() {
-    for width in [12, 17, 72, 79, 96] {
+    for width in [12, 17, 72, 79, 96, 200] {
         let layout = render::Layout::new(&["Draft".into()], &[], width.into());
         let mut terminal = Terminal::new(TestBackend::new(width, 24)).unwrap();
         for color in [true, false] {
@@ -2128,6 +2128,7 @@ fn hotkey_footer_colors_shortcuts_and_clears_styles_for_messages() {
                         && [
                             "Ctrl-S",
                             "Ctrl-B",
+                            "Ctrl-O",
                             "Ctrl-H",
                             "Ctrl-D",
                             "Ctrl-L",

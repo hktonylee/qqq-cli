@@ -6,6 +6,7 @@ mod conflict;
 mod dashboard;
 mod details;
 pub mod draft;
+mod graph_inspector;
 mod handoff;
 mod jump;
 mod panel;
@@ -936,6 +937,7 @@ fn compose_inner(
     let mut view_ui: Option<view_picker::Picker> = None;
     let mut bulk_ui: Option<bulk::View> = None;
     let mut bulk_selected = std::collections::BTreeSet::new();
+    let mut graph_ui: Option<graph_inspector::Inspector> = None;
     let mut save_revision_override = None;
     let mut saved_any = false;
     let mut buffers = DraftBuffers::default();
@@ -1193,13 +1195,27 @@ fn compose_inner(
                 usize::MAX,
             )
             .content;
-            let modal_lines = view_ui
+            if let Some(ui) = &mut graph_ui {
+                ui.refresh(
+                    mode.db().expect("dashboard has database"),
+                    list_version.expect("dashboard captures version"),
+                );
+            }
+            let modal_lines = graph_ui
                 .as_mut()
                 .map(|ui| {
                     ui.rows(
                         usize::from(popup_content.width),
                         usize::from(popup_content.height),
                     )
+                })
+                .or_else(|| {
+                    view_ui.as_mut().map(|ui| {
+                        ui.rows(
+                            usize::from(popup_content.width),
+                            usize::from(popup_content.height),
+                        )
+                    })
                 })
                 .or_else(|| {
                     conflict_ui.as_ref().map(|ui| {
@@ -1340,6 +1356,7 @@ fn compose_inner(
                     && conflict_ui.is_none()
                     && view_ui.is_none()
                     && bulk_ui.is_none()
+                    && graph_ui.is_none()
                     && match mouse.kind {
                         MouseEventKind::ScrollUp | MouseEventKind::ScrollDown => {
                             dashboard::wheel_area(size, mouse.column, mouse.row, filter_visible)
@@ -1371,7 +1388,7 @@ fn compose_inner(
         };
         match input {
             Event::Paste(text) if confirmation.is_none() && conflict_ui.is_none() => {
-                if view_ui.is_some() {
+                if view_ui.is_some() || graph_ui.is_some() {
                     continue;
                 } else if let Some(ui) = bulk_ui.as_mut() {
                     ui.paste(&text);
@@ -1506,6 +1523,17 @@ fn compose_inner(
                 }
             }
             Event::Key(mut key) if key.kind != KeyEventKind::Release => {
+                if let Some(ui) = &mut graph_ui {
+                    let area = dashboard::popup_layout(
+                        ratatui::layout::Rect::new(0, 0, size.0, size.1),
+                        usize::MAX,
+                    )
+                    .content;
+                    if ui.key(key, usize::from(area.height)) {
+                        graph_ui = None;
+                    }
+                    continue;
+                }
                 if let Some(mut ui) = view_ui.take() {
                     match ui.key(key) {
                         Some(view_picker::Action::Apply(view)) => {
@@ -1679,6 +1707,20 @@ fn compose_inner(
                     }
                 }
                 let control = key.modifiers.contains(KeyModifiers::CONTROL);
+                if dashboard
+                    && control
+                    && key.code == KeyCode::Char('o')
+                    && !key
+                        .modifiers
+                        .intersects(KeyModifiers::ALT | KeyModifiers::SUPER)
+                    && confirmation.is_none()
+                    && action_ui.is_none()
+                {
+                    if let Some(id) = target_id {
+                        graph_ui = Some(graph_inspector::Inspector::new(id));
+                    }
+                    continue;
+                }
                 if dashboard
                     && control
                     && key.code == KeyCode::Char('b')
