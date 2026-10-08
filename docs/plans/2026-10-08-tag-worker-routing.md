@@ -169,8 +169,8 @@ qqq next --explain --tag "界 面"
 - [x] Run `cargo fmt --check`, `git diff --check`, `CARGO_INCREMENTAL=0 cargo test --locked --offline`, `CARGO_INCREMENTAL=0 cargo clippy --locked --offline --all-targets -- -D warnings`; require zero failures.
 - [x] Request independent review through requesting-code-review skill; fix verified findings with regression tests, rerun affected/full checks if code changes.
 - [x] Build release `CARGO_INCREMENTAL=0 cargo build --release --locked --offline`; run isolated CLI script covering multiple exact tags, has_tag composition, owned reuse, no-match, explain and pre-DB invalid errors. Record results.
-- [ ] Mark plan completed, commit `[Docs] Document Tag Routing And Verification`. Follow finishing-a-development-branch skill: rebase onto master, full tests, fast-forward locally, full integrated verification. Install `CARGO_INCREMENTAL=0 cargo install --path . --locked --offline --force`; run isolated checks against installed binary, compare release/installed SHA256.
-- [ ] Record evidence with `qqq message 182`, complete task, read back status; remove own worktree and safely delete merged branch. Start one persistent `qqq next --wait --local --json`, retain live session without status polling.
+- [x] Mark plan completed, commit `[Docs] Document Tag Routing And Verification`. Follow finishing-a-development-branch skill: rebase onto master, full tests, fast-forward locally, full integrated verification. Install `CARGO_INCREMENTAL=0 cargo install --path . --locked --offline --force`; run isolated checks against installed binary, compare release/installed SHA256.
+Queue-worker handoff after implementation: record evidence with `qqq message 182`, complete task, read back status; remove own worktree and safely delete merged branch. Start one persistent `qqq next --wait --local --json`, retain live session without status polling.
 
 ## Verification Evidence
 
@@ -182,4 +182,6 @@ qqq next --explain --tag "界 面"
 - Formatting, diff check, strict all-targets Clippy passed.
 - Independent review: no findings requiring changes; reviewer CLI probes passed.
 - Release build passed; 29 isolated release CLI checks passed.
-- Local integration and installed-binary checks pending delivery steps below.
+- Local rebase and fast-forward integration completed. First integrated full run hit one existing Completed-toggle PTY timing failure; focused rerun passed, then full suite with four test threads passed all 747 tests across 43 binaries.
+- Installed `qqq 0.5.0`: 29 isolated CLI checks passed. Integrated release and installed SHA256 both `4edd1088e96fe64f2ef3196d789fa01311cc9fb8737534f618836ce14426b878`.
+- Verification logs: `/tmp/qqq-task-182-full.log`, `/tmp/qqq-task-182-integrated-full.log`, `/tmp/qqq-task-182-completed-toggle-rerun.log`, `/tmp/qqq-task-182-integrated-full-rerun.log`, `/tmp/qqq-task-182-clippy.log`, `/tmp/qqq-task-182-release-cli.log`, `/tmp/qqq-task-182-installed-cli.log`.
