@@ -211,11 +211,11 @@ conn.execute_batch("CREATE TRIGGER fail_second BEFORE INSERT ON tasks
 
 ## Task 4: Final Verification And Delivery
 
-- [ ] Run fmt, strict all-targets Clippy, full serial suite and release:
+- [x] Run fmt, strict all-targets Clippy, full serial suite and release:
   `cargo fmt --all -- --check`; `cargo clippy --locked --offline --all-targets
   -- -D warnings`; `cargo test --locked --offline -- --test-threads=1`;
   `cargo build --locked --offline --release`.
-- [ ] Request focused code review per skill; fix important findings with
+- [x] Request focused code review per skill; fix important findings with
   regression tests and rerun affected checks. Confirm DB schema stays13 and
   historical artifact hashes unchanged through compatibility suite.
 - [ ] Rebase onto current master, preserve concurrent work, fast-forward locally.
@@ -242,3 +242,10 @@ Task3 RED/GREEN: human preview initially omitted second line/tags; full safe
 preview now passes. Recipes14, CLI68 and autodetect27 pass (109 tests), including
 actual documented commands and bundled bug/release files. Output unit checks and
 strict Clippy pass. Full suite/review/integration/install remain pending.
+
+Task4 verification: initial full serial suite passed744 tests across43 binaries.
+Focused review found no important issues. Rebased cleanly onto bee72ab, preserving
+#182 tag routing. Fresh combined fmt, strict all-targets Clippy, release build and
+full serial suite pass:761 tests across44 binaries, including107 TUI tests and35
+compatibility checks. Schema remains13; historical artifacts unchanged. Local
+integration, root rebuild/install and installed-binary verification remain pending.
