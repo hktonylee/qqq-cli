@@ -747,6 +747,13 @@ fn tui_dashboard_tags_edit_clear_cancel_color_and_paste() {
 }
 
 #[test]
+fn tui_dashboard_tag_editor_enter_line_ctrl_s_save_and_ctrl_u_delete_line() {
+    for name in ["tags_editor", "tags_editor_no_color"] {
+        dashboard_scenario(name);
+    }
+}
+
+#[test]
 fn tui_dashboard_tags_preserve_dirty_drafts_caret_and_buffers() {
     dashboard_scenario("tags_dirty");
 }

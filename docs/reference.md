@@ -504,15 +504,18 @@ and press Ctrl+P to continue it. Ctrl-S creates child with dependency;
 Enter or Shift+Enter inserts newline. Navigating away retains child parent context.
 
 Ctrl+L opens tags for the selected task or new draft from editor or filter. Current
-labels are prefilled, one per line. Shift+Enter adds a line; Enter applies.
+labels are prefilled, one per line. Enter or Shift+Enter adds a line; Ctrl-S applies.
 Up/Down move caret between tag rows, preserving preferred display column across
 short rows. Left/Right move between characters; Home/End jump within current row.
-Typing, paste, Backspace/Delete and Shift+Enter edit at caret. Active row and
+Ctrl-A/Ctrl-E move to line start/end; Alt-Left/Alt-Right move by word. Ctrl-W deletes
+the previous word without crossing a line. Typing, terminal paste, Ctrl-V text
+paste, Backspace/Delete and Enter edit at caret. Active row and
 caret stay visible when tags exceed popup height or width.
 Blank lines are ignored; blank input clears tags. Newline/CRLF paste and legacy
-comma-separated input are accepted. Ctrl-U clears input, Esc/Ctrl-C cancels.
-Shortcuts share the popup footer; narrow popups use `^U` for Ctrl-U, `S-↵` for
-Shift+Enter and `↵` for Enter. Active input row stays visible in short terminals.
+comma-separated input are accepted. Ctrl-U deletes the current line while keeping
+other labels; delete each line to clear all tags. Esc/Ctrl-C cancels.
+Shortcuts share the popup footer; narrow popups use `^S` for Ctrl-S, `^U` for
+Ctrl-U and `↵` for Enter. Active input row stays visible in short terminals.
 List tags use yellow when color is enabled. Invalid labels stay in the popup. Tag saves
 retain unsaved description drafts, caret, scroll, parked buffers and filter
 focus. On a new general or child draft, applying tags only changes the draft;

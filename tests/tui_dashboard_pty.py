@@ -299,7 +299,7 @@ print(json.dumps({"result": {"pane": pane}}))
     if scenario in ("prerequisites", "prerequisites_no_color"):
         cli("edit", "2", "--depends-on", "1")
     if scenario.startswith("tags"):
-        cli("edit", "2", "--set-tags", "old")
+        cli("edit", "2", "--set-tags", "first, middle, last" if scenario.startswith("tags_editor") else "old")
     if scenario == "jump_archived":
         cli("archive", "2")
         for index in range(3, 21):
@@ -1021,7 +1021,7 @@ print(json.dumps({"result": result}))
                 return not visible.pending and screen.endswith(
                     b"\x1b[?25h" + f"\x1b[{visible.y + 1};{visible.x + 1}H".encode())
 
-            TAG_SHORTCUTS = "Ctrl-U clear Shift-Enter line Enter apply Esc"
+            TAG_SHORTCUTS = "Enter line Ctrl-S apply Ctrl-U delete line Esc"
 
             def assert_tag_shortcut_footer(shortcuts=TAG_SHORTCUTS):
                 rows = visible.text().splitlines()
@@ -1039,7 +1039,71 @@ print(json.dumps({"result": result}))
                              and frame_ready())
                 assert_tag_shortcut_footer()
 
-            if scenario.startswith("tags_new"):
+            if scenario.startswith("tags_editor"):
+                send(b"\x1b[1;2A")
+                wait_visible(lambda: "Task #2 (New)" in editor_title() and frame_ready())
+                send(b" dirty\x1b[D\x1b[D")
+                wait_visible(lambda: editor_line().startswith("Second dirty")
+                             and visible.x == 10 and frame_ready())
+                tag_task_before = cli("show", "2")
+                tag_cursor = (visible.x, visible.y)
+                open_tags()
+                send(b"\r")
+                wait_visible(lambda: "Tags task #2" in visible.text()
+                             and frame_ready()
+                             and "> " in visible.text().splitlines()[visible.y]
+                             and not visible.text().splitlines()[visible.y].split("> ", 1)[1].split("│", 1)[0].strip())
+                assert cli("show", "2") == tag_task_before
+                send("e\u0301🦀".encode())
+                wait_visible(lambda: "> e\u0301🦀" in visible.text() and frame_ready())
+                send(b"\x01\x05\x17\x17")
+                wait_visible(lambda: "> e\u0301🦀" not in visible.text()
+                             and "> last" in visible.text() and frame_ready())
+                send(b"\x15")
+                wait_visible(lambda: "> last" in visible.text().splitlines()[visible.y] and frame_ready())
+                send(b"\x1b[A\x15")
+                wait_visible(lambda: "> first" in visible.text() and "> last" in visible.text()
+                             and "> middle" not in visible.text() and frame_ready())
+                assert cli("show", "2") == tag_task_before
+                send(b"\x01" + "界 e\u0301🦀 ".encode() + b"\x05")
+                wait_visible(lambda: "> 界 e\u0301🦀 last" in visible.text() and frame_ready())
+                def last_column():
+                    row = visible.text().splitlines()[visible.y]
+                    prefix = row[:row.find("last")]
+                    return sum(0 if unicodedata.combining(ch) else
+                               2 if unicodedata.east_asian_width(ch) in ("W", "F") else 1
+                               for ch in prefix)
+
+                send(b"\x1b[1;3D")
+                wait_visible(lambda: last_column() == visible.x
+                             and frame_ready())
+                send(b"\x17")
+                wait_visible(lambda: "> 界 last" in visible.text() and frame_ready())
+                send(b"\x1b[1;3C")
+                wait_visible(lambda: visible.x == last_column() + 4
+                             and frame_ready())
+                send(b"\r\rnew")
+                wait_visible(lambda: "> new" in visible.text() and frame_ready())
+                assert cli("show", "2") == tag_task_before
+                send(b"\x13")
+                wait_visible(lambda: "Tags task #2" not in visible.text()
+                             and "Tags saved #2" in visible.text()
+                             and (visible.x, visible.y) == tag_cursor and frame_ready())
+                changed = cli("show", "2")
+                assert changed["task"]["tags"] == ["first", "界 last", "new"], changed
+                assert changed["task"]["description"] == "Second"
+                assert editor_line().startswith("Second dirty"), visible.text()
+                open_tags()
+                send(b"\x15\x15\x15\x15")
+                wait_visible(lambda: "> first" not in visible.text() and "> new" not in visible.text()
+                             and frame_ready())
+                send(b"\x03")
+                wait_visible(lambda: "Tags task #2" not in visible.text()
+                             and (visible.x, visible.y) == tag_cursor and frame_ready())
+                assert cli("show", "2") == changed
+                if scenario.endswith("no_color"):
+                    assert b"\x1b[38;" not in screen and b"\x1b[48;" not in screen
+            elif scenario.startswith("tags_new"):
                 def open_draft_tags():
                     send(b"\x0c")
                     wait_visible(lambda: "Tags new task" in visible.text()
@@ -1047,7 +1111,7 @@ print(json.dumps({"result": result}))
 
                 def apply_draft_tags(value):
                     open_draft_tags()
-                    send(b"\x15\x1b[200~" + value.encode() + b"\x1b[201~\r")
+                    send(b"\x15\x1b[200~" + value.encode() + b"\x1b[201~\x13")
                     wait_visible(lambda: "Tags new task" not in visible.text()
                                  and "Draft tags saved" in visible.text() and frame_ready())
                     assert cli("list") == tag_tasks_before
@@ -1067,7 +1131,7 @@ print(json.dumps({"result": result}))
                     wait_visible(lambda: "Discard draft?" not in visible.text() and frame_ready())
                     open_draft_tags()
                     assert "> frontend" in visible.text(), visible.text()
-                    send(b"\x15\r")
+                    send(b"\x15\x13")
                     wait_visible(lambda: "Draft tags saved" in visible.text()
                                  and "Tags new task" not in visible.text() and frame_ready())
                     assert "[*]" not in editor_title(), visible.text()
@@ -1109,10 +1173,10 @@ print(json.dumps({"result": result}))
                                  and visible.x == 8 and frame_ready())
                     draft_cursor = (visible.x, visible.y)
                     open_draft_tags()
-                    send(b"bad,,tag\r")
+                    send(b"bad,,tag\x13")
                     wait_visible(lambda: "nonempty labels" in visible.text() and frame_ready())
                     assert cli("list") == tag_tasks_before
-                    send("\x15\x1b[200~frontend\r\n界 面\nfrontend\x1b[201~\r".encode())
+                    send("\x15\x1b[200~frontend\r\n界 面\nfrontend\x1b[201~\x13".encode())
                     wait_visible(lambda: "Tags new task" not in visible.text()
                                  and "Draft tags saved" in visible.text()
                                  and (visible.x, visible.y) == draft_cursor and frame_ready())
@@ -1184,9 +1248,9 @@ print(json.dumps({"result": result}))
                 open_tags()
                 if scenario in ("tags", "tags_no_color"):
                     for width in (24, 42, 50, 51, 72):
-                        shortcuts = (TAG_SHORTCUTS if width >= 51
-                                     else "Ctrl-U Shift-Enter Enter Esc" if width >= 34
-                                     else "^U S-↵ ↵ Esc")
+                        shortcuts = (TAG_SHORTCUTS if width >= 52
+                                     else "Enter Ctrl-S Ctrl-U Esc" if width >= 30
+                                     else "↵ ^S ^U Esc")
                         clear_capture()
                         fcntl.ioctl(slave, termios.TIOCSWINSZ, struct.pack("HHHH", 24, width, 0, 0))
                         visible.resize(width, 24)
@@ -1194,19 +1258,19 @@ print(json.dumps({"result": result}))
                         wait_visible(lambda: shortcuts in visible.text()
                                      and "> old" in visible.text() and frame_ready())
                         assert_tag_shortcut_footer(shortcuts)
-                send(b"\x15bad,,tag\r")
+                send(b"\x15bad,,tag\x13")
                 wait_visible(lambda: "nonempty labels" in visible.text()
                              and "bad,,tag" in visible.text() and frame_ready())
                 assert_tag_shortcut_footer()
                 assert cli("show", "2") == tag_task_before
                 for invalid_paste in (b"front\tend", b"front\rend", b"front\x1bend"):
                     clear_capture()
-                    send(b"\x15\x1b[200~" + invalid_paste + b"\x1b[201~\r")
+                    send(b"\x15\x1b[200~" + invalid_paste + b"\x1b[201~\x13")
                     wait_visible(lambda: "Tags task #2" in visible.text()
                                  and "nonempty labels" in visible.text() and frame_ready())
                     assert_tag_shortcut_footer()
                     assert cli("show", "2") == tag_task_before
-                send(b"\x15\x1b[200~frontend\r\n" + "界 面".encode() + b"\r\nfrontend\x1b[201~\r")
+                send(b"\x15\x1b[200~frontend\r\n" + "界 面".encode() + b"\r\nfrontend\x1b[201~\x13")
                 wait_visible(lambda: "Tags task #2" not in visible.text()
                              and "[frontend]" in visible.text()
                              and "Tags saved #2" in visible.text()
@@ -1268,12 +1332,12 @@ print(json.dumps({"result": result}))
                     wait_visible(lambda: "> extra" in visible.text() and frame_ready())
                     assert_tag_shortcut_footer()
                     assert cli("show", "2") == changed
-                    send(b"\r")
+                    send(b"\x13")
                     wait_visible(lambda: "Tags task #2" not in visible.text() and frame_ready())
                     assert cli("show", "2")["task"]["tags"] == ["frontend", "界 面", "extra"]
                     open_tags()
                     paste = "\n".join(f"tag{index:02}" for index in range(30)).encode()
-                    send(b"\x15\x1b[200~" + paste + b"\x1b[201~")
+                    send(b"\x15" * 3 + b"\x1b[200~" + paste + b"\x1b[201~")
                     wait_visible(lambda: "> tag29" in visible.text()
                                  and frame_ready())
                     assert_tag_shortcut_footer()
@@ -1289,11 +1353,11 @@ print(json.dumps({"result": result}))
                     wait_visible(lambda: "Tags task #2" not in visible.text() and frame_ready())
                     assert cli("show", "2")["task"]["tags"] == ["frontend", "界 面", "extra"]
                     open_tags()
-                    send(b"\x15\x1b[200~legacy, comma\x1b[201~\r")
+                    send(b"\x15" * 3 + b"\x1b[200~legacy, comma\x1b[201~\x13")
                     wait_visible(lambda: "Tags task #2" not in visible.text() and frame_ready())
                     assert cli("show", "2")["task"]["tags"] == ["legacy", "comma"]
                     open_tags()
-                    send(b"\x15\r")
+                    send(b"\x15" * 2 + b"\x13")
                     wait_visible(lambda: "Tags task #2" not in visible.text()
                                  and "[frontend]" not in visible.text()
                                  and "Tags saved #2" in visible.text() and frame_ready())

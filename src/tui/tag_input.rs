@@ -1,4 +1,5 @@
 use super::render::{PopupKind, PopupRow};
+use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use unicode_segmentation::UnicodeSegmentation;
 use unicode_width::UnicodeWidthStr;
 
@@ -71,6 +72,147 @@ impl Cursor {
             .find('\n')
             .unwrap_or(value.len() - self.byte);
         self.column = None;
+    }
+
+    fn delete_line(&mut self, value: &mut String) {
+        let start = value[..self.byte].rfind('\n').map_or(0, |byte| byte + 1);
+        let end = value[start..].find('\n').map(|byte| start + byte);
+        let range = match end {
+            Some(end) => start..end + 1,
+            None if start > 0 => start - 1..value.len(),
+            None => 0..value.len(),
+        };
+        self.byte = range.start;
+        value.replace_range(range, "");
+        self.snap(value);
+    }
+
+    fn previous_word(&mut self, value: &str) {
+        let mut before = value[..self.byte].grapheme_indices(true).rev().peekable();
+        while let Some(&(byte, grapheme)) = before.peek() {
+            if !grapheme.chars().all(char::is_whitespace) {
+                break;
+            }
+            self.byte = byte;
+            before.next();
+        }
+        for (byte, grapheme) in before {
+            if grapheme.chars().all(char::is_whitespace) {
+                break;
+            }
+            self.byte = byte;
+        }
+        self.column = None;
+    }
+
+    fn next_word(&mut self, value: &str) {
+        let mut after = value[self.byte..].graphemes(true).peekable();
+        while let Some(grapheme) = after.peek() {
+            if !grapheme.chars().all(char::is_whitespace) {
+                break;
+            }
+            self.byte += grapheme.len();
+            after.next();
+        }
+        for grapheme in after {
+            if grapheme.chars().all(char::is_whitespace) {
+                break;
+            }
+            self.byte += grapheme.len();
+        }
+        self.column = None;
+    }
+
+    fn delete_previous_word(&mut self, value: &mut String) {
+        let end = self.byte;
+        let start = value[..end].rfind('\n').map_or(0, |byte| byte + 1);
+        self.byte -= start;
+        self.previous_word(&value[start..end]);
+        // Word deletion stops at current line; word navigation can cross lines.
+        self.byte += start;
+        value.replace_range(self.byte..end, "");
+        self.snap(value);
+    }
+
+    pub(super) fn edit(&mut self, value: &mut String, error: &mut String, key: KeyEvent) -> bool {
+        if key.modifiers.contains(KeyModifiers::SUPER) {
+            return false;
+        }
+        let control = key.modifiers.contains(KeyModifiers::CONTROL);
+        let alt = key.modifiers.contains(KeyModifiers::ALT);
+        let changed = match (key.code, control, alt) {
+            (KeyCode::Char('u'), true, false) => {
+                self.delete_line(value);
+                true
+            }
+            (KeyCode::Char('w'), true, false) => {
+                self.delete_previous_word(value);
+                true
+            }
+            (KeyCode::Char('a'), true, false) | (KeyCode::Home, false, false) => {
+                self.home(value);
+                false
+            }
+            (KeyCode::Char('e'), true, false) | (KeyCode::End, false, false) => {
+                self.end(value);
+                false
+            }
+            (KeyCode::Left, false, true) => {
+                self.previous_word(value);
+                false
+            }
+            (KeyCode::Right, false, true) => {
+                self.next_word(value);
+                false
+            }
+            (KeyCode::Char('v'), true, false) => {
+                match arboard::Clipboard::new().and_then(|mut clipboard| clipboard.get_text()) {
+                    Ok(text) => {
+                        self.insert(value, &text.replace("\r\n", "\n"));
+                        error.clear();
+                    }
+                    Err(failure) => *error = format!("Clipboard text unavailable: {failure}"),
+                }
+                return true;
+            }
+            (KeyCode::Left, false, false) => {
+                self.left(value);
+                false
+            }
+            (KeyCode::Right, false, false) => {
+                self.right(value);
+                false
+            }
+            (KeyCode::Up, false, false) | (KeyCode::Down, false, false) => {
+                self.vertical(value, key.code == KeyCode::Up);
+                false
+            }
+            (KeyCode::Enter, false, false) => {
+                self.insert(value, "\n");
+                true
+            }
+            (KeyCode::Tab, false, false) => {
+                self.insert(value, "\t");
+                true
+            }
+            (KeyCode::Backspace, false, false) => {
+                self.backspace(value);
+                true
+            }
+            (KeyCode::Delete, false, false) => {
+                self.delete(value);
+                true
+            }
+            (KeyCode::Char(ch), false, false) if !ch.is_control() => {
+                self.insert(value, &ch.to_string());
+                true
+            }
+            _ => return false,
+        };
+        if changed {
+            error.clear();
+        }
+        true
     }
 
     pub(super) fn vertical(&mut self, value: &str, up: bool) {
@@ -195,14 +337,14 @@ pub(super) fn rows(
             .map(|line| PopupRow::new(line, PopupKind::Error)),
     );
     if footer > 0 {
-        let full = "Ctrl-U clear Shift-Enter line Enter apply Esc";
-        let compact = "Ctrl-U Shift-Enter Enter Esc";
+        let full = "Enter line Ctrl-S apply Ctrl-U delete line Esc";
+        let compact = "Enter Ctrl-S Ctrl-U Esc";
         let shortcuts = if full.len() <= width {
             full
         } else if compact.len() <= width {
             compact
         } else {
-            "^U S-↵ ↵ Esc"
+            "↵ ^S ^U Esc"
         };
         rows.push(PopupRow::new(shortcuts, PopupKind::Hint));
     }
@@ -212,6 +354,115 @@ pub(super) fn rows(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn ctrl_u_removes_only_current_row_at_every_line_boundary() {
+        for (input, byte, expected, expected_byte) in [
+            ("first\nmiddle\nlast", 2, "middle\nlast", 0),
+            ("first\nmiddle\nlast", 8, "first\nlast", 6),
+            ("first\nmiddle\nlast", 17, "first\nmiddle", 12),
+            ("first\n", 6, "first", 5),
+            ("first\n\nlast", 6, "first\nlast", 6),
+            ("", 0, "", 0),
+            ("e\u{301}👩‍💻", 3, "", 0),
+            ("界\ne\u{301}👩‍💻\nlast", 7, "界\nlast", 4),
+        ] {
+            let mut value = input.to_owned();
+            let mut cursor = Cursor::at_end(&value);
+            cursor.byte = byte;
+            let mut error = "invalid label".to_owned();
+            assert!(cursor.edit(
+                &mut value,
+                &mut error,
+                KeyEvent::new(KeyCode::Char('u'), KeyModifiers::CONTROL),
+            ));
+            assert_eq!(value, expected, "input={input:?} byte={byte}");
+            assert_eq!(cursor.byte, expected_byte);
+            assert!(error.is_empty());
+        }
+    }
+
+    #[test]
+    fn word_shortcuts_match_editor_navigation_and_stop_deletion_at_newline() {
+        let text = "alpha  beta\n界 e\u{301}👩‍💻   ";
+        let mut value = text.to_owned();
+        let mut cursor = Cursor::at_end(&value);
+        let mut draft = super::super::draft::Draft::new(text);
+        let mut error = String::new();
+        for _ in 0..6 {
+            assert!(cursor.edit(
+                &mut value,
+                &mut error,
+                KeyEvent::new(KeyCode::Left, KeyModifiers::ALT)
+            ));
+            draft.previous_word();
+            assert_eq!(value[..cursor.byte].graphemes(true).count(), draft.cursor());
+        }
+        for _ in 0..6 {
+            assert!(cursor.edit(
+                &mut value,
+                &mut error,
+                KeyEvent::new(KeyCode::Right, KeyModifiers::ALT)
+            ));
+            draft.next_word();
+            assert_eq!(value[..cursor.byte].graphemes(true).count(), draft.cursor());
+        }
+        for _ in 0..6 {
+            assert!(cursor.edit(
+                &mut value,
+                &mut error,
+                KeyEvent::new(KeyCode::Char('w'), KeyModifiers::CONTROL)
+            ));
+            draft.delete_previous_word();
+            assert_eq!(value, draft.finish().unwrap().description);
+            assert!(value.starts_with("alpha  beta\n"));
+        }
+    }
+
+    #[test]
+    fn editor_keys_keep_caret_on_graphemes_and_leave_save_to_caller() {
+        let mut value = "first\ne\u{301}👩‍💻".to_owned();
+        let mut cursor = Cursor::at_end(&value);
+        let mut error = String::new();
+        assert!(cursor.edit(
+            &mut value,
+            &mut error,
+            KeyEvent::new(KeyCode::Char('a'), KeyModifiers::CONTROL)
+        ));
+        assert_eq!(cursor.byte, "first\n".len());
+        assert!(cursor.edit(
+            &mut value,
+            &mut error,
+            KeyEvent::new(KeyCode::Delete, KeyModifiers::NONE)
+        ));
+        assert_eq!(value, "first\n👩‍💻");
+        assert!(cursor.edit(
+            &mut value,
+            &mut error,
+            KeyEvent::new(KeyCode::Char('e'), KeyModifiers::CONTROL)
+        ));
+        assert_eq!(cursor.byte, value.len());
+        for modifiers in [KeyModifiers::NONE, KeyModifiers::SHIFT] {
+            assert!(cursor.edit(
+                &mut value,
+                &mut error,
+                KeyEvent::new(KeyCode::Enter, modifiers)
+            ));
+        }
+        assert_eq!(value, "first\n👩‍💻\n\n");
+        for modifiers in [
+            KeyModifiers::CONTROL,
+            KeyModifiers::CONTROL | KeyModifiers::ALT,
+            KeyModifiers::CONTROL | KeyModifiers::SUPER,
+        ] {
+            assert!(!cursor.edit(
+                &mut value,
+                &mut error,
+                KeyEvent::new(KeyCode::Char('s'), modifiers)
+            ));
+            assert_eq!(value, "first\n👩‍💻\n\n");
+        }
+    }
 
     #[test]
     fn vertical_navigation_keeps_preferred_column_across_short_unicode_rows() {

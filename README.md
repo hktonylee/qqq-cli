@@ -87,6 +87,8 @@ Add tags with `qqq add "Fix layout" --tag frontend --tag bug`; lists show
 clear via `--set-tags ""`, or edit selected task tags with Ctrl-L in TUI.
 On a new draft, Ctrl-L stages tags before Ctrl-S creates the task. Workers see
 the description and tags together when the task enters the queue.
+In the tag editor, Enter adds a line, Ctrl-S applies tags, Ctrl-U deletes the
+current line, and Esc/Ctrl-C cancels.
 
 See [batch schema and piping examples](docs/reference.md#atomic-batch-import).
 

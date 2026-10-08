@@ -1797,21 +1797,27 @@ fn compose_inner(
                     continue;
                 }
                 if let Some(mut ui) = action_ui.take() {
-                    if control && key.code == KeyCode::Char('u') {
-                        if let ActionUi::Input {
-                            kind: ActionInputKind::Tags,
-                            value,
-                            error,
-                            cursor,
-                            ..
-                        } = &mut ui
-                        {
-                            value.clear();
-                            *cursor = tag_input::Cursor::at_end(value);
-                            error.clear();
+                    if let ActionUi::Input {
+                        kind: ActionInputKind::Tags,
+                        value,
+                        error,
+                        cursor,
+                        ..
+                    } = &mut ui
+                    {
+                        if cursor.edit(value, error, key) {
+                            action_ui = Some(ui);
+                            continue;
                         }
-                        action_ui = Some(ui);
-                        continue;
+                        if control
+                            && key.code == KeyCode::Char('s')
+                            && !key
+                                .modifiers
+                                .intersects(KeyModifiers::ALT | KeyModifiers::SUPER)
+                        {
+                            key =
+                                crossterm::event::KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE);
+                        }
                     }
                     if control && key.code == KeyCode::Char('c') {
                         if let Some(pending) = confirm_buffers_exit(&buffers) {
@@ -1926,45 +1932,11 @@ fn compose_inner(
                             kind,
                             mut value,
                             mut error,
-                            mut cursor,
+                            cursor,
                         } => match key.code {
                             KeyCode::Esc => (),
-                            KeyCode::Left
-                            | KeyCode::Right
-                            | KeyCode::Up
-                            | KeyCode::Down
-                            | KeyCode::Home
-                            | KeyCode::End
-                            | KeyCode::Delete
-                                if matches!(kind, ActionInputKind::Tags) =>
-                            {
-                                match key.code {
-                                    KeyCode::Left => cursor.left(&value),
-                                    KeyCode::Right => cursor.right(&value),
-                                    KeyCode::Up => cursor.vertical(&value, true),
-                                    KeyCode::Down => cursor.vertical(&value, false),
-                                    KeyCode::Home => cursor.home(&value),
-                                    KeyCode::End => cursor.end(&value),
-                                    KeyCode::Delete => {
-                                        cursor.delete(&mut value);
-                                        error.clear();
-                                    }
-                                    _ => unreachable!(),
-                                }
-                                action_ui = Some(ActionUi::Input {
-                                    id,
-                                    kind,
-                                    value,
-                                    error,
-                                    cursor,
-                                });
-                            }
                             KeyCode::Backspace => {
-                                if matches!(kind, ActionInputKind::Tags) {
-                                    cursor.backspace(&mut value);
-                                } else if let Some((index, _)) =
-                                    value.grapheme_indices(true).next_back()
-                                {
+                                if let Some((index, _)) = value.grapheme_indices(true).next_back() {
                                     value.truncate(index);
                                 }
                                 error.clear();
@@ -1978,27 +1950,9 @@ fn compose_inner(
                             }
                             KeyCode::Char(ch) => {
                                 if !ch.is_control() {
-                                    if matches!(kind, ActionInputKind::Tags) {
-                                        cursor.insert(&mut value, &ch.to_string());
-                                    } else {
-                                        value.push(ch);
-                                    }
+                                    value.push(ch);
                                     error.clear();
                                 }
-                                action_ui = Some(ActionUi::Input {
-                                    id,
-                                    kind,
-                                    value,
-                                    error,
-                                    cursor,
-                                });
-                            }
-                            KeyCode::Enter
-                                if matches!(kind, ActionInputKind::Tags)
-                                    && key.modifiers.contains(KeyModifiers::SHIFT) =>
-                            {
-                                cursor.insert(&mut value, "\n");
-                                error.clear();
                                 action_ui = Some(ActionUi::Input {
                                     id,
                                     kind,
@@ -2571,7 +2525,7 @@ mod tests {
         );
         assert_eq!(
             rows.last().unwrap().text,
-            "Ctrl-U clear Shift-Enter line Enter apply Esc"
+            "Enter line Ctrl-S apply Ctrl-U delete line Esc"
         );
         for color in [true, false] {
             let mut terminal =
