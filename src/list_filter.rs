@@ -2,7 +2,8 @@ use crate::db::Task;
 use clap::ValueEnum;
 use std::collections::{HashMap, HashSet};
 
-#[derive(Clone, Copy, ValueEnum)]
+#[derive(Clone, Copy, Debug, ValueEnum, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "snake_case")]
 pub enum ListStatus {
     New,
     #[value(name = "in_progress")]
@@ -12,7 +13,7 @@ pub enum ListStatus {
 }
 
 impl ListStatus {
-    fn as_str(self) -> &'static str {
+    pub fn as_str(self) -> &'static str {
         match self {
             Self::New => "new",
             Self::InProgress => "in_progress",

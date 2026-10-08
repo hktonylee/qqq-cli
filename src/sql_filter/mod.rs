@@ -8,6 +8,7 @@ use full_moon::{
 };
 use rusqlite::types::Value;
 
+#[derive(Clone)]
 pub struct CompiledFilter {
     sql: String,
     params: Vec<Value>,
@@ -36,12 +37,45 @@ impl CompiledFilter {
     pub fn matches_tags(&self, tags: &[String]) -> bool {
         self.required_tags.iter().all(|tag| tags.contains(tag))
     }
+    pub fn require_query(&mut self, query: &str) {
+        self.params.push(Value::Text(query.to_owned()));
+        self.require_static(&format!("qqq_contains(description,?{})", self.params.len()));
+    }
+    pub fn require_statuses(&mut self, statuses: &[&str]) {
+        if statuses.is_empty() {
+            return;
+        }
+        let mut parameters = Vec::with_capacity(statuses.len());
+        for status in statuses {
+            self.params.push(Value::Text((*status).to_owned()));
+            parameters.push(format!("?{}", self.params.len()));
+        }
+        self.require_static(&format!("status IN ({})", parameters.join(",")));
+    }
+    /// Only compiler-generated SQL or trusted application predicates may be passed.
+    pub(crate) fn require_static(&mut self, predicate: &str) {
+        self.sql = format!("({}) AND ({predicate})", self.sql);
+    }
     pub fn sql(&self) -> &str {
         &self.sql
     }
     pub fn params(&self) -> &[Value] {
         &self.params
     }
+}
+
+pub fn register(conn: &rusqlite::Connection) -> rusqlite::Result<()> {
+    use rusqlite::functions::FunctionFlags;
+    conn.create_scalar_function(
+        "qqq_contains",
+        2,
+        FunctionFlags::SQLITE_UTF8 | FunctionFlags::SQLITE_DETERMINISTIC,
+        |ctx| {
+            let text = ctx.get::<String>(0)?;
+            let query = ctx.get::<String>(1)?;
+            Ok(text.to_lowercase().contains(&query.to_lowercase()))
+        },
+    )
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

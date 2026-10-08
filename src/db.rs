@@ -484,6 +484,7 @@ impl Db {
                 .join("images"),
         );
         let mut conn = Connection::open_with_flags(&path, flags)?;
+        crate::sql_filter::register(&conn)?;
         conn.busy_timeout(Duration::from_secs(10))?;
         conn.pragma_update(None, "foreign_keys", "ON")?;
         let version: i64 = conn.pragma_query_value(None, "user_version", |r| r.get(0))?;
@@ -621,6 +622,7 @@ impl Db {
         // existing sidecars before SQLite touches the live project.
         ensure_read_only_safe(&path)?;
         let conn = Connection::open_with_flags(&path, OpenFlags::SQLITE_OPEN_READ_ONLY)?;
+        crate::sql_filter::register(&conn)?;
         conn.busy_timeout(Duration::from_secs(10))?;
         ensure_read_only_safe(&path)?;
         conn.pragma_update(None, "query_only", "ON")?;

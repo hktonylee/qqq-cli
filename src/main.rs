@@ -19,6 +19,7 @@ mod preflight;
 mod process;
 mod queue;
 mod recipe;
+mod selection;
 mod session;
 mod snapshot;
 mod sql_filter;
@@ -145,24 +146,16 @@ enum Commands {
         /// Include archived tasks in dashboard browsing.
         #[arg(long)]
         include_archived: bool,
+        #[command(flatten)]
+        selectors: selection::Selectors,
     },
     /// List tasks as a dependency tree; JSON preserves whole text.
     List {
         /// Include archived tasks; default list hides them.
         #[arg(long)]
         include_archived: bool,
-        /// Match a Luau expression compiled to SQLite; see docs/filter.md.
-        #[arg(long, value_name = "EXPR", allow_hyphen_values = true)]
-        filter: Option<String>,
-        /// Require exact stored tag; repeat to require every label.
-        #[arg(long = "tag", value_name = "LABEL", allow_hyphen_values = true)]
-        tags: Vec<String>,
-        /// Match text anywhere in the full description, ignoring Unicode case.
-        #[arg(long, value_name = "TEXT", allow_hyphen_values = true)]
-        query: Option<String>,
-        /// Include a status; repeat to match any supplied status.
-        #[arg(long = "status", value_enum, value_name = "STATUS")]
-        statuses: Vec<list_filter::ListStatus>,
+        #[command(flatten)]
+        selectors: selection::Selectors,
         /// Maximum completed tasks to show; overrides human display default. 0 hides completed tasks.
         #[arg(long, value_parser = clap::value_parser!(i64).range(0..))]
         max_completed: Option<i64>,
@@ -264,12 +257,8 @@ enum Commands {
     },
     /// Return owned task or atomically claim highest-priority ready task (oldest ID on ties).
     Next {
-        /// Filter queued candidates with Luau; normal next still returns owned task. See docs/filter.md.
-        #[arg(long, value_name = "EXPR", allow_hyphen_values = true)]
-        filter: Option<String>,
-        /// Require exact stored tag; repeat to require every label.
-        #[arg(long = "tag", value_name = "LABEL", allow_hyphen_values = true)]
-        tags: Vec<String>,
+        #[command(flatten)]
+        selectors: selection::Selectors,
         /// Wait until a task is available to claim or preview.
         #[arg(long)]
         wait: bool,
@@ -354,11 +343,8 @@ fn local_owner(cli: &Cli, project_dir: &std::path::Path, db: &db::Db) -> Result<
     }
     resolved_owner(None, project_dir, db)
 }
-fn execute(
-    cli: Cli,
-    display_limit: Option<i64>,
-    filter: Option<&sql_filter::CompiledFilter>,
-) -> Result<Value> {
+fn execute(cli: Cli, selection: &selection::Prepared) -> Result<Value> {
+    let filter = selection.filter.as_ref();
     if let Commands::Config {
         list,
         get,
@@ -607,7 +593,9 @@ fn execute(
                 }
             }
         }
-        Commands::Tui { include_archived } => {
+        Commands::Tui {
+            include_archived, ..
+        } => {
             let settings = config::load_tui().map_err(cli_error::config_error)?;
             tui::compose_dashboard(
                 &mut db,
@@ -712,22 +700,7 @@ fn execute(
             )?;
             Value::Null
         }
-        Commands::List {
-            max_completed,
-            query,
-            statuses,
-            include_archived,
-            ..
-        } => {
-            let (tasks, matches) =
-                db.list_filtered(max_completed.or(display_limit), include_archived, filter)?;
-            json!(list_filter::filter_tasks(
-                tasks,
-                query.as_deref(),
-                &statuses,
-                matches.as_ref()
-            ))
-        }
+        Commands::List { .. } => json!(selection::list(&db, selection, None)?),
         Commands::Show {
             id,
             export_image,
@@ -992,37 +965,47 @@ fn execute(
     })
 }
 fn run(cli: Cli) -> Result<(Option<String>, bool)> {
-    let tags = match &cli.command {
-        Commands::List { tags, .. } | Commands::Next { tags, .. } => tags::normalize(tags)
-            .map_err(|error| errors::Info::invalid_argument("--tag", error.to_string()))?,
-        _ => Vec::new(),
-    };
-    let mut filter = match &cli.command {
-        Commands::List { filter, .. } | Commands::Next { filter, .. } => filter
-            .as_deref()
-            .map(sql_filter::compile)
-            .transpose()
-            .map_err(|error| {
-                cli_error::annotate(
-                    error,
-                    errors::Info::new(errors::Code::InvalidFilter, "Invalid --filter expression")
-                        .detail("argument", "--filter"),
-                )
-            })?,
-        _ => None,
-    };
-    if !tags.is_empty() {
-        filter
-            .get_or_insert_with(sql_filter::CompiledFilter::all)
-            .require_tags(tags);
-    }
-    let is_tui = matches!(&cli.command, Commands::Tui { .. });
-    let filtered_list = match &cli.command {
+    let mut prepared = match &cli.command {
         Commands::List {
-            query, statuses, ..
-        } => query.is_some() || !statuses.is_empty() || filter.is_some(),
-        _ => false,
+            selectors,
+            include_archived,
+            max_completed,
+            all,
+            ..
+        } => selection::prepare(
+            None,
+            selectors,
+            selection::Visibility {
+                include_archived: Some(*include_archived),
+                max_completed: if *all {
+                    Some(None)
+                } else {
+                    max_completed.map(Some)
+                },
+                ..Default::default()
+            },
+        )?,
+        Commands::Next {
+            selectors,
+            include_archived,
+            ..
+        }
+        | Commands::Tui {
+            selectors,
+            include_archived,
+            ..
+        } => selection::prepare(
+            None,
+            selectors,
+            selection::Visibility {
+                include_archived: Some(*include_archived),
+                ..Default::default()
+            },
+        )?,
+        _ => selection::Prepared::default(),
     };
+    let is_tui = matches!(&cli.command, Commands::Tui { .. });
+    let filtered_list = matches!(&cli.command, Commands::List { .. }) && prepared.filter.is_some();
     let display_limit = match &cli.command {
         Commands::List {
             all: false,
@@ -1036,26 +1019,25 @@ fn run(cli: Cli) -> Result<(Option<String>, bool)> {
             .transpose()?,
         _ => None,
     };
+    if matches!(&cli.command, Commands::List { .. }) && prepared.max_completed.is_none() {
+        prepared.max_completed = display_limit;
+    }
     if let Commands::List {
         watch: true,
-        max_completed,
-        include_archived,
         oneline,
-        query,
-        statuses,
         ..
     } = &cli.command
     {
         preflight::current_project()?;
         watch::run(watch::WatchOptions {
             json_output: cli.json,
-            max_completed: max_completed.or(display_limit),
-            include_archived: *include_archived,
+            max_completed: prepared.max_completed,
+            include_archived: prepared.include_archived,
             oneline: *oneline,
             display_limited: display_limit.is_some(),
-            query: query.as_deref(),
-            statuses,
-            filter: filter.as_ref(),
+            query: None,
+            statuses: &[],
+            filter: prepared.filter.as_ref(),
         })?;
         return Ok((None, false));
     }
@@ -1067,7 +1049,7 @@ fn run(cli: Cli) -> Result<(Option<String>, bool)> {
     }
     let is_doctor = matches!(&cli.command, Commands::Doctor);
     let format = output::Format::from(&cli.command);
-    let value = execute(cli, display_limit, filter.as_ref())?;
+    let value = execute(cli, &prepared)?;
     if is_tui {
         return Ok((None, false));
     }
