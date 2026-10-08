@@ -677,3 +677,83 @@ pub fn render(value: &serde_json::Value, columns: Option<usize>) -> String {
         .collect::<Vec<_>>()
         .join("\n")
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn traversal_uses_shortest_hops_once_even_with_cycles_and_many_shared_paths() {
+        let graph = HashMap::from([
+            (1, vec![2, 3]),
+            (2, vec![4]),
+            (3, vec![4, 5]),
+            (4, vec![5, 1]),
+        ]);
+        let reach = distances(1, &graph);
+        assert_eq!(reach.depths[&5], 2);
+        assert_eq!(reach.depths.len(), 5);
+        assert_eq!(reach.order.len(), 5);
+        let (ids, available, depth_omitted) = displayed_ids(
+            &reach,
+            &reach,
+            Options {
+                depth: 1,
+                max_nodes: 2,
+                ..Options::default()
+            },
+        );
+        assert!(ids.contains(&1));
+        assert_eq!(ids.len(), 2);
+        assert_eq!(available, 3);
+        assert_eq!(depth_omitted, 2);
+    }
+
+    #[test]
+    fn human_clipping_keeps_whole_graphemes_within_unicode_cell_width() {
+        let report = Report {
+            format_version: 1,
+            task_id: 1,
+            direction: Direction::Both,
+            depth: 0,
+            max_nodes: 1,
+            max_edges: 1,
+            focus: Node {
+                id: 1,
+                task_name: Some("雪👩‍💻é".into()),
+                status: Some("new".into()),
+                archived: Some(false),
+                ready: true,
+                reasons: vec![],
+                unfinished_dependencies: 0,
+                upstream_depth: Some(0),
+                downstream_depth: Some(0),
+                blocks_focus: false,
+                impact: None,
+                remaining_after_completion: None,
+            },
+            nodes: vec![],
+            edges: vec![],
+            impact: Impact::default(),
+            limits: Limits {
+                available_nodes: 1,
+                shown_nodes: 1,
+                omitted_by_depth: 0,
+                omitted_by_node_limit: 0,
+                available_edges: 0,
+                shown_edges: 0,
+                omitted_edges: 0,
+            },
+            diagnostics: Diagnostics {
+                missing_references: 0,
+                cycle_detected: false,
+            },
+        };
+        for columns in 0..20 {
+            let output = render(&serde_json::json!(report), Some(columns));
+            assert!(output.lines().all(|line| line.width() <= columns));
+            assert!(!output.contains("👩‍") || output.contains("👩‍💻"));
+            assert!(!output.contains('e') || !output.contains("雪👩‍💻e") || output.contains("é"));
+        }
+    }
+}

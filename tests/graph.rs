@@ -217,3 +217,289 @@ fn graph_human_output_is_plain_sanitized_and_deterministic() {
         run(p, &["graph", "1"]).stdout
     );
 }
+
+fn node(report: &Value, id: i64) -> &Value {
+    report["nodes"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|node| node["id"] == id)
+        .unwrap()
+}
+fn database(p: &Path) -> rusqlite::Connection {
+    rusqlite::Connection::open(p.join(".qqq/qqq.db")).unwrap()
+}
+
+#[test]
+fn graph_diamond_counts_each_descendant_once_and_matches_live_readiness() {
+    let dir = project();
+    let p = dir.path();
+    ok(p, &["add", "Root"]);
+    ok(p, &["add", "Left", "--parent", "1"]);
+    ok(p, &["add", "Right", "--depends-on", "1"]);
+    ok(p, &["add", "Shared", "--parent", "2", "--depends-on", "3"]);
+    ok(p, &["add", "Leaf", "--parent", "4"]);
+    let report = ok(p, &["graph", "1"]);
+    assert_eq!(report["impact"]["direct_dependents"], 2);
+    assert_eq!(report["impact"]["transitive_dependents"], 4);
+    assert_eq!(report["impact"]["indirect_dependents"], 2);
+    assert_eq!(report["impact"]["immediately_ready"], 2);
+    assert_eq!(node(&report, 4)["downstream_depth"], 2);
+    assert_eq!(report["nodes"].as_array().unwrap().len(), 5);
+    assert_eq!(
+        ok(p, &["graph", "5", "--direction", "downstream"])["nodes"]
+            .as_array()
+            .unwrap()
+            .len(),
+        1
+    );
+    ok(p, &["next", "--local", "--session", "owner"]);
+    ok(p, &["complete", "1", "--session", "owner"]);
+    let report = ok(p, &["graph", "1"]);
+    assert_eq!(report["impact"]["immediately_ready"], 0);
+    assert_eq!(report["impact"]["already_ready"], 2);
+    let ready = ok(p, &["list", "--readiness", "ready"]);
+    assert_eq!(
+        ready
+            .as_array()
+            .unwrap()
+            .iter()
+            .filter(|task| task["context_only"] != true)
+            .map(|task| task["id"].as_i64().unwrap())
+            .collect::<Vec<_>>(),
+        vec![2, 3]
+    );
+    let up = ok(p, &["graph", "4", "--direction", "upstream"]);
+    assert!(node(&up, 2)["blocks_focus"].as_bool().unwrap());
+    assert_eq!(
+        node(&up, 1)["blocks_focus"],
+        false,
+        "completed root terminates blocker traversal"
+    );
+    assert_eq!(
+        node(&up, 1)["upstream_depth"],
+        2,
+        "historical edge remains visible"
+    );
+}
+
+#[test]
+fn graph_mixed_states_and_two_prerequisites_share_queue_readiness() {
+    let dir = project();
+    let p = dir.path();
+    let db = database(p);
+    db.execute_batch("INSERT INTO tasks(id,description,status,archived,claim_key) VALUES
+        (1,'Root','new',0,NULL),(2,'Failed blocker','error',0,NULL),(3,'Archived blocker','new',1,NULL),
+        (4,'Archived completed','completed',1,NULL),(5,'Immediate','new',0,NULL),(6,'Two blockers','new',0,NULL),
+        (7,'Archived dependent','new',1,NULL),(8,'Running dependent','in_progress',0,'manual'),(9,'Done dependent','completed',0,NULL),
+        (10,'Failed dependent','error',0,NULL),(11,'Archived dependency candidate','new',0,NULL);
+        INSERT INTO task_dependencies(task_id,prerequisite_id) VALUES
+        (5,1),(5,4),(6,1),(6,2),(7,1),(8,1),(9,1),(10,1),(11,1),(11,3);").unwrap();
+    drop(db);
+    let report = ok(p, &["graph", "1"]);
+    assert_eq!(report["impact"]["direct_dependents"], 7);
+    assert_eq!(report["impact"]["immediately_ready"], 1);
+    assert_eq!(report["impact"]["still_blocked"], 2);
+    assert_eq!(report["impact"]["inactive_dependents"], 4);
+    assert_eq!(node(&report, 5)["remaining_after_completion"], 0);
+    assert_eq!(node(&report, 6)["remaining_after_completion"], 1);
+    let blocked = ok(p, &["graph", "6", "--direction", "upstream"]);
+    assert_eq!(node(&blocked, 2)["reasons"], serde_json::json!(["error"]));
+    let archived = ok(p, &["graph", "11", "--direction", "upstream"]);
+    assert_eq!(
+        node(&archived, 3)["reasons"],
+        serde_json::json!(["archived"])
+    );
+    let db = database(p);
+    db.execute("UPDATE tasks SET status='completed' WHERE id=1", [])
+        .unwrap();
+    drop(db);
+    assert_eq!(ok(p, &["graph", "1"])["impact"]["already_ready"], 1);
+    let ready = ok(p, &["list", "--readiness", "ready"]);
+    assert_eq!(
+        ready
+            .as_array()
+            .unwrap()
+            .iter()
+            .filter(|task| task["context_only"] != true)
+            .map(|task| task["id"].as_i64().unwrap())
+            .collect::<Vec<_>>(),
+        vec![5]
+    );
+    let db = database(p);
+    db.execute("UPDATE tasks SET status='completed' WHERE id=2", [])
+        .unwrap();
+    drop(db);
+    assert_eq!(ok(p, &["graph", "6"])["focus"]["ready"], true);
+    assert_eq!(ok(p, &["graph", "11"])["focus"]["ready"], false);
+}
+
+#[test]
+fn graph_corrupt_cycles_dangling_links_and_duplicate_edge_kinds_remain_read_only() {
+    let dir = project();
+    let p = dir.path();
+    let db = database(p);
+    db.execute_batch("PRAGMA foreign_keys=OFF;
+        INSERT INTO tasks(id,description,parent_id) VALUES (1,'Cycle root',2),(2,'Cycle child',1),(3,'Missing parent',900),(4,'Missing extra',NULL);
+        INSERT INTO task_dependencies(task_id,prerequisite_id) VALUES (2,1),(4,901),(902,1);").unwrap();
+    drop(db);
+    let before = files(p);
+    let report = ok(p, &["graph", "1"]);
+    assert_eq!(report["diagnostics"]["cycle_detected"], true);
+    assert_eq!(report["diagnostics"]["missing_references"], 3);
+    assert_eq!(report["impact"]["direct_dependents"], 1);
+    assert_eq!(report["impact"]["transitive_dependents"], 1);
+    assert_eq!(node(&report, 2)["unfinished_dependencies"], 1);
+    assert_eq!(node(&report, 902)["status"], Value::Null);
+    assert_eq!(
+        node(&report, 902)["reasons"],
+        serde_json::json!(["missing_task"])
+    );
+    let edges = report["edges"].as_array().unwrap();
+    assert_eq!(
+        edges
+            .iter()
+            .filter(|edge| edge["dependent"] == 2 && edge["prerequisite"] == 1)
+            .count(),
+        2
+    );
+    let missing = ok(p, &["graph", "3"]);
+    assert_eq!(node(&missing, 900)["blocks_focus"], true);
+    assert_eq!(missing["focus"]["ready"], false);
+    let missing = ok(p, &["graph", "4"]);
+    assert_eq!(node(&missing, 901)["blocks_focus"], true);
+    assert_eq!(files(p), before);
+}
+
+#[test]
+fn graph_deep_and_shared_layers_have_exact_totals_and_bounded_presentation() {
+    let dir = project();
+    let p = dir.path();
+    let mut db = database(p);
+    let tx = db.transaction().unwrap();
+    for id in 1..=1800 {
+        tx.execute(
+            "INSERT INTO tasks(id,description,parent_id) VALUES (?1,?2,?3)",
+            rusqlite::params![id, format!("Chain {id}"), (id > 1).then_some(id - 1)],
+        )
+        .unwrap();
+    }
+    tx.commit().unwrap();
+    let report = ok(
+        p,
+        &[
+            "graph",
+            "1",
+            "--depth",
+            "128",
+            "--max-nodes",
+            "20",
+            "--max-edges",
+            "5",
+        ],
+    );
+    assert_eq!(report["impact"]["transitive_dependents"], 1799);
+    assert_eq!(report["impact"]["immediately_ready"], 1);
+    assert_eq!(report["nodes"].as_array().unwrap().len(), 20);
+    assert_eq!(report["limits"]["omitted_by_depth"], 1671);
+    assert_eq!(report["limits"]["omitted_by_node_limit"], 109);
+    assert_eq!(report["limits"]["omitted_edges"], 14);
+    assert_eq!(report["edges"].as_array().unwrap().len(), 5);
+    assert_eq!(
+        ok(
+            p,
+            &["graph", "1800", "--direction", "upstream", "--depth", "0"]
+        )["nodes"]
+            .as_array()
+            .unwrap()
+            .len(),
+        1
+    );
+    let tx = db.transaction().unwrap();
+    for id in 2000..=2119 {
+        tx.execute(
+            "INSERT INTO tasks(id,description) VALUES (?,?)",
+            rusqlite::params![id, format!("Layer {id}")],
+        )
+        .unwrap();
+        if id >= 2002 {
+            let previous = 2000 + ((id - 2000) / 2 - 1) * 2;
+            for prerequisite in previous..=previous + 1 {
+                tx.execute(
+                    "INSERT INTO task_dependencies(task_id,prerequisite_id) VALUES (?,?)",
+                    [id, prerequisite],
+                )
+                .unwrap();
+            }
+        }
+    }
+    tx.commit().unwrap();
+    drop(db);
+    let report = ok(p, &["graph", "2000", "--max-nodes", "15"]);
+    assert_eq!(report["impact"]["direct_dependents"], 2);
+    assert_eq!(report["impact"]["transitive_dependents"], 118);
+    assert_eq!(
+        report["impact"]["immediately_ready"], 0,
+        "other root remains unfinished"
+    );
+    assert_eq!(report["nodes"].as_array().unwrap().len(), 15);
+    assert!(
+        report["nodes"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .all(|node| node["id"] != 2001),
+        "upstream then downstream would incorrectly include sibling root"
+    );
+    assert_eq!(
+        run(p, &["graph", "2000", "--max-nodes", "15"]).stdout,
+        run(p, &["graph", "2000", "--max-nodes", "15"]).stdout
+    );
+}
+
+#[test]
+fn graph_bulk_reads_share_one_snapshot_during_dependency_changes() {
+    use std::sync::{
+        Arc,
+        atomic::{AtomicBool, Ordering},
+    };
+    let dir = project();
+    let p = dir.path();
+    let db = database(p);
+    db.execute_batch("PRAGMA journal_mode=DELETE;
+        INSERT INTO tasks(id,description,status) VALUES (1,'Done','completed'),(2,'Candidate','new'),(3,'Waiting','new');
+        INSERT INTO task_dependencies VALUES (2,1);").unwrap();
+    drop(db);
+    let stop = Arc::new(AtomicBool::new(false));
+    let writer_stop = stop.clone();
+    let db_path = p.join(".qqq/qqq.db");
+    let writer = std::thread::spawn(move || {
+        let mut db = rusqlite::Connection::open(db_path).unwrap();
+        db.busy_timeout(std::time::Duration::from_secs(5)).unwrap();
+        let mut prerequisite = 3;
+        while !writer_stop.load(Ordering::Relaxed) {
+            let tx = db.transaction().unwrap();
+            tx.execute("DELETE FROM task_dependencies WHERE task_id=2", [])
+                .unwrap();
+            tx.execute("INSERT INTO task_dependencies VALUES (2,?)", [prerequisite])
+                .unwrap();
+            tx.commit().unwrap();
+            prerequisite = if prerequisite == 1 { 3 } else { 1 };
+        }
+    });
+    for _ in 0..25 {
+        let report = ok(p, &["graph", "2", "--direction", "upstream"]);
+        let prerequisite = report["edges"][0]["prerequisite"].as_i64().unwrap();
+        assert_eq!(report["focus"]["ready"], prerequisite == 1);
+        assert_eq!(
+            node(&report, prerequisite)["blocks_focus"],
+            prerequisite == 3
+        );
+        assert_eq!(
+            report["focus"]["unfinished_dependencies"],
+            usize::from(prerequisite == 3)
+        );
+    }
+    stop.store(true, Ordering::Relaxed);
+    writer.join().unwrap();
+}
