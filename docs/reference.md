@@ -553,9 +553,10 @@ TUI Reopen confirmation offers `y` to reopen normally or uppercase `Y` to force
 reopen a completed, in-progress or error task. Force reopen skips owner-liveness
 checks and permits manual errors; it clears the task's recorded assignment even
 when an owner remains live. Archive and dependency availability checks still
-apply, and a new task cannot reopen. `n` or Esc cancels. Confirmation hides the
-cursor and ignores editing/navigation input; cancellation restores the dirty
-draft and caret. Successful reopening records the actor in a reopen event.
+apply, and a new task cannot reopen. `n`, Enter or Esc cancels. Confirmation hides
+the cursor and ignores editing/navigation input; Ctrl-C leaves it open.
+Cancellation preserves the active filter, dirty draft and caret. Successful
+reopening records the actor in a reopen event.
 
 Reopening keeps
 description, priority, parent, prerequisites, messages, images, creation time, and prior
@@ -852,8 +853,8 @@ normal confirmation, popup keeps exact error plus both confirmation keys.
 Retry normally with `y`, or force explicitly with `Y`. Force path bypasses
 Herdr/owner lookup; it never happens automatically after failure. DB corruption,
 invalid input and other unrelated failures keep ordinary error handling.
-After filter clears, Esc closes menu or prompt. State changes ask for `y` before
-running; priority and parent changes ask when draft has unsaved edits. Successful
+Other menus/prompts close with Esc after the active filter clears. State changes
+require confirmation before running; priority and parent changes ask when draft has unsaved edits. Successful
 action refreshes task and list; rejected action keeps draft and shows DB error.
 Error view wraps long messages; Up/Down scrolls, Esc closes it.
 
