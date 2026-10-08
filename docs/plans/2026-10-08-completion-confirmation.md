@@ -33,7 +33,7 @@ send(b"Y")  # explicit force completes through existing guarded DB action
 ### 2. Confirmation and rendering
 
 **Files:** `src/tui/mod.rs`, `src/tui/dashboard.rs`, `src/tui/completion.rs`,
-`tests/tui_dashboard_render.rs`
+`tests/tui_dashboard_render.rs`, `src/tui/conflict.rs`, `src/tui/tag_input.rs`
 
 - [x] Remove `Confirmation::Action.force`, `toggle_force`, checkbox hit handler,
   checkbox rows and obsolete `FORCE_REQUIRED`. Keep error string/recovery whitelist.
@@ -66,9 +66,9 @@ let selected = if action.is_completion() {
 - [x] Replace checkbox documentation with explicit `y`/`Y`, passive popup and
   normal error retry. Run full locked/offline serial suite, fmt check, strict
   all-target Clippy, release build. Obtain independent read-only code review.
-- [ ] Rebase current master, resolve any concurrent-worker changes in worktree,
+- [x] Rebase current master, resolve any concurrent-worker changes in worktree,
   fast-forward clean master. Install with `cargo install --path . --locked --offline --force`.
-- [ ] Run force PTY scenarios against installed binary, compatibility suite and
+- [x] Run force PTY scenarios against installed binary, compatibility suite and
   doctor; compare release/install SHA256. Record evidence, complete #187 through
   qqq, read back, remove own worktree/branch, resume one persistent queue waiter.
 
@@ -90,4 +90,14 @@ let selected = if action.is_completion() {
 - Independent read-only review of `28a4164..accd78d` found no actionable issues;
   reviewer inspected source/PTY waits, ran no tests. Current full suite is fresh
   combined-source evidence. No DB/schema/preflight changes or remote CI/publish.
-- Integration/installed-binary verification pending.
+- Fast-forwarded clean local master to `56696ca`; installed `qqq 0.6.0` from
+  root, `/tmp/qqq-task-187-install.log`. Installed and root release SHA256 match:
+  `75dd7bdd0c550464faf46ea4ee36437098c1a51df4dec585dadb5340a3c0501b`.
+- All **11 completion PTY scenarios passed against installed binary**,
+  `/tmp/qqq-task-187-installed-pty.log`. Installed compatibility gate **35 passed**,
+  `/tmp/qqq-task-187-installed-compatibility.log`.
+- Installed doctor clean, schema 13. Root/source remain clean. Final evidence is
+  documentation-only; no source changes after full checks or installed tests.
+- Queue handoff: append final evidence, complete #187 and read back, remove owned
+  worktree/branch, resume exactly one `qqq next --wait --local --json` waiter.
+  No remote CI, push, tag or publication.
