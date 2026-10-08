@@ -108,14 +108,14 @@ assert_eq!(f.ok(&["show","1"])["task"]["priority"], 5);
 - [x] Implement basic preview/read/apply using transaction, exact IDs/metadata,
   fingerprint and structural report validation. Basic metadata writes update
   only tags/priority/archived/updated_at, preserve content_revision.
-- [ ] Add safe human renderer with every ID and before/after/count fields;
+- [x] Add safe human renderer with every ID and before/after/count fields;
   human preview ends with explicit command instruction using saved JSON file.
   Output defaults still controlled centrally. Re-run focused plus CLI/list/filter
   suites; commit first verified checkpoint.
 
 ## Task 2: Shared Archive Rules And Transaction Acceptance
 
-- [ ] Add tests for tag operations, priority bounds, active/archive dependent rules
+- [x] Add tests for tag operations, priority bounds, active/archive dependent rules
   and atomic projected archive/unarchive graph before moving validation:
 
 ```rust
@@ -130,32 +130,32 @@ let unarchive = f.ok(&["bulk","--id","1","--id","2","--unarchive"]);
 f.apply(&unarchive);
 ```
 
-- [ ] Shared archive helper reads parent/extra/dependent rows, substitutes final
+- [x] Shared archive helper reads parent/extra/dependent rows, substitutes final
   `BTreeMap<i64,bool>` archive values before checking. Same actor/nonempty,
   in_progress/unfinished-child/archived-prerequisite structured messages and
   no-op behavior as current Db::set_archived. Empty map preserves single behavior.
   Add module declarations to all direct-source Db test crates discovered via rg.
-- [ ] Guard fingerprint task JSON + private claim_key + MAX(event.id) in same
+- [x] Guard fingerprint task JSON + private claim_key + MAX(event.id) in same
   snapshot; task prerequisite states included. Readiness-related archive failures
   on new related rows reject whole apply. Compare every selected row before SQL.
-- [ ] Add selector matrix: direct children omit context parents, query/status/tag/
+- [x] Add selector matrix: direct children omit context parents, query/status/tag/
   Luau AND, exact tags, repeated status OR, completed rows no display cap,
   explicit archived IDs, positive/duplicate/missing IDs, explicit --all and empty.
-- [ ] Add malformed CLI/JSON matrix before writable open: missing actions/selection,
+- [x] Add malformed CLI/JSON matrix before writable open: missing actions/selection,
   conflicts, unknown fields/versions/duplicates/types, counts/IDs/hash consistency,
   after-values mismatch, already-applied report and cross-project DB binding.
-- [ ] Assert preview DB bytes, claims/sequence/staging stay unchanged; older
+- [x] Assert preview DB bytes, claims/sequence/staging stay unchanged; older
   schema reports migration-required without normal writable open. Existing native
   preflight semantics tested separately; unknown live owner remains unchanged.
-- [ ] Freeze selection test: preview query, add newly matching row, apply affects
+- [x] Freeze selection test: preview query, add newly matching row, apply affects
   original IDs only. Stale metadata/content/owner/dependency/delete cases ->
   BULK_CONFLICT and zero changes, including prior unchanged selected rows.
-- [ ] Inject late update and archive event failure; SQL transaction rolls back
+- [x] Inject late update and archive event failure; SQL transaction rolls back
   tasks and history. No-ops leave bytes/updated_at/events unchanged.
-- [ ] Run two CLI applies of same non-noop preview concurrently: exactly one
+- [x] Run two CLI applies of same non-noop preview concurrently: exactly one
   complete success, other conflict; no partial graph or overwritten concurrent
   edit. Archive parent/child/extra prerequisite tests exercise both directions.
-- [ ] Verify full descriptions/images/revisions/owners/private records/links/
+- [x] Verify full descriptions/images/revisions/owners/private records/links/
   dependencies/messages/prior history preserved. Run bulk, archive, priority,
   dependencies, list/filter/CLI, fmt and strict Clippy; commit checkpoint.
 
@@ -245,3 +245,14 @@ across7 binaries; fmt/diff checks and strict all-targets Clippy pass. Shared
 archive extraction included early because graph/active-row test precedes core
 archive exposure. Human renderer exists; dedicated human/default-output checks,
 broader validation/rollback/concurrency and TUI implementation remain pending.
+
+CLI acceptance checkpoint: bulk22 plus existing CLI/archive/priority/dependencies/
+list/filter/tag-routing/TUI DB checks pass164 tests across9 binaries. Strict
+all-targets Clippy and fmt pass. RED tests exposed unconditional metadata-column
+writes, ignored update/audit inserts and early global-identity-validation bypass;
+column-specific bound SQL, affected-row checks and normal identity-validation
+ordering fix all four gaps. Full preserved claims/links/content/images/graph/
+history, stale attachment/parent/prerequisite state/private claim changes,
+concurrent notes and competing applies verified. Human and native-agent output,
+stdin explicit confirmation, schema/staging purity and extra graph archives pass.
+TUI implementation, docs/examples and full delivery checks remain pending.

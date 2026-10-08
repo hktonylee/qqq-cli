@@ -428,21 +428,6 @@ fn execute(
             ViewCommand::Remove { name } => json!(views::remove(&path, name)?),
         });
     }
-    if let Commands::Bulk(args) = &cli.command {
-        return if let Some(path) = &args.apply {
-            let report = bulk::read(path)?;
-            let (mut db, _) = db::Db::open(false)?;
-            Ok(json!(bulk::apply(
-                &mut db,
-                &report,
-                cli.session.as_deref().unwrap_or("cli")
-            )?))
-        } else {
-            let actions = args.actions()?;
-            let (db, _) = db::Db::open_read_only()?;
-            Ok(json!(bulk::preview(&db, args.selection(filter), actions)?))
-        };
-    }
     if let Commands::Config {
         list,
         get,
@@ -470,6 +455,24 @@ fn execute(
         orchestrator_session: cli.orchestrator_session.clone(),
     };
     overrides.validate()?;
+    if let Commands::Bulk(args) = &cli.command {
+        return if let Some(path) = &args.apply {
+            let report = bulk::read(path)?;
+            let (mut db, _) = db::Db::open(false)?;
+            Ok(json!(bulk::apply(
+                &mut db,
+                &report,
+                cli.session
+                    .as_deref()
+                    .or(cli.harness_session.as_deref())
+                    .unwrap_or("cli")
+            )?))
+        } else {
+            let actions = args.actions()?;
+            let (db, _) = db::Db::open_read_only()?;
+            Ok(json!(bulk::preview(&db, args.selection(filter), actions)?))
+        };
+    }
     if let Commands::Restore { source, recovery } = &cli.command {
         return snapshot::restore::run(source, *recovery);
     }

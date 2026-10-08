@@ -9,7 +9,9 @@ use crate::{
 };
 use anyhow::{Context, Result, ensure};
 use clap::Args as ClapArgs;
-use rusqlite::{Connection, OptionalExtension, TransactionBehavior, params};
+use rusqlite::{
+    Connection, OptionalExtension, TransactionBehavior, params, params_from_iter, types::Value,
+};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::{
@@ -415,21 +417,61 @@ pub(crate) fn apply(db: &mut Db, report: &Report, actor: &str) -> Result<Report>
     );
     validate_archive(&tx, &tasks, report)?;
     for row in report.tasks.iter().filter(|row| row.count() > 0) {
-        tx.execute("UPDATE tasks SET tags=?,priority=?,archived=?,updated_at=strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE id=?",
-            params![serde_json::to_string(&row.after.tags)?,row.after.priority,row.after.archived,row.id])?;
+        let mut columns = Vec::new();
+        let mut values = Vec::new();
+        if row.before.tags != row.after.tags {
+            columns.push("tags");
+            values.push(Value::Text(serde_json::to_string(&row.after.tags)?));
+        }
+        if row.before.priority != row.after.priority {
+            columns.push("priority");
+            values.push(Value::Integer(row.after.priority));
+        }
         if row.before.archived != row.after.archived {
-            tx.execute(
-                "INSERT INTO events(task_id,session,action) VALUES (?,?,?)",
-                params![
-                    row.id,
-                    actor,
-                    if row.after.archived {
-                        "archive"
-                    } else {
-                        "unarchive"
-                    }
-                ],
-            )?;
+            columns.push("archived");
+            values.push(Value::Integer(i64::from(row.after.archived)));
+        }
+        let assignments = columns
+            .iter()
+            .enumerate()
+            .map(|(index, column)| format!("{column}=?{}", index + 1))
+            .collect::<Vec<_>>()
+            .join(",");
+        let id_index = values.len() + 1;
+        values.push(Value::Integer(row.id));
+        let sql = format!(
+            "UPDATE tasks SET {assignments},updated_at=strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE id=?{id_index}"
+        );
+        ensure!(
+            tx.execute(&sql, params_from_iter(values))? == 1,
+            Info::new(
+                Code::BulkConflict,
+                "Bulk update rejected; batch rolled back"
+            )
+            .detail("reason", "bulk_update_rejected")
+            .detail("conflict_ids", vec![row.id])
+        );
+        if row.before.archived != row.after.archived {
+            ensure!(
+                tx.execute(
+                    "INSERT INTO events(task_id,session,action) VALUES (?,?,?)",
+                    params![
+                        row.id,
+                        actor,
+                        if row.after.archived {
+                            "archive"
+                        } else {
+                            "unarchive"
+                        }
+                    ],
+                )? == 1,
+                Info::new(
+                    Code::BulkConflict,
+                    "Bulk audit insert rejected; batch rolled back"
+                )
+                .detail("reason", "bulk_event_rejected")
+                .detail("conflict_ids", vec![row.id])
+            );
         }
     }
     tx.commit()?;
