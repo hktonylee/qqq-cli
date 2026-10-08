@@ -112,6 +112,72 @@ print(json.dumps({'result':result}))
 }
 
 #[test]
+fn named_views_share_dispatch_preview_and_claim_without_empty_or_invalid_tabs() {
+    let p = Project::new();
+    p.ok(&[
+        "view",
+        "save",
+        "Worker",
+        "--tag",
+        "UI",
+        "--readiness",
+        "ready",
+    ]);
+    p.ok(&["add", "Partial", "--tag", "UI", "--priority", "100"]);
+    assert!(
+        p.ok(&["next", "--view", "Worker", "--tag", "bug"])
+            .is_null()
+    );
+    assert!(
+        !p.calls()
+            .iter()
+            .any(|call| call.first().map(String::as_str) == Some("tab"))
+    );
+    let before = p.calls();
+    assert!(!p.run(&["next", "--view", "Missing"]).status.success());
+    assert_eq!(p.calls(), before);
+    p.ok(&[
+        "add",
+        "Matched",
+        "--tag",
+        "UI",
+        "--tag",
+        "bug",
+        "--priority",
+        "5",
+    ]);
+    assert_eq!(
+        p.ok(&["next", "--dry-run", "--view", "Worker", "--tag", "bug"])["id"],
+        2
+    );
+    assert_eq!(p.calls(), before);
+    assert_eq!(p.ok(&["next", "--view", "Worker", "--tag", "bug"])["id"], 2);
+    assert_eq!(
+        p.calls()
+            .iter()
+            .filter(|call| call.first().map(String::as_str) == Some("tab"))
+            .count(),
+        1
+    );
+    assert_eq!(p.ok(&["show", "1"])["task"]["status"], "new");
+    let calls = p.calls();
+    let db = std::fs::read(p.dir.path().join(".qqq/qqq.db")).unwrap();
+    std::fs::write(
+        p.dir.path().join(".qqq-views.json"),
+        "{\"version\":2,\"views\":[]}",
+    )
+    .unwrap();
+    let out = p.run(&["next", "--view", "Worker"]);
+    assert!(!out.status.success());
+    assert_eq!(
+        serde_json::from_slice::<Value>(&out.stderr).unwrap()["code"],
+        "CONFIG_ERROR"
+    );
+    assert_eq!(p.calls(), calls);
+    assert_eq!(std::fs::read(p.dir.path().join(".qqq/qqq.db")).unwrap(), db);
+}
+
+#[test]
 fn dispatch_dry_run_never_starts_agent_or_returns_owned_task() {
     let p = Project::new();
     p.ok(&["add", "Owned"]);

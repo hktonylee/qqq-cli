@@ -1,7 +1,9 @@
 use serde_json::{Value, json};
 use std::{
     path::Path,
-    process::{Command, Output},
+    process::{Child, Command, Output, Stdio},
+    thread,
+    time::{Duration, Instant},
 };
 use tempfile::TempDir;
 
@@ -480,4 +482,217 @@ fn oversized_catalog_reads_and_writes_fail_without_replacing_source() {
         "CONFIG_ERROR"
     );
     assert_eq!(std::fs::read_to_string(&path).unwrap(), oversized);
+}
+
+struct Waiter(Option<Child>);
+impl Drop for Waiter {
+    fn drop(&mut self) {
+        if let Some(child) = &mut self.0 {
+            let _ = child.kill();
+            let _ = child.wait();
+        }
+    }
+}
+
+#[test]
+fn named_view_wait_and_preview_wait_recheck_readiness_and_explicit_tags() {
+    for preview in [false, true] {
+        let dir = project();
+        let p = dir.path();
+        ok(
+            p,
+            &[
+                "view",
+                "save",
+                "Worker",
+                "--tag",
+                "UI",
+                "--readiness",
+                "ready",
+            ],
+        );
+        ok(p, &["add", "Prerequisite", "--priority", "100"]);
+        ok(
+            p,
+            &[
+                "add",
+                "Blocked",
+                "--tag",
+                "UI",
+                "--tag",
+                "bug",
+                "--depends-on",
+                "1",
+            ],
+        );
+        let mut cmd = command(p);
+        cmd.args([
+            "--json",
+            "next",
+            "--local",
+            "--wait",
+            "--session",
+            "worker",
+            "--view",
+            "Worker",
+            "--tag",
+            "bug",
+        ]);
+        if preview {
+            cmd.arg("--dry-run");
+        }
+        let mut waiter = Waiter(Some(
+            cmd.stdout(Stdio::piped())
+                .stderr(Stdio::piped())
+                .spawn()
+                .unwrap(),
+        ));
+        thread::sleep(Duration::from_millis(400));
+        assert!(waiter.0.as_mut().unwrap().try_wait().unwrap().is_none());
+        ok(
+            p,
+            &[
+                "next",
+                "--local",
+                "--session",
+                "prerequisite",
+                "--filter",
+                "id == 1",
+            ],
+        );
+        ok(p, &["complete", "1", "--session", "prerequisite"]);
+        let deadline = Instant::now() + Duration::from_secs(5);
+        while waiter.0.as_mut().unwrap().try_wait().unwrap().is_none() {
+            assert!(
+                Instant::now() < deadline,
+                "named view waiter did not return"
+            );
+            thread::sleep(Duration::from_millis(25));
+        }
+        let out = waiter.0.take().unwrap().wait_with_output().unwrap();
+        assert!(
+            out.status.success(),
+            "{}",
+            String::from_utf8_lossy(&out.stderr)
+        );
+        let task: Value = serde_json::from_slice(&out.stdout).unwrap();
+        assert_eq!(task["id"], 2);
+        assert_eq!(task["status"], if preview { "new" } else { "in_progress" });
+        assert_eq!(ok(p, &["show", "2"])["task"]["status"], task["status"]);
+    }
+}
+
+#[test]
+fn named_views_preserve_atomic_claims_priority_and_owned_reuse() {
+    let dir = project();
+    let p = dir.path();
+    ok(
+        p,
+        &[
+            "view",
+            "save",
+            "Worker",
+            "--tag",
+            "UI",
+            "--status",
+            "new",
+            "--readiness",
+            "ready",
+        ],
+    );
+    ok(
+        p,
+        &[
+            "view",
+            "save",
+            "Other",
+            "--tag",
+            "absent",
+            "--status",
+            "completed",
+        ],
+    );
+    ok(p, &["add", "Partial", "--tag", "UI", "--priority", "100"]);
+    ok(
+        p,
+        &[
+            "add",
+            "Lower",
+            "--tag",
+            "UI",
+            "--tag",
+            "bug",
+            "--priority",
+            "1",
+        ],
+    );
+    ok(
+        p,
+        &[
+            "add",
+            "Higher",
+            "--tag",
+            "UI",
+            "--tag",
+            "bug",
+            "--priority",
+            "5",
+        ],
+    );
+    assert_eq!(
+        ok(
+            p,
+            &["next", "--dry-run", "--view", "Worker", "--tag", "bug"]
+        )["id"],
+        3
+    );
+    let children: Vec<_> = ["a", "b", "c"]
+        .into_iter()
+        .map(|owner| {
+            command(p)
+                .args([
+                    "--json",
+                    "next",
+                    "--local",
+                    "--session",
+                    owner,
+                    "--view",
+                    "Worker",
+                    "--tag",
+                    "bug",
+                ])
+                .stdout(Stdio::piped())
+                .stderr(Stdio::piped())
+                .spawn()
+                .unwrap()
+        })
+        .collect();
+    let mut claimed = Vec::new();
+    let mut empty = 0;
+    for (owner, child) in ["a", "b", "c"].into_iter().zip(children) {
+        let out = child.wait_with_output().unwrap();
+        assert!(
+            out.status.success(),
+            "{}",
+            String::from_utf8_lossy(&out.stderr)
+        );
+        let task: Value = serde_json::from_slice(&out.stdout).unwrap();
+        if task.is_null() {
+            empty += 1;
+        } else {
+            let id = task["id"].as_i64().unwrap();
+            claimed.push(id);
+            assert_eq!(
+                ok(
+                    p,
+                    &["next", "--local", "--session", owner, "--view", "Other"]
+                )["id"],
+                id
+            );
+        }
+    }
+    claimed.sort_unstable();
+    assert_eq!(claimed, [2, 3]);
+    assert_eq!(empty, 1);
+    assert_eq!(ok(p, &["show", "1"])["task"]["status"], "new");
 }

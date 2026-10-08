@@ -93,6 +93,48 @@ impl Drop for Watcher {
 }
 
 #[test]
+fn named_view_watch_loads_definition_once_and_rechecks_committed_tasks() {
+    let dir = project();
+    let p = dir.path();
+    ok(
+        p,
+        &[
+            "view",
+            "save",
+            "Worker",
+            "--tag",
+            "UI",
+            "--readiness",
+            "ready",
+        ],
+    );
+    ok(p, &["add", "Partial", "--tag", "UI"]);
+    let mut watch = Watcher::start(
+        p,
+        &[
+            "list", "--watch", "--json", "--view", "Worker", "--tag", "bug",
+        ],
+    );
+    assert_eq!(watch.snapshot(), serde_json::json!([]));
+    ok(p, &["view", "save", "Worker", "--tag", "absent"]);
+    watch.idle();
+    ok(p, &["edit", "1", "--set-tags", "UI, bug"]);
+    assert_eq!(watch.snapshot()[0]["id"], 1);
+    assert!(
+        ok(p, &["list", "--view", "Worker", "--tag", "bug"])
+            .as_array()
+            .unwrap()
+            .is_empty()
+    );
+    ok(
+        p,
+        &["next", "--local", "--session", "worker", "--tag", "UI"],
+    );
+    assert_eq!(watch.snapshot(), serde_json::json!([]));
+    watch.idle();
+}
+
+#[test]
 fn watch_rechecks_all_tag_selectors_and_luau_on_each_commit() {
     let dir = project();
     let p = dir.path();
