@@ -108,7 +108,7 @@ with tempfile.TemporaryDirectory(prefix="qqq-dashboard-test-") as folder:
         env["NO_COLOR"] = "1"
     elif scenario == "dumb":
         env["TERM"] = "dumb"
-    if scenario.startswith(("buffers_", "long_description_", "prerequisites", "dirty_marker", "completed_toggle", "jump", "menu_error_", "force_complete", "list_selection", "tags", "orphan_reopen")) and scenario.endswith("no_color"):
+    if scenario.startswith(("buffers_", "long_description_", "prerequisites", "dirty_marker", "completed_toggle", "jump", "menu_error_", "force_complete", "list_selection", "tags", "orphan_reopen", "views")) and scenario.endswith("no_color"):
         env["NO_COLOR"] = "1"
     for name in ("EDITOR", "QQQ_SESSION", "HERDR_ENV", "HERDR_PANE_ID", "CODEX_THREAD_ID", "CODEX_SESSION_ID"):
         env.pop(name, None)
@@ -301,6 +301,15 @@ print(json.dumps({"result": {"pane": pane}}))
         cli("edit", "2", "--depends-on", "1")
     if scenario.startswith("tags"):
         cli("edit", "2", "--set-tags", "first, middle, last" if scenario.startswith("tags_editor") else "old")
+    if scenario.startswith("views"):
+        cli("edit", "1", "--set-tags", "backend")
+        cli("edit", "2", "--set-tags", "frontend")
+        cli("view", "save", "Backend", "--tag", "backend")
+        cli("view", "save", "Frontend", "--tag", "frontend")
+        if scenario == "views_visibility":
+            cli("next", "--local", "--session", "finished", "--filter", "id == 1")
+            cli("complete", "1", "--session", "finished")
+            cli("view", "save", "Backend", "--tag", "backend", "--max-completed", "0")
     if scenario == "jump_archived":
         cli("archive", "2")
         for index in range(3, 21):
@@ -410,6 +419,10 @@ print(json.dumps({"result": result}))
         args.extend(["--session", "other" if scenario == "menu_error_rejected" else "worker"])
     if scenario in ("archive_included", "actions_basic", "actions_rejected"):
         args.append("--include-archived")
+    if scenario.startswith("views_startup"):
+        args.extend(["--view", "Backend", "--tag", "backend", "--query", "First", "--status", "new"])
+    if scenario == "views_visibility":
+        args.extend(["--view", "Backend"])
     child = subprocess.Popen(args, cwd=folder, env=env, stdin=slave,
                              stderr=slave, stdout=subprocess.PIPE)
     screen = bytearray()
@@ -569,7 +582,8 @@ print(json.dumps({"result": result}))
         wait_visible(lambda: visible.text().splitlines()[-1].startswith("Ctrl-S Save")
                      and (visible.x, visible.y) == (0, editor_row() + 1))
         assert visible.text().splitlines()[0].strip(), visible.text()
-        assert not visible.text().splitlines()[0].startswith("Filter:"), visible.text()
+        if scenario != "views_visibility":
+            assert not visible.text().splitlines()[0].startswith("Filter:"), visible.text()
         assert not any(line.split()[:3] == ["ID", "STATUS", "TASK"]
                        for line in visible.text().splitlines()[:list_bottom() + 1]), visible.text()
         assert "qqq tasks" not in visible.text(), visible.text()
@@ -594,11 +608,137 @@ print(json.dumps({"result": result}))
                              and editor_line().startswith("Second"))
                 settle()
                 assert b"\x1b[38;" not in screen and b"\x1b[48;" not in screen, screen[-2000:]
-        if not scenario.startswith(("wide_layout", "menu_retry_", "menu_error_", "long_description_", "completed_toggle", "force_complete", "orphan_reopen")) and scenario not in ("buffers_scroll", "handoff_scroll", "ctrl_c_new_scroll", "live_refresh_scroll", "tree_navigation", "scroll", "wheel", "click", "click_filter", "workflow", "workflow_empty", "workflow_status", "filter", "filter_no_color", "archive_hidden", "archive_included", "actions_basic", "actions_rejected", "actions_hidden", "jump_archived"):
+        if not scenario.startswith(("wide_layout", "menu_retry_", "menu_error_", "long_description_", "completed_toggle", "force_complete", "orphan_reopen", "views_startup", "views_visibility")) and scenario not in ("buffers_scroll", "handoff_scroll", "ctrl_c_new_scroll", "live_refresh_scroll", "tree_navigation", "scroll", "wheel", "click", "click_filter", "workflow", "workflow_empty", "workflow_status", "filter", "filter_no_color", "archive_hidden", "archive_included", "actions_basic", "actions_rejected", "actions_hidden", "jump_archived"):
             read_until(b"Second")
             assert "First" in visible.text() and "Second" in visible.text(), visible.text()
         assert not select.select([child.stdout], [], [], 0)[0], "TUI wrote stdout while open"
-        if scenario.startswith("content_conflict"):
+        if scenario == "views_visibility":
+            wait_frame(lambda: "View: Backend" in editor_title() and completed_button_text() == "[× Completed]"
+                       and "First" not in list_text() and "Second" not in list_text())
+            assert cli("list", "--view", "Backend") == []
+            send(CTRL_SLASH + b"\x14")
+            wait_frame(lambda: completed_button_text() == "[✓ Completed]" and "First" in list_text())
+            assert [task["id"] for task in cli("list", "--view", "Backend", "--all")] == [1]
+            send(b"\x02")
+            wait_visible(lambda: "Choose view" in visible.text() and "Completed limit: 0" in visible.text())
+            send(b"\r")
+            wait_frame(lambda: completed_button_text() == "[× Completed]" and "First" not in list_text())
+        elif scenario.startswith("views_startup"):
+            wait_frame(lambda: "View: Backend" in editor_title() and "First" in list_text() and "Second" not in list_text())
+            matched = cli("list", "--view", "Backend", "--tag", "backend", "--query", "First", "--status", "new")
+            assert [task["id"] for task in matched] == [1]
+            send(b"Unsaved")
+            wait_frame(lambda: editor_line().startswith("Unsaved"))
+            send(CTRL_SLASH + b"Second")
+            wait_frame(lambda: filter_text() == "Filter: Second" and "No matching tasks." in list_text())
+            send(b"\x02")
+            wait_visible(lambda: "Choose view" in visible.text() and "Tags (all): backend" in visible.text())
+            send(b"\x1b[H\r")
+            wait_frame(lambda: "View:" not in editor_title() and filter_text() == "Filter: Second" and "No matching tasks." in list_text())
+            assert editor_line().startswith("Unsaved"), visible.text()
+            assert visible.text().splitlines()[-1].startswith("Type to Filter"), visible.text()
+        elif scenario.startswith("views"):
+            initial = cli("list")
+            send(b"\x1b[1;2A")
+            wait_frame(lambda: "Task #2 (New)" in editor_title() and editor_line().startswith("Second"))
+            send(b" retained")
+            wait_frame(lambda: editor_line().startswith("Second retained"))
+            before_cursor = (visible.x, visible.y)
+            send(b"\x02")
+            wait_visible(lambda: "Choose view" in visible.text() and "Backend" in visible.text())
+            send(b"\x1b[B")
+            wait_visible(lambda: "Tags (all): backend" in visible.text())
+            send(b"\r")
+            wait_frame(lambda: "View: Backend" in editor_title() and "First" in list_text() and "Second" not in list_text())
+            assert "Task #2 (New)" in editor_title() and editor_line().startswith("Second retained"), visible.text()
+            assert (visible.x, visible.y) == before_cursor, visible.text()
+            send(b"\x02")
+            wait_visible(lambda: "Choose view" in visible.text())
+            send(b"\x1b[B\r")
+            wait_frame(lambda: "View: Frontend" in editor_title() and "Second" in list_text() and "First" not in list_text())
+            assert editor_line().startswith("Second retained"), visible.text()
+            assert cli("list") == initial
+            # Manual editor scroll survives a view hiding the opened dirty task.
+            body = "\n" + "\n".join(f"Row{index:02}" for index in range(1, 21))
+            send(b"\x1b[200~" + body.encode() + b"\x1b[201~")
+            wait_visible(lambda: "Row20" in visible.text())
+            wheel_editor(False, 20)
+            wait_visible(lambda: editor_line().startswith("Second retained"))
+            wheel_editor(True, 2)
+            wait_visible(lambda: editor_line().startswith("Row06") and not visible.cursor_visible
+                         and not visible.pending and screen.endswith(b"\x1b[?25l"))
+            before_lines = [editor_line(i) for i in range(4)]
+            send(b"\x02")
+            wait_visible(lambda: "Choose view" in visible.text())
+            send(b"\x1b[A\r")
+            wait_visible(lambda: "View: Backend" in editor_title() and "Second" not in list_text()
+                         and [editor_line(i) for i in range(4)] == before_lines and not visible.cursor_visible)
+            cli("edit", "2", "--set-tags", "backend")
+            wait_visible(lambda: "Second" in list_text() and [editor_line(i) for i in range(4)] == before_lines)
+            assert cli("show", "2")["task"]["description"] == "Second"
+            assert [task["id"] for task in cli("list", "--view", "Backend")] == [1, 2]
+            # Live query and filter focus survive picker cancel and apply.
+            send(CTRL_SLASH + b"Second")
+            wait_frame(lambda: filter_text() == "Filter: Second" and "Second" in list_text() and "First" not in list_text())
+            send(b"\x02")
+            wait_visible(lambda: "Choose view" in visible.text())
+            send(b"\x1b")
+            wait_frame(lambda: filter_text() == "Filter: Second" and "View: Backend" in editor_title())
+            send(b"\x02")
+            wait_visible(lambda: "Choose view" in visible.text())
+            send(b"\x1b[B\r")
+            wait_frame(lambda: "View: Frontend" in editor_title() and filter_text() == "Filter: Second"
+                       and "No matching tasks." in list_text())
+            assert visible.text().splitlines()[-1].startswith("Type to Filter"), visible.text()
+            assert [editor_line(i) for i in range(4)] == before_lines, visible.text()
+            # Resize open picker; cancel restores current view and draft.
+            send(b"\x02")
+            wait_visible(lambda: "Choose view" in visible.text())
+            for width, height in [(32, 12), (150, 24), (72, 24)]:
+                fcntl.ioctl(slave, termios.TIOCSWINSZ, struct.pack("HHHH", height, width, 0, 0))
+                visible.resize(width, height)
+                os.kill(child.pid, signal.SIGWINCH)
+                wait_visible(lambda: "Choose view" in visible.text() and "Frontend" in visible.text())
+                settle()
+            send(b"\x1b")
+            wait_frame(lambda: filter_text() == "Filter: Second" and "View: Frontend" in editor_title())
+            send(b"\x1b")
+            wait_visible(lambda: not filter_text().startswith("Filter:"))
+            # Park dirty saved task; retain staged new-task tags across view changes.
+            send(b"\x1b[1;2B")
+            wait_frame(lambda: "New Task" in editor_title())
+            send(b"Unsaved\x0c")
+            wait_visible(lambda: "Tags new task" in visible.text())
+            send(b"frontend\x13")
+            wait_frame(lambda: "Tags new task" not in visible.text() and editor_line().startswith("Unsaved"))
+            send(b"\x02")
+            wait_visible(lambda: "Choose view" in visible.text())
+            send(b"\x1b[A\r")
+            wait_frame(lambda: "New Task" in editor_title() and "View: Backend" in editor_title())
+            send(b"\x0c")
+            wait_visible(lambda: "Tags new task" in visible.text() and "frontend" in visible.text())
+            send(b"\x1b")
+            wait_frame(lambda: editor_line().startswith("Unsaved"))
+            send(b"\x1b[1;2A")
+            wait_visible(lambda: "Task #2 (New)" in editor_title() and [editor_line(i) for i in range(4)] == before_lines)
+            assert cli("show", "2")["task"]["description"] == "Second"
+            assert len(cli("list")) == 2
+            catalog_path = Path(folder) / ".qqq-views.json"
+            catalog = catalog_path.read_bytes()
+            catalog_path.write_text('{"version":2,"views":[]}')
+            send(b"\x02")
+            wait_visible(lambda: visible.text().splitlines()[-1].startswith("Invalid project views file")
+                         and "View: Backend" in editor_title()
+                         and [editor_line(i) for i in range(4)] == before_lines)
+            assert "Choose view" not in visible.text(), visible.text()
+            catalog_path.write_bytes(catalog)
+            send(b"\x02")
+            wait_visible(lambda: "Choose view" in visible.text() and "Backend" in visible.text())
+            send(b"\x1b")
+            wait_visible(lambda: "View: Backend" in editor_title() and "Choose view" not in visible.text())
+            if scenario.endswith("no_color"):
+                assert b"\x1b[38;" not in screen and b"\x1b[48;" not in screen, screen[-2000:]
+        elif scenario.startswith("content_conflict"):
             send(b"\x1b[1;2A")
             wait_visible(lambda: "Task #2 (New)" in editor_title() and editor_line().startswith("Second"))
             send(b" local")
@@ -845,7 +985,7 @@ print(json.dumps({"result": result}))
                              and (width < 150 or not visible.text().splitlines()[12][:split].strip())
                              and (not selected or editor_line().startswith("Changed Second"))
                              and visible.text().splitlines()[-1].rstrip() ==
-                             "Ctrl-S Save  Ctrl-L Tags  Ctrl-K Go to Task  Ctrl-P Create Child  Ctrl-G Menu  Shift-Up/Dn Switch Tasks  Ctrl+/ Filter"
+                             "Ctrl-S Save  Ctrl-L Tags  Ctrl-K Go to Task  Ctrl-P Create Child  Ctrl-B Views  Ctrl-G Menu  Shift-Up/Dn Switch Tasks  Ctrl+/ Filter"
                              and (visible.x, visible.y) == (8 if selected else 0, 14)
                              and not visible.pending and screen.endswith(final_cursor))
                 settle()

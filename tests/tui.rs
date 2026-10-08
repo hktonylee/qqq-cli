@@ -52,6 +52,19 @@ fn dashboard_scenario(name: &str) {
 }
 
 #[test]
+fn tui_dashboard_named_views_preserve_open_dirty_task() {
+    dashboard_scenario("views");
+    dashboard_scenario("views_no_color");
+}
+
+#[test]
+fn tui_dashboard_named_view_startup_and_live_query_share_cli_selection() {
+    dashboard_scenario("views_startup");
+    dashboard_scenario("views_startup_no_color");
+    dashboard_scenario("views_visibility");
+}
+
+#[test]
 fn tui_dashboard_task_id_jump_input_and_color() {
     for name in ["jump", "jump_no_color"] {
         dashboard_scenario(name);

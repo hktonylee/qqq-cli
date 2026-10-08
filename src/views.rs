@@ -144,7 +144,7 @@ fn update(
     catalog.views.sort_by(|a, b| a.name.cmp(&b.name));
     let bytes = serde_json::to_vec_pretty(&catalog)?;
     ensure!(
-        bytes.len() as u64 + 1 <= MAX_BYTES,
+        (bytes.len() as u64) < MAX_BYTES,
         Info::invalid_argument("view", "View catalog exceeds 1 MiB")
     );
     let mut temporary = tempfile::NamedTempFile::new_in(project)?;

@@ -398,7 +398,7 @@ fn local_owner(cli: &Cli, project_dir: &std::path::Path, db: &db::Db) -> Result<
 fn execute(
     cli: Cli,
     selection: &selection::Prepared,
-    _view_context: Option<views::ViewContext>,
+    view_context: Option<views::ViewContext>,
 ) -> Result<Value> {
     let filter = selection.filter.as_ref();
     if let Commands::View { command } = &cli.command {
@@ -685,6 +685,7 @@ fn execute(
                 &mut db,
                 include_archived,
                 settings.tui.after_save_new,
+                view_context.expect("dashboard view context prepared"),
                 &mut |db, outcome| {
                     let task = match outcome.target_id {
                         Some(id) => db.edit_composition_guarded(

@@ -107,6 +107,68 @@ fn tag_ranges_stop_before_preview_ellipsis() {
     }
 }
 
+// Exercise shared CLI/TUI selection after retiring the duplicate panel matcher.
+struct FilteredTasks {
+    included_ids: HashSet<i64>,
+}
+fn shared_filter(tasks: &[FilterTask<'_>], query: &str, show_completed: bool) -> FilteredTasks {
+    let dir = tempfile::TempDir::new().unwrap();
+    let run = |args: &[&str]| {
+        let out = std::process::Command::new(env!("CARGO_BIN_EXE_qqq"))
+            .current_dir(dir.path())
+            .env("HOME", dir.path())
+            .env_remove("QQQ_SESSION")
+            .env_remove("CODEX_THREAD_ID")
+            .env_remove("CODEX_SESSION_ID")
+            .env_remove("HERDR_ENV")
+            .env_remove("HERDR_PANE_ID")
+            .arg("--json")
+            .args(args)
+            .output()
+            .unwrap();
+        assert!(
+            out.status.success(),
+            "{}",
+            String::from_utf8_lossy(&out.stderr)
+        );
+        serde_json::from_slice::<serde_json::Value>(&out.stdout).unwrap()
+    };
+    run(&["init"]);
+    for task in tasks {
+        let parent = task.parent_id.map(|id| id.to_string());
+        let mut args = vec!["add", task.description];
+        if let Some(parent) = &parent {
+            args.extend(["--parent", parent]);
+        }
+        assert_eq!(run(&args)["id"], task.id);
+    }
+    let conn = rusqlite::Connection::open(dir.path().join(".qqq/qqq.db")).unwrap();
+    for task in tasks {
+        conn.execute(
+            "UPDATE tasks SET status=?1,claim_key=?3 WHERE id=?2",
+            rusqlite::params![
+                task.status,
+                task.id,
+                (task.status == "in_progress").then(|| format!("fixture-{}", task.id))
+            ],
+        )
+        .unwrap();
+    }
+    let mut args = vec!["list", "--query", query];
+    if !show_completed {
+        args.extend(["--max-completed", "0"]);
+    }
+    let matched = run(&args);
+    FilteredTasks {
+        included_ids: matched
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|task| task["id"].as_i64().unwrap())
+            .collect(),
+    }
+}
+
 fn tasks() -> Vec<FilterTask<'static>> {
     vec![
         FilterTask {
@@ -144,7 +206,7 @@ fn tasks() -> Vec<FilterTask<'static>> {
 
 #[test]
 fn filter_matches_full_description_case_insensitively_and_keeps_ancestors() {
-    let filtered = panel::filter_tasks(&tasks(), "cAsE MaTcH", true);
+    let filtered = shared_filter(&tasks(), "cAsE MaTcH", true);
     assert_eq!(filtered.included_ids, HashSet::from([1, 2]));
     assert!(filtered.included_ids.contains(&1));
     assert!(!filtered.included_ids.contains(&3));
@@ -154,11 +216,11 @@ fn filter_matches_full_description_case_insensitively_and_keeps_ancestors() {
 #[test]
 fn filter_empty_query_restores_all_and_no_match_is_empty() {
     assert_eq!(
-        panel::filter_tasks(&tasks(), "", true).included_ids,
+        shared_filter(&tasks(), "", true).included_ids,
         HashSet::from([1, 2, 3, 4, 5])
     );
     assert!(
-        panel::filter_tasks(&tasks(), "absent", true)
+        shared_filter(&tasks(), "absent", true)
             .included_ids
             .is_empty()
     );
@@ -172,27 +234,27 @@ fn completed_visibility_excludes_ancestors_without_hiding_unfinished_children() 
     tasks[3].status = "error";
     tasks[4].status = "in_progress";
     assert_eq!(
-        panel::filter_tasks(&tasks, "", false).included_ids,
+        shared_filter(&tasks, "", false).included_ids,
         HashSet::from([2, 4, 5])
     );
     assert_eq!(
-        panel::filter_tasks(&tasks, "match", false).included_ids,
+        shared_filter(&tasks, "match", false).included_ids,
         HashSet::from([2, 4, 5])
     );
     assert_eq!(
-        panel::filter_tasks(&tasks, "case", false).included_ids,
+        shared_filter(&tasks, "case", false).included_ids,
         HashSet::from([2])
     );
     assert!(
-        panel::filter_tasks(&tasks, "parent", false)
+        shared_filter(&tasks, "parent", false)
             .included_ids
             .is_empty()
     );
     assert_eq!(
-        panel::filter_tasks(&tasks, "case", true).included_ids,
+        shared_filter(&tasks, "case", true).included_ids,
         HashSet::from([1, 2])
     );
-    let filtered = panel::filter_tasks(&tasks, "", false);
+    let filtered = shared_filter(&tasks, "", false);
     let ids: Vec<_> = tasks
         .iter()
         .filter(|task| filtered.included_ids.contains(&task.id))
@@ -206,7 +268,7 @@ fn completed_visibility_excludes_ancestors_without_hiding_unfinished_children() 
 
 #[test]
 fn filtered_navigation_skips_hidden_ids_and_reaches_new_draft() {
-    let filtered = panel::filter_tasks(&tasks(), "match", true);
+    let filtered = shared_filter(&tasks(), "match", true);
     let ids: Vec<_> = tasks()
         .iter()
         .filter(|task| filtered.included_ids.contains(&task.id))

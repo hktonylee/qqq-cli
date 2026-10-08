@@ -9,40 +9,6 @@ pub struct FilterTask<'a> {
     pub status: &'a str,
 }
 
-pub struct FilteredTasks {
-    pub included_ids: HashSet<i64>,
-}
-
-pub fn filter_tasks(tasks: &[FilterTask<'_>], query: &str, show_completed: bool) -> FilteredTasks {
-    let query = query.to_lowercase();
-    let positions: HashMap<_, _> = tasks
-        .iter()
-        .enumerate()
-        .filter(|(_, task)| show_completed || task.status != "completed")
-        .map(|(index, task)| (task.id, index))
-        .collect();
-    let mut included_ids = HashSet::new();
-    for task in tasks
-        .iter()
-        .filter(|task| show_completed || task.status != "completed")
-    {
-        if !query.is_empty() && !task.description.to_lowercase().contains(&query) {
-            continue;
-        }
-        let mut current = Some(task.id);
-        while let Some(id) = current {
-            let Some(&index) = positions.get(&id) else {
-                break;
-            };
-            if !included_ids.insert(id) {
-                break;
-            }
-            current = tasks[index].parent_id;
-        }
-    }
-    FilteredTasks { included_ids }
-}
-
 pub fn adjacent_visible_id(ids: &[i64], current: Option<i64>, older: bool) -> Option<i64> {
     match current.and_then(|current| ids.iter().position(|id| *id == current)) {
         Some(index) if older => index.checked_sub(1).map(|index| ids[index]),

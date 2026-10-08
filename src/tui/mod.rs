@@ -10,6 +10,7 @@ mod jump;
 mod panel;
 mod render;
 mod tag_input;
+mod view_picker;
 
 use crate::config::AfterSaveNew;
 use anyhow::{Result, bail, ensure};
@@ -723,6 +724,7 @@ enum Mode<'a, 'b> {
         dashboard: bool,
         include_archived: bool,
         after_save_new: AfterSaveNew,
+        view_context: Option<Box<crate::views::ViewContext>>,
     },
 }
 type ActionHandler<'a> = dyn FnMut(&mut crate::db::Db, TaskAction) -> Result<crate::db::Task> + 'a;
@@ -815,6 +817,7 @@ pub fn compose_continuously(
             dashboard: false,
             include_archived: false,
             after_save_new: AfterSaveNew::OpenNew,
+            view_context: None,
         },
         None,
     )
@@ -824,6 +827,7 @@ pub fn compose_dashboard(
     db: &mut crate::db::Db,
     include_archived: bool,
     after_save_new: AfterSaveNew,
+    view_context: crate::views::ViewContext,
     save: &mut dyn FnMut(&mut crate::db::Db, Outcome) -> Result<i64>,
     completion: &mut CompletionHandler<'_>,
     action: &mut ActionHandler<'_>,
@@ -838,6 +842,7 @@ pub fn compose_dashboard(
             dashboard: true,
             include_archived,
             after_save_new,
+            view_context: Some(Box::new(view_context)),
         },
         None,
     )
@@ -855,6 +860,10 @@ fn compose_inner(
             ..
         }
     );
+    let mut view_context = match &mut mode {
+        Mode::Continuous { view_context, .. } => view_context.take(),
+        _ => None,
+    };
     let mut include_archived = matches!(
         mode,
         Mode::Continuous {
@@ -862,6 +871,9 @@ fn compose_inner(
             ..
         }
     );
+    if let Some(context) = &view_context {
+        include_archived = context.prepared.include_archived;
+    }
     let after_save_new = match &mode {
         Mode::Continuous { after_save_new, .. } => *after_save_new,
         Mode::Single(_) | Mode::Edit { .. } => AfterSaveNew::default(),
@@ -899,13 +911,17 @@ fn compose_inner(
     let mut editor_follow_cursor = true;
     let mut filter_query = String::new();
     let mut filter_focused = false;
-    let mut show_completed = true;
+    let mut completed_limit = view_context
+        .as_ref()
+        .and_then(|context| context.prepared.max_completed);
+    let mut show_completed = completed_limit != Some(0);
     let mut message = String::new();
     let mut message_is_error = false;
     let mut confirmation: Option<Confirmation> = None;
     let mut action_ui: Option<ActionUi> = None;
     let mut jump_ui: Option<jump::View> = None;
     let mut conflict_ui: Option<conflict::View> = None;
+    let mut view_ui: Option<view_picker::Picker> = None;
     let mut save_revision_override = None;
     let mut saved_any = false;
     let mut buffers = DraftBuffers::default();
@@ -1030,6 +1046,12 @@ fn compose_inner(
         if dashboard && target_id.is_none() && active_dirty {
             title.push_str(" [*]");
         }
+        if let Some(view) = view_context
+            .as_ref()
+            .and_then(|context| context.active.as_ref())
+        {
+            title.push_str(&format!(" · View: {}", view.name));
+        }
         let chrome = render::Chrome {
             title: &title,
             title_status_color: if dashboard {
@@ -1063,9 +1085,25 @@ fn compose_inner(
         let mut list_row_count = 0;
         let mut rows = Vec::new();
         if dashboard {
-            let tasks = dashboard_tasks
+            let snapshot = dashboard_tasks
                 .as_ref()
                 .expect("dashboard has task snapshot");
+            let mut selection = view_context
+                .as_ref()
+                .expect("dashboard has view context")
+                .prepared
+                .clone();
+            selection.include_archived = include_archived;
+            selection.max_completed = if !show_completed {
+                Some(0)
+            } else {
+                completed_limit.filter(|limit| *limit != 0)
+            };
+            let tasks = crate::selection::list(
+                mode.db().expect("dashboard has database"),
+                &selection,
+                Some(&filter_query),
+            )?;
             let filter_views: Vec<_> = tasks
                 .iter()
                 .map(|task| panel::FilterTask {
@@ -1075,12 +1113,8 @@ fn compose_inner(
                     status: &task.status,
                 })
                 .collect();
-            let filtered = panel::filter_tasks(&filter_views, &filter_query, show_completed);
-            let displayed: Vec<_> = tasks
-                .iter()
-                .filter(|task| filtered.included_ids.contains(&task.id))
-                .collect();
-            let statuses: HashMap<_, _> = tasks
+            let displayed: Vec<_> = tasks.iter().collect();
+            let statuses: HashMap<_, _> = snapshot
                 .iter()
                 .map(|task| (task.id, task.status.as_str()))
                 .collect();
@@ -1088,7 +1122,9 @@ fn compose_inner(
             if let Some(id) = target_id.filter(|_| active_dirty) {
                 dirty_ids.insert(id);
             }
-            rows = if (!filter_query.is_empty() || !show_completed) && displayed.is_empty() {
+            rows = if displayed.is_empty()
+                && (!snapshot.is_empty() || selection.filter.is_some() || !filter_query.is_empty())
+            {
                 Vec::new()
             } else {
                 let list_width = usize::from(
@@ -1111,7 +1147,6 @@ fn compose_inner(
             };
             let displayed_views: Vec<_> = filter_views
                 .iter()
-                .filter(|task| filtered.included_ids.contains(&task.id))
                 .map(|task| panel::FilterTask {
                     id: task.id,
                     parent_id: task.parent_id,
@@ -1141,13 +1176,21 @@ fn compose_inner(
                 usize::MAX,
             )
             .content;
-            let modal_lines = conflict_ui
-                .as_ref()
+            let modal_lines = view_ui
+                .as_mut()
                 .map(|ui| {
                     ui.rows(
                         usize::from(popup_content.width),
                         usize::from(popup_content.height),
                     )
+                })
+                .or_else(|| {
+                    conflict_ui.as_ref().map(|ui| {
+                        ui.rows(
+                            usize::from(popup_content.width),
+                            usize::from(popup_content.height),
+                        )
+                    })
                 })
                 .or_else(|| {
                     jump_ui
@@ -1269,6 +1312,7 @@ fn compose_inner(
                     && action_ui.is_none()
                     && jump_ui.is_none()
                     && conflict_ui.is_none()
+                    && view_ui.is_none()
                     && match mouse.kind {
                         MouseEventKind::ScrollUp | MouseEventKind::ScrollDown => {
                             dashboard::wheel_area(size, mouse.column, mouse.row, filter_visible)
@@ -1300,7 +1344,9 @@ fn compose_inner(
         };
         match input {
             Event::Paste(text) if confirmation.is_none() && conflict_ui.is_none() => {
-                if let Some(ui) = jump_ui.as_mut() {
+                if view_ui.is_some() {
+                    continue;
+                } else if let Some(ui) = jump_ui.as_mut() {
                     ui.paste(&text);
                 } else if let Some(ActionUi::Input {
                     kind,
@@ -1431,6 +1477,42 @@ fn compose_inner(
                 }
             }
             Event::Key(mut key) if key.kind != KeyEventKind::Release => {
+                if let Some(mut ui) = view_ui.take() {
+                    match ui.key(key) {
+                        Some(view_picker::Action::Apply(view)) => {
+                            let current =
+                                view_context.as_ref().expect("dashboard has view context");
+                            let mut next = current.clone();
+                            let result = next.select(view).and_then(|()| {
+                                crate::selection::list(
+                                    mode.db().expect("dashboard has database"),
+                                    &next.prepared,
+                                    Some(&filter_query),
+                                )
+                                .map(|_| ())
+                            });
+                            match result {
+                                Ok(()) => {
+                                    include_archived = next.prepared.include_archived;
+                                    completed_limit = next.prepared.max_completed;
+                                    show_completed = completed_limit != Some(0);
+                                    view_context = Some(next);
+                                    list_top = 0;
+                                    list_follow_selected = true;
+                                    message.clear();
+                                    message_is_error = false;
+                                }
+                                Err(error) => {
+                                    ui.set_error(format!("{error:#}"));
+                                    view_ui = Some(ui);
+                                }
+                            }
+                        }
+                        Some(view_picker::Action::Cancel) => (),
+                        None => view_ui = Some(ui),
+                    }
+                    continue;
+                }
                 if let Some(mut ui) = jump_ui.take() {
                     match ui.key(key) {
                         Some(jump::Action::Go(id)) => match task_target_with_archived(
@@ -1531,6 +1613,30 @@ fn compose_inner(
                     }
                 }
                 let control = key.modifiers.contains(KeyModifiers::CONTROL);
+                if dashboard
+                    && control
+                    && key.code == KeyCode::Char('b')
+                    && !key
+                        .modifiers
+                        .intersects(KeyModifiers::ALT | KeyModifiers::SUPER)
+                    && confirmation.is_none()
+                    && action_ui.is_none()
+                {
+                    let context = view_context.as_ref().expect("dashboard has view context");
+                    match crate::views::load(&context.path) {
+                        Ok(catalog) => {
+                            view_ui = Some(view_picker::Picker::new(
+                                catalog.views,
+                                context.active.as_ref().map(|view| view.name.as_str()),
+                            ))
+                        }
+                        Err(error) => {
+                            message = format!("{error:#}");
+                            message_is_error = true;
+                        }
+                    }
+                    continue;
+                }
                 let cancel_key = control && key.code == KeyCode::Char('c');
                 if matches!(
                     action_ui,
