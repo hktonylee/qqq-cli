@@ -222,15 +222,17 @@ wait_screen_contains("Task Editor")
   compatibility must confirm schema13 and immutable artifacts unchanged.
 - [x] Request focused read-only review through existing reviewer per requesting
   review skill. Fix important findings with regression tests and affected checks.
-- [ ] Check current root master; clean rebase preserving concurrent task #184
+- [x] Check current root master; clean rebase preserving concurrent task #184
   changes. Re-run affected/full gates if source changes. Fast-forward master,
   root install `cargo install --path . --locked --offline --force`.
-- [ ] Root and installed checks: documented CLI preview/apply, frozen/conflict/
+- [x] Root and installed checks: documented CLI preview/apply, frozen/conflict/
   rollback/noop, installed PTY multi-selection and dirty/caret/filter/scroll
   behavior, historical compatibility matrix, binary SHA match and root doctor.
-- [ ] Record verification evidence, update plan, commit/integrate docs. Complete
-  #185 through qqq, read back completion, remove owned merged worktree/branch,
-  resume one persistent `qqq next --wait --local --json` process.
+- [x] Record verification evidence, update plan and commit delivery notes.
+- [x] Complete #185 through qqq and read back completed status/history.
+
+Handoff after final delivery-note fast-forward: remove owned merged worktree and
+branch, then resume one persistent `qqq next --wait --local --json` process.
 
 ## Progress
 
@@ -275,3 +277,16 @@ and release build pass on final source; release CLI smoke passes documented
 commands, exact frozen IDs, noops, stale rejection, late SQL rollback and active
 archive guard. No schema migration or immutable compatibility artifact changed.
 Root installation and installed CLI/TUI checks pending.
+
+Delivery: code fast-forwarded to master2db2fbe and installed from root checkout.
+Root bulk23 + views10 + installed compatibility35 pass68 tests/3 binaries.
+Installed CLI smoke passes six actual documented commands from root/subdir,
+frozen arrival selection, deduplication, byte-identical noops, stale whole-batch
+rejection, late SQL rollback, active archive guard and schema13. Installed PTY
+runs pass11 bulk +5 named-view scenarios, including unsaved paste/image bytes,
+manual editor/list scroll, caret/filter preservation, conflicts, archive,
+compact/NO_COLOR and resize. Installed binary matches root release SHA256
+87efe77f7dbb98f67da2fd6fe19d8f19aa420285454afb4457e1c91a02d7934f.
+Root doctor reports schema13 and no issues. Task185 completion read back at
+2026-10-08T18:08:13.119Z; claim and complete events preserved. Final evidence in
+qqq message115. No remote push, remote CI run or publish performed.
