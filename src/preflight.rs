@@ -54,6 +54,10 @@ struct Claim {
     event: i64,
     link: Option<StoredLink>,
     process: Option<crate::process::Identity>,
+    link_json: Option<String>,
+    process_json: Option<String>,
+    process_key: Option<String>,
+    process_event: Option<i64>,
 }
 struct Death {
     claim: Claim,
@@ -77,14 +81,8 @@ struct ServerStatus {
 }
 
 fn sessions() -> Option<Sessions> {
-    let output = Command::new("herdr")
-        .args(["session", "list", "--json"])
-        .output()
-        .ok()?;
-    if !output.status.success() {
-        return None;
-    }
-    let sessions: Sessions = serde_json::from_slice(&output.stdout).ok()?;
+    let output = crate::process::probe(Command::new("herdr").args(["session", "list", "--json"]))?;
+    let sessions: Sessions = serde_json::from_slice(&output).ok()?;
     let mut names = std::collections::HashSet::new();
     if sessions
         .sessions
@@ -116,13 +114,21 @@ fn observe(conn: &Connection) -> Result<Vec<Death>> {
             Ok(Claim {
                 id: row.get(0)?,
                 process: if process_key.as_ref() == Some(&key) && process_event == Some(event) {
-                    process_json.and_then(|value| serde_json::from_str(&value).ok())
+                    process_json
+                        .as_ref()
+                        .and_then(|value| serde_json::from_str(value).ok())
                 } else {
                     None
                 },
                 key,
                 event,
-                link: encoded.and_then(|value| serde_json::from_str(&value).ok()),
+                link: encoded
+                    .as_ref()
+                    .and_then(|value| serde_json::from_str(value).ok()),
+                link_json: encoded,
+                process_json,
+                process_key,
+                process_event,
             })
         })?
         .collect::<rusqlite::Result<Vec<_>>>()?;
@@ -130,8 +136,17 @@ fn observe(conn: &Connection) -> Result<Vec<Death>> {
     let mut session_snapshot = None;
     let mut deaths = Vec::new();
     let mut process_snapshot = None;
+    let mut machine_snapshot = None;
     for claim in claims {
         if let Some(process) = &claim.process {
+            // Machine provenance does not depend on permission to inspect processes.
+            if machine_snapshot
+                .get_or_insert_with(crate::process::machine)
+                .as_deref()
+                != Some(process.machine.as_str())
+            {
+                continue;
+            }
             if let Some(snapshot) = process_snapshot
                 .get_or_insert_with(crate::process::Snapshot::read)
                 .as_ref()
@@ -150,6 +165,16 @@ fn observe(conn: &Connection) -> Result<Vec<Death>> {
             }
         }
         let Some(stored) = &claim.link else { continue };
+        if [
+            &stored.link.identity.agent,
+            &stored.link.identity.kind,
+            &stored.link.identity.value,
+        ]
+        .iter()
+        .any(|value| value.trim().is_empty())
+        {
+            continue;
+        }
         if stored
             .claim_key
             .as_ref()
@@ -165,26 +190,25 @@ fn observe(conn: &Connection) -> Result<Vec<Death>> {
         else {
             continue;
         };
-        let state =
-            servers
-                .entry(server.to_owned())
-                .or_insert_with(|| match herdr::owner_agents(server) {
-                    Ok(agents) => Server::Agents(agents),
-                    Err(_) => {
-                        let snapshot = session_snapshot.get_or_insert_with(sessions);
-                        match snapshot.as_ref() {
-                            Some(sessions)
-                                if !sessions
-                                    .sessions
-                                    .iter()
-                                    .any(|session| session.name == server && session.running) =>
-                            {
-                                Server::Dead
-                            }
-                            _ => Server::Unknown,
+        let state = servers.entry(server.to_owned()).or_insert_with(|| {
+            match herdr::probe_owner_agents(server) {
+                Some(agents) => Server::Agents(agents),
+                None => {
+                    let snapshot = session_snapshot.get_or_insert_with(sessions);
+                    match snapshot.as_ref() {
+                        Some(sessions)
+                            if !sessions
+                                .sessions
+                                .iter()
+                                .any(|session| session.name == server && session.running) =>
+                        {
+                            Server::Dead
                         }
+                        _ => Server::Unknown,
                     }
-                });
+                }
+            }
+        });
         let reason = match state {
             Server::Agents(agents)
                 if !agents
@@ -220,8 +244,12 @@ fn apply(conn: &mut Connection, deaths: Vec<Death>) -> Result<()> {
             "UPDATE tasks SET status='error',claim_key=NULL,harness_name=NULL,harness_session=NULL,
              orchestrator_name=NULL,orchestrator_session=NULL,updated_at=strftime('%Y-%m-%dT%H:%M:%fZ','now')
              WHERE id=?1 AND status='in_progress' AND claim_key=?2
-             AND COALESCE((SELECT MAX(id) FROM events WHERE task_id=?1 AND action='claim'),0)=?3",
-            params![claim.id, claim.key, claim.event])?;
+             AND COALESCE((SELECT MAX(id) FROM events WHERE task_id=?1 AND action='claim'),0)=?3
+             AND (SELECT link_json FROM herdr_links WHERE task_id=?1) IS ?4
+             AND (SELECT process_json FROM claim_processes WHERE task_id=?1) IS ?5
+             AND (SELECT claim_key FROM claim_processes WHERE task_id=?1) IS ?6
+             AND (SELECT claim_event_id FROM claim_processes WHERE task_id=?1) IS ?7",
+            params![claim.id, claim.key, claim.event, claim.link_json, claim.process_json, claim.process_key, claim.process_event])?;
         if changed == 0 {
             continue;
         }

@@ -127,6 +127,21 @@ pub(crate) fn owner_agents(server: &str) -> Result<Vec<Pane>> {
     Ok(agents.agents)
 }
 
+pub(crate) fn probe_owner_agents(server: &str) -> Option<Vec<Pane>> {
+    let output =
+        crate::process::probe(Command::new("herdr").args(["--session", server, "agent", "list"]))?;
+    let response: Envelope<Agents> = serde_json::from_slice(&output).ok()?;
+    if response.result.agents.iter().any(|pane| {
+        pane.pane_id.trim().is_empty()
+            || pane.workspace_id.trim().is_empty()
+            || pane.tab_id.trim().is_empty()
+            || pane_identity(pane).is_err()
+    }) {
+        return None;
+    }
+    Some(response.result.agents)
+}
+
 pub fn owner_is_live(link: &Link) -> Result<bool> {
     let server = link.server.as_deref().context(
         Info::new(

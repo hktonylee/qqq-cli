@@ -200,6 +200,9 @@ fn live_and_unknown_owner_evidence_leave_db_bytes_unchanged() {
         "missing-running",
         "missing-server",
         "mismatched-link",
+        "empty-identity",
+        "incomplete-agent",
+        "foreign-binding",
     ] {
         let f = Fixture::new();
         let mut pane = f.pane.clone();
@@ -222,7 +225,18 @@ fn live_and_unknown_owner_evidence_leave_db_bytes_unchanged() {
                 fs::write(f.dir.path().join("agents"), "{}").unwrap();
                 fs::write(f.dir.path().join("sessions"), "{}").unwrap();
             }
-            "missing-server" | "mismatched-link" => {
+            "incomplete-agent" => {
+                pane["agent"] = Value::Null;
+                pane["agent_session"] = Value::Null;
+                f.write("agents", json!({"result":{"agents":[pane]}}));
+            }
+            "foreign-binding" => {
+                let process = json!({"machine":"another-machine","pid":42,"started_at":"start","executable":"codex"});
+                f.db().execute("INSERT OR REPLACE INTO claim_processes(task_id,claim_key,claim_event_id,process_json)
+                    SELECT id,claim_key,(SELECT MAX(id) FROM events WHERE task_id=1 AND action='claim'),? FROM tasks WHERE id=1", [process.to_string()]).unwrap();
+                f.gone();
+            }
+            "missing-server" | "mismatched-link" | "empty-identity" => {
                 let db = f.db();
                 let mut link: Value = serde_json::from_str(
                     &db.query_row("SELECT link_json FROM herdr_links", [], |r| {
@@ -231,15 +245,19 @@ fn live_and_unknown_owner_evidence_leave_db_bytes_unchanged() {
                     .unwrap(),
                 )
                 .unwrap();
-                link[if mode == "missing-server" {
-                    "server"
+                if mode == "empty-identity" {
+                    link["identity"]["value"] = json!("");
                 } else {
-                    "claim_key"
-                }] = if mode == "missing-server" {
-                    Value::Null
-                } else {
-                    json!("wrong-owner")
-                };
+                    link[if mode == "missing-server" {
+                        "server"
+                    } else {
+                        "claim_key"
+                    }] = if mode == "missing-server" {
+                        Value::Null
+                    } else {
+                        json!("wrong-owner")
+                    };
+                }
                 db.execute("UPDATE herdr_links SET link_json=?", [link.to_string()])
                     .unwrap();
                 f.gone();
@@ -255,6 +273,112 @@ fn live_and_unknown_owner_evidence_leave_db_bytes_unchanged() {
         );
         assert_eq!(fs::read(path).unwrap(), before, "{mode}");
     }
+}
+
+#[test]
+fn hung_herdr_probe_is_unknown_and_command_finishes_within_timeout() {
+    let f = Fixture::new();
+    let script = fs::read_to_string(f.dir.path().join("herdr"))
+        .unwrap()
+        .lines()
+        .map(|line| {
+            if line.starts_with("'agent list')") {
+                "'agent list') exec /bin/sleep 30;;"
+            } else {
+                line
+            }
+        })
+        .collect::<Vec<_>>()
+        .join("\n")
+        + "\n";
+    fs::write(f.dir.path().join("herdr"), script).unwrap();
+    let started = std::time::Instant::now();
+    assert_eq!(f.ok(&["show", "1"])["task"]["status"], "in_progress");
+    assert!(started.elapsed() < std::time::Duration::from_secs(6));
+}
+
+#[test]
+fn init_new_nested_project_does_not_scan_parent_claims() {
+    let f = Fixture::new();
+    f.gone();
+    let nested = f.dir.path().join("child-project");
+    fs::create_dir(&nested).unwrap();
+    let out = f
+        .command()
+        .current_dir(&nested)
+        .arg("init")
+        .output()
+        .unwrap();
+    assert!(out.status.success());
+    assert!(nested.join(".qqq/qqq.db").exists());
+    assert_eq!(
+        f.db()
+            .query_row("SELECT status FROM tasks WHERE id=1", [], |r| r
+                .get::<_, String>(0))
+            .unwrap(),
+        "in_progress"
+    );
+}
+
+#[test]
+fn rejected_nested_restore_does_not_scan_parent_claims() {
+    let f = Fixture::new();
+    f.ok(&["backup", "copy.tar"]);
+    f.gone();
+    let nested = f.dir.path().join("restored-project");
+    fs::create_dir(&nested).unwrap();
+    let out = f
+        .command()
+        .current_dir(&nested)
+        .args(["restore", "../copy.tar"])
+        .output()
+        .unwrap();
+    assert!(!out.status.success());
+    assert!(!nested.join(".qqq/qqq.db").exists());
+    assert_eq!(
+        f.db()
+            .query_row("SELECT status FROM tasks WHERE id=1", [], |r| r
+                .get::<_, String>(0))
+            .unwrap(),
+        "in_progress"
+    );
+}
+
+#[test]
+fn relink_after_observation_wins_over_old_owner_failure() {
+    let f = Fixture::new();
+    f.gone();
+    let script = fs::read_to_string(f.dir.path().join("herdr")).unwrap().replace(
+        "'agent list')", "'agent list') if [ -f \"$QQQ_TEST_BLOCK\" ]; then : > \"$QQQ_TEST_ENTERED\"; while [ -f \"$QQQ_TEST_BLOCK\" ]; do /bin/sleep 0.01; done; fi;");
+    fs::write(f.dir.path().join("herdr"), script).unwrap();
+    let block = f.dir.path().join("block");
+    let entered = f.dir.path().join("entered");
+    fs::write(&block, "").unwrap();
+    let mut child = Harness(
+        f.command()
+            .env("QQQ_TEST_BLOCK", &block)
+            .env("QQQ_TEST_ENTERED", &entered)
+            .args(["show", "1"])
+            .spawn()
+            .unwrap(),
+    );
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
+    while !entered.exists() {
+        assert!(
+            std::time::Instant::now() < deadline,
+            "preflight never probed owner"
+        );
+        std::thread::sleep(std::time::Duration::from_millis(10));
+    }
+    f.db().execute("UPDATE herdr_links SET link_json=json_set(link_json,'$.server','new-live-server','$.identity.value','new-terminal','$.pane.terminal_id','new-terminal') WHERE task_id=1", []).unwrap();
+    fs::remove_file(block).unwrap();
+    let mut text = String::new();
+    std::io::Read::read_to_string(&mut child.0.stdout.take().unwrap(), &mut text).unwrap();
+    assert!(child.0.wait().unwrap().success());
+    assert_eq!(
+        serde_json::from_str::<Value>(&text).unwrap()["task"]["status"],
+        "in_progress"
+    );
 }
 
 #[test]
@@ -487,6 +611,8 @@ fn preflight_failed_owner_can_be_explicitly_reopened() {
     let f = Fixture::new();
     f.gone();
     assert_eq!(f.ok(&["show", "1"])["task"]["status"], "error");
+    f.ok(&["archive", "1"]);
+    f.ok(&["unarchive", "1"]);
     assert_eq!(
         f.ok(&["reopen", "1", "--session", "reviewer"])["status"],
         "new"

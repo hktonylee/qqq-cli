@@ -272,7 +272,7 @@ enum Commands {
     },
     /// Mark task completed; supplied or discovered session ID must match recorded owner.
     Complete { id: i64 },
-    /// Return completed task or in-progress task with absent Herdr owner to new; keep history.
+    /// Return completed/auto-failed task or active task with absent Herdr owner to new; keep history.
     Reopen {
         /// Task ID, or negative creation index: -1 is newest.
         #[arg(allow_negative_numbers = true)]
@@ -1013,7 +1013,11 @@ fn run(cli: Cli) -> Result<(Option<String>, bool)> {
         return Ok((None, false));
     }
     let json = cli.json;
-    preflight::current_project()?;
+    // Init/restore target current directory, rather than nearest parent project.
+    // Init's DB open checks its own active owners; restore has no live target DB.
+    if !matches!(&cli.command, Commands::Init | Commands::Restore { .. }) {
+        preflight::current_project()?;
+    }
     let is_doctor = matches!(&cli.command, Commands::Doctor);
     let format = output::Format::from(&cli.command);
     let value = execute(cli, display_limit, filter.as_ref())?;

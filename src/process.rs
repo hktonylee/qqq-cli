@@ -2,9 +2,45 @@
 use serde::{Deserialize, Serialize};
 use std::{
     collections::{HashMap, HashSet},
+    io::{Read, Seek},
     path::Path,
-    process::Command,
+    process::{Command, Stdio},
+    time::{Duration, Instant},
 };
+
+/// Bounded read-only probe. File stdout avoids pipe backpressure or reader threads.
+pub(crate) fn probe(command: &mut Command) -> Option<Vec<u8>> {
+    let mut stdout = tempfile::tempfile().ok()?;
+    let mut child = command
+        .stdin(Stdio::null())
+        .stderr(Stdio::null())
+        .stdout(Stdio::from(stdout.try_clone().ok()?))
+        .spawn()
+        .ok()?;
+    let deadline = Instant::now() + Duration::from_secs(2);
+    loop {
+        match child.try_wait() {
+            Ok(Some(status)) if status.success() => break,
+            Ok(Some(_)) => return None,
+            Ok(None) if Instant::now() < deadline => std::thread::sleep(Duration::from_millis(10)),
+            _ => {
+                let _ = child.kill();
+                let _ = child.wait();
+                return None;
+            }
+        }
+    }
+    stdout.rewind().ok()?;
+    let mut bytes = Vec::new();
+    stdout
+        .take(16 * 1024 * 1024 + 1)
+        .read_to_end(&mut bytes)
+        .ok()?;
+    if bytes.len() > 16 * 1024 * 1024 {
+        return None;
+    }
+    Some(bytes)
+}
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
@@ -35,16 +71,13 @@ pub(crate) struct Snapshot {
 
 impl Snapshot {
     pub(crate) fn read() -> Option<Self> {
-        let output = Command::new("/bin/ps")
-            .env("LC_ALL", "C")
-            .env("TZ", "UTC")
-            .args(["-axo", "pid=,ppid=,lstart=,stat=,comm="])
-            .output()
-            .ok()?;
-        if !output.status.success() {
-            return None;
-        }
-        Self::parse(machine()?, std::str::from_utf8(&output.stdout).ok()?)
+        let output = probe(
+            Command::new("/bin/ps")
+                .env("LC_ALL", "C")
+                .env("TZ", "UTC")
+                .args(["-axo", "pid=,ppid=,lstart=,stat=,comm="]),
+        )?;
+        Self::parse(machine()?, std::str::from_utf8(&output).ok()?)
     }
 
     fn parse(machine: String, text: &str) -> Option<Self> {
@@ -141,7 +174,7 @@ pub(crate) fn capture(session: &str, link: Option<&crate::herdr::Link>) -> Optio
 }
 
 #[cfg(target_os = "linux")]
-fn machine() -> Option<String> {
+pub(crate) fn machine() -> Option<String> {
     let machine = std::fs::read_to_string("/etc/machine-id").ok()?;
     if machine.trim().is_empty() {
         return None;
@@ -151,15 +184,10 @@ fn machine() -> Option<String> {
 }
 
 #[cfg(target_os = "macos")]
-fn machine() -> Option<String> {
-    let output = Command::new("/usr/sbin/ioreg")
-        .args(["-rd1", "-c", "IOPlatformExpertDevice"])
-        .output()
-        .ok()?;
-    if !output.status.success() {
-        return None;
-    }
-    let text = std::str::from_utf8(&output.stdout).ok()?;
+pub(crate) fn machine() -> Option<String> {
+    let output =
+        probe(Command::new("/usr/sbin/ioreg").args(["-rd1", "-c", "IOPlatformExpertDevice"]))?;
+    let text = std::str::from_utf8(&output).ok()?;
     let line = text
         .lines()
         .find(|line| line.contains("\"IOPlatformUUID\""))?;
@@ -171,7 +199,7 @@ fn machine() -> Option<String> {
 }
 
 #[cfg(not(any(target_os = "linux", target_os = "macos")))]
-fn machine() -> Option<String> {
+pub(crate) fn machine() -> Option<String> {
     None
 }
 

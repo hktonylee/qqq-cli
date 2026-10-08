@@ -1670,7 +1670,8 @@ impl Db {
             task.status == "completed" || task.status == "in_progress"
                 || (task.status == "error" && tx.query_row(
                     "SELECT EXISTS(SELECT 1 FROM events WHERE task_id=?1 AND action='error' AND session=?2
-                     AND id=(SELECT MAX(id) FROM events WHERE task_id=?1))",
+                     AND id=(SELECT MAX(id) FROM events WHERE task_id=?1
+                     AND action NOT IN ('archive','unarchive')))",
                     params![id, crate::preflight::ACTOR], |row| row.get::<_, bool>(0))?),
             crate::errors::Info::transition(
                 id,

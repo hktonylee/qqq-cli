@@ -10,11 +10,14 @@ After parsing/validation, before project command or TUI starts, scan current
 project's in-progress claims. Every command includes inspection/dry-run commands:
 preflight may mark dead owners error; command's own preview remains nonmutating.
 Help/parser failures have no command execution. Config/restore without existing
-project remain usable. Preflight never creates projects or migrates DBs; normal
+project remain usable. Init scans its target DB after opening; restore has no
+live target DB. Creating nested project never scans parent project. Preflight
+never creates projects or migrates DBs; normal
 project opens run preflight after any required migration. Older-schema inspection
 retains migration-required behavior. Current-schema preflight with no confirmed
 dead claims makes no DB writes. TUI/watch/next-wait run scan once before start;
-no periodic scan while idle.
+no periodic scan while idle. External preflight probes time out after two seconds;
+timeout remains unknown.
 
 ## Proof Of Death
 
@@ -41,7 +44,7 @@ restored foreign processes unknown.
 
 Observe without write transaction. For each confirmed dead owner, acquire short
 immediate transaction and conditionally update exact in-progress claim, guarded
-by claim key and newest claim event ID. Completion/release/reassignment, including
+by claim key, newest claim event ID and observed link/process binding. Completion/release/reassignment, including
 same owner reclaim, wins over stale observation. Set existing status error, clear
 claim/assignment fields, update timestamp; retain task contents, revision, images,
 tags, relationships, messages and Herdr link. Append one error event authored
@@ -49,7 +52,8 @@ qqq-preflight and one reason message. Concurrent/repeated scans produce one pair
 DB failure aborts command; unavailable liveness evidence does not.
 
 Reopen accepts preflight-generated errors as explicit orphan recovery, using
-latest event's error action and qqq-preflight author. Ordinary manual error still
+latest status event's error action and qqq-preflight author. Archive/unarchive
+preserve recovery eligibility. Ordinary manual error still
 uses edit --set-status new. This preserves existing orphan reopen flow after
 automatic failure has cleared assignment.
 
