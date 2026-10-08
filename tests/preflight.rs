@@ -2,7 +2,12 @@
 
 use rusqlite::Connection;
 use serde_json::{Value, json};
-use std::{fs, os::unix::fs::PermissionsExt, process::Command};
+use std::{
+    fs,
+    io::{BufRead, BufReader},
+    os::unix::fs::PermissionsExt,
+    process::{Child, Command, Stdio},
+};
 use tempfile::TempDir;
 
 struct Fixture {
@@ -76,6 +81,8 @@ esac
         let mut c = Command::new(env!("CARGO_BIN_EXE_qqq"));
         c.current_dir(self.dir.path())
             .arg("--json")
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
             .env_remove("QQQ_SESSION")
             .env_remove("CODEX_THREAD_ID")
             .env_remove("CODEX_SESSION_ID")
@@ -289,5 +296,307 @@ fn two_claims_on_saved_server_use_one_probe() {
             .count(),
         1,
         "{calls}"
+    );
+}
+
+struct Harness(Child);
+impl Drop for Harness {
+    fn drop(&mut self) {
+        let _ = self.0.kill();
+        let _ = self.0.wait();
+    }
+}
+
+fn native_command(dir: &TempDir) -> Command {
+    let mut command = Command::new(env!("CARGO_BIN_EXE_qqq"));
+    command
+        .current_dir(dir.path())
+        .arg("--json")
+        .env_remove("QQQ_SESSION")
+        .env_remove("CODEX_THREAD_ID")
+        .env_remove("CODEX_SESSION_ID")
+        .env_remove("HERDR_ENV")
+        .env_remove("HERDR_PANE_ID");
+    command
+}
+
+fn native_claim() -> (TempDir, Harness) {
+    let dir = TempDir::new().unwrap();
+    for args in [&["init"][..], &["add", "Native task"][..]] {
+        assert!(
+            native_command(&dir)
+                .args(args)
+                .output()
+                .unwrap()
+                .status
+                .success()
+        );
+    }
+    fs::write(
+        dir.path().join("parent.rs"),
+        r#"
+use std::{io::Read, process::Command};
+fn main() {
+    assert!(Command::new(std::env::var_os("QQQ_BIN").unwrap())
+        .args(["--json", "next", "--local"]).status().unwrap().success());
+    println!("READY");
+    let _ = std::io::stdin().read_exact(&mut [0u8]);
+}
+"#,
+    )
+    .unwrap();
+    let compile = Command::new(std::env::var_os("RUSTC").unwrap_or_else(|| "rustc".into()))
+        .arg(dir.path().join("parent.rs"))
+        .arg("-o")
+        .arg(dir.path().join("codex"))
+        .output()
+        .unwrap();
+    assert!(
+        compile.status.success(),
+        "{}",
+        String::from_utf8_lossy(&compile.stderr)
+    );
+    let mut parent = Command::new(dir.path().join("codex"));
+    parent
+        .current_dir(dir.path())
+        .env("QQQ_BIN", env!("CARGO_BIN_EXE_qqq"))
+        .env("CODEX_THREAD_ID", "native-preflight-owner")
+        .env_remove("CODEX_SESSION_ID")
+        .env_remove("QQQ_SESSION")
+        .env_remove("HERDR_ENV")
+        .env_remove("HERDR_PANE_ID")
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped());
+    let mut harness = Harness(parent.spawn().unwrap());
+    let mut reader = BufReader::new(harness.0.stdout.take().unwrap());
+    let mut text = String::new();
+    loop {
+        let mut line = String::new();
+        assert_ne!(
+            reader.read_line(&mut line).unwrap(),
+            0,
+            "harness exited: {text}"
+        );
+        if line.trim() == "READY" {
+            break;
+        }
+        text.push_str(&line);
+    }
+    let task: Value = serde_json::from_str(&text).unwrap();
+    assert_eq!(task["status"], "in_progress");
+    (dir, harness)
+}
+
+#[test]
+fn native_harness_death_is_detected_before_command_without_herdr_link() {
+    let (dir, mut harness) = native_claim();
+    let out = native_command(&dir).args(["show", "1"]).output().unwrap();
+    assert!(out.status.success());
+    assert_eq!(
+        serde_json::from_slice::<Value>(&out.stdout).unwrap()["task"]["status"],
+        "in_progress"
+    );
+    harness.0.kill().unwrap();
+    harness.0.wait().unwrap();
+    let out = native_command(&dir).args(["show", "1"]).output().unwrap();
+    assert!(
+        out.status.success(),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let shown: Value = serde_json::from_slice(&out.stdout).unwrap();
+    assert_eq!(shown["task"]["status"], "error");
+    assert!(
+        shown["messages"][0]["body"]
+            .as_str()
+            .unwrap()
+            .contains("process")
+    );
+    assert!(shown["herdr"].is_null());
+}
+
+#[test]
+fn concurrent_commands_fail_one_owner_once() {
+    let f = Fixture::new();
+    f.gone();
+    let mut commands: Vec<_> = (0..5)
+        .map(|_| f.command().args(["show", "1"]).spawn().unwrap())
+        .collect();
+    for command in &mut commands {
+        assert!(command.wait().unwrap().success());
+    }
+    let shown = f.ok(&["show", "1"]);
+    assert_eq!(shown["events"].as_array().unwrap().len(), 2);
+    assert_eq!(shown["messages"].as_array().unwrap().len(), 2);
+}
+
+#[test]
+fn same_key_reclaim_after_observation_wins_over_stale_failure() {
+    let f = Fixture::new();
+    f.gone();
+    let script = fs::read_to_string(f.dir.path().join("herdr")).unwrap().replace(
+        "'agent list')", "'agent list') if [ -f \"$QQQ_TEST_BLOCK\" ]; then : > \"$QQQ_TEST_ENTERED\"; while [ -f \"$QQQ_TEST_BLOCK\" ]; do /bin/sleep 0.01; done; fi;");
+    fs::write(f.dir.path().join("herdr"), script).unwrap();
+    let block = f.dir.path().join("block");
+    let entered = f.dir.path().join("entered");
+    fs::write(&block, "").unwrap();
+    let child = f
+        .command()
+        .env("QQQ_TEST_BLOCK", &block)
+        .env("QQQ_TEST_ENTERED", &entered)
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .args(["show", "1"])
+        .spawn()
+        .unwrap();
+    let mut child = Harness(child);
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
+    while !entered.exists() {
+        assert!(
+            std::time::Instant::now() < deadline,
+            "preflight never probed owner"
+        );
+        std::thread::sleep(std::time::Duration::from_millis(10));
+    }
+    let db = f.db();
+    db.execute_batch("BEGIN IMMEDIATE; INSERT INTO events(task_id,session,action) SELECT id,claim_key,'release' FROM tasks WHERE id=1;
+        INSERT INTO events(task_id,session,action) SELECT id,claim_key,'claim' FROM tasks WHERE id=1; COMMIT;").unwrap();
+    fs::remove_file(block).unwrap();
+    let output = child.0.stdout.take().unwrap();
+    let mut text = String::new();
+    std::io::Read::read_to_string(&mut BufReader::new(output), &mut text).unwrap();
+    assert!(child.0.wait().unwrap().success());
+    assert_eq!(
+        serde_json::from_str::<Value>(&text).unwrap()["task"]["status"],
+        "in_progress"
+    );
+    assert_eq!(
+        db.query_row(
+            "SELECT count(*) FROM events WHERE action='error'",
+            [],
+            |r| r.get::<_, i64>(0)
+        )
+        .unwrap(),
+        0
+    );
+}
+
+#[test]
+fn preflight_failed_owner_can_be_explicitly_reopened() {
+    let f = Fixture::new();
+    f.gone();
+    assert_eq!(f.ok(&["show", "1"])["task"]["status"], "error");
+    assert_eq!(
+        f.ok(&["reopen", "1", "--session", "reviewer"])["status"],
+        "new"
+    );
+    assert_eq!(
+        f.ok(&["next", "--local", "--session", "replacement"])["id"],
+        1
+    );
+    assert!(f.ok(&["show", "1"])["herdr"].is_null());
+}
+
+#[test]
+fn inspection_preflight_fails_dead_owner_before_preview_without_claiming_work() {
+    for args in [
+        &["status"][..],
+        &["doctor"][..],
+        &["next", "--dry-run"][..],
+        &["next", "--explain"][..],
+    ] {
+        let f = Fixture::new();
+        f.ok(&["add", "Queued"]);
+        f.gone();
+        f.ok(args);
+        let db = f.db();
+        assert_eq!(
+            db.query_row("SELECT status FROM tasks WHERE id=1", [], |r| r
+                .get::<_, String>(0))
+                .unwrap(),
+            "error",
+            "{args:?}"
+        );
+        assert_eq!(
+            db.query_row("SELECT status FROM tasks WHERE id=2", [], |r| r
+                .get::<_, String>(0))
+                .unwrap(),
+            "new"
+        );
+    }
+}
+
+#[test]
+fn native_pid_reuse_foreign_machine_and_stale_binding_are_distinguished() {
+    for mode in ["reuse", "foreign", "stale-event", "mismatched-key"] {
+        let (dir, _harness) = native_claim();
+        let db = Connection::open(dir.path().join(".qqq/qqq.db")).unwrap();
+        let original: String = db
+            .query_row("SELECT process_json FROM claim_processes", [], |r| r.get(0))
+            .unwrap();
+        let mut identity: Value = serde_json::from_str(&original).unwrap();
+        identity["started_at"] = json!("different process start");
+        match mode {
+            "foreign" => identity["machine"] = json!("another-machine"),
+            "stale-event" => {
+                db.execute("INSERT INTO events(task_id,session,action) SELECT id,claim_key,'claim' FROM tasks WHERE id=1", []).unwrap();
+            }
+            "mismatched-key" => {
+                db.execute("UPDATE claim_processes SET claim_key='stale-owner'", [])
+                    .unwrap();
+            }
+            _ => (),
+        }
+        db.execute(
+            "UPDATE claim_processes SET process_json=?",
+            [identity.to_string()],
+        )
+        .unwrap();
+        let out = native_command(&dir).args(["show", "1"]).output().unwrap();
+        assert!(
+            out.status.success(),
+            "{}",
+            String::from_utf8_lossy(&out.stderr)
+        );
+        let task: Value = serde_json::from_slice(&out.stdout).unwrap();
+        assert_eq!(
+            task["task"]["status"],
+            if mode == "reuse" {
+                "error"
+            } else {
+                "in_progress"
+            },
+            "{mode}"
+        );
+    }
+}
+
+#[test]
+fn retrieving_native_assignment_preserves_original_process_binding() {
+    let (dir, _harness) = native_claim();
+    let db = Connection::open(dir.path().join(".qqq/qqq.db")).unwrap();
+    let before: String = db
+        .query_row("SELECT process_json FROM claim_processes", [], |r| r.get(0))
+        .unwrap();
+    let out = native_command(&dir)
+        .args([
+            "next",
+            "--local",
+            "--harness-session",
+            "native-preflight-owner",
+        ])
+        .output()
+        .unwrap();
+    assert!(
+        out.status.success(),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    assert_eq!(
+        db.query_row("SELECT process_json FROM claim_processes", [], |r| r
+            .get::<_, String>(0))
+            .unwrap(),
+        before
     );
 }

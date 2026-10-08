@@ -26,7 +26,7 @@ pub(crate) fn filter_evaluation_error() -> crate::errors::Info {
 
 pub const DB_NAME: &str = "qqq.db";
 const PROJECT_DIR_NAME: &str = ".qqq";
-pub(crate) const SCHEMA_VERSION: i64 = 12;
+pub(crate) const SCHEMA_VERSION: i64 = 13;
 pub(crate) const READY_TASK_PREDICATE: &str = "tasks.status='new' AND tasks.archived=0 AND
     (tasks.parent_id IS NULL OR EXISTS
     (SELECT 1 FROM tasks parent WHERE parent.id=tasks.parent_id AND parent.status='completed')) AND NOT EXISTS (
@@ -585,6 +585,9 @@ impl Db {
             }
             if version < 12 {
                 tx.execute_batch(include_str!("sql/migrate_v12.sql"))?;
+            }
+            if version < 13 {
+                tx.execute_batch(include_str!("sql/migrate_v13.sql"))?;
             }
             commit_with_files(tx, &mut pending)?;
             if disable_foreign_keys {
@@ -1562,11 +1565,17 @@ impl Db {
         if let Some(id) = id {
             if owned.is_none() {
                 tx.execute("DELETE FROM herdr_links WHERE task_id=?", [id])?;
+                tx.execute("DELETE FROM claim_processes WHERE task_id=?", [id])?;
                 tx.execute("UPDATE tasks SET status='in_progress',claim_key=?,updated_at=strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE id=?",params![session,id])?;
                 tx.execute(
                     "INSERT INTO events(task_id,session,action) VALUES (?,?,'claim')",
                     params![id, session],
                 )?;
+                let event = tx.last_insert_rowid();
+                if let Some(process) = crate::process::capture(&session, link) {
+                    tx.execute("INSERT INTO claim_processes(task_id,claim_key,claim_event_id,process_json) VALUES (?,?,?,?)",
+                        params![id, session, event, serde_json::to_string(&process)?])?;
+                }
             }
             if let Some(link) = link {
                 Self::save_link(&tx, id, link)?;
@@ -1658,7 +1667,11 @@ impl Db {
             .optional()?
             .with_context(|| crate::errors::Info::missing_task(id))?;
         ensure!(
-            task.status == "completed" || task.status == "in_progress",
+            task.status == "completed" || task.status == "in_progress"
+                || (task.status == "error" && tx.query_row(
+                    "SELECT EXISTS(SELECT 1 FROM events WHERE task_id=?1 AND action='error' AND session=?2
+                     AND id=(SELECT MAX(id) FROM events WHERE task_id=?1))",
+                    params![id, crate::preflight::ACTOR], |row| row.get::<_, bool>(0))?),
             crate::errors::Info::transition(
                 id,
                 &task.status,

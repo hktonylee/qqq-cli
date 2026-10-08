@@ -16,6 +16,7 @@ mod import;
 mod list_filter;
 mod output;
 mod preflight;
+mod process;
 mod queue;
 mod session;
 mod snapshot;

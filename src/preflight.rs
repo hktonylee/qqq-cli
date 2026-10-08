@@ -53,6 +53,7 @@ struct Claim {
     key: String,
     event: i64,
     link: Option<StoredLink>,
+    process: Option<crate::process::Identity>,
 }
 struct Death {
     claim: Claim,
@@ -99,16 +100,28 @@ fn observe(conn: &Connection) -> Result<Vec<Death>> {
     let claims = conn
         .prepare(
             "SELECT tasks.id,tasks.claim_key,COALESCE((SELECT MAX(id) FROM events
-         WHERE task_id=tasks.id AND action='claim'),0),herdr_links.link_json
+         WHERE task_id=tasks.id AND action='claim'),0),herdr_links.link_json,
+         claim_processes.claim_key,claim_processes.claim_event_id,claim_processes.process_json
          FROM tasks LEFT JOIN herdr_links ON herdr_links.task_id=tasks.id
+         LEFT JOIN claim_processes ON claim_processes.task_id=tasks.id
          WHERE tasks.status='in_progress' ORDER BY tasks.id",
         )?
         .query_map([], |row| {
             let encoded: Option<String> = row.get(3)?;
+            let key: String = row.get(1)?;
+            let event: i64 = row.get(2)?;
+            let process_key: Option<String> = row.get(4)?;
+            let process_event: Option<i64> = row.get(5)?;
+            let process_json: Option<String> = row.get(6)?;
             Ok(Claim {
                 id: row.get(0)?,
-                key: row.get(1)?,
-                event: row.get(2)?,
+                process: if process_key.as_ref() == Some(&key) && process_event == Some(event) {
+                    process_json.and_then(|value| serde_json::from_str(&value).ok())
+                } else {
+                    None
+                },
+                key,
+                event,
                 link: encoded.and_then(|value| serde_json::from_str(&value).ok()),
             })
         })?
@@ -116,7 +129,26 @@ fn observe(conn: &Connection) -> Result<Vec<Death>> {
     let mut servers = HashMap::new();
     let mut session_snapshot = None;
     let mut deaths = Vec::new();
+    let mut process_snapshot = None;
     for claim in claims {
+        if let Some(process) = &claim.process {
+            if let Some(snapshot) = process_snapshot
+                .get_or_insert_with(crate::process::Snapshot::read)
+                .as_ref()
+            {
+                if !snapshot.same_machine(process) {
+                    continue;
+                }
+                if snapshot.state(process) == crate::process::State::Dead {
+                    let reason = format!(
+                        "Owner preflight: harness process {} ({}) is no longer alive",
+                        process.pid, process.executable
+                    );
+                    deaths.push(Death { claim, reason });
+                    continue;
+                }
+            }
+        }
         let Some(stored) = &claim.link else { continue };
         if stored
             .claim_key
