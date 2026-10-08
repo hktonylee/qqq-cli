@@ -13,6 +13,7 @@ use unicode_width::UnicodeWidthStr;
 pub enum Format {
     ConfigList,
     Views,
+    Graph,
     ConfigGet,
     ConfigSet,
     ConfigUnset,
@@ -44,6 +45,7 @@ impl From<&Commands> for Format {
         match command {
             Commands::Config { list: true, .. } => Self::ConfigList,
             Commands::View { .. } => Self::Views,
+            Commands::Graph { .. } => Self::Graph,
             Commands::Config { unset: Some(_), .. } => Self::ConfigUnset,
             Commands::Config { value: Some(_), .. } => Self::ConfigSet,
             Commands::Config { .. } => Self::ConfigGet,
@@ -418,6 +420,7 @@ pub fn render(format: Format, value: &Value, color: bool, columns: Option<usize>
         Format::Bulk => bulk::render(value),
         Format::Recipe => recipe::render(value),
         Format::Views => crate::views::render(value),
+        Format::Graph => crate::graph::render(value, columns),
         Format::QueueOverview => queue::render(value, color, false),
         Format::NextExplanation => queue::render(value, color, true),
         Format::ConfigList => {

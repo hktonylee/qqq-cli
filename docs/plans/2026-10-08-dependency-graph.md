@@ -1,6 +1,6 @@
 # Dependency Graph Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task inline. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task inline. Steps use checkbox (`- [x]`) syntax for tracking.
 
 **Goal:** Inspect typed upstream blockers and unique downstream impact through read-only CLI/TUI.
 
@@ -14,7 +14,7 @@ Spec: [resolved design](../specs/2026-10-08-dependency-graph-design.md).
 
 Files: create `src/graph.rs`, `tests/graph.rs`; modify `src/db.rs`, `src/main.rs`, `src/cli_error.rs`, `src/output.rs`.
 
-- [ ] Add isolated CLI helpers clearing HOME/QQQ/CODEX/Herdr identities. Initial RED:
+- [x] Add isolated CLI helpers clearing HOME/QQQ/CODEX/Herdr identities. Initial RED:
 
 ```rust
 #[test]
@@ -41,8 +41,8 @@ fn graph_separates_two_blockers_and_immediate_versus_transitive_impact() {
 }
 ```
 
-- [ ] Run `CARGO_INCREMENTAL=0 cargo test --locked --offline --test graph`; expect unknown graph command, not fixture errors.
-- [ ] Define complete report model and CLI options:
+- [x] Run `CARGO_INCREMENTAL=0 cargo test --locked --offline --test graph`; expect unknown graph command, not fixture errors.
+- [x] Define complete report model and CLI options:
 
 ```rust
 #[derive(Clone, Copy, Debug, PartialEq, Eq, clap::ValueEnum, serde::Serialize, serde::Deserialize)]
@@ -100,8 +100,8 @@ pub struct Report {
 }
 ```
 
-- [ ] Internally store minimal metadata and parent IDs, edges, `HashMap<i64, Vec<usize>>` prerequisite/dependent edge indexes. Bulk SELECT `id,description,status,archived,parent_id,({READY_TASK_PREDICATE})` ordered by ID, then extra edges ordered by task/prerequisite. Missing IDs receive placeholder metadata. Build indexes in one edge pass; do not use TASK_COLUMNS' unrelated images/identity/prerequisite JSON. Deduplicate dependency IDs when counting blockers/direct impact; preserve parent/extra edge kinds in output.
-- [ ] Implement iterative BFS depth map and unfinished-blocker traversal:
+- [x] Internally store minimal metadata and parent IDs, edges, `HashMap<i64, Vec<usize>>` prerequisite/dependent edge indexes. Bulk SELECT `id,description,status,archived,parent_id,({READY_TASK_PREDICATE})` ordered by ID, then extra edges ordered by task/prerequisite. Missing IDs receive placeholder metadata. Build indexes in one edge pass; do not use TASK_COLUMNS' unrelated images/identity/prerequisite JSON. Deduplicate dependency IDs when counting blockers/direct impact; preserve parent/extra edge kinds in output.
+- [x] Implement iterative BFS depth map and unfinished-blocker traversal:
 
 ```rust
 fn distances(start: i64, adjacency: &std::collections::HashMap<i64, Vec<i64>>)
@@ -121,11 +121,11 @@ fn distances(start: i64, adjacency: &std::collections::HashMap<i64, Vec<i64>>)
 ```
 
 Build unfinished-only adjacency in same edge pass; a completed prerequisite stops blocker reach. Kahn indegrees/reverse edges detect cycles without recursion. BFS both directions independently; remove root from impact sets even if corrupt cycle returns to root.
-- [ ] Compute unique direct and transitive real-task sets. For each direct real task, use current SQL ready flag; new/unarchived candidate future-ready iff every prerequisite is focus or completed. Count currently-false/future-true as immediate, other unfinished dependencies as still-blocked, ready tasks as already-ready, other states inactive. Root already completed yields zero new readiness. Keep exact totals independent of display direction/depth.
-- [ ] Presentation selects focus first, then minimum-hop discovered candidates matching requested direction and depth until node cap. Sort selected IDs only; include each node once with both distances when relevant. Scan stable edge vector once to count edges between selected nodes and retain first max_edges. Limits expose omissions; never construct path lists or exponentially duplicated trees.
-- [ ] Add `Db::graph(reference, options) -> Result<Report>` wrapping `unchecked_transaction()`, existing `resolve_task_id` inside transaction, `graph::report(&tx, id, options)`, commit read transaction. CLI command handles before writable DB/owner resolution. Add Graph command name/output format, skip preflight in run. No change to existing List/Status/Next behavior.
-- [ ] `graph::lines(&Report) -> Vec<String>` renders focus status/reasons, exact impact counts and hypothetical explanation, upstream/downstream ID summaries, typed edge references, missing/cycle diagnostics and limit notices. `graph::render(&Value, Option<usize>)` deserializes typed report, sanitizes controls, clips human lines by grapheme cell width when terminal width exists. Plain text respects all color modes.
-- [ ] Add read-only tests comparing DB/config/sidecars before/after valid/missing graph under active stale owner and mutation-denying triggers. Old schema rejects migration without bytes change. Assert native/Herdr probes are skipped, snapshot fields coherent, JSON streams/errors preserved. Run graph/cli/output/dependencies/preflight focused tests; fmt/diff. Commit `[Feat] Inspect Dependency Graphs And Completion Impact`.
+- [x] Compute unique direct and transitive real-task sets. For each direct real task, use current SQL ready flag; new/unarchived candidate future-ready iff every prerequisite is focus or completed. Count currently-false/future-true as immediate, other unfinished dependencies as still-blocked, ready tasks as already-ready, other states inactive. Root already completed yields zero new readiness. Keep exact totals independent of display direction/depth.
+- [x] Presentation selects focus first, then minimum-hop discovered candidates matching requested direction and depth until node cap. Sort selected IDs only; include each node once with both distances when relevant. Scan stable edge vector once to count edges between selected nodes and retain first max_edges. Limits expose omissions; never construct path lists or exponentially duplicated trees.
+- [x] Add `Db::graph(reference, options) -> Result<Report>` wrapping `unchecked_transaction()`, existing `resolve_task_id` inside transaction, `graph::report(&tx, id, options)`, commit read transaction. CLI command handles before writable DB/owner resolution. Add Graph command name/output format, skip preflight in run. No change to existing List/Status/Next behavior.
+- [x] `graph::lines(&Report) -> Vec<String>` renders focus status/reasons, exact impact counts and hypothetical explanation, upstream/downstream ID summaries, typed edge references, missing/cycle diagnostics and limit notices. `graph::render(&Value, Option<usize>)` deserializes typed report, sanitizes controls, clips human lines by grapheme cell width when terminal width exists. Plain text respects all color modes.
+- [x] Add read-only tests comparing DB/config/sidecars before/after valid/missing graph under active stale owner and mutation-denying triggers. Old schema rejects migration without bytes change. Assert native/Herdr probes are skipped, snapshot fields coherent, JSON streams/errors preserved. Run graph/cli/output/dependencies/preflight focused tests; fmt/diff. Commit `[Feat] Inspect Dependency Graphs And Completion Impact`.
 
 ## Task 2: Bounds, Corruption And Readiness Parity
 
@@ -160,5 +160,7 @@ Files: create `docs/graph.md`; modify README/reference, this plan.
 
 ## Evidence
 
-- Task184 integrated baseline passed 779 tests/45 binaries at a0a166f. Fresh isolated task186 baseline running; `/tmp/qqq-task-186-baseline.log`.
+- Task184 integrated baseline passed 779 tests/45 binaries at a0a166f. Fresh isolated task186 baseline passed 779 tests/45 binaries; `/tmp/qqq-task-186-baseline.log`.
 - Spec self-review: no placeholders; exact totals and presentation limits separated; completed prerequisites stop blocker reach; immediate-ready never means transitive automatic completion; CLI skip-preflight is explicit read-only exception; TUI retains existing startup behavior. Rust graph analysis uses direct indexing and bounded-work tests; bundled complexity scanner does not analyze Rust.
+
+- Task1 RED: two CLI tests failed only for unknown graph subcommand. GREEN: graph/CLI/output/dependencies/preflight passed 109 tests across five binaries; `/tmp/qqq-task-186-cli-focused.log`. Offline Herdr evidence intentionally stays unknown; confirmed gone-owner probe still recovers through ordinary show. Graph invokes neither probe nor writes. Db graph extension impl lives in graph.rs to keep database-only fixture modules independent of presentation.

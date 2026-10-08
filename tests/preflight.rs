@@ -125,6 +125,22 @@ esac
 }
 
 #[test]
+fn graph_inspection_skips_stale_owner_and_herdr_probes() {
+    let f = Fixture::new();
+    f.gone();
+    fs::write(f.dir.path().join("fail"), "offline").unwrap();
+    let db_path = f.dir.path().join(".qqq/qqq.db");
+    let before = fs::read(&db_path).unwrap();
+    let report = f.ok(&["graph", "1"]);
+    assert_eq!(report["focus"]["status"], "in_progress");
+    assert_eq!(fs::read(&db_path).unwrap(), before);
+    assert_eq!(fs::read_to_string(f.dir.path().join("calls")).unwrap(), "");
+    // Ordinary commands retain owner recovery; graph is the read-only exception.
+    fs::remove_file(f.dir.path().join("fail")).unwrap();
+    assert_eq!(f.ok(&["show", "1"])["task"]["status"], "error");
+}
+
+#[test]
 fn missing_or_malformed_named_views_precede_owner_preflight() {
     let f = Fixture::new();
     f.gone();
