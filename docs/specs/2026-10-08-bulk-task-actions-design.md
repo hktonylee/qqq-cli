@@ -96,10 +96,10 @@ graph. Batch parent/child archive/unarchive works regardless of ID order.
 
 ## TUI Selection And Preview
 
-Ctrl-B toggles current saved task in bulk selection, using existing one-cell blank
+Ctrl-D toggles current saved task in bulk selection, using existing one-cell blank
 list prefix as `+` marker. Dirty marker `[*]` and focused-row background stay
 distinct. Shift-Up/Down and mouse navigation retain existing parked draft flow.
-Ctrl-B on new task reports instruction rather than assigning invented ID.
+Ctrl-D on new task reports instruction rather than assigning invented ID.
 Selection survives filter/status toggles and refresh, so hidden selections remain
 explicitly visible in bulk menu/preview list. Ctrl-G opens existing single-task
 menu when selection empty, bulk menu when selection nonempty. Bulk menu shows

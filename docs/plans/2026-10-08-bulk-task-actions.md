@@ -26,7 +26,7 @@ existing subprocess and screen-aware Python PTY tests.
 - `src/output.rs`, `src/output/bulk.rs`: full safe human before/after preview.
 - `src/tui/bulk.rs`: selection, menu/input/preview/error UI and scrolling.
 - `src/tui/mod.rs`, `src/tui/dashboard.rs`, `src/tui/render.rs`: integrate modal,
-  Ctrl-B/Ctrl-G and existing one-cell list marker without editor transitions.
+  Ctrl-D/Ctrl-G and existing one-cell list marker without editor transitions.
 - `tests/bulk.rs`: real CLI/DB acceptance; `tests/tui_bulk_pty.py`: reuse
   TerminalScreen from dashboard PTY support through isolated module extraction if
   needed; `tests/tui.rs`: named PTY entrypoints.
@@ -161,15 +161,15 @@ f.apply(&unarchive);
 
 ## Task 3: TUI Multi-Selection And Preview Flow
 
-- [ ] Add PTY fixture with three tasks, one dirty draft and tag metadata. Capture
-  real rendered screen for Ctrl-B marker and bulk menu before DB assertions:
+- [x] Add PTY fixture with three tasks, one dirty draft and tag metadata. Capture
+  real rendered screen for Ctrl-D marker and bulk menu before DB assertions:
 
 ```python
 send(b"\x1b[A")                    # navigate existing draft caret safely
-send(b"\x02")                      # Ctrl-B selects current saved task
+send(b"\x04")                      # Ctrl-D selects current saved task
 wait_screen_contains("Bulk selected: 1")
 send(b"\x1b[1;2A")                 # Shift-Up switches, parks dirty draft
-send(b"\x02\x07")                 # select second task, Ctrl-G bulk menu
+send(b"\x04\x07")                 # select second task, Ctrl-G bulk menu
 wait_screen_contains("Bulk actions (2)")
 send(b"p5\r")                      # priority input -> frozen preview
 wait_screen_contains("Bulk preview")
@@ -181,46 +181,46 @@ wait_screen_contains("Task Editor")
   Actual navigation chooses existing saved tasks from initial new draft; test
   frames/caret positions and exact saved draft expectations. Add wrapper Rust
   test entry and run expected missing marker/menu RED.
-- [ ] Add `src/tui/bulk.rs`: View stages Menu/Input/Preview/Error; key handlers
+- [x] Add `src/tui/bulk.rs`: View stages Menu/Input/Preview/Error; key handlers
   return typed intents Preview(Actions), Apply(Report), Close/Clear/None. Input
   tags reuse tag_input::Cursor key/paste/rows; Enter newline, Ctrl-S preview.
   Numeric Enter previews; invalid input keeps text+cursor. Menu arrows/Enter
   and labeled shortcuts; no implicit confirm. Selection uses BTreeSet IDs.
-- [ ] Add modal slot alongside jump/conflict/action in compose_inner. Bulk modal
+- [x] Add modal slot alongside jump/conflict/action in compose_inner. Bulk modal
   consumes paste/mouse/key input before editor. Add Mode::bulk_preview and
   bulk_apply operating on actual dashboard Db with actor tui, never run_action
   or load_target. Preserve all draft/top/filter/follow variables on every path.
-- [ ] Ctrl-B toggles current saved ID, emits selected count in existing footer;
+- [x] Ctrl-D toggles current saved ID, emits selected count in existing footer;
   empty target gives helpful message. Ctrl-G chooses bulk menu when marks exist;
   no marks leaves current single menu unchanged. Clear menu clears set only.
-- [ ] dashboard View adds selected-ID reference for prefix marker; update
+- [x] dashboard View adds selected-ID reference for prefix marker; update
   standalone dashboard-render test initializers. Replace one-cell blank prefix
   with plus only on first row of marked task; continuation rows remain blank.
   Keep pane widths/hit targets and one-cell prefix contract unchanged.
-- [ ] Scroll preview all rows within popup height, fixed heading/footer always
+- [x] Scroll preview all rows within popup height, fixed heading/footer always
   visible, PgUp/PgDn/Up/Down, resize-safe top clamping. n/Esc/Enter cancel;
   Ctrl-C closes. y applies frozen report, no fresh selector call. Success clears
   marks and reports changed tasks; conflict/error preserves marks and drafts.
-- [ ] Extend PTY checks: add/remove/replace tags, empty replace, priority,
+- [x] Extend PTY checks: add/remove/replace tags, empty replace, priority,
   archive/unarchive and active rejection; hidden selection; cancellation;
   stale DB edit while preview open; dirty current/parked drafts, caret/paste
   atoms/attachments/filter/list+editor scroll restoration; compact/NO_COLOR
   and resize. Observe final frames before task assertions.
-- [ ] Run focused bulk PTY, existing dirty-buffer/tag/navigation/action tests,
+- [x] Run focused bulk PTY, existing dirty-buffer/tag/navigation/action tests,
   model/render tests, fmt/Clippy; commit verified TUI checkpoint.
 
 ## Task 4: Documentation, Review And Delivery
 
-- [ ] Document full selector/action syntax, preview JSON shape/path binding,
+- [x] Document full selector/action syntax, preview JSON shape/path binding,
   counts/no-ops, conflict regeneration, final graph archive rules and no raw
   owner token. Add actual marked CLI example commands exercised by test from
-  project root/subdir. Document Ctrl-B/Ctrl-G, marker, modal input and confirm,
+  project root/subdir. Document Ctrl-D/Ctrl-G, marker, modal input and confirm,
   filter-hidden selection and retained drafts. Add BULK_CONFLICT reference row.
 - [ ] Run `cargo fmt --all -- --check`, `cargo clippy --locked --offline
   --all-targets -- -D warnings`, full serial `cargo test --locked --offline --
   --test-threads=1`, `cargo build --locked --offline --release`. Historical
   compatibility must confirm schema13 and immutable artifacts unchanged.
-- [ ] Request focused read-only review through existing reviewer per requesting
+- [x] Request focused read-only review through existing reviewer per requesting
   review skill. Fix important findings with regression tests and affected checks.
 - [ ] Check current root master; clean rebase preserving concurrent task #184
   changes. Re-run affected/full gates if source changes. Fast-forward master,
@@ -256,3 +256,12 @@ history, stale attachment/parent/prerequisite state/private claim changes,
 concurrent notes and competing applies verified. Human and native-agent output,
 stdin explicit confirmation, schema/staging purity and extra graph archives pass.
 TUI implementation, docs/examples and full delivery checks remain pending.
+
+TUI checkpoint: CLI23, existing TUI115, dashboard render36, DB23 and model32
+pass229 tests/5 binaries. Later bulk PTY9 plus popup/cursor unit3 pass, covering
+manual editor/list scroll, parked drafts, pending paste/image bytes, filters,
+conflicts, tags, archives, compact/NO_COLOR and resize. Tiny-height input/title
+and footer bounds, narrow confirmation hints and reviewer Alt-word cursor issue
+were each reproduced RED then fixed GREEN. Strict all-target Clippy and fmt pass.
+Concurrent task184 integrated Ctrl-B Views, so bulk selection moves to unused
+Ctrl-D; view picker remains Ctrl-B. Final combined full-suite/install pending.

@@ -1,4 +1,5 @@
 mod buffers;
+mod bulk;
 mod clipboard;
 pub(crate) mod completion;
 mod conflict;
@@ -758,6 +759,17 @@ impl Mode<'_, '_> {
             _ => bail!("Task actions require dashboard"),
         }
     }
+
+    fn bulk_apply(&mut self, report: &crate::bulk::Report) -> Result<crate::bulk::Report> {
+        match self {
+            Self::Continuous {
+                db,
+                dashboard: true,
+                ..
+            } => crate::bulk::apply(db, report, "tui"),
+            _ => bail!("Bulk actions require dashboard"),
+        }
+    }
 }
 fn run_action(
     mode: &mut Mode<'_, '_>,
@@ -922,6 +934,8 @@ fn compose_inner(
     let mut jump_ui: Option<jump::View> = None;
     let mut conflict_ui: Option<conflict::View> = None;
     let mut view_ui: Option<view_picker::Picker> = None;
+    let mut bulk_ui: Option<bulk::View> = None;
+    let mut bulk_selected = std::collections::BTreeSet::new();
     let mut save_revision_override = None;
     let mut saved_any = false;
     let mut buffers = DraftBuffers::default();
@@ -1069,6 +1083,8 @@ fn compose_inner(
                 render::FILTER_KEYS
             } else if dashboard && has_herdr_link {
                 render::DASHBOARD_HERDR_KEYS
+            } else if dashboard && target_id.is_none() && bulk_selected.is_empty() {
+                render::DASHBOARD_NEW_KEYS
             } else if dashboard {
                 render::DASHBOARD_KEYS
             } else {
@@ -1199,6 +1215,14 @@ fn compose_inner(
                         .map(|ui| ui.rows(usize::from(popup_content.width)))
                 })
                 .or_else(|| {
+                    bulk_ui.as_mut().map(|ui| {
+                        ui.rows(
+                            usize::from(popup_content.width),
+                            usize::from(popup_content.height),
+                        )
+                    })
+                })
+                .or_else(|| {
                     action_ui.as_ref().map(|ui| {
                         action_lines(
                             ui,
@@ -1241,6 +1265,7 @@ fn compose_inner(
                             query: &filter_query,
                             focused: filter_focused,
                             show_completed,
+                            bulk_selected: Some(&bulk_selected),
                             top: &mut list_top,
                             follow_selected: list_follow_selected,
                             modal_lines: modal_lines.as_deref(),
@@ -1314,6 +1339,7 @@ fn compose_inner(
                     && jump_ui.is_none()
                     && conflict_ui.is_none()
                     && view_ui.is_none()
+                    && bulk_ui.is_none()
                     && match mouse.kind {
                         MouseEventKind::ScrollUp | MouseEventKind::ScrollDown => {
                             dashboard::wheel_area(size, mouse.column, mouse.row, filter_visible)
@@ -1347,6 +1373,8 @@ fn compose_inner(
             Event::Paste(text) if confirmation.is_none() && conflict_ui.is_none() => {
                 if view_ui.is_some() {
                     continue;
+                } else if let Some(ui) = bulk_ui.as_mut() {
+                    ui.paste(&text);
                 } else if let Some(ui) = jump_ui.as_mut() {
                     ui.paste(&text);
                 } else if let Some(ActionUi::Input {
@@ -1511,6 +1539,43 @@ fn compose_inner(
                         }
                         Some(view_picker::Action::Cancel) => (),
                         None => view_ui = Some(ui),
+                    }
+                    continue;
+                }
+                if let Some(mut ui) = bulk_ui.take() {
+                    match ui.key(key) {
+                        bulk::Intent::None => bulk_ui = Some(ui),
+                        bulk::Intent::Close => {
+                            message = "Bulk preview cancelled".to_owned();
+                            message_is_error = false;
+                        }
+                        bulk::Intent::Clear => {
+                            bulk_selected.clear();
+                            message = "Bulk selection cleared".to_owned();
+                            message_is_error = false;
+                        }
+                        bulk::Intent::Preview(actions) => {
+                            match crate::bulk::preview(
+                                mode.db().expect("bulk has dashboard DB"),
+                                crate::bulk::Selection::Ids(ui.ids()),
+                                actions,
+                            ) {
+                                Ok(report) => ui.show_preview(report),
+                                Err(error) => ui.show_error(format!("{error:#}")),
+                            }
+                            bulk_ui = Some(ui);
+                        }
+                        bulk::Intent::Apply(report) => match mode.bulk_apply(&report) {
+                            Ok(applied) => {
+                                bulk_selected.clear();
+                                message = format!("Bulk applied: {} tasks", applied.changed_count);
+                                message_is_error = false;
+                            }
+                            Err(error) => {
+                                ui.show_error(format!("{error:#}"));
+                                bulk_ui = Some(ui);
+                            }
+                        },
                     }
                     continue;
                 }
@@ -2268,7 +2333,30 @@ fn compose_inner(
                     }
                     continue;
                 }
+                if dashboard
+                    && control
+                    && key.code == KeyCode::Char('d')
+                    && !key
+                        .modifiers
+                        .intersects(KeyModifiers::ALT | KeyModifiers::SUPER)
+                {
+                    if let Some(id) = target_id {
+                        if !bulk_selected.insert(id) {
+                            bulk_selected.remove(&id);
+                        }
+                        message = format!("Bulk selected: {}", bulk_selected.len());
+                        message_is_error = false;
+                    } else {
+                        message = "Select saved task before Ctrl-D".to_owned();
+                        message_is_error = true;
+                    }
+                    continue;
+                }
                 if dashboard && control && key.code == KeyCode::Char('g') {
+                    if !bulk_selected.is_empty() {
+                        bulk_ui = Some(bulk::View::menu(bulk_selected.iter().copied().collect()));
+                        continue;
+                    }
                     match target_id {
                         Some(id) => match mode.db().expect("dashboard has database").task(id) {
                             Ok(task) => {

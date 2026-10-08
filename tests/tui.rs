@@ -51,6 +51,71 @@ fn dashboard_scenario(name: &str) {
     );
 }
 
+fn bulk_scenario(name: &str) {
+    let output = Command::new("python3")
+        .arg(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/tests/tui_bulk_pty.py"
+        ))
+        .arg(env!("CARGO_BIN_EXE_qqq"))
+        .arg(name)
+        .output()
+        .unwrap();
+    assert!(
+        output.status.success(),
+        "{}\n{}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+}
+
+#[test]
+fn tui_bulk_priority_preview_cancel_apply_preserves_dirty_caret() {
+    bulk_scenario("basic");
+}
+
+#[test]
+fn tui_bulk_tags_keep_multiline_cursor_and_draft() {
+    bulk_scenario("tags");
+}
+
+#[test]
+fn tui_bulk_preserves_unsaved_paste_atoms_and_image_bytes() {
+    bulk_scenario("basic_atoms");
+}
+
+#[test]
+fn tui_bulk_preview_cancel_apply_preserves_manual_editor_scroll() {
+    bulk_scenario("editor_scroll");
+}
+
+#[test]
+fn tui_bulk_conflict_retains_selection_for_fresh_preview() {
+    bulk_scenario("conflict");
+}
+
+#[test]
+fn tui_bulk_archive_and_unarchive_preserve_dirty_buffer() {
+    bulk_scenario("archive");
+    bulk_scenario("archive_active");
+}
+
+#[test]
+fn tui_bulk_hidden_selection_preserves_filter_focus() {
+    bulk_scenario("filter");
+}
+
+#[test]
+fn tui_bulk_preview_scroll_resize_preserves_parked_draft() {
+    bulk_scenario("scroll");
+}
+
+#[test]
+fn tui_bulk_selection_and_confirmation_support_compact_and_no_color() {
+    bulk_scenario("basic_compact");
+    bulk_scenario("basic_no_color");
+}
+
 #[test]
 fn tui_dashboard_named_views_preserve_open_dirty_task() {
     dashboard_scenario("views");

@@ -6,7 +6,7 @@ use ratatui::{
     text::{Line, Span},
     widgets::{Block, BorderType, Borders, Clear, Padding, Paragraph},
 };
-use std::collections::HashMap;
+use std::collections::{BTreeSet, HashMap};
 use unicode_segmentation::UnicodeSegmentation;
 use unicode_width::UnicodeWidthStr;
 
@@ -31,6 +31,7 @@ pub struct View<'a> {
     pub query: &'a str,
     pub focused: bool,
     pub show_completed: bool,
+    pub bulk_selected: Option<&'a BTreeSet<i64>>,
     pub top: &'a mut usize,
     pub follow_selected: bool,
     pub modal_lines: Option<&'a [render::PopupRow]>,
@@ -686,7 +687,13 @@ pub fn draw(
             is_selected,
             color,
         );
-        let mut spans = vec![Span::raw(LIST_ROW_PREFIX)];
+        let index = list_view.top.saturating_add(offset);
+        let first = index == 0 || rows[index - 1].task_id != row.task_id;
+        let marked = first
+            && row
+                .task_id
+                .is_some_and(|id| list_view.bulk_selected.is_some_and(|ids| ids.contains(&id)));
+        let mut spans = vec![Span::raw(if marked { "+" } else { LIST_ROW_PREFIX })];
         let start = row.description_start.filter(|_| row.dirty).unwrap_or(0);
         if row.dirty && row.description_start.is_some() {
             spans.push(Span::raw(row.text[..start].to_owned()));

@@ -83,6 +83,7 @@ fn task_tags_keep_color_across_status_selection_dirty_and_compact_rows() {
                                         query: "",
                                         focused: false,
                                         show_completed: true,
+                                        bulk_selected: None,
                                         top: &mut 0,
                                         follow_selected: true,
                                         modal_lines: None,
@@ -196,6 +197,7 @@ fn task_list_selection_reclaims_one_column() {
                                 query: "",
                                 focused: false,
                                 show_completed: true,
+                                bulk_selected: None,
                                 top: &mut 0,
                                 follow_selected: true,
                                 modal_lines: None,
@@ -249,6 +251,7 @@ fn completed_filter_button_reserves_query_caret_space() {
                 None,
                 dashboard::View {
                     show_completed: true,
+                    bulk_selected: None,
                     query: &"界e\u{301}".repeat(40),
                     focused: true,
                     top: &mut 0,
@@ -298,6 +301,7 @@ fn completed_filter_button_render_and_hit_cells_agree_at_every_layout() {
                                 query: &"界e\u{301}".repeat(40),
                                 focused: true,
                                 show_completed,
+                                bulk_selected: None,
                                 top: &mut 0,
                                 follow_selected: true,
                                 modal_lines: None,
@@ -425,6 +429,7 @@ fn hidden_completed_state_keeps_empty_unfocused_filter_bar_visible() {
                     query: "",
                     focused: false,
                     show_completed: false,
+                    bulk_selected: None,
                     top: &mut 0,
                     follow_selected: true,
                     modal_lines: None,
@@ -527,6 +532,7 @@ fn action_popup_preserves_background_and_clears_overlaid_styles() {
                         Some(1),
                         dashboard::View {
                             show_completed: true,
+                            bulk_selected: None,
                             query: "",
                             focused: false,
                             top: &mut 0,
@@ -677,6 +683,7 @@ fn action_popup_input_errors_and_warnings_keep_roles_and_plain_styles() {
                         None,
                         dashboard::View {
                             show_completed: true,
+                            bulk_selected: None,
                             query: "",
                             focused: false,
                             top: &mut 0,
@@ -771,6 +778,7 @@ fn blank_draft_keeps_details_pane_and_editor_position() {
                 None,
                 dashboard::View {
                     show_completed: true,
+                    bulk_selected: None,
                     query: "",
                     focused: false,
                     top: &mut 0,
@@ -907,6 +915,7 @@ fn selected_task_renders_details_between_list_and_editor() {
                         Some(1),
                         dashboard::View {
                             show_completed: true,
+                            bulk_selected: None,
                             query: "",
                             focused: false,
                             top: &mut 0,
@@ -1013,6 +1022,7 @@ fn details_scroll_clamps_without_moving_editor() {
                 Some(1),
                 dashboard::View {
                     show_completed: true,
+                    bulk_selected: None,
                     query: "",
                     focused: false,
                     top: &mut 0,
@@ -1240,6 +1250,7 @@ fn manual_list_scroll_does_not_snap_to_selected_task() {
                 Some(10),
                 dashboard::View {
                     show_completed: true,
+                    bulk_selected: None,
                     query: "",
                     focused: false,
                     top: &mut top,
@@ -1270,6 +1281,7 @@ fn manual_list_scroll_does_not_snap_to_selected_task() {
                 Some(10),
                 dashboard::View {
                     show_completed: true,
+                    bulk_selected: None,
                     query: "",
                     focused: false,
                     top: &mut top,
@@ -1327,6 +1339,7 @@ fn manual_editor_scroll_keeps_viewport_then_keyboard_reveals_caret() {
                 None,
                 dashboard::View {
                     show_completed: true,
+                    bulk_selected: None,
                     query: "",
                     focused: false,
                     top: &mut 0,
@@ -1358,6 +1371,7 @@ fn manual_editor_scroll_keeps_viewport_then_keyboard_reveals_caret() {
                 None,
                 dashboard::View {
                     show_completed: true,
+                    bulk_selected: None,
                     query: "",
                     focused: false,
                     top: &mut 0,
@@ -1416,6 +1430,7 @@ fn manual_offsets_clamp_after_resize() {
                 Some(10),
                 dashboard::View {
                     show_completed: true,
+                    bulk_selected: None,
                     query: "",
                     focused: false,
                     top: &mut list_top,
@@ -1504,6 +1519,7 @@ fn empty_filter_reserves_list_row_while_focused() {
                     Some(8),
                     dashboard::View {
                         show_completed: true,
+                        bulk_selected: None,
                         query: "",
                         focused,
                         top: &mut top,
@@ -1557,6 +1573,7 @@ fn filter_bar_shows_empty_result_and_takes_cursor_only_while_focused() {
                             Some(99),
                             dashboard::View {
                                 show_completed: true,
+                                bulk_selected: None,
                                 query,
                                 focused,
                                 top: &mut 0,
@@ -1668,6 +1685,7 @@ fn small_dashboard_keeps_filter_row_and_plain_style() {
                 None,
                 dashboard::View {
                     show_completed: true,
+                    bulk_selected: None,
                     query: "abcdefghijklmnop",
                     focused: true,
                     top: &mut 0,
@@ -1720,6 +1738,7 @@ fn minimum_dashboard_height_still_shows_selected_task() {
                 Some(1),
                 dashboard::View {
                     show_completed: true,
+                    bulk_selected: None,
                     query: "",
                     focused: false,
                     top: &mut 0,
@@ -1767,6 +1786,7 @@ fn split_dashboard_keeps_list_above_editor() {
                 Some(1),
                 dashboard::View {
                     show_completed: true,
+                    bulk_selected: None,
                     query: "",
                     focused: false,
                     top: &mut list_top,
@@ -1821,6 +1841,7 @@ fn narrow_dashboard_shows_plain_resize_hint() {
                 None,
                 dashboard::View {
                     show_completed: true,
+                    bulk_selected: None,
                     query: "",
                     focused: false,
                     top: &mut 0,
@@ -1866,6 +1887,7 @@ fn no_color_dashboard_keeps_default_cell_styles() {
                 Some(1),
                 dashboard::View {
                     show_completed: true,
+                    bulk_selected: None,
                     query: "",
                     focused: false,
                     top: &mut 0,
@@ -1928,6 +1950,7 @@ fn status_selection_and_editor_images_use_distinct_colors() {
                     selected,
                     dashboard::View {
                         show_completed: true,
+                        bulk_selected: None,
                         query: "",
                         focused: false,
                         top: &mut 0,
@@ -2018,6 +2041,7 @@ fn dashboard_paste_label_uses_gold_while_body_stays_neutral() {
                 None,
                 dashboard::View {
                     show_completed: true,
+                    bulk_selected: None,
                     query: "",
                     focused: false,
                     top: &mut 0,
@@ -2075,6 +2099,7 @@ fn hotkey_footer_colors_shortcuts_and_clears_styles_for_messages() {
                             None,
                             dashboard::View {
                                 show_completed: true,
+                                bulk_selected: None,
                                 query: "",
                                 focused: false,
                                 top: &mut 0,
@@ -2104,6 +2129,7 @@ fn hotkey_footer_colors_shortcuts_and_clears_styles_for_messages() {
                             "Ctrl-S",
                             "Ctrl-B",
                             "Ctrl-H",
+                            "Ctrl-D",
                             "Ctrl-L",
                             "Ctrl-K",
                             "Ctrl-P",
@@ -2293,6 +2319,7 @@ fn wide_dashboard_keeps_spacer_below_full_selected_list() {
                         Some(20),
                         dashboard::View {
                             show_completed: true,
+                            bulk_selected: None,
                             query,
                             focused,
                             top: &mut list_top,
@@ -2355,6 +2382,7 @@ fn wide_dashboard_renders_both_upper_panes_and_full_width_editor() {
                     Some(1),
                     dashboard::View {
                         show_completed: true,
+                        bulk_selected: None,
                         query: "Selected",
                         focused: true,
                         top: &mut 0,
@@ -2420,6 +2448,7 @@ fn failed_save_footer_uses_error_color() {
                 None,
                 dashboard::View {
                     show_completed: true,
+                    bulk_selected: None,
                     query: "",
                     focused: false,
                     top: &mut 0,
@@ -2494,6 +2523,7 @@ fn dirty_marker_is_distinct_aligned_and_keeps_task_hit_targets() {
                             selected,
                             dashboard::View {
                                 show_completed: true,
+                                bulk_selected: None,
                                 query: "",
                                 focused: false,
                                 top: &mut 0,
