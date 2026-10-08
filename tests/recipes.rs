@@ -19,9 +19,13 @@ impl Fixture {
         self.0.path()
     }
     fn command(&self) -> Command {
+        let mut c = self.base_command();
+        c.arg("--json");
+        c
+    }
+    fn base_command(&self) -> Command {
         let mut c = Command::new(env!("CARGO_BIN_EXE_qqq"));
         c.current_dir(self.path())
-            .arg("--json")
             .env_remove("QQQ_SESSION")
             .env_remove("CODEX_THREAD_ID")
             .env_remove("CODEX_SESSION_ID")
@@ -249,11 +253,16 @@ fn invalid_recipe_schema_fields_expansion_and_graphs_are_atomic() {
         json!({"version":1,"tasks":[],"unknown":true}),
         json!({"version":1,"parameters":[{"name":"x","default":null}],"tasks":[]}),
         json!({"version":1,"parameters":[{"name":"x","default":false}],"tasks":[]}),
+        json!({"version":1,"parameters":[{"name":"x","default":"v","unknown":true}],"tasks":[]}),
         json!({"version":1,"parameters":[{"name":"x"},{"name":"x"}],"tasks":[]}),
         json!({"version":1,"parameters":[{"name":"bad-name"}],"tasks":[]}),
         json!({"version":1,"tasks":[{"key":"a","description":"A"},{"key":"a","description":"B"}]}),
         json!({"version":1,"tasks":[{"key":"a","description":"A","parent":{"key":"b"}},
                                     {"key":"b","description":"B","depends_on":[{"key":"a"}]}]}),
+        json!({"version":1,"tasks":[{"key":"a","description":"A","parent":{"key":"b"},
+             "depends_on":[{"key":"b"}]},{"key":"b","description":"B"}]}),
+        json!({"version":1,"tasks":[{"key":"a","description":"A",
+             "depends_on":[{"key":"b"},{"key":"b"}]},{"key":"b","description":"B"}]}),
     ];
     for (field, value) in [
         ("description", json!(" ")),
@@ -298,6 +307,9 @@ fn invalid_recipe_schema_fields_expansion_and_graphs_are_atomic() {
         assert!(!out.status.success(), "{raw}");
         assert_eq!(f.bytes(), before);
     }
+    fs::write(f.path().join(".qqq-recipes/bad.json"), [0xff, 0xfe]).unwrap();
+    assert!(!f.run(&["add", "--template", "bad"]).status.success());
+    assert_eq!(f.bytes(), before);
 }
 
 #[test]
@@ -511,4 +523,128 @@ fn concurrent_recipe_applications_commit_independent_complete_graphs() {
         );
     }
     assert_eq!(ids, (1..=6).collect());
+}
+
+#[test]
+fn human_recipe_preview_shows_full_text_tags_and_sanitized_controls() {
+    let f = Fixture::new();
+    f.recipe("preview",&json!({"version":1,"tasks":[
+        {"key":"preview","description":"First line\nSecond line\n\u{001b}[31mText","tags":["exampleλ"]}]}));
+    let out = f
+        .base_command()
+        .args(["add", "--template", "preview", "--dry-run"])
+        .output()
+        .unwrap();
+    assert!(
+        out.status.success(),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    assert!(out.stderr.is_empty());
+    let text = String::from_utf8(out.stdout).unwrap();
+    assert!(text.contains("Validated 1 task"), "{text}");
+    assert!(text.contains("Second line"), "{text}");
+    assert!(text.contains("exampleλ"), "{text}");
+    assert!(text.contains("\\u{1b}[31mText"), "{text}");
+    assert!(!text.contains('\u{001b}'));
+}
+
+#[test]
+fn recipes_preserve_agent_default_json_and_explicit_output_overrides() {
+    let f = Fixture::new();
+    f.recipe("plain", &graph());
+    let out = f
+        .base_command()
+        .env("CODEX_THREAD_ID", "recipe-agent")
+        .args(["add", "--template", "plain", "--dry-run"])
+        .output()
+        .unwrap();
+    assert!(out.status.success());
+    let report: Value = serde_json::from_slice(&out.stdout).unwrap();
+    assert_eq!(report["count"], 3);
+    let out = f
+        .base_command()
+        .env("CODEX_THREAD_ID", "recipe-agent")
+        .args(["--human", "add", "--template", "plain", "--dry-run"])
+        .output()
+        .unwrap();
+    assert!(out.status.success());
+    assert!(
+        String::from_utf8(out.stdout)
+            .unwrap()
+            .starts_with("Validated 3 tasks")
+    );
+    let out = f
+        .base_command()
+        .args(["--json", "add", "--template", "plain", "--dry-run"])
+        .output()
+        .unwrap();
+    assert!(out.status.success());
+    let report: Value = serde_json::from_slice(&out.stdout).unwrap();
+    assert_eq!(report["count"], 3);
+}
+
+#[test]
+fn bundled_recipes_run_documented_cli_examples_from_root_and_subdirectory() {
+    let f = Fixture::new();
+    let source = Path::new(env!("CARGO_MANIFEST_DIR"));
+    for name in ["bug", "release"] {
+        fs::copy(
+            source.join("examples/recipes").join(format!("{name}.json")),
+            f.path().join(".qqq-recipes").join(format!("{name}.json")),
+        )
+        .unwrap();
+    }
+    let reference = fs::read_to_string(source.join("docs/reference.md")).unwrap();
+    let examples = reference
+        .split("<!-- recipe-cli-examples -->")
+        .nth(1)
+        .unwrap()
+        .split("<!-- /recipe-cli-examples -->")
+        .next()
+        .unwrap();
+    let nested = f.path().join("subdirectory");
+    fs::create_dir(&nested).unwrap();
+    let mut reports = Vec::new();
+    for (index, line) in examples
+        .lines()
+        .filter(|line| line.starts_with("qqq "))
+        .enumerate()
+    {
+        let args = shlex::split(line).unwrap();
+        let out = f
+            .base_command()
+            .current_dir(if index < 2 { f.path() } else { &nested })
+            .args(&args[1..])
+            .output()
+            .unwrap();
+        assert!(
+            out.status.success(),
+            "{line}: {}",
+            String::from_utf8_lossy(&out.stderr)
+        );
+        assert!(out.stderr.is_empty());
+        reports.push(serde_json::from_slice::<Value>(&out.stdout).unwrap());
+    }
+    assert_eq!(reports.len(), 4);
+    assert_eq!(reports[0]["mapping"], json!({}));
+    assert_eq!(reports[1]["mapping"], json!({"bug":1}));
+    assert_eq!(reports[2]["mapping"], json!({}));
+    assert_eq!(
+        reports[3]["mapping"],
+        json!({"prepare":2,"tests":3,"publish":4})
+    );
+    assert_eq!(reports[3]["tasks"][2]["prerequisite_ids"], json!([3]));
+    assert!(
+        reports[1]["tasks"][0]["description"]
+            .as_str()
+            .unwrap()
+            .contains("Acceptance criteria")
+    );
+    assert!(
+        reports[3]["tasks"][0]["description"]
+            .as_str()
+            .unwrap()
+            .starts_with("Prepare qqq 0.5.1")
+    );
 }

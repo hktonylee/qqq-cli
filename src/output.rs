@@ -1,6 +1,7 @@
 mod detail;
 mod import;
 mod queue;
+mod recipe;
 
 use crate::{Commands, HerdrCommand};
 use serde_json::Value;
@@ -16,6 +17,7 @@ pub enum Format {
     Database,
     AddedTask,
     Import,
+    Recipe,
     Task,
     NextTask,
     QueueOverview,
@@ -52,7 +54,7 @@ impl From<&Commands> for Format {
             },
             Commands::Add {
                 template: Some(_), ..
-            } => Self::Import,
+            } => Self::Recipe,
             Commands::Add { .. } => Self::AddedTask,
             Commands::Import { .. } => Self::Import,
             Commands::Backup { .. } => Self::Backup,
@@ -408,6 +410,7 @@ fn task_tree(
 pub fn render(format: Format, value: &Value, color: bool, columns: Option<usize>) -> String {
     match format {
         Format::Import => import::render(value),
+        Format::Recipe => recipe::render(value),
         Format::QueueOverview => queue::render(value, color, false),
         Format::NextExplanation => queue::render(value, color, true),
         Format::ConfigList => {

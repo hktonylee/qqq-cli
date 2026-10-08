@@ -195,19 +195,19 @@ conn.execute_batch("CREATE TRIGGER fail_second BEFORE INSERT ON tasks
 
 ## Task 3: Human Preview And Documented Examples
 
-- [ ] Add human preview test asserting full multiline description, tags, local
+- [x] Add human preview test asserting full multiline description, tags, local
   and existing refs; add agent-default JSON and explicit --human/--json tests.
   Ordinary add/import output tests remain unchanged.
-- [ ] Add Format::Recipe selected only by template Add; recipe renderer delegates
+- [x] Add Format::Recipe selected only by template Add; recipe renderer delegates
   summary to import renderer, appends full expanded descriptions/tags for dry-run
   using existing clean helper. Render every line without terminal controls.
-- [ ] Create version1 bug/release examples. Release graph uses prepare as parent,
+- [x] Create version1 bug/release examples. Release graph uses prepare as parent,
   tests as extra prerequisite for publish, param version in descriptions/tags.
   Document copying examples, exact discovery, schema/escaping, quoted assignments,
   previews, no reserved IDs, committed mapping and existing task ref variant.
-- [ ] Exercise both copied examples in TempDir through documented CLI commands,
+- [x] Exercise both copied examples in TempDir through documented CLI commands,
   from project root and subdir. Verify preview/commit descriptions and graph IDs.
-- [ ] Run recipes, output, CLI/default-output suites; commit docs/output/examples.
+- [x] Run recipes, output, CLI/default-output suites; commit docs/output/examples.
 
 ## Task 4: Final Verification And Delivery
 
@@ -237,3 +237,8 @@ no DB schema change. Human full preview and broader acceptance remain pending.
 Task2: recipe11 plus CLI68/dependencies7 pass (86 tests). Strict all-targets
 Clippy passes. Rejections preserve DB bytes; native graph importer handles
 rollback/IDs, existing refs and competing complete graphs unchanged.
+
+Task3 RED/GREEN: human preview initially omitted second line/tags; full safe
+preview now passes. Recipes14, CLI68 and autodetect27 pass (109 tests), including
+actual documented commands and bundled bug/release files. Output unit checks and
+strict Clippy pass. Full suite/review/integration/install remain pending.

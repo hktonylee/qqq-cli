@@ -1,0 +1,28 @@
+{
+  "version": 1,
+  "parameters": [
+    {"name": "version"},
+    {"name": "project", "default": "qqq"}
+  ],
+  "tasks": [
+    {
+      "key": "prepare",
+      "description": "Prepare ${project} ${version}\n\nAcceptance criteria\n- Update version and release notes\n- Review changes included in release",
+      "tags": ["release", "${project}"],
+      "priority": 5
+    },
+    {
+      "key": "tests",
+      "description": "Verify ${project} ${version}\n\nAcceptance criteria\n- Run focused and full tests\n- Verify release build and installed binary",
+      "tags": ["release", "verification"],
+      "parent": {"key": "prepare"}
+    },
+    {
+      "key": "publish",
+      "description": "Publish ${project} ${version}\n\nAcceptance criteria\n- Confirm release authorization\n- Publish verified release and check public version",
+      "tags": ["release", "publication"],
+      "parent": {"key": "prepare"},
+      "depends_on": [{"key": "tests"}]
+    }
+  ]
+}

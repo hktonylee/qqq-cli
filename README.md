@@ -92,6 +92,11 @@ current line, and Esc/Ctrl-C cancels.
 
 See [batch schema and piping examples](docs/reference.md#atomic-batch-import).
 
+Reuse workflows with `qqq add --template bug --var component=auth --dry-run`.
+Project-local `.qqq-recipes/*.json` files declare parameters and one or more tasks;
+applying a recipe creates its whole dependency graph atomically. See
+[recipe format and examples](docs/reference.md#task-recipes).
+
 Inspect readiness, owners and blockers with `qqq status`. Preview selection reasons
 with `qqq next --explain`; neither command claims work. Both support `--json`.
 See [queue diagnostics](docs/reference.md#queue-diagnostics) for filters and owner context.

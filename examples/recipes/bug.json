@@ -1,0 +1,15 @@
+{
+  "version": 1,
+  "parameters": [
+    {"name": "component"},
+    {"name": "severity", "default": "normal"}
+  ],
+  "tasks": [
+    {
+      "key": "bug",
+      "description": "Fix ${component} bug\n\nAcceptance criteria\n- Add regression test reproducing failure\n- Fix passes focused and full tests\nSeverity: ${severity}",
+      "tags": ["bug", "${component}"],
+      "priority": 5
+    }
+  ]
+}

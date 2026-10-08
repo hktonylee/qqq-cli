@@ -325,6 +325,105 @@ commit, allocated task IDs and every resolved dependency ID are returned. For th
 example above in an empty project, mapping is `{"feature":1,"tests":2}` and
 creation order is `["feature","tests"]`.
 
+## Task recipes
+
+Store reusable workflows in `<project-root>/.qqq-recipes/NAME.json`. Recipe files
+are ordinary project files suitable for Git, separate from ignored `.qqq/`
+runtime state. Discovery uses nearest `.qqq` project, including from subdirs;
+it never searches global folders, uses cwd shadow files or falls back to an outer
+project's recipes. Project must already be initialized. Names contain ASCII
+letters/digits/underscores/hyphens; pass name without `.json` or path separators.
+
+Copy bundled [bug](../examples/recipes/bug.json) and
+[release](../examples/recipes/release.json) examples from qqq source checkout into
+your project's `.qqq-recipes/`, or create files using format below.
+
+<!-- recipe-cli-examples -->
+```sh
+qqq add --template bug --var component=auth --dry-run --json
+qqq add --template bug --var component=auth --json
+qqq add --template release --var version=0.5.1 --dry-run --json
+qqq add --template release --var version=0.5.1 --json
+```
+<!-- /recipe-cli-examples -->
+
+Each application creates new tasks. Bug example creates one tagged task with
+whole description and acceptance criteria. Release example creates `prepare`,
+`tests`, `publish`: tests has prepare as parent; publish has prepare as parent
+and tests as extra prerequisite. Recipes create queue records; applying release
+recipe does not execute tests or publish software.
+
+Version-1 recipe format:
+
+```json
+{
+  "version": 1,
+  "parameters": [
+    {"name": "component"},
+    {"name": "severity", "default": "normal"}
+  ],
+  "tasks": [
+    {
+      "key": "bug",
+      "description": "Fix ${component} bug\n\nAcceptance criteria\n- Add regression test\nSeverity: ${severity}",
+      "tags": ["bug", "${component}"],
+      "priority": 5
+    }
+  ]
+}
+```
+
+`version` and `tasks` are required. `parameters` defaults to `[]`. Parameter
+names follow ASCII identifier syntax: letter/underscore first, then
+letters/digits/underscores. Omitted `default` makes parameter required; supplied
+default must be string. Names are case-sensitive. Every required declaration
+must receive value, including declarations unused by task text.
+
+Task fields, defaults, parent/prerequisite reference forms, tag validation and
+ordering use [atomic import schema](#atomic-batch-import). Acceptance criteria
+belong in whole description. Local refs such as `{"key":"prepare"}` resolve to
+new IDs from same application; explicitly declared existing refs such as
+`"depends_on":[{"id":12}]` retain ID12 and must exist in target project. No image
+attachment fields in version1. Empty task arrays are valid no-ops.
+
+Repeat `--var NAME=VALUE`; split occurs at first equals sign. Quote assignments
+when values contain spaces or shell metacharacters, for example
+`--var 'component=auth = account login'`. Values preserve whitespace, additional
+equals signs, quotes, Unicode and newlines. Empty value counts as provided;
+expanded descriptions/tags still must pass ordinary task validation.
+
+`${name}` substitutes only descriptions and individual tags. Keys, integer
+priorities and reference objects remain literal. Values/defaults are inserted
+once without further expansion: value containing `${other}` stays literal text.
+`$$` emits `$`; `$${name}` emits literal `${name}`. Other dollar forms such as
+`$HOME` or `$(...)` stay literal. Loading recipes never reads environment values,
+executes shell commands or evaluates code. Unknown/malformed/unclosed placeholders
+fail. JSON itself must use normal JSON string escaping (`\n`, `\"`, `\\`).
+
+Required/duplicate/unknown assignments, duplicate declarations/JSON fields/task
+keys, invalid fields/versions, missing refs and graph cycles fail before any task
+creation. Expansion happens on parsed strings before shared import validation;
+it cannot inject JSON fields. Recipe fields own task data, so `--template`
+conflicts with positional text, `--description`, `--stdin`, `--edit`, `--parent`,
+`--depends-on`, explicit `--priority`, `--image` and `--tag`. Add's `--var` and
+`--dry-run` require `--template`; ordinary add/import behavior stays unchanged.
+
+`--dry-run` validates expanded descriptions, normalized tags and graph against
+current read-only DB snapshot. No new tasks, claims, IDs, migration or deletion
+recovery. Command-start owner preflight remains independent and may fail a
+confirmed dead owner, as with other inspection commands. Real application
+rechecks existing references and inserts whole graph in one import transaction;
+validation/insertion failures leave batch absent and consume no IDs. Concurrent
+applications retain separate complete mappings.
+
+JSON uses import report fields `version`, `dry_run`, `count`, `mapping`,
+`creation_order`, `tasks`. Committed mapping is recipe key -> new task ID.
+Preview mapping is `{}`; new IDs remain null while original reference objects
+and creation_order show graph without reserving IDs. Expanded descriptions/tags
+are exact JSON data. Human preview adds full descriptions/tags to graph summary;
+terminal controls are escaped. Native agent callers retain automatic JSON,
+ordinary shells human output, with existing `--json`/`--human` overrides.
+
 ## Archive and unarchive
 
 ```sh
