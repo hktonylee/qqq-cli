@@ -953,3 +953,75 @@ fn concurrent_message_history_survives_metadata_apply_without_spurious_conflict(
     assert_eq!(detail["messages"][0]["body"], "Concurrent note");
     assert_eq!(detail["task"]["priority"], 5);
 }
+
+#[test]
+fn documented_bulk_commands_run_from_root_and_subdirectory() {
+    let f = Fixture::new();
+    f.ok(&["add", "First", "--tag", "backend"]);
+    f.ok(&["add", "Second", "--tag", "backend"]);
+    f.ok(&["add", "Third"]);
+    let reference =
+        fs::read_to_string(Path::new(env!("CARGO_MANIFEST_DIR")).join("docs/reference.md"))
+            .unwrap();
+    let examples = reference
+        .split("<!-- bulk-cli-examples -->")
+        .nth(1)
+        .unwrap()
+        .split("<!-- /bulk-cli-examples -->")
+        .next()
+        .unwrap();
+    let nested = f.path().join("subdirectory");
+    fs::create_dir(&nested).unwrap();
+    let mut reports = Vec::new();
+    for (index, line) in examples
+        .lines()
+        .filter(|line| line.starts_with("qqq "))
+        .enumerate()
+    {
+        let mut args = shlex::split(line).unwrap();
+        let directory = if index < 2 { f.path() } else { &nested };
+        let redirect = args.iter().position(|arg| arg == ">").map(|position| {
+            assert_eq!(args.len(), position + 2);
+            let file = directory.join(&args[position + 1]);
+            args.truncate(position);
+            file
+        });
+        let before = f.bytes();
+        let output = f
+            .command()
+            .current_dir(directory)
+            .args(&args[1..])
+            .output()
+            .unwrap();
+        assert!(
+            output.status.success(),
+            "{line}: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+        assert!(output.stderr.is_empty());
+        if let Some(file) = redirect {
+            assert_eq!(f.bytes(), before);
+            fs::write(file, &output.stdout).unwrap();
+        }
+        reports.push(serde_json::from_slice::<Value>(&output.stdout).unwrap());
+    }
+    assert_eq!(reports.len(), 6);
+    for index in [0, 2, 4] {
+        assert_eq!(reports[index]["applied"], false);
+        assert_eq!(reports[index + 1]["applied"], true);
+        assert_eq!(
+            reports[index]["selected_ids"],
+            reports[index + 1]["selected_ids"]
+        );
+    }
+    assert_eq!(reports[0]["selected_ids"], json!([1, 2]));
+    assert_eq!(reports[0]["action_count"], 4);
+    assert_eq!(
+        reports[2]["tasks"][0]["after"]["tags"],
+        json!(["release", "verified"])
+    );
+    assert_eq!(reports[4]["selected_ids"], json!([1, 2, 3]));
+    for id in ["1", "2", "3"] {
+        assert_eq!(f.ok(&["show", id])["task"]["archived"], true);
+    }
+}

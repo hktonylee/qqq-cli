@@ -92,6 +92,12 @@ current line, and Esc/Ctrl-C cancels.
 
 See [batch schema and piping examples](docs/reference.md#atomic-batch-import).
 
+Preview changes to several saved tasks with
+`qqq bulk --tag backend --add-tag review --priority 5 --json > preview.json`,
+then confirm with `qqq bulk --apply preview.json`. Preview freezes exact IDs;
+stale changes reject whole batch. See [bulk actions](docs/reference.md#bulk-task-actions)
+for selectors, tags, archive and conflict handling.
+
 Reuse workflows with `qqq add --template bug --var component=auth --dry-run`.
 Project-local `.qqq-recipes/*.json` files declare parameters and one or more tasks;
 applying a recipe creates its whole dependency graph atomically. See
@@ -112,12 +118,13 @@ task to load it, scroll each pane, or use the keyboard:
 | --- | --- |
 | Shift+Up / Shift+Down | Move between tasks and a blank draft |
 | Ctrl+S | Save |
+| Ctrl+D | Toggle task in bulk selection; `+` marks selected rows |
 | Ctrl+L | Edit task or new draft tags; retain unsaved drafts |
 | Ctrl+K | Go to task ID; retain unsaved drafts |
 | Ctrl+B | Pick saved project view; retain editor and parked drafts |
 | Ctrl+P | Create a child of the selected task |
 | Ctrl+/ | Filter tasks |
-| Ctrl+G | Open task actions |
+| Ctrl+G | Open bulk actions when tasks marked, otherwise task actions |
 | Ctrl+H | Open linked Herdr agent; shown only for tasks with a Herdr link |
 | Esc | Close the filter, clear the editor, then exit; changed drafts ask before discard |
 

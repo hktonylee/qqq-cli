@@ -9,6 +9,7 @@ Detailed behavior and flags for qqq. For a first run, start with the
 - [List and search](#list-and-show) · [Add and edit](#add-and-edit)
 - [Named project views](views.md)
 - [Archive](#archive-and-unarchive) · [Reopen](#reopen-work)
+- [Bulk metadata actions](#bulk-task-actions)
 - [Editor](#built-in-editor) · [TUI](#task-tui)
 - [Dependencies and images](#dependencies-and-images)
 - [Ownership and recovery](#agents-and-recovery)
@@ -151,6 +152,7 @@ Parser and alias failures can occur before command resolution.
 | `INVALID_FILTER` | Luau filter invalid or failed during evaluation | `argument: "--filter"`; runtime failure adds `reason: "evaluation_failed"` |
 | `DB_BUSY` | SQLite busy/locked; retry after competing transaction finishes | `sqlite_code` (5 or 6), `sqlite_extended_code` |
 | `CONTENT_CONFLICT` | Loaded content changed or task removed during edit | `task_id`, `expected_revision`, `current_revision`, `reason` (`revision_changed` or `task_removed`) |
+| `BULK_CONFLICT` | Frozen bulk selection changed or DB rejected a batch write; whole batch rolls back | `conflict_ids`, `reason`; stale previews include `selected_ids` and `reason: "stale_bulk_preview"` |
 | `PROJECT_NOT_FOUND` | Project DB unavailable | `command` when resolved |
 | `CONFIG_ERROR` | Config cannot load or requested config operation failed | `path` |
 | `IO_ERROR` | Filesystem or input/output operation failed | `io_kind`, `os_code` when available; explicit guards may add `path`, `task_id`, `reason` |
@@ -453,6 +455,83 @@ while a visible unfinished task depends on it. Adding links or unarchiving
 unfinished dependents under archived unfinished dependencies also fails.
 Archived completed dependencies still release tasks.
 
+## Bulk task actions
+
+`qqq bulk` previews metadata changes. Review exact IDs and before/after values,
+save JSON, then explicitly confirm with `--apply PATH`. Commands below run from
+project root or subdirectories:
+
+<!-- bulk-cli-examples -->
+```sh
+qqq bulk --tag backend --status new --add-tag review --priority 5 --json > preview.json
+qqq bulk --apply preview.json --json
+qqq bulk --id 1 --id 2 --set-tags 'release,verified' --json > preview.json
+qqq bulk --apply preview.json --json
+qqq bulk --all --archive --json > preview.json
+qqq bulk --apply preview.json --json
+```
+<!-- /bulk-cli-examples -->
+
+Use IDs returned by `add`; example IDs `1` and `2` must exist. Human output shows
+every selected ID and its values. `qqq bulk --apply preview.json --human` prints
+readable results. `qqq bulk --apply - --json` reads a saved preview from stdin.
+Generating a preview alone changes no selected task; discarding preview cancels.
+
+Selection uses either repeated positive absolute `--id ID`, or selectors:
+
+| Selector | Behavior |
+| --- | --- |
+| `--query TEXT` | Case-insensitive substring in full saved description |
+| `--status STATUS` | Repeat for OR; `new`, `in_progress`, `completed`, `error` |
+| `--filter EXPR` | Existing typed Luau filter |
+| `--tag LABEL` | Repeat to require every exact normalized label |
+| `--all` | Explicitly select all visible tasks without completion display limit |
+| `--include-archived` | Include archived tasks with selectors |
+
+Query, status, tag and Luau selectors combine with AND. Only directly matching
+rows enter batch; ancestor context rows stay out. Completed display limits never
+apply. Explicit IDs include archived tasks, deduplicate and sort ascending; they
+conflict with selectors. Archive visibility alone is not a selection. Empty
+selection produces zero counts, empty IDs and empty task rows.
+
+| Action | Behavior |
+| --- | --- |
+| `--add-tag LABEL` | Add label; repeat |
+| `--remove-tag LABEL` | Remove label; repeat |
+| `--set-tags LABELS` | Replace with comma-separated labels; `""` clears |
+| `--priority N` | Set integer priority from -100 through 100 |
+| `--archive` / `--unarchive` | Set archive visibility |
+
+At least one action is required. Tags use single-task validation. Replacing tags
+conflicts with adding/removing; same normalized label cannot be added and removed.
+Archive/unarchive conflict. Priority, tags and archive visibility can combine.
+Deletion, status changes and ownership use individual task commands.
+
+Preview JSON has `version: 1`, `applied: false`, canonical `database` path,
+normalized `actions`, `selected_ids`, `selected_count`, `changed_count`,
+`action_count` and `tasks`. Each task row has `id`, `before`, `after` and opaque
+SHA256 `fingerprint`; metadata contains `tags`, `priority`, `archived`.
+`changed_count` counts tasks with changed values; `action_count` counts changed
+metadata fields across tasks. Adding several tags to one task counts as one
+field change. No-op rows contribute zero; empty/no-op application writes no task
+rows or history. Apply returns same report with `applied: true`.
+
+Apply uses only frozen IDs, never reruns selectors. Newly matching tasks stay
+unchanged. Saved preview belongs to its canonical project DB path. Relevant
+selected-task changes, removal, assignment changes or content/attachment revisions
+cause `BULK_CONFLICT`; no task in batch changes. Messages alone do not invalidate
+preview. Regenerate and review after conflict. Malformed/inconsistent previews
+fail with `INVALID_ARGUMENT`; applied reports cannot be applied again.
+
+All rows validate before one transaction commits. DB failures roll back every
+change and archive event. Archive guards use final batch state: active tasks
+cannot be archived; unfinished dependencies cannot be archived while visible
+unfinished tasks depend on them. Archiving/unarchiving parent and dependent
+together works when final graph satisfies guards. Other task fields, claims,
+descriptions, images, dependencies and existing history stay intact. Actual
+archive changes add normal archive/unarchive events. Standard synchronous owner
+liveness preflight still runs before command, as described below.
+
 ## Reopen work
 
 ```sh
@@ -661,6 +740,23 @@ task reveals completed rows when hidden by the completion toggle or zero limit;
 other jumps and cancellation preserve that setting. Saved selectors and positive
 completed limits remain in effect: jump opens a task even if its list row stays
 hidden. Navigation saves no content and changes no task status or ownership.
+
+Ctrl+D toggles current saved task in bulk selection. Selected tasks show `+` in
+existing one-cell row prefix; dirty `[*]` and focused row remain independent.
+Marks survive filtering and refresh, including hidden tasks. Ctrl+G opens bulk
+menu while any task is marked; menu and preview show count and exact IDs.
+`x Clear selection` removes marks. With no marks, Ctrl+G opens individual actions.
+
+Bulk menu offers add/remove/replace tags, priority and archive/unarchive. Tag
+input uses one label per line: Enter/Shift+Enter adds newline, Ctrl+U deletes
+current line, Ctrl+S generates preview. Empty replacement clears tags. Priority
+input previews on Enter. Invalid input retains text for correction.
+Preview shows full before/after metadata; Up/Down, PgUp/PgDn and Home/End scroll.
+Heading and `y apply` / `n/Esc cancel` stay visible across resize. Enter or Ctrl+C
+also cancels. Only `y` applies frozen preview. Success clears marks; conflicts
+retain marks for fresh preview. Cancelling or applying preserves unsaved drafts,
+paste/image items, caret, manual pane scroll, filter and focus. Bulk actions
+operate on saved tasks; Ctrl+S in editor saves description separately.
 
 Ctrl-H focuses selected task's live Herdr agent and opens Herdr client using
 task's linked server. `Ctrl-H Herdr` appears in the shortcut bar only when the
