@@ -1627,6 +1627,12 @@ impl Db {
         Ok(task)
     }
     pub fn reopen(&mut self, id: i64, actor: &str) -> Result<Task> {
+        self.reopen_inner(id, actor, false)
+    }
+    pub fn force_reopen(&mut self, id: i64, actor: &str) -> Result<Task> {
+        self.reopen_inner(id, actor, true)
+    }
+    fn reopen_inner(&mut self, id: i64, actor: &str, force: bool) -> Result<Task> {
         nonempty(actor, "Actor")?;
         let tx = self
             .conn
@@ -1641,16 +1647,20 @@ impl Db {
             .with_context(|| crate::errors::Info::missing_task(id))?;
         ensure!(
             task.status == "completed" || task.status == "in_progress"
-                || (task.status == "error" && tx.query_row(
+                || (task.status == "error" && (force || tx.query_row(
                     "SELECT EXISTS(SELECT 1 FROM events WHERE task_id=?1 AND action='error' AND session=?2
                      AND id=(SELECT MAX(id) FROM events WHERE task_id=?1
                      AND action NOT IN ('archive','unarchive')))",
-                    params![id, crate::preflight::ACTOR], |row| row.get::<_, bool>(0))?),
+                    params![id, crate::preflight::ACTOR], |row| row.get::<_, bool>(0))?)),
             crate::errors::Info::transition(
                 id,
                 &task.status,
-                &["completed"],
-                format!("Task {id} must be completed to reopen")
+                if force { &["completed", "in_progress", "error"] } else { &["completed"] },
+                if force {
+                    format!("Task {id} must be completed, in progress or error to force reopen")
+                } else {
+                    format!("Task {id} must be completed to reopen")
+                }
             )
         );
         ensure!(
@@ -1665,7 +1675,7 @@ impl Db {
             .detail("expected_archived", false)
         );
         crate::dependencies::ensure_all_available(&tx, id)?;
-        if task.status == "in_progress" {
+        if task.status == "in_progress" && !force {
             Self::ensure_orphaned_claim(&tx, &task)?;
         }
         tx.execute(

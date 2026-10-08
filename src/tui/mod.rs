@@ -129,6 +129,7 @@ pub enum TaskAction {
     ForceComplete(i64),
     Retry(i64),
     Reopen(i64),
+    ForceReopen(i64),
     SetArchived(i64, bool),
     Priority(i64, i64),
     Tags(i64, Vec<String>),
@@ -140,6 +141,10 @@ impl TaskAction {
         matches!(self, Self::Complete(_) | Self::ForceComplete(_))
     }
 
+    fn is_reopening(&self) -> bool {
+        matches!(self, Self::Reopen(_) | Self::ForceReopen(_))
+    }
+
     fn id(&self) -> i64 {
         match self {
             Self::Complete(id)
@@ -147,6 +152,7 @@ impl TaskAction {
             | Self::ForceComplete(id)
             | Self::Retry(id)
             | Self::Reopen(id)
+            | Self::ForceReopen(id)
             | Self::SetArchived(id, _)
             | Self::Tags(id, _)
             | Self::Priority(id, _)
@@ -161,6 +167,7 @@ impl TaskAction {
             Self::ForceComplete(_) => "Force complete",
             Self::Retry(_) => "Retry",
             Self::Reopen(_) => "Reopen",
+            Self::ForceReopen(_) => "Force reopen",
             Self::SetArchived(_, true) => "Archive",
             Self::SetArchived(_, false) => "Unarchive",
             Self::Priority(_, _) => "Set priority",
@@ -174,7 +181,7 @@ impl TaskAction {
             Self::Complete(id) | Self::ForceComplete(id) => format!("Completed #{id}"),
             Self::MarkError(id, _) => format!("Marked error #{id}"),
             Self::Retry(id) => format!("Retried #{id}"),
-            Self::Reopen(id) => format!("Reopened #{id}"),
+            Self::Reopen(id) | Self::ForceReopen(id) => format!("Reopened #{id}"),
             Self::SetArchived(id, true) => format!("Archived #{id}"),
             Self::SetArchived(id, false) => format!("Unarchived #{id}"),
             Self::Tags(id, _) => format!("Tags saved #{id}"),
@@ -400,6 +407,13 @@ fn action_confirmation_lines(
         format!("{} task #{}?", action.label(), action.id()),
         PopupKind::Heading,
     )];
+    if action.is_reopening() {
+        rows.extend(
+            wrap_modal("Y ignores owner checks.", width)
+                .into_iter()
+                .map(|text| PopupRow::new(text, PopupKind::Warning)),
+        );
+    }
     if matches!(action, TaskAction::ForceComplete(_)) {
         rows.extend(
             wrap_modal("Complete without matching task owner.", width)
@@ -431,7 +445,16 @@ fn action_confirmation_lines(
             );
         }
     }
-    let hint = if action.is_completion() {
+    let hint = if action.is_reopening() {
+        rows.truncate(height.saturating_sub(1));
+        if width >= "y reopen  Y force reopen  n/Esc cancel".len() {
+            "y reopen  Y force reopen  n/Esc cancel"
+        } else if width >= "y reopen  Y force  Esc".len() {
+            "y reopen  Y force  Esc"
+        } else {
+            "y/Y Esc"
+        }
+    } else if action.is_completion() {
         if width >= "y confirm  Y force  n/Esc cancel".len() {
             "y confirm  Y force  n/Esc cancel"
         } else if width >= "y Y force Esc".len() {
@@ -1059,6 +1082,9 @@ fn compose_inner(
                 "Switch? y/N"
             }
             Some(Confirmation::Switch { .. }) => "Discard changes and switch? (y/N)",
+            Some(Confirmation::Action { action, .. }) if action.is_reopening() => {
+                "y Reopen  Y Force reopen  n/Esc Cancel"
+            }
             Some(Confirmation::Action { .. }) => "Confirm action? (y/N)",
             None => &message,
         };
@@ -1296,7 +1322,8 @@ fn compose_inner(
                             modal_lines: modal_lines.as_deref(),
                             hide_cursor: matches!(
                                 &confirmation,
-                                Some(Confirmation::Action { action, .. }) if action.is_completion()
+                                Some(Confirmation::Action { action, .. })
+                                    if action.is_completion() || action.is_reopening()
                             ),
                             details: target_id.map(|_| dashboard::DetailsView {
                                 rows: &details_rows,
@@ -1902,6 +1929,10 @@ fn compose_inner(
                                         } else {
                                             TaskAction::Complete(action.id())
                                         }
+                                    } else if key.code == KeyCode::Char('Y')
+                                        && action.is_reopening()
+                                    {
+                                        TaskAction::ForceReopen(action.id())
                                     } else {
                                         action.clone()
                                     };

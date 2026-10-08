@@ -547,7 +547,15 @@ with same agent kind counts as live, including moved panes and changed session
 reports. Missing links or saved servers, mismatched claim associations, failed commands and
 invalid responses cannot establish absence; task stays unchanged. Legacy links
 remain usable because fresh claims replace saved links. New links privately
-record current claim association. CLI and TUI Reopen use same checks.
+record current claim association. CLI and lowercase `y` in TUI Reopen use same checks.
+
+TUI Reopen confirmation offers `y` to reopen normally or uppercase `Y` to force
+reopen a completed, in-progress or error task. Force reopen skips owner-liveness
+checks and permits manual errors; it clears the task's recorded assignment even
+when an owner remains live. Archive and dependency availability checks still
+apply, and a new task cannot reopen. `n` or Esc cancels. Confirmation hides the
+cursor and ignores editing/navigation input; cancellation restores the dirty
+draft and caret. Successful reopening records the actor in a reopen event.
 
 Reopening keeps
 description, priority, parent, prerequisites, messages, images, creation time, and prior
@@ -816,7 +824,7 @@ selectable. Cyan titles/shortcuts, muted help, gold prompts/warnings and soft-re
 errors distinguish popup states. Up/Down selects action, wrapping at ends;
 Enter activates selected row. Dark accent tint and `>` mark selection; plain
 mode keeps marker. Letter shortcuts activate actions directly. Press `c` to complete owned task,
-`r` to retry error task, `o` to reopen completed task or absent Herdr owner's active task, `a` to archive or
+`r` to retry error task, `o` to open Reopen confirmation (`y` normal, `Y` force), `a` to archive or
 unarchive, `p` to set priority (-100..100), or `d` to set parent by positive
 task ID or `none`. Retry appears only for error tasks; non-error tasks ignore `r`.
 Press `e` for Mark error, enter a nonempty reason, then confirm with `y`.

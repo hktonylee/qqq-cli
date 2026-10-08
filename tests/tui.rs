@@ -588,6 +588,24 @@ fn tui_dashboard_preflight_fails_absent_owner_and_reopen_recovers() {
 }
 
 #[test]
+fn tui_dashboard_reopen_popup_hides_cursor_and_restores_dirty_caret() {
+    dashboard_scenario("force_reopen_cursor");
+    dashboard_scenario("force_reopen_cursor_no_color");
+}
+
+#[test]
+fn tui_dashboard_force_reopen_distinguishes_uppercase_confirmation() {
+    for name in [
+        "force_reopen",
+        "force_reopen_no_color",
+        "force_reopen_narrow",
+        "orphan_reopen_force_live",
+    ] {
+        dashboard_scenario(name);
+    }
+}
+
+#[test]
 fn tui_dashboard_mark_error_requires_reason_and_confirmation() {
     for name in ["menu_error_success", "menu_error_success_no_color"] {
         dashboard_scenario(name);

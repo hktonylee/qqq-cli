@@ -243,6 +243,161 @@ fn force_completion_rolls_back_status_and_ownership_if_audit_insert_fails() {
 }
 
 #[test]
+fn force_reopen_preserves_content_and_history_and_clears_assignment() {
+    for state in ["completed", "in_progress", "error"] {
+        let (mut db, dir) = database();
+        let parent = db.add("Parent", None, &[]).unwrap();
+        db.force_complete(parent.id, "operator").unwrap();
+        let prerequisite = db.add("Prerequisite", None, &[]).unwrap();
+        db.force_complete(prerequisite.id, "operator").unwrap();
+        let task = db
+            .add_with_dependencies(
+                "Original content",
+                Some(parent.id),
+                &composition().images,
+                7,
+                &[prerequisite.id],
+            )
+            .unwrap();
+        db.next("foreign", None).unwrap();
+        db.message(task.id, "Keep note", Some("foreign")).unwrap();
+        db.conn
+            .execute(
+                "UPDATE tasks SET harness_name='codex',harness_session='foreign',
+            orchestrator_name='herdr',orchestrator_session='saved' WHERE id=?",
+                [task.id],
+            )
+            .unwrap();
+        if state == "completed" {
+            db.complete(task.id, "foreign", None).unwrap();
+        } else if state == "error" {
+            db.edit_with_priority(
+                task.id,
+                None,
+                Some(db::EditTransition::Error {
+                    session: "foreign",
+                    reason: "Keep failure note",
+                    harness_name: None,
+                }),
+                &[],
+                None,
+                None,
+            )
+            .unwrap();
+        }
+        let before = db.show(task.id).unwrap();
+        if state != "completed" {
+            assert!(db.reopen(task.id, "operator").is_err());
+            assert_eq!(db.show(task.id).unwrap(), before);
+        }
+        let image = dir.path().join(format!("images/{}/1.png", task.id));
+        let image_bytes = std::fs::read(&image).unwrap();
+        assert_eq!(db.force_reopen(task.id, "operator").unwrap().status, "new");
+        let after = db.show(task.id).unwrap();
+        for field in [
+            "description",
+            "content_revision",
+            "priority",
+            "archived",
+            "parent_id",
+            "prerequisites",
+            "tags",
+            "created_at",
+        ] {
+            assert_eq!(
+                after["task"][field], before["task"][field],
+                "{state}: {field}"
+            );
+        }
+        for field in ["messages", "images", "herdr"] {
+            assert_eq!(after[field], before[field], "{state}: {field}");
+        }
+        for field in [
+            "harness_name",
+            "harness_session",
+            "orchestrator_name",
+            "orchestrator_session",
+        ] {
+            assert!(after["task"][field].is_null(), "{state}: {field}");
+        }
+        assert!(db.owned_with_name("foreign", None).unwrap().is_none());
+        let mut events = after["events"].as_array().unwrap().clone();
+        let forced = events.pop().unwrap();
+        assert_eq!(forced["action"], "reopen");
+        assert_eq!(forced["session"], "operator");
+        assert_eq!(events, *before["events"].as_array().unwrap());
+        assert_eq!(std::fs::read(image).unwrap(), image_bytes);
+    }
+}
+
+#[test]
+fn force_reopen_keeps_status_archive_and_dependency_guards() {
+    let (mut db, _dir) = database();
+    let task = db.add("Fresh", None, &[]).unwrap();
+    let before = db.show(task.id).unwrap();
+    assert!(db.force_reopen(task.id, "operator").is_err());
+    assert!(db.force_reopen(task.id, " ").is_err());
+    assert_eq!(db.show(task.id).unwrap(), before);
+    let missing = db.force_reopen(999, "operator").err().unwrap();
+    assert!(matches!(
+        missing.downcast_ref::<errors::Info>().unwrap().code,
+        errors::Code::TaskNotFound
+    ));
+    for guard in ["self", "parent", "prerequisite"] {
+        let (mut db, _dir) = database();
+        let dependency = db.add("Dependency", None, &[]).unwrap();
+        let dependencies = [dependency.id];
+        let task = db
+            .add_with_dependencies(
+                "Finished",
+                (guard == "parent").then_some(dependency.id),
+                &[],
+                0,
+                if guard == "prerequisite" {
+                    &dependencies
+                } else {
+                    &[]
+                },
+            )
+            .unwrap();
+        db.force_complete(task.id, "operator").unwrap();
+        db.set_archived(
+            if guard == "self" {
+                task.id
+            } else {
+                dependency.id
+            },
+            true,
+            "operator",
+        )
+        .unwrap();
+        let before = db.show(task.id).unwrap();
+        assert!(db.force_reopen(task.id, "operator").is_err(), "{guard}");
+        assert_eq!(db.show(task.id).unwrap(), before, "{guard}");
+    }
+}
+
+#[test]
+fn force_reopen_rolls_back_assignment_when_audit_fails() {
+    let (mut db, _dir) = database();
+    let task = db.add("Original", None, &[]).unwrap();
+    db.next("foreign", None).unwrap();
+    let before = db.show(task.id).unwrap();
+    db.conn
+        .execute_batch(
+            "CREATE TRIGGER reject_force_reopen BEFORE INSERT ON events
+        WHEN NEW.action='reopen' BEGIN SELECT RAISE(ABORT,'audit rejected'); END;",
+        )
+        .unwrap();
+    assert!(db.force_reopen(task.id, "operator").is_err());
+    assert_eq!(db.show(task.id).unwrap(), before);
+    assert_eq!(
+        db.owned_with_name("foreign", None).unwrap().unwrap().id,
+        task.id
+    );
+}
+
+#[test]
 fn loaded_compositions_conflict_without_losing_local_paste_or_image_payloads() {
     let (mut db, dir) = database();
     let task = db.add("Original", None, &[]).unwrap();

@@ -798,6 +798,9 @@ fn execute(
                         None,
                     ),
                     tui::TaskAction::Reopen(id) => db.reopen(id, session_input.unwrap_or("cli")),
+                    tui::TaskAction::ForceReopen(id) => {
+                        db.force_reopen(id, session_input.unwrap_or("manual"))
+                    }
                     tui::TaskAction::SetArchived(id, archived) => {
                         db.set_archived(id, archived, session_input.unwrap_or("cli"))
                     }

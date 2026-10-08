@@ -35,7 +35,7 @@ with tempfile.TemporaryDirectory(prefix="qqq-dashboard-test-") as folder:
         env["NO_COLOR"] = "1"
     elif scenario == "dumb":
         env["TERM"] = "dumb"
-    if scenario.startswith(("buffers_", "long_description_", "prerequisites", "dirty_marker", "completed_toggle", "jump", "menu_error_", "force_complete", "list_selection", "tags", "orphan_reopen", "views", "graph")) and scenario.endswith("no_color"):
+    if scenario.startswith(("buffers_", "long_description_", "prerequisites", "dirty_marker", "completed_toggle", "jump", "menu_error_", "force_complete", "force_reopen", "list_selection", "tags", "orphan_reopen", "views", "graph")) and scenario.endswith("no_color"):
         env["NO_COLOR"] = "1"
     for name in ("EDITOR", "QQQ_SESSION", "HERDR_ENV", "HERDR_PANE_ID", "CODEX_THREAD_ID", "CODEX_SESSION_ID"):
         env.pop(name, None)
@@ -88,9 +88,9 @@ esac
         cli("next", "--local")
         env.pop("HERDR_ENV")
         env.pop("HERDR_PANE_ID")
-        if scenario != "orphan_reopen_live":
+        if not scenario.endswith("live"):
             response_path.write_text(json.dumps({"result": {"agents": []}}))
-    elif scenario.startswith("force_complete"):
+    elif scenario.startswith(("force_complete", "force_reopen")):
         cli("add", "Foreign item")
         cli("next", "--local", "--session", "foreign")
         cli("add", "Failed item")
@@ -347,7 +347,7 @@ print(json.dumps({"result": result}))
         args.extend(["--session", "native-display"])
     elif scenario.startswith("orphan_reopen"):
         args.extend(["--session", "reviewer"])
-    elif scenario in ("actions_basic", "actions_rejected", "actions_narrow") or scenario.startswith(("menu_retry_", "menu_error_")) or (scenario.startswith("force_complete") and not scenario.startswith("force_complete_herdr_") and scenario not in ("force_complete_sessionless", "force_complete_owner_db_error")):
+    elif scenario in ("actions_basic", "actions_rejected", "actions_narrow") or scenario.startswith(("menu_retry_", "menu_error_", "force_reopen")) or (scenario.startswith("force_complete") and not scenario.startswith("force_complete_herdr_") and scenario not in ("force_complete_sessionless", "force_complete_owner_db_error")):
         args.extend(["--session", "other" if scenario == "menu_error_rejected" else "worker"])
     if scenario in ("archive_included", "actions_basic", "actions_rejected"):
         args.append("--include-archived")
@@ -545,7 +545,7 @@ print(json.dumps({"result": result}))
                              and editor_line().startswith("Second"))
                 settle()
                 assert b"\x1b[38;" not in screen and b"\x1b[48;" not in screen, screen[-2000:]
-        if not scenario.startswith(("wide_layout", "menu_retry_", "menu_error_", "long_description_", "completed_toggle", "force_complete", "orphan_reopen", "views_startup", "views_visibility")) and scenario not in ("buffers_scroll", "handoff_scroll", "ctrl_c_new_scroll", "live_refresh_scroll", "tree_navigation", "scroll", "wheel", "click", "click_filter", "workflow", "workflow_empty", "workflow_status", "filter", "filter_no_color", "archive_hidden", "archive_included", "actions_basic", "actions_rejected", "actions_hidden", "jump_archived"):
+        if not scenario.startswith(("wide_layout", "menu_retry_", "menu_error_", "long_description_", "completed_toggle", "force_complete", "force_reopen", "orphan_reopen", "views_startup", "views_visibility")) and scenario not in ("buffers_scroll", "handoff_scroll", "ctrl_c_new_scroll", "live_refresh_scroll", "tree_navigation", "scroll", "wheel", "click", "click_filter", "workflow", "workflow_empty", "workflow_status", "filter", "filter_no_color", "archive_hidden", "archive_included", "actions_basic", "actions_rejected", "actions_hidden", "jump_archived"):
             read_until(b"Second")
             assert "First" in visible.text() and "Second" in visible.text(), visible.text()
         assert not select.select([child.stdout], [], [], 0)[0], "TUI wrote stdout while open"
@@ -3032,8 +3032,82 @@ print(json.dumps({"result": result}))
                 wait_frame(lambda: "Task actions" not in visible.text() and editor_line().startswith(label))
             if scenario.endswith("no_color"):
                 assert b"\x1b[38;" not in screen and b"\x1b[48;" not in screen
+        elif scenario.startswith("force_reopen"):
+            send(b"\x0b1\r")
+            wait_frame(lambda: "Task #1 (In progress)" in editor_title()
+                       and editor_line().startswith("Foreign item"))
+            send(b" retained\x1b[D\x1b[D")
+            caret = (len("Foreign item retained") - 2, editor_row() + 1)
+            wait_caret(lambda: editor_line().startswith("Foreign item retained"), caret)
+            initial_detail = cli("show", "1")
+
+            def open_reopen():
+                send(b"\x07")
+                wait_visible(lambda: "o Reopen" in visible.text())
+                send(b"o")
+                wait_visible(lambda: "Reopen task #1?" in visible.text())
+                wait_visible(lambda: "y reopen" in visible.text() and "Y force" in visible.text())
+
+            open_reopen()
+            if "cursor" in scenario:
+                wait_visible(lambda: not visible.cursor_visible and not visible.pending)
+                send(b"z123\x1b[D\x1b[B\x13\x1b[200~ignored\x1b[201~")
+                click(5, 2)
+                settle()
+                assert "Reopen task #1?" in visible.text() and not visible.cursor_visible
+                assert cli("show", "1") == initial_detail
+                fcntl.ioctl(slave, termios.TIOCSWINSZ, struct.pack("HHHH", 12, 32, 0, 0))
+                visible.resize(32, 12)
+                wait_visible(lambda: "Reopen task #1?" in visible.text()
+                             and not visible.cursor_visible and not visible.pending)
+                send(b"\x1b")
+                wait_visible(lambda: editor_line().startswith("Foreign item retained")
+                             and visible.cursor_visible)
+                wait_caret(lambda: editor_line().startswith("Foreign item retained")
+                           and visible.cursor_visible, (caret[0], editor_row() + 1))
+                assert cli("show", "1") == initial_detail
+            else:
+                if scenario.endswith("narrow"):
+                    fcntl.ioctl(slave, termios.TIOCSWINSZ, struct.pack("HHHH", 12, 32, 0, 0))
+                    visible.resize(32, 12)
+                    wait_visible(lambda: "Reopen task #1?" in visible.text())
+                send(b"y")
+                wait_visible(lambda: "Action error" in visible.text())
+                assert cli("show", "1") == initial_detail
+                send(b"\x1b")
+                wait_visible(lambda: "Action error" not in visible.text())
+                open_reopen()
+                send(b"Y")
+                wait_frame(lambda: "Task #1 (New)" in editor_title()
+                           and "Reopened #1" in visible.text()
+                           and editor_line().startswith("Foreign item"))
+                detail = cli("show", "1")
+                assert detail["task"]["status"] == "new"
+                assert detail["task"]["description"] == initial_detail["task"]["description"]
+                assert detail["events"][:-1] == initial_detail["events"]
+                assert detail["events"][-1]["action"] == "reopen"
+                assert detail["events"][-1]["session"] == "worker"
+                for field in ("harness_name", "harness_session", "orchestrator_name", "orchestrator_session"):
+                    assert detail["task"][field] is None
+                for task_id, status, key in [(2, "Error", b"Y"), (5, "Completed", b"y")]:
+                    send(f"\x0b{task_id}\r".encode())
+                    wait_visible(lambda: f"Task #{task_id} ({status}" in editor_title())
+                    before_reopen = cli("show", str(task_id))
+                    send(b"\x07")
+                    wait_visible(lambda: "o Reopen" in visible.text())
+                    send(b"o")
+                    wait_visible(lambda: f"Reopen task #{task_id}?" in visible.text())
+                    send(key)
+                    wait_frame(lambda: f"Task #{task_id} (New)" in editor_title()
+                               and f"Reopened #{task_id}" in visible.text())
+                    after_reopen = cli("show", str(task_id))
+                    assert after_reopen["task"]["description"] == before_reopen["task"]["description"]
+                    assert after_reopen["messages"] == before_reopen["messages"]
+                    assert after_reopen["events"][-1]["action"] == "reopen"
+            if scenario.endswith("no_color"):
+                assert b"\x1b[38;" not in screen and b"\x1b[48;" not in screen
         elif scenario.startswith("orphan_reopen"):
-            expected_status = "In progress" if scenario == "orphan_reopen_live" else "Error"
+            expected_status = "In progress" if scenario.endswith("live") else "Error"
             wait_visible(lambda: "Orphan item" in visible.text())
             click(5, task_row("Orphan item"))
             wait_visible(lambda: f"Task #1 ({expected_status})" in editor_title())
@@ -3050,15 +3124,26 @@ print(json.dumps({"result": result}))
             wait_visible(lambda: "o Reopen" in visible.text())
             send(b"o")
             wait_visible(lambda: "Reopen task #1?" in visible.text())
-            if scenario == "orphan_reopen_live":
+            if scenario.endswith("live"):
                 response_path.write_text(json.dumps({"result": {"agents": [owner_pane]}}))
             send(b"y")
-            if scenario == "orphan_reopen_live":
+            if scenario.endswith("live"):
                 wait_visible(lambda: "Action error" in visible.text()
                              and "still live" in visible.text())
                 assert cli("show", "1") == initial_detail
                 send(b"\x1b")
                 wait_visible(lambda: "Action error" not in visible.text())
+                if scenario == "orphan_reopen_force_live":
+                    send(b"\x07")
+                    wait_visible(lambda: "o Reopen" in visible.text())
+                    send(b"o")
+                    wait_visible(lambda: "Reopen task #1?" in visible.text())
+                    send(b"Y")
+                    wait_visible(lambda: "Task #1 (New)" in editor_title()
+                                 and "Reopened #1" in visible.text())
+                    wait_caret(lambda: visible.cursor_visible,
+                               (len("Preserve body"), editor_row() + 2))
+                    assert cli("show", "1")["events"][-1]["action"] == "reopen"
             else:
                 wait_visible(lambda: "Task #1 (New)" in editor_title()
                              and "Reopened #1" in visible.text()
