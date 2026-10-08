@@ -63,7 +63,7 @@ let selected = if action.is_completion() {
 
 **Files:** `docs/reference.md`, this plan
 
-- [ ] Replace checkbox documentation with explicit `y`/`Y`, passive popup and
+- [x] Replace checkbox documentation with explicit `y`/`Y`, passive popup and
   normal error retry. Run full locked/offline serial suite, fmt check, strict
   all-target Clippy, release build. Obtain independent read-only code review.
 - [ ] Rebase current master, resolve any concurrent-worker changes in worktree,
@@ -83,4 +83,11 @@ let selected = if action.is_completion() {
   narrow/compact, 12x8 and undersized resize. A test indentation error was corrected;
   foreign-owner waits now require changed error frame, avoiding stale modal reads.
 - Binary unit tests and 36 dashboard render tests passed, `/tmp/qqq-task-187-render.log`.
-- Full checks/review/integration/installation pending.
+- After clean rebase onto #186 (`28a4164`), full serial locked/offline suite passed:
+  **832 tests / 47 binaries**, `/tmp/qqq-task-187-full.log`.
+- `cargo fmt --check`, strict all-target Clippy and release build passed:
+  `/tmp/qqq-task-187-clippy.log`, `/tmp/qqq-task-187-release.log`.
+- Independent read-only review of `28a4164..accd78d` found no actionable issues;
+  reviewer inspected source/PTY waits, ran no tests. Current full suite is fresh
+  combined-source evidence. No DB/schema/preflight changes or remote CI/publish.
+- Integration/installed-binary verification pending.
