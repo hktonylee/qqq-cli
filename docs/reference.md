@@ -8,6 +8,7 @@ Detailed behavior and flags for qqq. For a first run, start with the
 - [Install from source](#install-from-source)
 - [List and search](#list-and-show) · [Add and edit](#add-and-edit)
 - [Named project views](views.md)
+- [Dependency graph and completion impact](graph.md)
 - [Archive](#archive-and-unarchive) · [Reopen](#reopen-work)
 - [Bulk metadata actions](#bulk-task-actions)
 - [Editor](#built-in-editor) · [TUI](#task-tui)
@@ -708,6 +709,11 @@ dirty/parked drafts, staged tags, caret/scroll and live query/focus, including w
 the task disappears from the view. Picker reloads `.qqq-views.json` when opened;
 active definition stays fixed until another selection. See [named views](views.md).
 
+Ctrl+O opens selected saved task's dependency graph from editor or filter.
+Up/Down/PgUp/PgDn scroll, Home/End jump, `u`/`d`/`b` select direction, `+`/`-`
+adjust depth. Esc/Ctrl+C closes without changing drafts, tags, caret/scroll,
+saved view or query/focus. DB commits refresh cached report. See [graph](graph.md).
+
 Ctrl+L opens tags for the selected task or new draft from editor or filter. Current
 labels are prefilled, one per line. Enter or Shift+Enter adds a line; Ctrl-S applies.
 Up/Down move caret between tag rows, preserving preferred display column across
@@ -902,6 +908,11 @@ description link while keeping the attachment available through `show`.
 Description, status, parent, prerequisites, priority and image updates save atomically.
 
 ## Queue diagnostics
+
+For task-focused upstream blocker chains and unique downstream impact, use
+`qqq graph ID [--direction both|upstream|downstream] [--depth N] --json`.
+Graph is strictly read-only and skips owner recovery. See [graph flags,
+count semantics and JSON format](graph.md).
 
 ```sh
 qqq status
@@ -1103,6 +1114,10 @@ Inspection commands (`status`, `doctor`, `next --explain`, `--dry-run`) also run
 cleanup first; preview itself does not claim or edit queued work. When no dead
 owner is confirmed, preflight makes no DB writes. It never creates or migrates a
 project; writable opens scan after migration.
+
+`graph` is the read-only exception: it skips owner recovery and identity probes,
+preserving stored owner/status exactly. TUI graph popup keeps existing TUI startup
+preflight, then performs read-only graph snapshots.
 
 Native Codex claims bind actual harness ancestor PID, start time, executable and
 machine identity privately to current claim. Missing/reused PID or zombie proves

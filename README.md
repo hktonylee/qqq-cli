@@ -107,6 +107,11 @@ Inspect readiness, owners and blockers with `qqq status`. Preview selection reas
 with `qqq next --explain`; neither command claims work. Both support `--json`.
 See [queue diagnostics](docs/reference.md#queue-diagnostics) for filters and owner context.
 
+Inspect task prerequisites and downstream impact with `qqq graph 12` or
+`qqq graph 12 --direction upstream --depth 3 --json`. Counts distinguish unique
+descendants from tasks immediately ready if only that task completes.
+See [dependency graph and read-only inspection](docs/graph.md).
+
 ```sh
 qqq tui
 ```
@@ -122,6 +127,7 @@ task to load it, scroll each pane, or use the keyboard:
 | Ctrl+L | Edit task or new draft tags; retain unsaved drafts |
 | Ctrl+K | Go to task ID; retain unsaved drafts |
 | Ctrl+B | Pick saved project view; retain editor and parked drafts |
+| Ctrl+O | Inspect task blockers and downstream impact; retain drafts |
 | Ctrl+P | Create a child of the selected task |
 | Ctrl+/ | Filter tasks |
 | Ctrl+G | Open bulk actions when tasks marked, otherwise task actions |
