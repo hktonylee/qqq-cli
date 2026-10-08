@@ -256,7 +256,7 @@
       "sha256": "cda1c5b0f466d648aa36f4f889a26509e9564cceec7e2133ad5825f94285164c"
     },
     {
-      "commit": "487755d0a3428223ee65613010cf6df71161109b",
+      "commit": "4ed6e3d1f6193f6ce1b28c712bf43150fc9f4972",
       "git_blob": "52d5d05c57670860db3ad200629aead2783fce0a",
       "original_path": "src/sql/migrate_v13.sql",
       "package_version": "0.5.0",

@@ -201,8 +201,8 @@ fn dispatch_claims_for_new_agent_links_before_prompt_and_can_find_session() {
     );
     let calls = p.calls();
     assert_eq!(calls.len(), 6);
-    assert_eq!(calls[4], ["agent", "list"]);
-    assert_eq!(calls[5], ["agent", "list"]);
+    assert_eq!(calls[4], ["--session", "default", "agent", "list"]);
+    assert_eq!(calls[5], ["--session", "default", "agent", "list"]);
     assert_eq!(&calls[0][..2], ["tab", "create"]);
     assert!(calls[0].contains(&"--no-focus".to_owned()));
     assert!(calls[0].contains(&"workspace".to_owned()));
@@ -220,6 +220,7 @@ fn dispatch_claims_for_new_agent_links_before_prompt_and_can_find_session() {
     assert!(!calls[3][3].contains("--session"));
     assert!(!calls[3][3].contains(owner));
     assert_eq!(p.ok(&["herdr", "find", "1"])["pane_id"], owner);
+    let calls_before_inherited = p.calls().len();
     let mut inherited = p.command();
     inherited
         .env("QQQ_SESSION", owner)
@@ -273,7 +274,7 @@ fn dispatch_claims_for_new_agent_links_before_prompt_and_can_find_session() {
     }
     assert_eq!(
         p.calls().len(),
-        5,
+        calls_before_inherited,
         "Downstream env-only commands invoked Herdr"
     );
     let completed_detail = p.ok(&["show", "1"]);

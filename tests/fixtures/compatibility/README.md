@@ -28,7 +28,7 @@ Schema 10 is an accepted intermediate definition. Tagged releases emitted
 schemas 9 and 11. Schema 12 has no release tag in this inventory: its extension
 comes from commit `6c67d0ddac81faffceb94104d4486ceaf57cd78d`, package version
 0.4.0. Schema13 adds private claim process bindings from commit
-`487755d0a3428223ee65613010cf6df71161109b`, package version0.5.0.
+`4ed6e3d1f6193f6ce1b28c712bf43150fc9f4972`, package version0.5.0.
 Catalog explicitly marks development provenance. Snapshots are
 source-derived synthetic archives, not recordings of released binaries.
 
