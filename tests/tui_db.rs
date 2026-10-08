@@ -401,8 +401,24 @@ fn force_reopen_rolls_back_assignment_when_audit_fails() {
 fn force_error_preserves_content_links_and_records_reason_with_actor() {
     for state in ["new", "in_progress", "completed"] {
         let (mut db, dir) = database();
+        let parent = db.add("Parent", None, &[]).unwrap();
+        db.force_complete(parent.id, "operator").unwrap();
+        let prerequisite = db.add("Prerequisite", None, &[]).unwrap();
+        db.force_complete(prerequisite.id, "operator").unwrap();
         let task = db
-            .add_with_dependencies("Original", None, &composition().images, 7, &[])
+            .add_with_dependencies(
+                "Original",
+                Some(parent.id),
+                &composition().images,
+                7,
+                &[prerequisite.id],
+            )
+            .unwrap();
+        db.conn
+            .execute(
+                "UPDATE tasks SET tags='[\"important\",\"failure\"]' WHERE id=?",
+                [task.id],
+            )
             .unwrap();
         if state != "new" {
             db.next("foreign", None).unwrap();

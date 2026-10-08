@@ -614,7 +614,12 @@ fn tui_dashboard_mark_error_requires_reason_and_confirmation() {
 
 #[test]
 fn tui_dashboard_force_error_uses_explicit_uppercase_confirmation() {
-    for name in ["force_error", "force_error_no_color", "force_error_narrow"] {
+    for name in [
+        "force_error",
+        "force_error_no_color",
+        "force_error_narrow",
+        "force_error_sessionless",
+    ] {
         dashboard_scenario(name);
     }
 }

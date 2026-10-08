@@ -335,6 +335,16 @@ print(json.dumps({"result": result}))
         env["HANDOFF_SCENARIO"] = scenario
         env["HANDOFF_PANE"] = json.dumps(live_pane)
 
+    if scenario == "force_error_sessionless":
+        fake = Path(folder) / "herdr"
+        force_error_calls = Path(folder) / "herdr-calls"
+        fake.write_text('#!/bin/sh\nprintf x >> "$QQQ_TEST_HERDR_CALLS"\nexit 1\n')
+        fake.chmod(0o755)
+        env["PATH"] = os.pathsep.join((folder, os.defpath))
+        env["HERDR_ENV"] = "1"
+        env["HERDR_PANE_ID"] = "force-error-pane"
+        env["QQQ_TEST_HERDR_CALLS"] = str(force_error_calls)
+
     master, slave = pty.openpty()
     os.set_blocking(master, False)
     fcntl.ioctl(slave, termios.TIOCSWINSZ, struct.pack("HHHH", 24, 72, 0, 0))
@@ -347,7 +357,7 @@ print(json.dumps({"result": result}))
         args.extend(["--session", "native-display"])
     elif scenario.startswith("orphan_reopen"):
         args.extend(["--session", "reviewer"])
-    elif scenario in ("actions_basic", "actions_rejected", "actions_narrow") or scenario.startswith(("menu_retry_", "menu_error_", "force_reopen", "force_error")) or (scenario.startswith("force_complete") and not scenario.startswith("force_complete_herdr_") and scenario not in ("force_complete_sessionless", "force_complete_owner_db_error")):
+    elif scenario != "force_error_sessionless" and (scenario in ("actions_basic", "actions_rejected", "actions_narrow") or scenario.startswith(("menu_retry_", "menu_error_", "force_reopen", "force_error")) or (scenario.startswith("force_complete") and not scenario.startswith("force_complete_herdr_") and scenario not in ("force_complete_sessionless", "force_complete_owner_db_error"))):
         args.extend(["--session", "other" if scenario == "menu_error_rejected" else "worker"])
     if scenario in ("archive_included", "actions_basic", "actions_rejected"):
         args.append("--include-archived")
@@ -3090,16 +3100,22 @@ print(json.dumps({"result": result}))
                     send(b"\x1b")
                     wait_visible(lambda: "Action error" not in visible.text())
                     error_confirmation(task_id)
+                    if scenario == "force_error_sessionless":
+                        calls_before_force = force_error_calls.read_text()
+                        assert calls_before_force
                     send(b"Y")
                     wait_frame(lambda: f"Task #{task_id} (Error)" in editor_title()
                                and f"Marked error #{task_id}" in visible.text())
+                    if scenario == "force_error_sessionless":
+                        assert force_error_calls.read_text() == calls_before_force
                     after_error = cli("show", str(task_id))
                     assert after_error["task"]["description"] == before_error["task"]["description"]
                     assert after_error["events"][:-1] == before_error["events"]
                     assert after_error["events"][-1]["action"] == "error"
-                    assert after_error["events"][-1]["session"] == "worker"
+                    assert after_error["events"][-1]["session"] == ("manual" if scenario == "force_error_sessionless" else "worker")
                     assert after_error["messages"][:-1] == before_error["messages"]
                     assert after_error["messages"][-1]["body"] == reason
+                    assert after_error["messages"][-1]["session"] == after_error["events"][-1]["session"]
                     for field in ("harness_name", "harness_session", "orchestrator_name", "orchestrator_session"):
                         assert after_error["task"][field] is None
                     assert cli("next", "--local", "--session", "probe", "--filter", f"id == {task_id}") is None
