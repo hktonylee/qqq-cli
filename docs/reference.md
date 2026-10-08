@@ -789,7 +789,10 @@ Mouse wheel scrolls list, details or editor under pointer. Panes keep separate
 scroll positions; scrolling never edits or saves text. PgUp/PgDn scroll selected
 task details while editor has focus. Selection changes reset details scroll.
 Details clicks leave editor caret and draft unchanged. Shift-Up/Down
-returns list to selected task. Editor keys reveal caret after manual scroll.
+returns list to selected task, revealing its full preview when it fits. Automatic
+selection follow also keeps all preview rows visible; smaller viewports keep
+preview's first row visible. Mouse scrolling retains manual row offsets and can
+leave previews partially visible. Editor keys reveal caret after manual scroll.
 Left-click task row to load it in editor, including indented or wrapped rows.
 Left-click editor text to place caret. Task-row clicks retain unsaved drafts,
 using same restoration behavior as Shift-Up/Down.

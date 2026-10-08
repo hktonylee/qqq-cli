@@ -488,6 +488,12 @@ fn tui_dashboard_scrolls_to_selected_task() {
 }
 
 #[test]
+fn tui_dashboard_navigation_reveals_multiline_previews_without_changing_wheel_scroll() {
+    dashboard_scenario("scroll_multiline");
+    dashboard_scenario("scroll_multiline_no_color");
+}
+
+#[test]
 fn tui_dashboard_mouse_wheel_scrolls_both_panes() {
     dashboard_scenario("wheel");
     dashboard_scenario("wheel_error");

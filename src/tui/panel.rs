@@ -202,15 +202,26 @@ pub fn set_dirty_markers(
     }
 }
 
+/// Reveal whole selected preview; anchor oversized previews at their first row.
 pub fn scroll_to(rows: &[ListRow], selected: Option<i64>, top: usize, height: usize) -> usize {
     if height == 0 {
         return 0;
     }
     let last = rows.len().saturating_sub(height);
     let next = match selected.and_then(|id| rows.iter().position(|row| row.task_id == Some(id))) {
-        Some(index) if index < top => index,
-        Some(index) if index >= top.saturating_add(height) => index + 1 - height,
-        Some(_) => top,
+        Some(start) => {
+            let count = rows[start..]
+                .iter()
+                .take_while(|row| row.task_id == selected)
+                .count();
+            if start < top || count > height {
+                start
+            } else if start + count > top.saturating_add(height) {
+                start + count - height
+            } else {
+                top
+            }
+        }
         None => last,
     };
     next.min(last)

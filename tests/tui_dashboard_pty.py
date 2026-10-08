@@ -35,7 +35,7 @@ with tempfile.TemporaryDirectory(prefix="qqq-dashboard-test-") as folder:
         env["NO_COLOR"] = "1"
     elif scenario == "dumb":
         env["TERM"] = "dumb"
-    if scenario.startswith(("buffers_", "long_description_", "prerequisites", "dirty_marker", "completed_toggle", "jump", "menu_error_", "force_complete", "force_reopen", "force_error", "list_selection", "tags", "orphan_reopen", "views", "graph")) and scenario.endswith("no_color"):
+    if scenario.startswith(("buffers_", "long_description_", "prerequisites", "dirty_marker", "completed_toggle", "jump", "menu_error_", "force_complete", "force_reopen", "force_error", "list_selection", "tags", "orphan_reopen", "views", "graph", "scroll_multiline")) and scenario.endswith("no_color"):
         env["NO_COLOR"] = "1"
     for name in ("EDITOR", "QQQ_SESSION", "HERDR_ENV", "HERDR_PANE_ID", "CODEX_THREAD_ID", "CODEX_SESSION_ID"):
         env.pop(name, None)
@@ -215,12 +215,14 @@ print(json.dumps({"result": {"pane": pane}}))
         cli("next", "--local", "--session", "worker", "--harness-name", "codex",
             "--harness-session", "00000000-0000-0000-0000-000000000000",
             "--orchestrator-name", "herdr", "--orchestrator-session", "default")
-    if scenario in ("scroll", "wheel", "live_refresh_scroll", "ctrl_c_new_scroll"):
+    if scenario in ("scroll", "wheel", "live_refresh_scroll", "ctrl_c_new_scroll") or scenario.startswith("scroll_multiline"):
         for index in range(3, 21):
             description = ("\n".join(f"Line{line:02}" for line in range(1, 16))
                            if scenario == "wheel" and index == 20 else f"Task {index}")
             if scenario == "scroll" and index == 20:
                 description += "\nNewest preview second\nNewest preview tail"
+            if scenario.startswith("scroll_multiline"):
+                description += f"\nBody {index}\nTail {index}"
             cli("add", description)
     if scenario == "click_editor_scroll":
         cli("add", "\n".join(f"Line{index:02}" for index in range(1, 13)))
@@ -555,7 +557,7 @@ print(json.dumps({"result": result}))
                              and editor_line().startswith("Second"))
                 settle()
                 assert b"\x1b[38;" not in screen and b"\x1b[48;" not in screen, screen[-2000:]
-        if not scenario.startswith(("wide_layout", "menu_retry_", "menu_error_", "long_description_", "completed_toggle", "force_complete", "force_reopen", "force_error", "orphan_reopen", "views_startup", "views_visibility")) and scenario not in ("buffers_scroll", "handoff_scroll", "ctrl_c_new_scroll", "live_refresh_scroll", "tree_navigation", "scroll", "wheel", "click", "click_filter", "workflow", "workflow_empty", "workflow_status", "filter", "filter_no_color", "archive_hidden", "archive_included", "actions_basic", "actions_rejected", "actions_hidden", "jump_archived"):
+        if not scenario.startswith(("wide_layout", "menu_retry_", "menu_error_", "long_description_", "completed_toggle", "force_complete", "force_reopen", "force_error", "orphan_reopen", "views_startup", "views_visibility", "scroll_multiline")) and scenario not in ("buffers_scroll", "handoff_scroll", "ctrl_c_new_scroll", "live_refresh_scroll", "tree_navigation", "scroll", "wheel", "click", "click_filter", "workflow", "workflow_empty", "workflow_status", "filter", "filter_no_color", "archive_hidden", "archive_included", "actions_basic", "actions_rejected", "actions_hidden", "jump_archived"):
             read_until(b"Second")
             assert "First" in visible.text() and "Second" in visible.text(), visible.text()
         assert not select.select([child.stdout], [], [], 0)[0], "TUI wrote stdout while open"
@@ -4257,6 +4259,66 @@ print(json.dumps({"result": result}))
             read_until(b"Saved #3")
             assert "3      New" in visible.text(), visible.text()
             assert cli("show", "3")["task"]["description"] == "Third"
+        elif scenario.startswith("scroll_multiline"):
+            initial_tasks = cli("list", "--all")
+
+            def full_preview(task_id):
+                lines = list_text().splitlines()
+                return (f"Task #{task_id} (New)" in editor_title()
+                        and all(any(line.rstrip().endswith(label) for line in lines)
+                                for label in (f"Task {task_id}", f"Body {task_id}", f"Tail {task_id}")))
+
+            def wait_preview(task_id):
+                wait_visible(lambda: full_preview(task_id))
+                wait_caret(lambda: full_preview(task_id), (len(f"Tail {task_id}"), editor_row() + 3))
+
+            for task_id in range(20, 2, -1):
+                clear_capture()
+                send(b"\x1b[1;2A")
+                wait_preview(task_id)
+            send(b"\x1b[1;2A" * 2)
+            wait_frame(lambda: "Task #1 (New)" in editor_title())
+            send(b"\x1b[1;2B")
+            wait_frame(lambda: "Task #2 (New)" in editor_title())
+            for task_id in range(3, 11):
+                clear_capture()
+                send(b"\x1b[1;2B")
+                wait_preview(task_id)
+
+            # Two wheel notches leave only continuation rows of selected task.
+            # Manual scrolling must retain that partial preview, even after refresh.
+            clear_capture()
+            send(b"\x1b[<65;6;4M" * 2)
+            wait_caret(lambda: visible.text().splitlines()[0].rstrip().endswith("Body 10")
+                       and "Tail 10" in list_text() and "Task 10" not in list_text(),
+                       (len("Tail 10"), editor_row() + 3))
+            manual_list = list_text()
+            settle()
+            assert list_text() == manual_list, visible.text()
+            assert "Task #10 (New)" in editor_title(), visible.text()
+
+            clear_capture()
+            send(b"\x1b[1;2A")
+            wait_preview(9)
+            clear_capture()
+            send(b"\x1b[1;2B")
+            wait_preview(10)
+            clear_capture()
+            send(CTRL_SLASH + b"Task\t")
+            wait_preview(10)
+            assert filter_text() == "Filter: Task", visible.text()
+            clear_capture()
+            send(b"\x0b14\r")
+            wait_preview(14)
+            for width in (50, 150, 72):
+                fcntl.ioctl(slave, termios.TIOCSWINSZ, struct.pack("HHHH", 24, width, 0, 0))
+                visible.resize(width, 24)
+                clear_capture()
+                os.kill(child.pid, signal.SIGWINCH)
+                wait_preview(14)
+            assert cli("list", "--all") == initial_tasks
+            if scenario.endswith("no_color"):
+                assert b"\x1b[38;" not in screen and b"\x1b[48;" not in screen
         elif scenario == "scroll":
             assert "Task 20" in visible.text(), visible.text()
             assert "Newest preview tail" in visible.text().splitlines()[list_bottom()], visible.text()

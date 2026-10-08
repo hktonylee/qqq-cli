@@ -1233,6 +1233,81 @@ fn click_target_ignores_non_content_and_out_of_bounds() {
 }
 
 #[test]
+fn multiline_selection_fits_preview_while_manual_scrolling_keeps_partial_rows() {
+    let tree = (1..=40)
+        .map(|id| {
+            if id == 12 {
+                "12 New Selected\n  Preview second\n  Preview tail".to_owned()
+            } else {
+                format!("{id} New Task {id}")
+            }
+        })
+        .collect::<Vec<_>>()
+        .join("\n");
+    let rows = panel::rows(&tree, 80);
+    let chrome = render::Chrome {
+        title: "Editor",
+        title_status_color: None,
+        keys: render::KEYS,
+        message: "",
+    };
+    for width in [50, 72, 150] {
+        for height in [12, 24, 36] {
+            for filter in [false, true] {
+                for color in [false, true] {
+                    for follow_selected in [false, true] {
+                        let mut terminal = Terminal::new(TestBackend::new(width, height)).unwrap();
+                        let layout = render::Layout::new(&["Draft".into()], &[], width.into());
+                        let mut top = if follow_selected { 0 } else { 12 };
+                        terminal
+                            .draw(|frame| {
+                                dashboard::draw(
+                                    frame,
+                                    &rows,
+                                    &HashMap::from([(12, "new")]),
+                                    Some(12),
+                                    dashboard::View {
+                                        query: if filter { "Selected" } else { "" },
+                                        focused: filter,
+                                        show_completed: true,
+                                        bulk_selected: None,
+                                        top: &mut top,
+                                        follow_selected,
+                                        modal_lines: None,
+                                        hide_cursor: false,
+                                        details: None,
+                                    },
+                                    render::DashboardEditor {
+                                        layout: &layout,
+                                        cursor: 0,
+                                        top: &mut 0,
+                                        chrome: &chrome,
+                                        message_is_error: false,
+                                        follow_cursor: true,
+                                    },
+                                    color,
+                                );
+                            })
+                            .unwrap();
+                        let area = dashboard::panes(terminal.backend().buffer().area).list;
+                        let list = (u16::from(filter)..area.height)
+                            .map(|y| line(terminal.backend().buffer(), y))
+                            .collect::<Vec<_>>()
+                            .join("\n");
+                        assert!(list.contains("Preview second"), "{list}");
+                        assert!(list.contains("Preview tail"), "{list}");
+                        assert_eq!(list.contains("12 New Selected"), follow_selected, "{list}");
+                        if !follow_selected {
+                            assert_eq!(top, 12);
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+#[test]
 fn manual_list_scroll_does_not_snap_to_selected_task() {
     let tree = format!(
         "ID     STATUS       TASK\n{}",

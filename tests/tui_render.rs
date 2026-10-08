@@ -30,6 +30,46 @@ fn dashboard_rows_keep_task_identity_across_continuations() {
 }
 
 #[test]
+fn dashboard_selection_scroll_reveals_full_multiline_preview() {
+    let rows = panel::rows(
+        "1 New First\n2 New Second\n  second body\n  second tail\n3 New Third\n4 New Fourth\n  fourth body\n  fourth tail\n5 New Fifth",
+        80,
+    );
+    for (selected, top, height, expected) in [
+        (2, 0, 3, 1),
+        (4, 0, 4, 4),
+        (4, 6, 4, 5),
+        (2, 3, 4, 1),
+        (2, 0, 5, 0),
+        (2, 1, 5, 1),
+        (4, 4, 4, 4),
+        (4, usize::MAX, 4, 5),
+    ] {
+        let actual = panel::scroll_to(&rows, Some(selected), top, height);
+        assert_eq!(
+            actual, expected,
+            "selected={selected} top={top} height={height}"
+        );
+        assert!(rows.iter().enumerate().all(|(index, row)| {
+            row.task_id != Some(selected) || (actual..actual + height).contains(&index)
+        }));
+    }
+}
+
+#[test]
+fn dashboard_oversized_preview_keeps_first_row_visible() {
+    let rows = panel::rows("1 New First\n2 New Second\n  body\n  tail\n3 New Third", 80);
+    for height in [1, 2] {
+        for top in 0..rows.len() {
+            assert_eq!(panel::scroll_to(&rows, Some(2), top, height), 1);
+        }
+    }
+    assert_eq!(panel::scroll_to(&rows, Some(2), 4, 0), 0);
+    assert_eq!(panel::scroll_to(&rows, Some(99), 0, 2), 3);
+    assert_eq!(panel::scroll_to(&[], Some(2), 4, 2), 0);
+}
+
+#[test]
 fn dashboard_rows_preserve_empty_message_and_header_like_task_text() {
     let rows = panel::rows("No tasks yet.", 80);
     assert_eq!(rows.len(), 1);
