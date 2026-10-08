@@ -112,6 +112,21 @@ fn identity_matches(pane: &Pane, identity: &AgentSession) -> bool {
     })
 }
 
+pub(crate) fn matches_owner(link: &Link, pane: &Pane) -> bool {
+    identity_matches(pane, &link.identity)
+        // Active claims survive changed or temporarily missing session reports.
+        || link.pane.terminal_id.as_deref().is_some_and(|terminal| {
+            pane.terminal_id.as_deref() == Some(terminal)
+                && (pane.agent.as_deref() == Some(&link.identity.agent)
+                    || pane.agent_session.as_ref().is_some_and(|session| session.agent == link.identity.agent))
+        })
+}
+
+pub(crate) fn owner_agents(server: &str) -> Result<Vec<Pane>> {
+    let agents: Agents = call(Some(server), &["agent", "list"])?;
+    Ok(agents.agents)
+}
+
 pub fn owner_is_live(link: &Link) -> Result<bool> {
     let server = link.server.as_deref().context(
         Info::new(
@@ -120,16 +135,9 @@ pub fn owner_is_live(link: &Link) -> Result<bool> {
         )
         .detail("reason", "missing_owner_server"),
     )?;
-    let agents: Agents = call(Some(server), &["agent", "list"])?;
-    Ok(agents.agents.iter().any(|pane| {
-        identity_matches(pane, &link.identity)
-            // Active claims survive changed or temporarily missing session reports.
-            || link.pane.terminal_id.as_deref().is_some_and(|terminal| {
-                pane.terminal_id.as_deref() == Some(terminal)
-                    && (pane.agent.as_deref() == Some(&link.identity.agent)
-                        || pane.agent_session.as_ref().is_some_and(|session| session.agent == link.identity.agent))
-            })
-    }))
+    Ok(owner_agents(server)?
+        .iter()
+        .any(|pane| matches_owner(link, pane)))
 }
 
 pub fn pane_identity(pane: &Pane) -> Result<AgentSession> {

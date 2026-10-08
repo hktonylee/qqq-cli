@@ -15,6 +15,7 @@ mod images;
 mod import;
 mod list_filter;
 mod output;
+mod preflight;
 mod queue;
 mod session;
 mod snapshot;
@@ -997,6 +998,7 @@ fn run(cli: Cli) -> Result<(Option<String>, bool)> {
         ..
     } = &cli.command
     {
+        preflight::current_project()?;
         watch::run(watch::WatchOptions {
             json_output: cli.json,
             max_completed: max_completed.or(display_limit),
@@ -1010,6 +1012,7 @@ fn run(cli: Cli) -> Result<(Option<String>, bool)> {
         return Ok((None, false));
     }
     let json = cli.json;
+    preflight::current_project()?;
     let is_doctor = matches!(&cli.command, Commands::Doctor);
     let format = output::Format::from(&cli.command);
     let value = execute(cli, display_limit, filter.as_ref())?;

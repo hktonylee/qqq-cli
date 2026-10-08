@@ -172,11 +172,11 @@ pub struct TaskMessage {
 }
 
 #[derive(Deserialize, Serialize)]
-struct StoredLink {
+pub(crate) struct StoredLink {
     #[serde(flatten)]
-    link: crate::herdr::Link,
+    pub(crate) link: crate::herdr::Link,
     #[serde(default)]
-    claim_key: Option<String>,
+    pub(crate) claim_key: Option<String>,
 }
 pub(crate) fn task_row(r: &rusqlite::Row<'_>) -> rusqlite::Result<Task> {
     Ok(Task {
@@ -606,7 +606,11 @@ impl Db {
             .detail("schema_version", version)
             .detail("reason", "unsupported_schema")
         );
-        Ok((Self { conn, image_store }, path))
+        let mut db = Self { conn, image_store };
+        if !crate::preflight::already_checked(&path) {
+            crate::preflight::run(&mut db.conn)?;
+        }
+        Ok((db, path))
     }
     pub fn open_read_only() -> Result<(Self, PathBuf)> {
         let path = database_path(false)?;
