@@ -25,7 +25,7 @@ See [all variables](filter-variables.md), [all functions](filter-functions.md).
 
 Tags match whole stored labels with exact case and Unicode, never description text or substrings. Surrounding spaces are trimmed; exact duplicate selectors are removed. Quote labels with internal spaces. Empty labels, controls, commas and square brackets fail before project preflight or DB access. Case and Unicode normalization remain unchanged: `UI` differs from `ui`, and composed/decomposed Unicode spellings remain distinct. For a label starting with `-`, use `--tag="-label"`.
 
-`has_tag("LABEL")` returns boolean under the same matching and validation rules. It accepts exactly one string literal, including a parenthesized literal; dynamic text expressions and nil fail during compilation. It composes with `and`, `or`, `not`, priority/status predicates and named views using config aliases:
+`has_tag("LABEL")` returns boolean under the same matching and validation rules. It accepts exactly one string literal, including a parenthesized literal; dynamic text expressions and nil fail during compilation. It composes with `and`, `or`, `not` and priority/status predicates. Use it in saved-view filters or config aliases:
 
 ```toml
 [alias]
