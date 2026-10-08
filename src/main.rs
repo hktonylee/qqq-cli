@@ -144,6 +144,9 @@ enum Commands {
         /// Match a Luau expression compiled to SQLite; see docs/filter.md.
         #[arg(long, value_name = "EXPR", allow_hyphen_values = true)]
         filter: Option<String>,
+        /// Require exact stored tag; repeat to require every label.
+        #[arg(long = "tag", value_name = "LABEL", allow_hyphen_values = true)]
+        tags: Vec<String>,
         /// Match text anywhere in the full description, ignoring Unicode case.
         #[arg(long, value_name = "TEXT", allow_hyphen_values = true)]
         query: Option<String>,
@@ -254,6 +257,9 @@ enum Commands {
         /// Filter queued candidates with Luau; normal next still returns owned task. See docs/filter.md.
         #[arg(long, value_name = "EXPR", allow_hyphen_values = true)]
         filter: Option<String>,
+        /// Require exact stored tag; repeat to require every label.
+        #[arg(long = "tag", value_name = "LABEL", allow_hyphen_values = true)]
+        tags: Vec<String>,
         /// Wait until a task is available to claim or preview.
         #[arg(long)]
         wait: bool,
@@ -955,7 +961,12 @@ fn execute(
     })
 }
 fn run(cli: Cli) -> Result<(Option<String>, bool)> {
-    let filter = match &cli.command {
+    let tags = match &cli.command {
+        Commands::List { tags, .. } | Commands::Next { tags, .. } => tags::normalize(tags)
+            .map_err(|error| errors::Info::invalid_argument("--tag", error.to_string()))?,
+        _ => Vec::new(),
+    };
+    let mut filter = match &cli.command {
         Commands::List { filter, .. } | Commands::Next { filter, .. } => filter
             .as_deref()
             .map(sql_filter::compile)
@@ -969,6 +980,11 @@ fn run(cli: Cli) -> Result<(Option<String>, bool)> {
             })?,
         _ => None,
     };
+    if !tags.is_empty() {
+        filter
+            .get_or_insert_with(sql_filter::CompiledFilter::all)
+            .require_tags(tags);
+    }
     let is_tui = matches!(&cli.command, Commands::Tui { .. });
     let filtered_list = match &cli.command {
         Commands::List {

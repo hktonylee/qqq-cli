@@ -55,6 +55,7 @@ enum Reason {
     Error,
     Completed,
     FilterExcluded,
+    TagExcluded,
 }
 
 #[derive(Serialize)]
@@ -300,7 +301,12 @@ fn report_with_activity(
             }
         }
         if !matches_filter {
-            reasons.push(Reason::FilterExcluded);
+            let reason = if filter.is_some_and(|filter| !filter.matches_tags(&task.tags)) {
+                Reason::TagExcluded
+            } else {
+                Reason::FilterExcluded
+            };
+            reasons.push(reason);
         }
         let owner = (task.status == "in_progress")
             .then_some(claim_key)

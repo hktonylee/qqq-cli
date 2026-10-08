@@ -11,8 +11,31 @@ use rusqlite::types::Value;
 pub struct CompiledFilter {
     sql: String,
     params: Vec<Value>,
+    required_tags: Vec<String>,
 }
 impl CompiledFilter {
+    pub fn all() -> Self {
+        Self {
+            sql: "1".to_owned(),
+            params: Vec::new(),
+            required_tags: Vec::new(),
+        }
+    }
+    /// Labels must already pass shared normalization.
+    pub fn require_tags(&mut self, tags: Vec<String>) {
+        let mut predicates = Vec::with_capacity(tags.len());
+        for tag in &tags {
+            self.params.push(Value::Text(tag.clone()));
+            predicates.push(functions::tag_sql(&format!("?{}", self.params.len())));
+        }
+        if !predicates.is_empty() {
+            self.sql = format!("({}) AND ({})", self.sql, predicates.join(" AND "));
+        }
+        self.required_tags.extend(tags);
+    }
+    pub fn matches_tags(&self, tags: &[String]) -> bool {
+        self.required_tags.iter().all(|tag| tags.contains(tag))
+    }
     pub fn sql(&self) -> &str {
         &self.sql
     }
@@ -118,6 +141,7 @@ fn compile_inner(source: &str) -> Result<CompiledFilter> {
     Ok(CompiledFilter {
         sql,
         params: compiler.params,
+        required_tags: Vec::new(),
     })
 }
 

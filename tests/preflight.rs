@@ -125,6 +125,38 @@ esac
 }
 
 #[test]
+fn invalid_tag_selectors_precede_active_owner_preflight() {
+    let f = Fixture::new();
+    f.gone();
+    let db_path = f.dir.path().join(".qqq/qqq.db");
+    let before = fs::read(&db_path).unwrap();
+    for args in [
+        vec!["list", "--tag", "bad,tag"],
+        vec!["list", "--watch", "--tag", ""],
+        vec!["next", "--local", "--tag", "[bad]"],
+        vec!["next", "--explain", "--filter", "has_tag('')"],
+        vec!["next", "--wait", "--filter", r"has_tag('bad\ntag')"],
+        vec!["next", "--dry-run", "--tag", "\tbad"],
+    ] {
+        let out = f.command().args(&args).output().unwrap();
+        assert!(!out.status.success(), "{args:?}");
+        assert!(out.stdout.is_empty());
+        let error: Value = serde_json::from_slice(&out.stderr).unwrap();
+        assert_eq!(
+            error["code"],
+            if args.contains(&"--filter") {
+                "INVALID_FILTER"
+            } else {
+                "INVALID_ARGUMENT"
+            }
+        );
+        assert_eq!(fs::read(&db_path).unwrap(), before);
+        assert_eq!(fs::read_to_string(f.dir.path().join("calls")).unwrap(), "");
+    }
+    assert_eq!(f.ok(&["show", "1"])["task"]["status"], "error");
+}
+
+#[test]
 fn dead_harness_fails_before_show_preserving_data_and_exactly_one_reason() {
     let f = Fixture::new();
     let before = f.ok(&["show", "1"]);
