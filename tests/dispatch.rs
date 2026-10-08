@@ -200,7 +200,9 @@ fn dispatch_claims_for_new_agent_links_before_prompt_and_can_find_session() {
         format!("session-{owner}")
     );
     let calls = p.calls();
-    assert_eq!(calls.len(), 4);
+    assert_eq!(calls.len(), 6);
+    assert_eq!(calls[4], ["agent", "list"]);
+    assert_eq!(calls[5], ["agent", "list"]);
     assert_eq!(&calls[0][..2], ["tab", "create"]);
     assert!(calls[0].contains(&"--no-focus".to_owned()));
     assert!(calls[0].contains(&"workspace".to_owned()));
