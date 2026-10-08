@@ -25,6 +25,7 @@ mod snapshot;
 mod sql_filter;
 mod tags;
 mod tui;
+mod views;
 mod watch;
 use anyhow::{Context, Result, ensure};
 use clap::{ArgGroup, Parser, Subcommand, ValueEnum};
@@ -146,6 +147,16 @@ enum Commands {
         /// Include archived tasks in dashboard browsing.
         #[arg(long)]
         include_archived: bool,
+        /// Hide archived tasks, overriding a saved view.
+        #[arg(long, conflicts_with = "include_archived")]
+        hide_archived: bool,
+        /// Select project saved view; Ctrl-B switches views interactively.
+        #[arg(long, value_name = "NAME")]
+        view: Option<String>,
+        #[arg(long, value_parser = clap::value_parser!(i64).range(0..))]
+        max_completed: Option<i64>,
+        #[arg(short = 'a', long, conflicts_with = "max_completed")]
+        all: bool,
         #[command(flatten)]
         selectors: selection::Selectors,
     },
@@ -154,6 +165,12 @@ enum Commands {
         /// Include archived tasks; default list hides them.
         #[arg(long)]
         include_archived: bool,
+        /// Hide archived tasks, overriding a saved view.
+        #[arg(long, conflicts_with = "include_archived")]
+        hide_archived: bool,
+        /// Select project saved view; extra selectors use AND.
+        #[arg(long, value_name = "NAME")]
+        view: Option<String>,
         #[command(flatten)]
         selectors: selection::Selectors,
         /// Maximum completed tasks to show; overrides human display default. 0 hides completed tasks.
@@ -259,6 +276,9 @@ enum Commands {
     Next {
         #[command(flatten)]
         selectors: selection::Selectors,
+        /// Select project saved view; owned task still returns first.
+        #[arg(long, value_name = "NAME")]
+        view: Option<String>,
         /// Wait until a task is available to claim or preview.
         #[arg(long)]
         wait: bool,
@@ -271,9 +291,17 @@ enum Commands {
         /// Include archived diagnostic rows; archived tasks remain ineligible.
         #[arg(long, requires = "explain")]
         include_archived: bool,
+        /// Hide archived diagnostic rows, overriding saved visibility.
+        #[arg(long, requires = "explain", conflicts_with = "include_archived")]
+        hide_archived: bool,
         /// Claim locally even when Herdr new-agent dispatch is configured.
         #[arg(long)]
         local: bool,
+    },
+    /// Save, browse, inspect or remove project-local named views.
+    View {
+        #[command(subcommand)]
+        command: ViewCommand,
     },
     /// Mark task completed; supplied or discovered session ID must match recorded owner.
     Complete { id: i64 },
@@ -302,6 +330,30 @@ enum Commands {
         command: HerdrCommand,
     },
 }
+#[derive(Subcommand)]
+enum ViewCommand {
+    /// Save or replace selection criteria and visibility under a name.
+    Save {
+        name: String,
+        #[command(flatten)]
+        selectors: selection::Selectors,
+        #[arg(long)]
+        include_archived: bool,
+        #[arg(long, conflicts_with = "include_archived")]
+        hide_archived: bool,
+        #[arg(long, value_parser = clap::value_parser!(i64).range(0..))]
+        max_completed: Option<i64>,
+        #[arg(short = 'a', long, conflicts_with = "max_completed")]
+        all: bool,
+    },
+    /// List saved definitions in name order.
+    List,
+    /// Inspect one saved definition.
+    Show { name: String },
+    /// Remove one saved definition.
+    Remove { name: String },
+}
+
 #[derive(Subcommand)]
 enum HerdrCommand {
     /// Link to caller, unique agent at project root, or explicit agent session.
@@ -343,8 +395,35 @@ fn local_owner(cli: &Cli, project_dir: &std::path::Path, db: &db::Db) -> Result<
     }
     resolved_owner(None, project_dir, db)
 }
-fn execute(cli: Cli, selection: &selection::Prepared) -> Result<Value> {
+fn execute(
+    cli: Cli,
+    selection: &selection::Prepared,
+    _view_context: Option<views::ViewContext>,
+) -> Result<Value> {
     let filter = selection.filter.as_ref();
+    if let Commands::View { command } = &cli.command {
+        let path = views::path()?;
+        return Ok(match command {
+            ViewCommand::Save {
+                name,
+                selectors,
+                include_archived,
+                max_completed,
+                ..
+            } => json!(views::save(
+                &path,
+                views::SavedView {
+                    name: name.clone(),
+                    criteria: selectors.clone(),
+                    include_archived: *include_archived,
+                    max_completed: *max_completed,
+                }
+            )?),
+            ViewCommand::List => json!(views::load(&path)?.views),
+            ViewCommand::Show { name } => json!(views::find(&views::load(&path)?, name)?),
+            ViewCommand::Remove { name } => json!(views::remove(&path, name)?),
+        });
+    }
     if let Commands::Config {
         list,
         get,
@@ -443,7 +522,11 @@ fn execute(cli: Cli, selection: &selection::Prepared) -> Result<Value> {
         return Ok(json!(queue::report(
             &mut db.conn,
             queue::Options {
-                include_archived,
+                include_archived: if explain {
+                    selection.include_archived
+                } else {
+                    include_archived
+                },
                 filter,
                 explain,
                 owner: session_input,
@@ -475,6 +558,7 @@ fn execute(cli: Cli, selection: &selection::Prepared) -> Result<Value> {
     };
     Ok(match cli.command {
         Commands::Config { .. } => unreachable!("config was handled before database lookup"),
+        Commands::View { .. } => unreachable!("views handled before database lookup"),
         Commands::Init => json!({"database":path}),
         Commands::Status { .. } => unreachable!("diagnostics handled before database writes"),
         Commands::Import { .. } => json!(import::run(
@@ -965,18 +1049,38 @@ fn execute(cli: Cli, selection: &selection::Prepared) -> Result<Value> {
     })
 }
 fn run(cli: Cli) -> Result<(Option<String>, bool)> {
-    let mut prepared = match &cli.command {
+    let archive = |include: bool, hide: bool| {
+        if include {
+            Some(true)
+        } else if hide {
+            Some(false)
+        } else {
+            None
+        }
+    };
+    let inputs = match &cli.command {
         Commands::List {
             selectors,
             include_archived,
+            hide_archived,
             max_completed,
             all,
+            view,
             ..
-        } => selection::prepare(
-            None,
+        }
+        | Commands::Tui {
             selectors,
+            include_archived,
+            hide_archived,
+            max_completed,
+            all,
+            view,
+            ..
+        } => Some((
+            selectors,
+            view.as_deref(),
             selection::Visibility {
-                include_archived: Some(*include_archived),
+                include_archived: archive(*include_archived, *hide_archived),
                 max_completed: if *all {
                     Some(None)
                 } else {
@@ -984,32 +1088,49 @@ fn run(cli: Cli) -> Result<(Option<String>, bool)> {
                 },
                 ..Default::default()
             },
-        )?,
+        )),
         Commands::Next {
             selectors,
             include_archived,
+            hide_archived,
+            view,
             ..
-        }
-        | Commands::Tui {
+        } => Some((
             selectors,
-            include_archived,
-            ..
-        } => selection::prepare(
-            None,
-            selectors,
+            view.as_deref(),
             selection::Visibility {
-                include_archived: Some(*include_archived),
+                include_archived: archive(*include_archived, *hide_archived),
                 ..Default::default()
             },
-        )?,
-        _ => selection::Prepared::default(),
+        )),
+        Commands::View {
+            command: ViewCommand::Save { selectors, .. },
+        } => Some((selectors, None, selection::Visibility::default())),
+        _ => None,
     };
+    // Validate explicit selectors before project discovery, catalog loading or preflight.
+    let mut prepared = inputs
+        .map(|(selectors, _, visibility)| selection::prepare(None, selectors, visibility))
+        .transpose()?
+        .unwrap_or_default();
+    let mut view_context = None;
+    if let Some((selectors, name, visibility)) = inputs {
+        if name.is_some() || matches!(&cli.command, Commands::Tui { .. }) {
+            let path = views::path()?;
+            let catalog = views::load(&path)?;
+            let active = name.map(|name| views::find(&catalog, name)).transpose()?;
+            let context = views::ViewContext::new(path, selectors.clone(), visibility, active)?;
+            prepared = context.prepared.clone();
+            view_context = Some(context);
+        }
+    }
     let is_tui = matches!(&cli.command, Commands::Tui { .. });
     let filtered_list = matches!(&cli.command, Commands::List { .. }) && prepared.filter.is_some();
     let display_limit = match &cli.command {
         Commands::List {
             all: false,
             max_completed: None,
+            view: None,
             ..
         } if !cli.json => config::load_display()
             .map_err(cli_error::config_error)?
@@ -1044,12 +1165,15 @@ fn run(cli: Cli) -> Result<(Option<String>, bool)> {
     let json = cli.json;
     // Init/restore target current directory, rather than nearest parent project.
     // Init's DB open checks its own active owners; restore has no live target DB.
-    if !matches!(&cli.command, Commands::Init | Commands::Restore { .. }) {
+    if !matches!(
+        &cli.command,
+        Commands::Init | Commands::Restore { .. } | Commands::View { .. }
+    ) {
         preflight::current_project()?;
     }
     let is_doctor = matches!(&cli.command, Commands::Doctor);
     let format = output::Format::from(&cli.command);
-    let value = execute(cli, &prepared)?;
+    let value = execute(cli, &prepared, view_context)?;
     if is_tui {
         return Ok((None, false));
     }

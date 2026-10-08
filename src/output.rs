@@ -11,6 +11,7 @@ use unicode_width::UnicodeWidthStr;
 
 pub enum Format {
     ConfigList,
+    Views,
     ConfigGet,
     ConfigSet,
     ConfigUnset,
@@ -40,6 +41,7 @@ impl From<&Commands> for Format {
     fn from(command: &Commands) -> Self {
         match command {
             Commands::Config { list: true, .. } => Self::ConfigList,
+            Commands::View { .. } => Self::Views,
             Commands::Config { unset: Some(_), .. } => Self::ConfigUnset,
             Commands::Config { value: Some(_), .. } => Self::ConfigSet,
             Commands::Config { .. } => Self::ConfigGet,
@@ -94,7 +96,7 @@ pub fn terminal_columns(terminal: bool) -> Option<usize> {
 }
 
 // Keep user text on one line and prevent terminal control sequences in text output.
-fn clean(text: &str) -> String {
+pub(crate) fn clean(text: &str) -> String {
     let mut result = String::with_capacity(text.len());
     for c in text.chars() {
         if c.is_control() {
@@ -411,6 +413,7 @@ pub fn render(format: Format, value: &Value, color: bool, columns: Option<usize>
     match format {
         Format::Import => import::render(value),
         Format::Recipe => recipe::render(value),
+        Format::Views => crate::views::render(value),
         Format::QueueOverview => queue::render(value, color, false),
         Format::NextExplanation => queue::render(value, color, true),
         Format::ConfigList => {

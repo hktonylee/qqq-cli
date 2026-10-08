@@ -65,6 +65,7 @@ pub fn output_override(arguments: &[OsString]) -> Option<bool> {
 pub fn command_name(command: &Commands) -> &'static str {
     match command {
         Commands::Config { .. } => "config",
+        Commands::View { .. } => "view",
         Commands::Init => "init",
         Commands::Add { .. } => "add",
         Commands::Import { .. } => "import",

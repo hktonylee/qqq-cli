@@ -125,6 +125,47 @@ esac
 }
 
 #[test]
+fn missing_or_malformed_named_views_precede_owner_preflight() {
+    let f = Fixture::new();
+    f.gone();
+    let db_path = f.dir.path().join(".qqq/qqq.db");
+    let before = fs::read(&db_path).unwrap();
+    for args in [
+        vec!["list", "--view", "missing"],
+        vec!["list", "--watch", "--view", "missing"],
+        vec!["next", "--local", "--view", "missing"],
+        vec!["next", "--explain", "--view", "missing"],
+        vec!["tui", "--view", "missing"],
+    ] {
+        let out = f.command().args(&args).output().unwrap();
+        assert!(!out.status.success());
+        assert_eq!(
+            serde_json::from_slice::<Value>(&out.stderr).unwrap()["code"],
+            "INVALID_ARGUMENT"
+        );
+        assert_eq!(fs::read(&db_path).unwrap(), before);
+        assert_eq!(fs::read_to_string(f.dir.path().join("calls")).unwrap(), "");
+    }
+    fs::write(
+        f.dir.path().join(".qqq-views.json"),
+        r#"{"version":2,"views":[]}"#,
+    )
+    .unwrap();
+    let out = f
+        .command()
+        .args(["next", "--view", "invalid"])
+        .output()
+        .unwrap();
+    assert_eq!(
+        serde_json::from_slice::<Value>(&out.stderr).unwrap()["code"],
+        "CONFIG_ERROR"
+    );
+    assert_eq!(fs::read(&db_path).unwrap(), before);
+    assert_eq!(fs::read_to_string(f.dir.path().join("calls")).unwrap(), "");
+    assert_eq!(f.ok(&["show", "1"])["task"]["status"], "error");
+}
+
+#[test]
 fn invalid_tag_selectors_precede_active_owner_preflight() {
     let f = Fixture::new();
     f.gone();
