@@ -565,6 +565,18 @@ print(json.dumps({"result": result}))
             wait_caret(lambda: "Dependency graph #3" not in visible.text()
                        and editor_line().startswith("Integration retained"), caret)
             assert cli("list", "--all") == initial
+            # Bulk marks survive graph modal; its Ctrl-D cannot change selection.
+            send(b"\x04")
+            wait_caret(lambda: visible.text().splitlines()[-1].startswith("Bulk selected: 1"), caret)
+            send(b"\x0f")
+            wait_visible(lambda: "Dependency graph #3" in visible.text())
+            send(b"\x04\x03\x07")
+            wait_visible(lambda: "Bulk actions (1)" in visible.text() and "IDs: #3" in visible.text())
+            send(b"\x1b")
+            wait_caret(lambda: "Bulk actions (1)" not in visible.text(), caret)
+            send(b"\x04")
+            wait_caret(lambda: visible.text().splitlines()[-1].startswith("Bulk selected: 0"), caret)
+            assert cli("list", "--all") == initial
             if scenario == "graph_failure":
                 send(b"\x0f")
                 wait_visible(lambda: "Dependency graph #3" in visible.text())
@@ -1076,7 +1088,7 @@ print(json.dumps({"result": result}))
                              and (not selected or editor_line().startswith("Changed Second"))
                              and visible.text().splitlines()[-1].rstrip() ==
                              ("Ctrl-S Save  Ctrl-D Select  Ctrl-G Menu  Ctrl-L Tags  Ctrl-K Go to Task  Ctrl-P Create Child  Ctrl-B Views  Shift-Up/Dn Switch Tasks  Ctrl+/ Filter  Ctrl-O Graph"
-                              if selected else "Ctrl-S Save  Ctrl-L Tags  Ctrl-K Go to Task  Ctrl-P Create Child  Ctrl-B Views  Ctrl-G Menu  Shift-Up/Dn Switch Tasks  Ctrl+/ Filter")
+                              if selected else "Ctrl-S Save  Ctrl-L Tags  Ctrl-K Go to Task  Ctrl-P Create Child  Ctrl-B Views  Ctrl-G Menu  Shift-Up/Dn Switch Tasks  Ctrl+/ Filter")[:width].rstrip()
                              and (visible.x, visible.y) == (8 if selected else 0, 14)
                              and not visible.pending and screen.endswith(final_cursor))
                 settle()
