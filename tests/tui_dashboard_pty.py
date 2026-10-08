@@ -161,7 +161,8 @@ esac
         cli("next", "--local")
         env.pop("HERDR_ENV")
         env.pop("HERDR_PANE_ID")
-        response_path.write_text(json.dumps({"result": {"agents": []}}))
+        if scenario != "orphan_reopen_live":
+            response_path.write_text(json.dumps({"result": {"agents": []}}))
     elif scenario.startswith("force_complete"):
         cli("add", "Foreign item")
         cli("next", "--local", "--session", "foreign")
@@ -2789,9 +2790,10 @@ print(json.dumps({"result": result}))
             if scenario.endswith("no_color"):
                 assert b"\x1b[38;" not in screen and b"\x1b[48;" not in screen
         elif scenario.startswith("orphan_reopen"):
+            expected_status = "In progress" if scenario == "orphan_reopen_live" else "Error"
             wait_visible(lambda: "Orphan item" in visible.text())
             click(5, task_row("Orphan item"))
-            wait_visible(lambda: "Task #1 (In progress)" in editor_title())
+            wait_visible(lambda: f"Task #1 ({expected_status})" in editor_title())
             initial_detail = cli("show", "1")
             send(b"\x07")
             wait_visible(lambda: "o Reopen" in visible.text())
@@ -2799,7 +2801,7 @@ print(json.dumps({"result": result}))
             wait_visible(lambda: "Reopen task #1?" in visible.text())
             send(b"n")
             wait_visible(lambda: "Reopen task" not in visible.text()
-                         and "Task #1 (In progress)" in editor_title())
+                         and f"Task #1 ({expected_status})" in editor_title())
             assert cli("show", "1") == initial_detail
             send(b"\x07")
             wait_visible(lambda: "o Reopen" in visible.text())
@@ -2826,7 +2828,7 @@ print(json.dumps({"result": result}))
                 assert detail["task"]["description"] == initial_detail["task"]["description"]
                 assert detail["task"]["tags"] == ["recover"]
                 assert detail["herdr"] == initial_detail["herdr"]
-                assert [event["action"] for event in detail["events"]] == ["claim", "reopen"]
+                assert [event["action"] for event in detail["events"]] == ["claim", "error", "reopen"]
                 assert detail["events"][-1]["session"] == "reviewer"
             if scenario.endswith("no_color"):
                 assert b"\x1b[38;" not in screen and b"\x1b[48;" not in screen

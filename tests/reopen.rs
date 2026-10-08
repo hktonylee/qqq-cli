@@ -106,7 +106,7 @@ fn migration_from_eight_preserves_events_and_autoincrement() {
     assert_eq!(
         conn.pragma_query_value(None, "user_version", |row| row.get::<_, i64>(0))
             .unwrap(),
-        12
+        13
     );
     conn.execute(
         "INSERT INTO events(task_id,session,action) VALUES (5,'cli','reopen')",
@@ -137,7 +137,7 @@ fn concurrent_version_eight_opens_migrate_once() {
     assert_eq!(
         conn.pragma_query_value(None, "user_version", |row| row.get::<_, i64>(0))
             .unwrap(),
-        12
+        13
     );
 }
 

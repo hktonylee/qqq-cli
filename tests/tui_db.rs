@@ -20,6 +20,12 @@ mod identity;
 #[path = "../src/images.rs"]
 mod images;
 #[allow(dead_code)]
+#[path = "../src/preflight.rs"]
+mod preflight;
+#[allow(dead_code)]
+#[path = "../src/process.rs"]
+mod process;
+#[allow(dead_code)]
 #[path = "../src/snapshot/mod.rs"]
 mod snapshot;
 #[allow(dead_code)]
@@ -63,6 +69,8 @@ fn database() -> (Db, tempfile::TempDir) {
     conn.execute_batch(include_str!("../src/sql/migrate_v11.sql"))
         .unwrap();
     conn.execute_batch(include_str!("../src/sql/migrate_v12.sql"))
+        .unwrap();
+    conn.execute_batch(include_str!("../src/sql/migrate_v13.sql"))
         .unwrap();
     (
         Db {

@@ -96,11 +96,17 @@ fn late_sql_migration_failures_roll_back_all_schemas_and_retry_cleanly() {
                 "DROP TABLE task_dependencies",
                 "already exists",
             )
-        } else {
+        } else if entry.schema_version < 12 {
             (
                 "ALTER TABLE tasks ADD COLUMN tags TEXT NOT NULL DEFAULT '[]'",
                 "ALTER TABLE tasks DROP COLUMN tags",
                 "duplicate column",
+            )
+        } else {
+            (
+                "CREATE TABLE claim_processes(sentinel TEXT)",
+                "DROP TABLE claim_processes",
+                "already exists",
             )
         };
         conn.execute_batch(inject).unwrap();

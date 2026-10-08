@@ -354,7 +354,8 @@ record current claim association. CLI and TUI Reopen use same checks.
 Reopening keeps
 description, priority, parent, prerequisites, messages, images, creation time, and prior
 history. Reopening clears recorded assignment metadata; saved Herdr link stays
-until next claim replaces it. New and error tasks fail without changes; repeating
+until next claim replaces it. Preflight-generated errors also reopen; ordinary
+manual errors use retry. New tasks fail without changes; repeating
 `reopen` also fails. Archived tasks require `unarchive` first. A
 task with an archived unfinished parent or prerequisite cannot reopen until
 dependency is unarchived or completed, or its link removed. Completed descendants
@@ -863,6 +864,31 @@ clear current assignment metadata; fresh claim records new worker identity.
 Human `next` output omits these four assignment fields. JSON and `show` retain
 them for ownership inspection.
 
+### Owner liveness before commands
+
+qqq checks current project’s active owners synchronously before command execution
+or TUI/watch startup. No background process or periodic scan. Confirmed dead
+harness/orchestrator changes task to `error`, clears assignment, preserves task
+contents/history/link, records reason message and `qqq-preflight` error event.
+Inspection commands (`status`, `doctor`, `next --explain`, `--dry-run`) also run
+cleanup first; preview itself does not claim or edit queued work. When no dead
+owner is confirmed, preflight makes no DB writes. It never creates or migrates a
+project; writable opens scan after migration.
+
+Native Codex claims bind actual harness ancestor PID, start time, executable and
+machine identity privately to current claim. Missing/reused PID or zombie proves
+death on same machine; another machine or unavailable process data stays unknown.
+Manual session tokens alone do not identify process. Saved Herdr server and agent
+identity/terminal establish liveness; stopped/missing saved server or successful
+agent list without owner proves death. Failed/malformed/timeout probes stay
+unknown unless separate evidence proves stopped server. Probes time out after
+two seconds. Claim, link and process guards prevent stale checks from failing
+reassigned work.
+
+Use `qqq edit ID --set-status new` to retry errors. `qqq reopen ID` also recovers
+auto-failed owners; archive/unarchive preserves that option. TUI actions apply
+same rules. Idle TUI/watch/wait does not rescan until another qqq command runs.
+
 ### Return or retry work
 
 Return active task owned by `worker-1`:
@@ -992,13 +1018,13 @@ runtime output enforce this table; package version and DB schema are separate.
 <!-- compatibility-support:start -->
 | Contract | Supported value |
 | --- | --- |
-| Current DB schema | `12` |
-| Normal-open DB schemas | `1–12` |
-| Automatic upgrade source schemas | `1–11` |
+| Current DB schema | `13` |
+| Normal-open DB schemas | `1–13` |
+| Automatic upgrade source schemas | `1–12` |
 | Portable snapshot format | `1` |
-| Portable snapshot DB schemas | `9–12` |
+| Portable snapshot DB schemas | `9–13` |
 | Upgrade recovery format | `2` |
-| Upgrade recovery source schemas | `1–11` |
+| Upgrade recovery source schemas | `1–12` |
 | Initialization-only schema | `0` |
 | Manual-conversion layouts | `title`, `pending` |
 <!-- compatibility-support:end -->
@@ -1156,6 +1182,7 @@ new fields use defaults when source schema predates them:
 | 10 | Content revision | `1` |
 | 11 | Extra prerequisites | Empty; existing parent edges retained |
 | 12 | Tags | Empty array `[]` |
+| 13 | Private claim process identity | Empty; legacy Herdr links still support liveness checks |
 
 Version 6 moves existing image blobs to `.qqq/images/` before SQLite drops its
 `data` column, preserving IDs, metadata and bytes. Portable restore preserves

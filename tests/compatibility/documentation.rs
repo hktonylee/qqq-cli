@@ -190,7 +190,22 @@ fn shell_example(name: &str, directory: &Path, temp_root: &Path, input: &str) ->
         .expect("documented example must contain one shell block");
     let binary = std::env::var_os("QQQ_COMPATIBILITY_BINARY")
         .unwrap_or_else(|| env!("CARGO_BIN_EXE_qqq").into());
-    let mut path = vec![Path::new(&binary).parent().unwrap().to_path_buf()];
+    // Synthetic saved servers must not be compared with user's running Herdr.
+    let probes = TempDir::new().unwrap();
+    fs::write(probes.path().join("herdr"), "#!/bin/sh\nexit 1\n").unwrap();
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        fs::set_permissions(
+            probes.path().join("herdr"),
+            fs::Permissions::from_mode(0o755),
+        )
+        .unwrap();
+    }
+    let mut path = vec![
+        probes.path().to_path_buf(),
+        Path::new(&binary).parent().unwrap().to_path_buf(),
+    ];
     path.extend(std::env::split_paths(
         &std::env::var_os("PATH").unwrap_or_default(),
     ));

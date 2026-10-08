@@ -111,7 +111,8 @@
         "task_id": 13
       }
     ],
-    "schema_version": 12,
+    "processes": [],
+    "schema_version": 13,
     "sequences": [
       {
         "name": "events",

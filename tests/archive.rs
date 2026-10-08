@@ -115,7 +115,7 @@ fn migration_from_seven_preserves_data_and_defaults_to_unarchived() {
     assert_eq!(
         conn.pragma_query_value(None, "user_version", |row| row.get::<_, i64>(0))
             .unwrap(),
-        12
+        13
     );
     assert_eq!(
         conn.query_row("SELECT id FROM events WHERE task_id=5", [], |row| row
@@ -153,7 +153,7 @@ fn concurrent_version_seven_opens_migrate_once() {
     assert_eq!(
         conn.pragma_query_value(None, "user_version", |row| row.get::<_, i64>(0))
             .unwrap(),
-        12
+        13
     );
 }
 

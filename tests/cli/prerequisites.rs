@@ -302,7 +302,7 @@ fn migration_and_snapshot_round_trip_preserve_ownership_content_and_dependency_e
     let db = p.join(".qqq/qqq.db");
     {
         let conn = rusqlite::Connection::open(&db).unwrap();
-        conn.execute_batch("DROP TABLE task_dependencies; ALTER TABLE tasks DROP COLUMN tags; PRAGMA user_version=10;")
+        conn.execute_batch("DROP TABLE claim_processes; DROP TABLE task_dependencies; ALTER TABLE tasks DROP COLUMN tags; PRAGMA user_version=10;")
             .unwrap();
     }
     assert_eq!(ok(p, &["list"]), list);
@@ -312,7 +312,7 @@ fn migration_and_snapshot_round_trip_preserve_ownership_content_and_dependency_e
             .unwrap()
             .pragma_query_value(None, "user_version", |r| r.get::<_, i64>(0))
             .unwrap(),
-        12
+        13
     );
     ok(p, &["add", "Extra"]);
     ok(p, &["edit", "2", "--depends-on", "3"]);

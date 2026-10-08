@@ -153,6 +153,7 @@ pub fn command(path: &Path) -> Command {
     let mut command = Command::new(binary);
     command
         .current_dir(path)
+        .env("PATH", root().join("no-executables"))
         .env_remove("QQQ_SESSION")
         .env_remove("CODEX_THREAD_ID")
         .env_remove("CODEX_SESSION_ID")
@@ -243,6 +244,7 @@ pub fn canonical(conn: &Connection) -> Value {
         "images": rows(conn, "SELECT id,task_id,name,media_type,bytes FROM images ORDER BY id"),
         "links": rows(conn, "SELECT task_id,link_json FROM herdr_links ORDER BY task_id"),
         "dependencies": rows(conn, "SELECT task_id,prerequisite_id FROM task_dependencies ORDER BY task_id,prerequisite_id"),
+        "processes": rows(conn, "SELECT task_id,claim_key,claim_event_id,process_json FROM claim_processes ORDER BY task_id"),
         "sequences": rows(conn, "SELECT name,seq FROM sqlite_sequence ORDER BY name"),
     })
 }

@@ -488,7 +488,7 @@ fn tui_dashboard_task_actions() {
 }
 
 #[test]
-fn tui_dashboard_reopen_recovers_absent_herdr_owner_and_checks_current_liveness() {
+fn tui_dashboard_preflight_fails_absent_owner_and_reopen_recovers() {
     for scenario in [
         "orphan_reopen",
         "orphan_reopen_no_color",

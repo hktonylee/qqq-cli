@@ -12,8 +12,8 @@ commits, Git blob IDs and SHA-256 hashes for frozen source bytes.
 | --- | --- | --- |
 | Normal-open DBs | `user_version` 1–9 | SQL definitions frozen from v0.1.1 |
 | Normal-open DBs | 10–11 | SQL definitions frozen from v0.4.0 |
-| Normal-open DB | 12 | v0.4.0 base plus pinned schema-12 introducing SQL |
-| Portable snapshots | Format 1, DB schemas 9–12 | Frozen format definitions, deterministic synthetic GNU tar |
+| Normal-open DBs | 12–13 | v0.4.0 base plus pinned introducing SQL |
+| Portable snapshots | Format 1, DB schemas 9–13 | Frozen format definitions, deterministic synthetic GNU tar |
 
 Verified release inventory:
 
@@ -27,7 +27,9 @@ Verified release inventory:
 Schema 10 is an accepted intermediate definition. Tagged releases emitted
 schemas 9 and 11. Schema 12 has no release tag in this inventory: its extension
 comes from commit `6c67d0ddac81faffceb94104d4486ceaf57cd78d`, package version
-0.4.0. Catalog explicitly marks this development provenance. Snapshots are
+0.4.0. Schema13 adds private claim process bindings from commit
+`487755d0a3428223ee65613010cf6df71161109b`, package version0.5.0.
+Catalog explicitly marks development provenance. Snapshots are
 source-derived synthetic archives, not recordings of released binaries.
 
 Schema 0 is initialization-only. Legacy `title` / `pending` layouts need manual
@@ -96,7 +98,7 @@ remains schema9. Initialization/current-schema/read-only commands save no archiv
 Published support table in [reference](../../../docs/reference.md#data) is checked
 against this catalog and emitted DB/portable/recovery archive versions. Focused
 documentation gate also executes marked shell examples against temporary copies:
-portable example on schemas 9–12, recovery example on every source schema 1–11.
+portable example on schemas 9–13, recovery example on every source schema 1–12.
 It verifies SQLite inspection happens before normal-open upgrade and canonical
 task/image/claim/readiness state survives. Both CI OSes and publication run gate.
 New schemas require fixtures, catalog support and published table to update

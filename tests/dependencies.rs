@@ -203,7 +203,7 @@ fn version_one_migration_preserves_data_and_is_repeatable() {
     let version: i64 = conn
         .pragma_query_value(None, "user_version", |r| r.get(0))
         .unwrap();
-    assert_eq!(version, 12);
+    assert_eq!(version, 13);
     assert_eq!(
         std::fs::read(p.join(".qqq/images/1/1.png")).unwrap(),
         vec![1, 2, 3]

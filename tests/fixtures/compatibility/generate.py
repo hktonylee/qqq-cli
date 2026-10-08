@@ -128,12 +128,12 @@ def expectations(version: int) -> dict[str, object]:
                    key=lambda task: (-task["priority"], task["id"]))
     return {
         "canonical": {
-            "schema_version": 12, "tasks": tasks, "messages": messages, "events": events,
+            "schema_version": 13, "tasks": tasks, "messages": messages, "events": events,
             "images": [{"id": image_id, "task_id": task_id, "name": name,
                         "media_type": media_type, "bytes": len(data)}
                        for image_id, task_id, name, media_type, _, data in PIXELS],
             "links": [{"task_id": 8, "link_json": LINK}],
-            "dependencies": dependencies,
+            "dependencies": dependencies, "processes": [],
             "sequences": [{"name": name, "seq": seq} for name, seq in sorted(SEQUENCES.items())],
         },
         "queue": {"ready_ids": sorted(ready), "blockers": blockers,
@@ -152,8 +152,10 @@ def sql_paths(version: int) -> tuple[str, list[str]]:
     release = "v0.1.1" if version <= 9 else "v0.4.0"
     paths = [f"sources/{release}/schema.sql"]
     paths.extend(f"sources/{release}/migrate_v{target}.sql" for target in range(2, min(version, 11) + 1))
-    if version == 12:
+    if version >= 12:
         paths.append("sources/schema12/migrate_v12.sql")
+    if version >= 13:
+        paths.append("sources/schema13/migrate_v13.sql")
     return release, paths
 
 
@@ -214,7 +216,7 @@ def seed_database(output: Path, version: int) -> dict[str, object]:
             "sha256": digest(data), "source_release": release if version < 12 else None,
             "base_release": release, "sql_sources": paths, "files": files, "images": images,
             "expected": expected, "expected_sha256": digest(expected_data),
-            "source_kind": "pinned-development-extension" if version == 12 else "released-source-definition"}
+            "source_kind": "pinned-development-extension" if version >= 12 else "released-source-definition"}
 
 
 def snapshot(output: Path, database: dict[str, object]) -> dict[str, object]:
@@ -252,18 +254,18 @@ def generate(output: Path) -> None:
         assert digest((ROOT / source["path"]).read_bytes()) == source["sha256"], source["path"]
     for _, _, name, _, _, data in PIXELS:
         write(output / "assets" / name, data)
-    databases = [seed_database(output, version) for version in range(1, 13)]
+    databases = [seed_database(output, version) for version in range(1, 14)]
     snapshots = [snapshot(output, entry) for entry in databases if entry["schema_version"] >= 9]
     manifest = {
         "version": 1, "sqlite_generation_version": SQLITE_VERSION,
         "source_provenance": "provenance.json", "source_provenance_sha256": digest(provenance_data),
-        "support": {"current_schema": 12, "normal_open_schemas": list(range(1, 13)),
-                    "snapshot_database_schemas": list(range(9, 13)), "snapshot_format_versions": [1],
+        "support": {"current_schema": 13, "normal_open_schemas": list(range(1, 14)),
+                    "snapshot_database_schemas": list(range(9, 14)), "snapshot_format_versions": [1],
                     "released_snapshot_schemas": [9, 11],
                     "exclusions": ["version0-initialization-only", "legacy-title-manual-conversion",
                                    "legacy-pending-manual-conversion", "future-schema-unsupported"],
                     "provenance_notes": ["Schema10 accepted intermediate definition; tagged releases emitted9/11.",
-                                         "Schema12 has no release tag; released base plus pinned introducing SQL."]},
+                                         "Schemas12/13 have no release tag; released base plus pinned introducing SQL."]},
         "databases": databases, "snapshots": snapshots,
     }
     write(output / "manifest.json", json_bytes(manifest))

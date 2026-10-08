@@ -8,6 +8,7 @@ fn command(dir: &Path) -> Command {
     command
         .current_dir(dir)
         .arg("--json")
+        .env("PATH", dir)
         .env("HOME", dir)
         .env_remove("QQQ_SESSION")
         .env_remove("CODEX_THREAD_ID")

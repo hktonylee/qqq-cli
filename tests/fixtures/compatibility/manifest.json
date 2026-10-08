@@ -5,7 +5,7 @@
       "bytes": 49152,
       "database": "databases/schema01/qqq.db",
       "expected": "expected/schema01.json",
-      "expected_sha256": "eb13be0299bbc6cbc9e83409b0dab5a0a77fced18d29d5dae5eff1f07884a8e1",
+      "expected_sha256": "8951d58eb3211126c62470537e93e4f8ca0c1608b3ca42902d2966dd3c25c23a",
       "files": [],
       "images": [
         {
@@ -38,7 +38,7 @@
       "bytes": 49152,
       "database": "databases/schema02/qqq.db",
       "expected": "expected/schema02.json",
-      "expected_sha256": "ee6550c1cf3c1a9005986ae5aace71ed96fc462100f94c003af3be6a5dd59ab5",
+      "expected_sha256": "5bbbc67ba460b5e284b53258589684194232a51c164e343e461f03beb57603b1",
       "files": [],
       "images": [
         {
@@ -72,7 +72,7 @@
       "bytes": 49152,
       "database": "databases/schema03/qqq.db",
       "expected": "expected/schema03.json",
-      "expected_sha256": "ee6550c1cf3c1a9005986ae5aace71ed96fc462100f94c003af3be6a5dd59ab5",
+      "expected_sha256": "5bbbc67ba460b5e284b53258589684194232a51c164e343e461f03beb57603b1",
       "files": [],
       "images": [
         {
@@ -107,7 +107,7 @@
       "bytes": 49152,
       "database": "databases/schema04/qqq.db",
       "expected": "expected/schema04.json",
-      "expected_sha256": "36ab5f8ba9936f593b5f29bc1bccb65a25f841153b92cda961263f1025ba7479",
+      "expected_sha256": "c411fd0560081fab67907eac4f00ef85cea4278abb236b4280f98dcefa2240b6",
       "files": [],
       "images": [
         {
@@ -143,7 +143,7 @@
       "bytes": 49152,
       "database": "databases/schema05/qqq.db",
       "expected": "expected/schema05.json",
-      "expected_sha256": "945e1cf4ce0d755edc8f2e9538d46f5e660144b273233afaa80e5cc23257a289",
+      "expected_sha256": "ea1e2b330302c30a99ee61ee48cd3428b91010d6ebb90bae1df64f6457dde313",
       "files": [],
       "images": [
         {
@@ -180,7 +180,7 @@
       "bytes": 49152,
       "database": "databases/schema06/qqq.db",
       "expected": "expected/schema06.json",
-      "expected_sha256": "c914852193af830ccb16fc35077ef5a7676aac2b39161ac4f77012a230c2d4b3",
+      "expected_sha256": "de9c23abfdabfe428192dca99f4c3f53e3f0987f0e47d32ed76deba743b59989",
       "files": [
         {
           "bytes": 68,
@@ -231,7 +231,7 @@
       "bytes": 49152,
       "database": "databases/schema07/qqq.db",
       "expected": "expected/schema07.json",
-      "expected_sha256": "c15227bca36db5855a13f354e4627017ca861d0b182fd2dbf0ed55c134ac812b",
+      "expected_sha256": "6ec946e9b3edc3ab233b2af3ac944a193bc2b1e52ac412a25f8ad65177a043c9",
       "files": [
         {
           "bytes": 68,
@@ -283,7 +283,7 @@
       "bytes": 49152,
       "database": "databases/schema08/qqq.db",
       "expected": "expected/schema08.json",
-      "expected_sha256": "d20c8b6f5a82ea8698e27dcce23b9f786af19907ba34da20679633f90f70ed8d",
+      "expected_sha256": "784163eae4532cc2fc4d77766e70b45f175f0b0a91b4f03037ac33f17212071a",
       "files": [
         {
           "bytes": 68,
@@ -336,7 +336,7 @@
       "bytes": 49152,
       "database": "databases/schema09/qqq.db",
       "expected": "expected/schema09.json",
-      "expected_sha256": "ed692ed887556113add8cc7c601436746b503fd6cf4f467835ff20af149652b0",
+      "expected_sha256": "ab8ed1c39ecd9ff1500a28d316e78ac17abf46c57dc11e80a8d6834e70d83da6",
       "files": [
         {
           "bytes": 68,
@@ -390,7 +390,7 @@
       "bytes": 49152,
       "database": "databases/schema10/qqq.db",
       "expected": "expected/schema10.json",
-      "expected_sha256": "b589fceab8db55b6b2d31b6ab1ef7b6ebcb27bd82e91e5dd2441427a3d095499",
+      "expected_sha256": "9361aba77e0c6048558d4377c694e001f0477bc55781c931a7674099918f7883",
       "files": [
         {
           "bytes": 68,
@@ -445,7 +445,7 @@
       "bytes": 65536,
       "database": "databases/schema11/qqq.db",
       "expected": "expected/schema11.json",
-      "expected_sha256": "9b5d937c7195a58a8250742c0253f3effa0f207def1f20b1eb5dcc25547d1d79",
+      "expected_sha256": "ca2a2f4ecd20492eb36eb36a8f276097ee84ca8ebb27a98c9d7b0cb5fb7cc06a",
       "files": [
         {
           "bytes": 68,
@@ -501,7 +501,7 @@
       "bytes": 69632,
       "database": "databases/schema12/qqq.db",
       "expected": "expected/schema12.json",
-      "expected_sha256": "2f8c58a9cb5da41beadea6027c1f9787de0b8d1798cb894303f674d4400d3fa2",
+      "expected_sha256": "6c69c0fadbc68f9816480491c792601bbf344a8bb4dffd4f142f1b6951a86344",
       "files": [
         {
           "bytes": 68,
@@ -552,6 +552,64 @@
         "sources/v0.4.0/migrate_v11.sql",
         "sources/schema12/migrate_v12.sql"
       ]
+    },
+    {
+      "base_release": "v0.4.0",
+      "bytes": 73728,
+      "database": "databases/schema13/qqq.db",
+      "expected": "expected/schema13.json",
+      "expected_sha256": "6c69c0fadbc68f9816480491c792601bbf344a8bb4dffd4f142f1b6951a86344",
+      "files": [
+        {
+          "bytes": 68,
+          "path": "images/3/7.png",
+          "sha256": "9572308cc0b9db8572ef20dbf4b5fa3fe8502a427a62d417322b39b1a7194b3a",
+          "source": "databases/schema13/images/3/7.png"
+        },
+        {
+          "bytes": 34,
+          "path": "images/13/19.gif",
+          "sha256": "1e85ec81b9800b4c443d39caca0d0926089a3ac201120db1ceb45b93789480b8",
+          "source": "databases/schema13/images/13/19.gif"
+        }
+      ],
+      "images": [
+        {
+          "bytes": 68,
+          "id": 7,
+          "media_type": "image/png",
+          "path": "images/3/7.png",
+          "sha256": "9572308cc0b9db8572ef20dbf4b5fa3fe8502a427a62d417322b39b1a7194b3a",
+          "task_id": 3
+        },
+        {
+          "bytes": 34,
+          "id": 19,
+          "media_type": "image/gif",
+          "path": "images/13/19.gif",
+          "sha256": "1e85ec81b9800b4c443d39caca0d0926089a3ac201120db1ceb45b93789480b8",
+          "task_id": 13
+        }
+      ],
+      "schema_version": 13,
+      "sha256": "5c94080f07fab269fe8baaf9be11a142810312c79aa07a35dc56892b329a358a",
+      "source_kind": "pinned-development-extension",
+      "source_release": null,
+      "sql_sources": [
+        "sources/v0.4.0/schema.sql",
+        "sources/v0.4.0/migrate_v2.sql",
+        "sources/v0.4.0/migrate_v3.sql",
+        "sources/v0.4.0/migrate_v4.sql",
+        "sources/v0.4.0/migrate_v5.sql",
+        "sources/v0.4.0/migrate_v6.sql",
+        "sources/v0.4.0/migrate_v7.sql",
+        "sources/v0.4.0/migrate_v8.sql",
+        "sources/v0.4.0/migrate_v9.sql",
+        "sources/v0.4.0/migrate_v10.sql",
+        "sources/v0.4.0/migrate_v11.sql",
+        "sources/schema12/migrate_v12.sql",
+        "sources/schema13/migrate_v13.sql"
+      ]
     }
   ],
   "snapshots": [
@@ -598,13 +656,24 @@
       "schema_version": 12,
       "sha256": "91b64dfa0054d8462c70160cf7594524f8a3181288efaa3e26a730a4a0b7ea7f",
       "source_release": null
+    },
+    {
+      "bytes": 81920,
+      "construction": "synthetic-source-derived-gnu-tar",
+      "emitted_by_tagged_release": false,
+      "format_source": "sources/v0.4.0/snapshot_format.rs",
+      "format_version": 1,
+      "path": "snapshots/format1-schema13.tar",
+      "schema_version": 13,
+      "sha256": "6c9ac69aa6b80d78f3b3517d5300f90363d8157b0ed2bef0e75c336ffd4b6856",
+      "source_release": null
     }
   ],
   "source_provenance": "provenance.json",
-  "source_provenance_sha256": "2174df5fc03eb942b910a0e811735bd5b8f8256c7738025f6c870147aa3b4ae6",
+  "source_provenance_sha256": "02459c8a8d4506159d1ed78f2fa7ff4e6bd887293367716e4f56374cc1d19ba4",
   "sqlite_generation_version": "3.53.1",
   "support": {
-    "current_schema": 12,
+    "current_schema": 13,
     "exclusions": [
       "version0-initialization-only",
       "legacy-title-manual-conversion",
@@ -623,11 +692,12 @@
       9,
       10,
       11,
-      12
+      12,
+      13
     ],
     "provenance_notes": [
       "Schema10 accepted intermediate definition; tagged releases emitted9/11.",
-      "Schema12 has no release tag; released base plus pinned introducing SQL."
+      "Schemas12/13 have no release tag; released base plus pinned introducing SQL."
     ],
     "released_snapshot_schemas": [
       9,
@@ -637,7 +707,8 @@
       9,
       10,
       11,
-      12
+      12,
+      13
     ],
     "snapshot_format_versions": [
       1

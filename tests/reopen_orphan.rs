@@ -167,13 +167,17 @@ fn orphaned_terminal_and_reported_session_reopen_preserves_task_and_can_reclaim(
             assert!(reopened[field].is_null(), "{field}");
         }
         let after = fixture.show();
-        for field in ["messages", "images", "herdr"] {
+        for field in ["images", "herdr"] {
             assert_eq!(after[field], before[field], "{field}");
         }
+        assert_eq!(after["messages"][0], before["messages"][0]);
+        assert_eq!(after["messages"].as_array().unwrap().len(), 2);
         assert_eq!(after["events"][0], before["events"][0]);
-        assert_eq!(after["events"][1]["action"], "reopen");
-        assert_eq!(after["events"][1]["session"], "reviewer");
-        assert_eq!(after["events"].as_array().unwrap().len(), 2);
+        assert_eq!(after["events"][1]["action"], "error");
+        assert_eq!(after["events"][1]["session"], "qqq-preflight");
+        assert_eq!(after["events"][2]["action"], "reopen");
+        assert_eq!(after["events"][2]["session"], "reviewer");
+        assert_eq!(after["events"].as_array().unwrap().len(), 3);
         assert!(
             fs::read_to_string(fixture.dir.path().join("calls"))
                 .unwrap()
@@ -390,6 +394,6 @@ fn concurrent_orphan_reopens_commit_once() {
             .count(),
         1
     );
-    assert_eq!(fixture.show()["events"].as_array().unwrap().len(), 2);
+    assert_eq!(fixture.show()["events"].as_array().unwrap().len(), 3);
     assert_eq!(fixture.show()["task"]["status"], "new");
 }

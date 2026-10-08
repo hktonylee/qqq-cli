@@ -226,7 +226,7 @@ fn schema_eleven_migrates_tasks_to_empty_tags() {
         )
         .unwrap();
     if has_tags {
-        conn.execute_batch("ALTER TABLE tasks DROP COLUMN tags;")
+        conn.execute_batch("DROP TABLE claim_processes; ALTER TABLE tasks DROP COLUMN tags;")
             .unwrap();
     }
     conn.pragma_update(None, "user_version", 11).unwrap();
@@ -238,7 +238,7 @@ fn schema_eleven_migrates_tasks_to_empty_tags() {
     assert_eq!(
         conn.pragma_query_value(None, "user_version", |r| r.get::<_, i64>(0))
             .unwrap(),
-        12
+        13
     );
 }
 

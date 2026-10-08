@@ -110,7 +110,7 @@ fn historical_sources_and_artifacts_match_recorded_provenance() {
                     .unwrap()
                     .starts_with("src/")
             );
-            if path.starts_with("sources/schema12/") {
+            if path.starts_with("sources/schema12/") || path.starts_with("sources/schema13/") {
                 assert!(source["release"].is_null());
             } else {
                 assert!(source["release"].as_str().unwrap().starts_with('v'));
@@ -119,7 +119,7 @@ fn historical_sources_and_artifacts_match_recorded_provenance() {
             path.to_owned()
         })
         .collect();
-    assert_eq!(sources.len(), 25);
+    assert_eq!(sources.len(), 26);
     let releases = provenance["releases"].as_array().unwrap();
     assert_eq!(
         releases
@@ -147,7 +147,7 @@ fn historical_sources_and_artifacts_match_recorded_provenance() {
         assert_eq!(entry.sql_sources.len() as i64, entry.schema_version);
         assert!(entry.sql_sources.iter().all(|path| sources.contains(path)));
         assert!(entry.sql_sources[0].starts_with(&format!("sources/{}/", entry.base_release)));
-        if entry.schema_version == 12 {
+        if entry.schema_version >= 12 {
             assert!(entry.source_release.is_none());
             assert_eq!(entry.source_kind, "pinned-development-extension");
         } else {
