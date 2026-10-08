@@ -216,7 +216,7 @@ wait_screen_contains("Task Editor")
   owner token. Add actual marked CLI example commands exercised by test from
   project root/subdir. Document Ctrl-D/Ctrl-G, marker, modal input and confirm,
   filter-hidden selection and retained drafts. Add BULK_CONFLICT reference row.
-- [ ] Run `cargo fmt --all -- --check`, `cargo clippy --locked --offline
+- [x] Run `cargo fmt --all -- --check`, `cargo clippy --locked --offline
   --all-targets -- -D warnings`, full serial `cargo test --locked --offline --
   --test-threads=1`, `cargo build --locked --offline --release`. Historical
   compatibility must confirm schema13 and immutable artifacts unchanged.
@@ -265,3 +265,13 @@ and footer bounds, narrow confirmation hints and reviewer Alt-word cursor issue
 were each reproduced RED then fixed GREEN. Strict all-target Clippy and fmt pass.
 Concurrent task184 integrated Ctrl-B Views, so bulk selection moves to unused
 Ctrl-D; view picker remains Ctrl-B. Final combined full-suite/install pending.
+
+Combined verification: rebased onto a0a166f, preserving named views and0.6.0.
+Full serial suite passed814 tests/46 binaries, including TUI118, bulk23 and
+historical compatibility35. Integration reviewer found no important defects.
+Final footer width38/39 boundary reproduced RED; threshold40 + boundary cases
+pass popup3, bulk PTY9, dashboard render36. Fresh fmt, strict all-target Clippy
+and release build pass on final source; release CLI smoke passes documented
+commands, exact frozen IDs, noops, stale rejection, late SQL rollback and active
+archive guard. No schema migration or immutable compatibility artifact changed.
+Root installation and installed CLI/TUI checks pending.

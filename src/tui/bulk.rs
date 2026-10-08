@@ -337,7 +337,7 @@ impl View {
                         .flat_map(|text| wrap(&text, width))
                         .map(|text| PopupRow::new(text, PopupKind::Body))
                         .collect(),
-                    if width >= 38 {
+                    if width >= 40 {
                         "y apply  n/Esc cancel  Up/Down PgUp/PgDn"
                     } else if width >= 21 {
                         "y apply n/Esc cancel"
@@ -424,7 +424,7 @@ mod tests {
                 "after": {"tags": [], "priority": 1, "archived": false}}]
         }))
         .unwrap();
-        for width in [12, 18, 28, 46] {
+        for width in [12, 18, 28, 38, 39, 40, 46] {
             for height in (2..=18).chain(0..=1) {
                 for stage in [0, 1, 2] {
                     let mut ui = View::menu(vec![1]);
