@@ -163,24 +163,24 @@ Commands::Add { template: Some(name), vars, .. } => Some(recipe::read(name, vars
 
 ## Task 2: Validation, Graphs And Atomicity
 
-- [ ] Add fixtures for two/three-task forward references, extra prerequisites
+- [x] Add fixtures for two/three-task forward references, extra prerequisites
   and explicit existing IDs. Verify mapping, creation_order and actual saved IDs.
   Repeat application; ensure new independent graph and original existing refs.
-- [ ] Add literal assignments containing quotes, equals, CRLF, Unicode, `${other}`,
+- [x] Add literal assignments containing quotes, equals, CRLF, Unicode, `${other}`,
   shell-looking text; assert exact saved descriptions and absent execution marker.
   Cover `$$`, `$${name}`, default literal tokens and malformed placeholders.
-- [ ] Add rejection matrix: required/duplicate/unknown vars, missing equals,
+- [x] Add rejection matrix: required/duplicate/unknown vars, missing equals,
   invalid identifiers, missing recipes/traversal, duplicate declarations/JSON
   fields/task keys, invalid types/version/tags/descriptions/priority, missing refs,
   overlap/cycles, every conflicting Add flag, vars/dry_run without template.
   Capture DB bytes and logical task/dependency/event/sequence state before errors.
-- [ ] Run focused tests, diagnose expected failures, adjust parser/CLI validation
+- [x] Run focused tests, diagnose expected failures, adjust parser/CLI validation
   only where evidence requires. Keep import graph implementation unchanged.
-- [ ] Add read-only preview assertions for bytes, sqlite_sequence, statuses,
+- [x] Add read-only preview assertions for bytes, sqlite_sequence, statuses,
   claims and delete-staging marker. Older schema requires ordinary migration;
   failed recipe validation happens before normal writable migration. Missing
   project never creates `.qqq`. Subdir discovery and nested-project isolation.
-- [ ] Inject second task insertion failure and verify transaction rollback:
+- [x] Inject second task insertion failure and verify transaction rollback:
 
 ```rust
 conn.execute_batch("CREATE TRIGGER fail_second BEFORE INSERT ON tasks
@@ -190,7 +190,7 @@ conn.execute_batch("CREATE TRIGGER fail_second BEFORE INSERT ON tasks
   Apply two-task recipe; assert no new tasks/dependencies/events/sequence consumed.
   Launch two CLI processes applying same graph concurrently; verify disjoint
   complete key/ID mappings and local edges inside each graph.
-- [ ] Run `cargo test --locked --offline --test recipes --test cli --test
+- [x] Run `cargo test --locked --offline --test recipes --test cli --test
   dependencies -- --test-threads=1`; commit verified acceptance checkpoint.
 
 ## Task 3: Human Preview And Documented Examples
@@ -233,3 +233,7 @@ one importer, fixed structural types, no schema migration, no unresolved choices
 Task1 RED: three real CLI tests rejected unknown --template. GREEN: recipe3
 plus existing CLI68 pass. Loader shares typed import tasks/validator/transaction;
 no DB schema change. Human full preview and broader acceptance remain pending.
+
+Task2: recipe11 plus CLI68/dependencies7 pass (86 tests). Strict all-targets
+Clippy passes. Rejections preserve DB bytes; native graph importer handles
+rollback/IDs, existing refs and competing complete graphs unchanged.
