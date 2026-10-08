@@ -4286,7 +4286,7 @@ print(json.dumps({"result": result}))
                 wait_preview(task_id)
 
             # Two wheel notches leave only continuation rows of selected task.
-            # Manual scrolling must retain that partial preview, even after refresh.
+            # Manual scrolling must retain that partial preview while idle.
             clear_capture()
             send(b"\x1b[<65;6;4M" * 2)
             wait_caret(lambda: visible.text().splitlines()[0].rstrip().endswith("Body 10")
