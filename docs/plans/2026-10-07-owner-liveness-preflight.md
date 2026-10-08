@@ -117,10 +117,12 @@ Files: modify `docs/reference.md` and this plan with final evidence.
   --test-threads=1`, `cargo build --locked --offline --release`.
 - [x] Request precise-context code review; fix important findings with regression
   tests and rerun affected checks. Verify diff/checklist and commit evidence.
-- [ ] Rebase/fast-forward locally using existing authorization, install qqq,
-  verify installed native/Herdr dead/live/unknown smoke and TUI startup. Record
-  evidence on #181, complete task, remove feature worktree/branch, resume one
-  `qqq next --wait --local --json` waiter without polling/restarting silent wait.
+- [x] Rebase/fast-forward locally using existing authorization, install qqq,
+  verify installed native/Herdr dead/live/unknown smoke and TUI startup.
+
+Queue handoff after verification: record evidence on #181, complete task, remove
+feature worktree/branch, resume one `qqq next --wait --local --json` waiter without
+polling/restarting silent wait.
 
 ## Progress
 
@@ -134,5 +136,13 @@ Review fixes cover stale relink, bounded probes, malformed owner metadata,
 foreign machine under denied process access and archive recovery.
 Historical DB/snapshot/image bytes unchanged (30 artifacts). Migration and
 autodetection fixtures isolate synthetic owners from host Herdr. Rebased onto
-master169c256, preserving concurrent tag-popup fix. Installed verification and
-local integration pending; CI not run.
+master169c256, preserving concurrent tag-popup fix. Master fast-forwarded to
+f36785b; offline install built from /app/qqq after clearing package artifacts.
+Installed qqq0.5.0 and root release SHA256 both:
+`e7d5e99a65e1f27493db281fc426c4b5b2fe99d1fd532d20759d41abcc33a5d2`.
+Integrated preflight/reopen27 and installed compatibility35 pass (62 tests,
+three binaries). Installed native/Herdr smoke and three startup/reopen PTY
+scenarios pass, including no-color and live-owner refusal. PTY scenarios run
+through subprocess parent so each can acquire independent terminal session.
+Real root DB schema13 and quick_check pass; real #181 owner remains live.
+CI not run; no push/publish.
