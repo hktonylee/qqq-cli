@@ -7,6 +7,7 @@ Detailed behavior and flags for qqq. For a first run, start with the
 
 - [Install from source](#install-from-source)
 - [List and search](#list-and-show) · [Add and edit](#add-and-edit)
+- [Named project views](views.md)
 - [Archive](#archive-and-unarchive) · [Reopen](#reopen-work)
 - [Editor](#built-in-editor) · [TUI](#task-tui)
 - [Dependencies and images](#dependencies-and-images)
@@ -44,6 +45,8 @@ qqq list --status new --status error
 qqq list --query "parser" --status in_progress --all
 qqq list --filter 'like(task_name, "%auth%") and priority > 0'
 qqq list --tag frontend --tag "UI review"
+qqq list --readiness blocked
+qqq list --view "Ready frontend"
 qqq list --watch
 qqq list --watch --json
 qqq list --include-archived
@@ -83,6 +86,14 @@ using AND. Boundary whitespace is trimmed. Invalid labels fail before project
 preflight or DB access. `has_tag("LABEL")` offers the same membership test in
 Luau expressions; exactly one valid string literal is required. See
 [tag selectors and named views](filter.md#list-behavior).
+
+`list`, `next`, and `tui` share tags, Luau filter, Unicode query, status groups and
+`--readiness ready|blocked`. Ready uses existing parent/prerequisite eligibility;
+blocked includes only new unarchived tasks failing that predicate. Save these
+selectors with `qqq view save NAME`, inspect using `view list`/`view show NAME`,
+remove using `view remove NAME`. `--view NAME` applies the same project definition
+across CLI/TUI. Extra selectors combine using AND; explicit archive/completed
+flags override saved visibility. See [versioned file, precedence and picker](views.md).
 
 `--watch` prints initial list, then refreshes after DB commits. Terminal output
 redraws; pipes, `TERM=dumb` and JSON append snapshots. Ctrl-C stops watching.
@@ -610,6 +621,13 @@ Ctrl+P opens or restores child draft under selected task; header shows parent ID
 Current edits stay retained. Each parent has separate child draft; return to parent
 and press Ctrl+P to continue it. Ctrl-S creates child with dependency;
 Enter or Shift+Enter inserts newline. Navigating away retains child parent context.
+
+Ctrl+B opens saved project views from editor or filter. Arrows select, Enter
+applies, Esc/Ctrl+C cancels; PgUp/PgDn scrolls criteria. `tui --view NAME` opens
+the same definition as CLI lists/workers. Switching retains opened task,
+dirty/parked drafts, staged tags, caret/scroll and live query/focus, including when
+the task disappears from the view. Picker reloads `.qqq-views.json` when opened;
+active definition stays fixed until another selection. See [named views](views.md).
 
 Ctrl+L opens tags for the selected task or new draft from editor or filter. Current
 labels are prefilled, one per line. Enter or Shift+Enter adds a line; Ctrl-S applies.

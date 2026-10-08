@@ -114,6 +114,7 @@ task to load it, scroll each pane, or use the keyboard:
 | Ctrl+S | Save |
 | Ctrl+L | Edit task or new draft tags; retain unsaved drafts |
 | Ctrl+K | Go to task ID; retain unsaved drafts |
+| Ctrl+B | Pick saved project view; retain editor and parked drafts |
 | Ctrl+P | Create a child of the selected task |
 | Ctrl+/ | Filter tasks |
 | Ctrl+G | Open task actions |
@@ -162,6 +163,19 @@ qqq list --tag "UI review" --filter 'has_tag("frontend") and priority >= 5'
 Repeated tags require every exact label; case and Unicode stay distinct.
 Existing owned tasks return even after selectors change.
 See [tag matching and filter examples](docs/filter.md).
+
+Save shared CLI/TUI selectors as project views:
+
+```sh
+qqq view save "Ready frontend" --tag frontend --readiness ready --max-completed 0
+qqq list --view "Ready frontend"
+qqq next --view "Ready frontend" --local --wait --json
+qqq tui --view "Ready frontend"
+```
+
+Additional selectors combine with saved criteria using AND. Ctrl-B switches views
+without losing unsaved drafts. Commit `.qqq-views.json` to share definitions.
+See [named views, visibility overrides and picker](docs/views.md).
 
 ## Keep going
 

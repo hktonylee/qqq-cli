@@ -21,7 +21,7 @@ See [all variables](filter-variables.md), [all functions](filter-functions.md).
 
 ## List behavior
 
-`--tag`, `--filter`, `--query`, and `--status` combine with AND. Every repeated `--tag LABEL` must match; repeated statuses combine with OR. Archive visibility and completed-task limits apply before matching. Use `--all` to bypass configured completed limit, `--include-archived` to include archived rows.
+`--tag`, `--filter`, `--query`, `--status`, and `--readiness` combine with AND across list, next and TUI. Every repeated `--tag LABEL` must match; repeated statuses combine with OR. Archive visibility and completed-task limits apply before matching. Use `--all` to bypass configured completed limit, `--include-archived` to include archived rows.
 
 Tags match whole stored labels with exact case and Unicode, never description text or substrings. Surrounding spaces are trimmed; exact duplicate selectors are removed. Quote labels with internal spaces. Empty labels, controls, commas and square brackets fail before project preflight or DB access. Case and Unicode normalization remain unchanged: `UI` differs from `ui`, and composed/decomposed Unicode spellings remain distinct. For a label starting with `-`, use `--tag="-label"`.
 
@@ -33,6 +33,13 @@ ui = "list --filter 'has_tag(\"frontend\") and status == \"new\"'"
 ```
 
 `qqq ui --tag bug` requires both the configured expression and the appended tag selector.
+
+Save actual project views with `qqq view save NAME --tag frontend --readiness ready`.
+`list --view NAME`, `next --view NAME` and `tui --view NAME` use the same
+definition. Saved and explicit selectors combine with AND, preserving independent
+Luau truthiness. Explicit visibility flags override saved defaults. See
+[named view persistence and TUI picker](views.md). Aliases remain config command
+shortcuts; their expansion rules are unchanged.
 
 Visible ancestors of direct matches remain as context rows, even when predicate is false for parent. Human output marks `[context]`; JSON marks `context_only: true`. Ancestors excluded by archive/completed limits remain excluded. Task order, complete descriptions, JSON fields stay unchanged. No matches -> `[]` in JSON, `No matching tasks.` in human output.
 
