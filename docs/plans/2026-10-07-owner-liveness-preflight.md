@@ -110,12 +110,12 @@ Files: modify `src/main.rs`, `src/db.rs`, `src/watch.rs`,
 
 Files: modify `docs/reference.md` and this plan with final evidence.
 
-- [ ] Document synchronous preflight, proof/unknown cases, command inspection
+- [x] Document synchronous preflight, proof/unknown cases, command inspection
   semantics, manual retry/orphan recovery, one scan per command/TUI startup.
-- [ ] Run `cargo fmt --all -- --check`, `cargo clippy --locked --offline
+- [x] Run `cargo fmt --all -- --check`, `cargo clippy --locked --offline
   --all-targets -- -D warnings`, `cargo test --locked --offline --
   --test-threads=1`, `cargo build --locked --offline --release`.
-- [ ] Request precise-context code review; fix important findings with regression
+- [x] Request precise-context code review; fix important findings with regression
   tests and rerun affected checks. Verify diff/checklist and commit evidence.
 - [ ] Rebase/fast-forward locally using existing authorization, install qqq,
   verify installed native/Herdr dead/live/unknown smoke and TUI startup. Record
@@ -124,12 +124,15 @@ Files: modify `docs/reference.md` and this plan with final evidence.
 
 ## Progress
 
-Baseline: 705 tests across41 binaries. Core preflight/native tests15 pass,
-autodetection27 pass; focused compatibility/doctor/reopen/DB suite91 pass.
-TUI startup/reopen scenarios pass. Clippy clean before final startup-scope patch.
-Review found/fixed stale relink, unbounded probes, malformed owner metadata,
-foreign machine under denied process access, archive recovery. Re-review found
-no important issues. Historical DB/snapshot/image bytes unchanged (30 artifacts).
-Full regression running; first attempt stopped after older autodetection
-fixtures consulted live Herdr and stalled owned-task waiter. Fixtures now isolate
-Herdr. Installed verification and integration pending.
+Baseline: 705 tests across41 binaries. Final rebased serial suite: 730 tests
+across42 binaries pass, including107 TUI tests. Core preflight/native15,
+autodetection27, dispatch17, identity11 and compatibility35 pass.
+Fresh fmt, Clippy all-targets and release build pass. Release smoke verifies
+native exact-owner PID, live/dead handling, one audit pair and reopen; Herdr
+live/dead/stopped/unknown cases pass. Final review found no important issues.
+Review fixes cover stale relink, bounded probes, malformed owner metadata,
+foreign machine under denied process access and archive recovery.
+Historical DB/snapshot/image bytes unchanged (30 artifacts). Migration and
+autodetection fixtures isolate synthetic owners from host Herdr. Rebased onto
+master169c256, preserving concurrent tag-popup fix. Installed verification and
+local integration pending; CI not run.
