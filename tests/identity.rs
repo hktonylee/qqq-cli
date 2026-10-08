@@ -11,7 +11,8 @@ fn command(dir: &TempDir) -> Command {
         .env_remove("CODEX_THREAD_ID")
         .env_remove("CODEX_SESSION_ID")
         .env_remove("HERDR_PANE_ID")
-        .env_remove("HERDR_ENV");
+        .env_remove("HERDR_ENV")
+        .env("PATH", dir.path());
     c
 }
 fn run(dir: &TempDir, args: &[&str]) -> Output {
