@@ -4,7 +4,7 @@ use clap::CommandFactory;
 use std::{collections::HashSet, ffi::OsString};
 
 // Only inspect the root command. Leave command arguments and invalid options to Clap.
-fn command_index(args: &[OsString]) -> Option<usize> {
+pub(crate) fn command_index(args: &[OsString]) -> Option<usize> {
     let mut index = 1;
     while let Some(arg) = args.get(index) {
         let arg = arg.to_str()?;
@@ -33,18 +33,26 @@ fn command_index(args: &[OsString]) -> Option<usize> {
 }
 
 pub fn expand(mut args: Vec<OsString>, agent_caller: &mut Option<bool>) -> Result<Vec<OsString>> {
+    if let Err(error) = expand_inner(&mut args) {
+        crate::errors::set_json_output(crate::cli_error::requests_json(&args, agent_caller));
+        return Err(error);
+    }
+    Ok(args)
+}
+
+fn expand_inner(args: &mut Vec<OsString>) -> Result<()> {
     let cli = crate::Cli::command();
     let builtin =
         |name: &str| name == "help" || cli.get_subcommands().any(|cmd| cmd.get_name() == name);
-    let Some(index) = command_index(&args) else {
-        return Ok(args);
+    let Some(index) = command_index(args) else {
+        return Ok(());
     };
     if builtin(args[index].to_str().expect("command_index checked UTF-8")) {
-        return Ok(args);
+        return Ok(());
     }
     let config = crate::config::load().map_err(crate::cli_error::config_error)?;
     let mut seen = HashSet::new();
-    while let Some(index) = command_index(&args) {
+    while let Some(index) = command_index(args) {
         let name = args[index].to_str().expect("command_index checked UTF-8");
         if builtin(name) {
             break;
@@ -85,18 +93,17 @@ pub fn expand(mut args: Vec<OsString>, agent_caller: &mut Option<bool>) -> Resul
         expanded.extend(words.into_iter().map(OsString::from));
         let mut prospective = args.clone();
         prospective.splice(index..=index, expanded.iter().skip(1).cloned());
-        crate::errors::set_json_output(crate::cli_error::requests_json(&prospective, agent_caller));
         if command_index(&expanded).is_none() {
-            bail!(
-                Info::invalid_argument(
-                    "alias",
-                    format!("Alias '{name}' must contain a qqq command")
-                )
-                .detail("alias", name)
-                .detail("reason", "missing_command")
-            );
+            let error = Info::invalid_argument(
+                "alias",
+                format!("Alias '{name}' must contain a qqq command"),
+            )
+            .detail("alias", name)
+            .detail("reason", "missing_command");
+            *args = prospective;
+            return Err(error.into());
         }
-        args = prospective;
+        *args = prospective;
     }
-    Ok(args)
+    Ok(())
 }

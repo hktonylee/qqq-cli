@@ -90,6 +90,10 @@ normal command such as `qqq list` first. Existing WAL/SHM safeguard is retained:
 unsafe WAL state returns `DATABASE_ERROR`, reason `unsafe_read_only`.
 Ordinary list/status/next inspection retains its existing owner recovery.
 
+Output defaults are also probe-free, including aliases expanding to `graph`.
+Native Codex environment markers select JSON; other callers get human output.
+Use explicit `--json` or `--human` to select format in Herdr-only contexts.
+
 Human output uses plain text, sanitizes controls in descriptions and clips at
 terminal cell width. `NO_COLOR`, `TERM=dumb` and JSON emit no ANSI styling.
 JSON retains exact description title strings through normal JSON escaping.
@@ -128,6 +132,10 @@ prerequisite completion updates displayed blockers/readiness while inspector is
 open. Deleted task or query error appears inside inspector without discarding
 drafts. TUI startup keeps its ordinary owner preflight; graph browsing adds no
 mutation. Paste, background clicks and save shortcuts do not edit through popup.
+
+If dashboard reads fail while inspecting, last valid pane snapshot is retained.
+Closing inspector keeps local drafts alive until DB reads recover; footer shows
+read error. A new unsaved task shows a selection hint instead of opening graph.
 
 Opened/parked drafts, staged new-task tags, selected task, caret, manual editor
 and details scroll, active saved view and live query/focus survive opening,

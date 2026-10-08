@@ -551,6 +551,9 @@ print(json.dumps({"result": result}))
         assert not select.select([child.stdout], [], [], 0)[0], "TUI wrote stdout while open"
         if scenario.startswith("graph"):
             initial = cli("list", "--all")
+            send(b"\x0f")
+            wait_visible(lambda: visible.text().splitlines()[-1].startswith("Select task to inspect dependency graph"))
+            assert "Dependency graph #" not in visible.text()
             send(b"\x0b3\r")
             wait_frame(lambda: "Task #3 (New)" in editor_title() and editor_line().startswith("Integration"))
             send(b" retained\x1b[D\x1b[D")
@@ -562,6 +565,25 @@ print(json.dumps({"result": result}))
             wait_caret(lambda: "Dependency graph #3" not in visible.text()
                        and editor_line().startswith("Integration retained"), caret)
             assert cli("list", "--all") == initial
+            if scenario == "graph_failure":
+                send(b"\x0f")
+                wait_visible(lambda: "Dependency graph #3" in visible.text())
+                with sqlite3.connect(Path(folder) / ".qqq" / "qqq.db") as db:
+                    db.execute("ALTER TABLE task_dependencies RENAME TO graph_saved_dependencies")
+                wait_visible(lambda: "no such table: task_dependencies" in visible.text())
+                assert child.poll() is None, "Read error exited TUI"
+                with sqlite3.connect(Path(folder) / ".qqq" / "qqq.db") as db:
+                    db.execute("ALTER TABLE graph_saved_dependencies RENAME TO task_dependencies")
+                wait_visible(lambda: "Immediately ready: 1" in visible.text() and "no such table" not in visible.text())
+                with sqlite3.connect(Path(folder) / ".qqq" / "qqq.db") as db:
+                    db.execute("ALTER TABLE task_dependencies RENAME TO graph_saved_dependencies")
+                wait_visible(lambda: "no such table: task_dependencies" in visible.text())
+                send(b"\x03")
+                wait_caret(lambda: "Dependency graph #3" not in visible.text()
+                           and editor_line().startswith("Integration retained"), caret)
+                assert child.poll() is None, "Closing failed inspector exited TUI"
+                with sqlite3.connect(Path(folder) / ".qqq" / "qqq.db") as db:
+                    db.execute("ALTER TABLE graph_saved_dependencies RENAME TO task_dependencies")
             # Direction/depth/scroll belong to popup, never editor.
             send(b"\x0fu")
             wait_visible(lambda: "upstream · depth 8" in visible.text())

@@ -78,9 +78,14 @@ esac
     }
 
     fn command(&self) -> Command {
+        let mut command = self.bare_command();
+        command.arg("--json");
+        command
+    }
+    fn bare_command(&self) -> Command {
         let mut c = Command::new(env!("CARGO_BIN_EXE_qqq"));
         c.current_dir(self.dir.path())
-            .arg("--json")
+            .env("HOME", self.dir.path())
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
             .env_remove("QQQ_SESSION")
@@ -122,6 +127,51 @@ esac
     fn gone(&self) {
         self.write("agents", json!({"result":{"agents":[]}}));
     }
+}
+
+#[test]
+fn bare_and_alias_graph_output_defaults_never_probe_herdr() {
+    let f = Fixture::new();
+    f.gone();
+    let config_dir = f.dir.path().join(".config/qqq");
+    fs::create_dir_all(&config_dir).unwrap();
+    fs::write(
+        config_dir.join("config.toml"),
+        "[alias]\ninspect = 'graph'\ninspect_nested = 'inspect'\n",
+    )
+    .unwrap();
+    let before = fs::read(f.dir.path().join(".qqq/qqq.db")).unwrap();
+    for command in ["graph", "inspect", "inspect_nested"] {
+        let out = f
+            .bare_command()
+            .env("HERDR_ENV", "1")
+            .env("HERDR_PANE_ID", "w1:p1")
+            .args([command, "1"])
+            .output()
+            .unwrap();
+        assert!(out.status.success() && out.stderr.is_empty());
+        assert!(
+            String::from_utf8(out.stdout)
+                .unwrap()
+                .starts_with("Dependency graph #1")
+        );
+        assert_eq!(fs::read_to_string(f.dir.path().join("calls")).unwrap(), "");
+    }
+    let out = f
+        .bare_command()
+        .env("HERDR_ENV", "1")
+        .env("HERDR_PANE_ID", "w1:p1")
+        .env("CODEX_THREAD_ID", "native-context")
+        .args(["inspect_nested", "1"])
+        .output()
+        .unwrap();
+    assert_eq!(
+        serde_json::from_slice::<Value>(&out.stdout).unwrap()["task_id"],
+        1
+    );
+    assert!(out.stderr.is_empty());
+    assert_eq!(fs::read_to_string(f.dir.path().join("calls")).unwrap(), "");
+    assert_eq!(fs::read(f.dir.path().join(".qqq/qqq.db")).unwrap(), before);
 }
 
 #[test]

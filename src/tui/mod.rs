@@ -861,6 +861,52 @@ pub fn compose_dashboard(
     )
     .map(|_| ())
 }
+#[derive(Clone)]
+struct DashboardSnapshot {
+    tasks: Vec<crate::db::Task>,
+    selected: Vec<crate::db::Task>,
+    version: i64,
+    details: Vec<render::DetailRow>,
+    has_herdr_link: bool,
+}
+
+fn dashboard_snapshot(
+    db: &crate::db::Db,
+    target_id: Option<i64>,
+    size: (u16, u16),
+    selection: &crate::selection::Prepared,
+    query: &str,
+) -> Result<DashboardSnapshot> {
+    // Capture before reads so commits during rendering trigger another refresh.
+    let version = db.data_version()?;
+    let tasks = if selection.include_archived || target_id.is_some() {
+        db.list_with_archived(None, true)?
+    } else {
+        db.list(None)?
+    };
+    let area = dashboard::panes(ratatui::layout::Rect::new(0, 0, size.0, size.1)).details;
+    let width = usize::from(dashboard::details_content(area).width).max(1);
+    let details = match target_id.filter(|_| area.height > 0) {
+        Some(id) => match tasks.iter().find(|task| task.id == id) {
+            Some(task) => details::rows(&db.show_task(task)?, width),
+            None => details::unavailable(id, width),
+        },
+        None => Vec::new(),
+    };
+    let has_herdr_link = match target_id {
+        Some(id) => db.link(id)?.is_some(),
+        None => false,
+    };
+    let selected = crate::selection::list(db, selection, Some(query))?;
+    Ok(DashboardSnapshot {
+        tasks,
+        selected,
+        version,
+        details,
+        has_herdr_link,
+    })
+}
+
 fn compose_inner(
     description: &str,
     mut mode: Mode<'_, '_>,
@@ -938,6 +984,7 @@ fn compose_inner(
     let mut bulk_ui: Option<bulk::View> = None;
     let mut bulk_selected = std::collections::BTreeSet::new();
     let mut graph_ui: Option<graph_inspector::Inspector> = None;
+    let mut graph_background: Option<DashboardSnapshot> = None;
     let mut save_revision_override = None;
     let mut saved_any = false;
     let mut buffers = DraftBuffers::default();
@@ -957,59 +1004,90 @@ fn compose_inner(
         } else {
             render::Layout::new(&fragments, &image_mask, size.0 as usize)
         };
-        let (dashboard_tasks, list_version, details_rows, has_herdr_link) = if dashboard {
-            let db = mode.db().expect("dashboard has database");
-            // Capture before listing so commits during rendering trigger another refresh.
-            let version = db.data_version()?;
-            let mut tasks = if include_archived || target_id.is_some() {
-                db.list_with_archived(None, true)?
+        let prepared_selection = dashboard.then(|| {
+            let mut selection = view_context
+                .as_ref()
+                .expect("dashboard has view context")
+                .prepared
+                .clone();
+            selection.include_archived = include_archived;
+            selection.max_completed = if !show_completed {
+                Some(0)
             } else {
-                db.list(None)?
+                completed_limit.filter(|limit| *limit != 0)
             };
-            if let Some(task) = tasks.iter().find(|task| Some(task.id) == target_id) {
-                target_status = Some(task.status.clone());
-                if let Some(ActionUi::Menu {
-                    can_retry,
-                    selected,
-                    ..
-                }) = &mut action_ui
-                {
-                    let retry = task.status == "error";
-                    if *can_retry != retry {
-                        let key = action_menu_items(*can_retry)
-                            .nth(*selected)
-                            .expect("menu selection is valid")
-                            .0;
-                        *can_retry = retry;
-                        *selected = action_menu_items(retry)
-                            .position(|(candidate, _)| candidate == key)
-                            .unwrap_or_else(|| {
-                                (*selected).min(action_menu_items(retry).count() - 1)
-                            });
+            selection
+        });
+        let (dashboard_tasks, selected_tasks, list_version, details_rows, has_herdr_link) =
+            if dashboard {
+                let db = mode.db().expect("dashboard has database");
+                let mut frame = match dashboard_snapshot(
+                    db,
+                    target_id,
+                    size,
+                    prepared_selection
+                        .as_ref()
+                        .expect("dashboard prepares selection"),
+                    &filter_query,
+                ) {
+                    Ok(frame) => {
+                        if graph_ui.is_some() {
+                            graph_background = Some(frame.clone());
+                        } else {
+                            graph_background = None;
+                        }
+                        frame
+                    }
+                    Err(error) => {
+                        let Some(mut previous) = graph_background.clone() else {
+                            return Err(error);
+                        };
+                        previous.version = db.data_version().unwrap_or(previous.version);
+                        if let Some(ui) = &mut graph_ui {
+                            ui.set_error(&error, previous.version);
+                        } else {
+                            message = format!("{error:#}; local drafts kept");
+                            message_is_error = true;
+                        }
+                        previous
+                    }
+                };
+                if let Some(task) = frame.tasks.iter().find(|task| Some(task.id) == target_id) {
+                    target_status = Some(task.status.clone());
+                    if let Some(ActionUi::Menu {
+                        can_retry,
+                        selected,
+                        ..
+                    }) = &mut action_ui
+                    {
+                        let retry = task.status == "error";
+                        if *can_retry != retry {
+                            let key = action_menu_items(*can_retry)
+                                .nth(*selected)
+                                .expect("menu selection is valid")
+                                .0;
+                            *can_retry = retry;
+                            *selected = action_menu_items(retry)
+                                .position(|(candidate, _)| candidate == key)
+                                .unwrap_or_else(|| {
+                                    (*selected).min(action_menu_items(retry).count() - 1)
+                                });
+                        }
                     }
                 }
-            }
-            let details_area =
-                dashboard::panes(ratatui::layout::Rect::new(0, 0, size.0, size.1)).details;
-            let details_width = usize::from(dashboard::details_content(details_area).width).max(1);
-            let details_rows = match target_id.filter(|_| details_area.height > 0) {
-                Some(id) => match tasks.iter().find(|task| task.id == id) {
-                    Some(task) => details::rows(&db.show_task(task)?, details_width),
-                    None => details::unavailable(id, details_width),
-                },
-                None => Vec::new(),
+                if !include_archived {
+                    frame.tasks.retain(|task| !task.archived);
+                }
+                (
+                    Some(frame.tasks),
+                    Some(frame.selected),
+                    Some(frame.version),
+                    frame.details,
+                    frame.has_herdr_link,
+                )
+            } else {
+                (None, None, None, Vec::new(), false)
             };
-            let has_herdr_link = match target_id {
-                Some(id) => db.link(id)?.is_some(),
-                None => false,
-            };
-            if !include_archived {
-                tasks.retain(|task| !task.archived);
-            }
-            (Some(tasks), Some(version), details_rows, has_herdr_link)
-        } else {
-            (None, None, Vec::new(), false)
-        };
         let buffer_footer = match &confirmation {
             Some(Confirmation::ExitBuffers { keys, index }) => {
                 let key = keys[*index];
@@ -1106,22 +1184,12 @@ fn compose_inner(
             let snapshot = dashboard_tasks
                 .as_ref()
                 .expect("dashboard has task snapshot");
-            let mut selection = view_context
+            let selection = prepared_selection
                 .as_ref()
-                .expect("dashboard has view context")
-                .prepared
-                .clone();
-            selection.include_archived = include_archived;
-            selection.max_completed = if !show_completed {
-                Some(0)
-            } else {
-                completed_limit.filter(|limit| *limit != 0)
-            };
-            let tasks = crate::selection::list(
-                mode.db().expect("dashboard has database"),
-                &selection,
-                Some(&filter_query),
-            )?;
+                .expect("dashboard prepares selection");
+            let tasks = selected_tasks
+                .as_ref()
+                .expect("dashboard has selected tasks");
             let filter_views: Vec<_> = tasks
                 .iter()
                 .map(|task| panel::FilterTask {
@@ -1329,7 +1397,12 @@ fn compose_inner(
                 let timeout = refresh_deadline.saturating_duration_since(Instant::now());
                 if !event::poll(timeout)? || Instant::now() >= refresh_deadline {
                     let db = mode.db().expect("dashboard has database");
-                    if Some(db.data_version()?) != list_version {
+                    let version = match db.data_version() {
+                        Ok(version) => version,
+                        Err(_) if graph_ui.is_some() || graph_background.is_some() => break None,
+                        Err(error) => return Err(error),
+                    };
+                    if Some(version) != list_version {
                         break None;
                     }
                     refresh_deadline = Instant::now() + refresh_interval;
@@ -1717,7 +1790,23 @@ fn compose_inner(
                     && action_ui.is_none()
                 {
                     if let Some(id) = target_id {
+                        graph_background = Some(DashboardSnapshot {
+                            tasks: dashboard_tasks
+                                .as_ref()
+                                .expect("dashboard has tasks")
+                                .clone(),
+                            selected: selected_tasks
+                                .as_ref()
+                                .expect("dashboard has selection")
+                                .clone(),
+                            version: list_version.expect("dashboard has version"),
+                            details: details_rows.clone(),
+                            has_herdr_link,
+                        });
                         graph_ui = Some(graph_inspector::Inspector::new(id));
+                    } else {
+                        message = "Select task to inspect dependency graph".into();
+                        message_is_error = false;
                     }
                     continue;
                 }

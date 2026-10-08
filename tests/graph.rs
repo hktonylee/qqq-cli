@@ -35,6 +35,25 @@ fn project() -> TempDir {
     dir
 }
 
+#[cfg(unix)]
+#[test]
+fn graph_human_stdout_terminal_width_clips_and_json_remains_complete() {
+    let output = Command::new("python3")
+        .arg(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/tests/graph_tty_pty.py"
+        ))
+        .arg(env!("CARGO_BIN_EXE_qqq"))
+        .output()
+        .unwrap();
+    assert!(
+        output.status.success(),
+        "{}\n{}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+}
+
 #[test]
 fn graph_separates_two_blockers_and_immediate_versus_transitive_impact() {
     let dir = project();

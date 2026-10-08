@@ -1239,6 +1239,7 @@ fn run(cli: Cli) -> Result<(Option<String>, bool)> {
             let columns = if matches!(
                 &format,
                 output::Format::Tasks
+                    | output::Format::Graph
                     | output::Format::PriorityTasks
                     | output::Format::OnelinePriorityTasks
             ) {
@@ -1254,8 +1255,6 @@ fn run(cli: Cli) -> Result<(Option<String>, bool)> {
 fn main() {
     let arguments: Vec<_> = std::env::args_os().collect();
     let mut agent_caller = None;
-    let requested_json = cli_error::requests_json(&arguments, &mut agent_caller);
-    errors::set_json_output(requested_json);
     let arguments = match aliases::expand(arguments, &mut agent_caller) {
         Ok(arguments) => arguments,
         Err(error) => {

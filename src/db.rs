@@ -142,7 +142,7 @@ pub struct Prerequisite {
     pub archived: Option<bool>,
 }
 
-#[derive(Serialize)]
+#[derive(Clone, Serialize)]
 pub struct Task {
     pub id: i64,
     pub description: String,

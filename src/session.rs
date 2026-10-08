@@ -15,10 +15,14 @@ pub struct Owner {
 
 /// Output defaults use caller context without resolving ownership or opening a DB.
 pub fn is_agent_caller() -> bool {
+    native_agent_context() || herdr::caller_is_agent()
+}
+
+/// Environment-only output hint; never probes process or orchestration state.
+pub fn native_agent_context() -> bool {
     ["CODEX_THREAD_ID", "CODEX_SESSION_ID"]
         .iter()
         .any(|name| env::var(name).is_ok_and(|value| !value.trim().is_empty()))
-        || herdr::caller_is_agent()
 }
 
 fn env_session(name: &str) -> Result<Option<String>> {

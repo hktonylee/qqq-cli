@@ -123,6 +123,11 @@ fn tui_dashboard_graph_inspector_preserves_drafts() {
 }
 
 #[test]
+fn tui_dashboard_graph_read_failure_and_recovery_keep_drafts_alive() {
+    dashboard_scenario("graph_failure");
+}
+
+#[test]
 fn tui_dashboard_named_views_preserve_open_dirty_task() {
     dashboard_scenario("views");
     dashboard_scenario("views_no_color");

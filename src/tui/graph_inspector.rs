@@ -41,6 +41,11 @@ impl Inspector {
             }
         }
     }
+    pub fn set_error(&mut self, error: &anyhow::Error, version: i64) {
+        self.version = Some(version);
+        self.report = None;
+        self.error = crate::output::clean(&format!("{error:#}"));
+    }
     pub fn key(&mut self, key: KeyEvent, height: usize) -> bool {
         if key.code == KeyCode::Esc
             || (key.modifiers.contains(KeyModifiers::CONTROL) && key.code == KeyCode::Char('c'))
