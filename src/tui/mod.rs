@@ -1166,6 +1166,7 @@ fn compose_inner(
                     id: task.id,
                     tags: &task.tags,
                     archived: task.archived,
+                    context_only: task.context_only,
                 })
                 .collect();
             panel::set_tag_ranges(&mut rows, &tag_tasks);

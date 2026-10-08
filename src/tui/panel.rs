@@ -32,6 +32,7 @@ pub struct TagTask<'a> {
     pub id: i64,
     pub tags: &'a [String],
     pub archived: bool,
+    pub context_only: bool,
 }
 
 /// Set tag byte ranges after description offsets; match only actual label prefixes.
@@ -41,6 +42,9 @@ pub fn set_tag_ranges(rows: &mut [ListRow], tasks: &[TagTask<'_>]) {
         .filter(|task| !task.tags.is_empty())
         .map(|task| {
             let mut prefix = if task.archived { "[archived] " } else { "" }.to_owned();
+            if task.context_only {
+                prefix.push_str("[context] ");
+            }
             let tag_start = prefix.len();
             for (index, tag) in task.tags.iter().enumerate() {
                 if index > 0 {

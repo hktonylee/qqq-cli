@@ -657,8 +657,10 @@ input; Ctrl+U clears it. Esc or Ctrl+C closes popup and preserves selection,
 draft, filter and focus. Successful jump clears filter and retains unsaved
 task/new/child drafts, including caret and editor scroll. Jumping to archived
 task enables archived rows for remaining dashboard session. Jumping to completed
-task reveals completed rows when hidden; other jumps and cancellation preserve
-that setting. Navigation saves no content and changes no task status or ownership.
+task reveals completed rows when hidden by the completion toggle or zero limit;
+other jumps and cancellation preserve that setting. Saved selectors and positive
+completed limits remain in effect: jump opens a task even if its list row stays
+hidden. Navigation saves no content and changes no task status or ownership.
 
 Ctrl-H focuses selected task's live Herdr agent and opens Herdr client using
 task's linked server. `Ctrl-H Herdr` appears in the shortcut bar only when the

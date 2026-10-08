@@ -65,6 +65,7 @@ fn task_tags_keep_color_across_status_selection_dirty_and_compact_rows() {
                         id: 2,
                         tags: &labels,
                         archived: false,
+                        context_only: false,
                     }],
                 );
                 let tag_x = 1 + if compact { 11 } else { 24 } + usize::from(dirty) * 4;
@@ -2050,9 +2051,11 @@ fn hotkey_footer_colors_shortcuts_and_clears_styles_for_messages() {
         for color in [true, false] {
             for (keys, message, error) in [
                 (render::DASHBOARD_KEYS, "", false),
+                (render::DASHBOARD_HERDR_KEYS, "", false),
                 (render::DASHBOARD_KEYS, "Ctrl-S save failed", true),
                 (render::DASHBOARD_KEYS, "Saved #1. New task", false),
                 (render::FILTER_KEYS, "", false),
+                (render::FILTER_HERDR_KEYS, "", false),
                 (render::KEYS, "", false),
                 (render::NAV_KEYS, "", false),
                 (render::ADD_KEYS, "", false),
@@ -2099,6 +2102,8 @@ fn hotkey_footer_colors_shortcuts_and_clears_styles_for_messages() {
                     let shortcut = message.is_empty()
                         && [
                             "Ctrl-S",
+                            "Ctrl-B",
+                            "Ctrl-H",
                             "Ctrl-L",
                             "Ctrl-K",
                             "Ctrl-P",

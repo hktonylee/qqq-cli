@@ -6,6 +6,47 @@ use panel::FilterTask;
 use std::collections::HashSet;
 
 #[test]
+fn context_ancestor_tags_skip_context_and_archive_metadata() {
+    for archived in [false, true] {
+        let prefix = if archived { "[archived] " } else { "" };
+        for tree in [
+            format!("1      New          {prefix}[context] [界 面] [bug] Literal"),
+            format!(
+                "1      New          {prefix}\n                    [context] \n                    [界 面] [bug] Literal"
+            ),
+        ] {
+            let mut rows = panel::rows(&tree, 90);
+            panel::set_dirty_markers(
+                &mut rows,
+                &[FilterTask {
+                    id: 1,
+                    parent_id: None,
+                    status: "new",
+                    description: "Literal",
+                }],
+                &HashSet::from([1]),
+                true,
+            );
+            panel::set_tag_ranges(
+                &mut rows,
+                &[panel::TagTask {
+                    id: 1,
+                    tags: &["界 面".into(), "bug".into()],
+                    archived,
+                    context_only: true,
+                }],
+            );
+            let colored: String = rows
+                .iter()
+                .filter_map(|row| row.tag_range.map(|(start, end)| &row.text[start..end]))
+                .collect();
+            assert_eq!(colored, "[界 面] [bug]", "{tree}");
+            assert!(rows.iter().all(|row| row.dirty));
+        }
+    }
+}
+
+#[test]
 fn tag_ranges_follow_real_unicode_labels_and_skip_bracket_descriptions() {
     let tasks: Vec<_> = (1..=4)
         .map(|id| FilterTask {
@@ -37,21 +78,26 @@ fn tag_ranges_follow_real_unicode_labels_and_skip_bracket_descriptions() {
                 id: 1,
                 tags: &labels,
                 archived: false,
+                context_only: false,
             },
             panel::TagTask {
                 id: 2,
                 tags: &[],
                 archived: false,
+                context_only: false,
             },
             panel::TagTask {
                 id: 3,
                 tags: &bug,
                 archived: true,
+
+                context_only: false,
             },
             panel::TagTask {
                 id: 4,
                 tags: &archived_label,
                 archived: false,
+                context_only: false,
             },
         ],
     );
@@ -98,6 +144,7 @@ fn tag_ranges_stop_before_preview_ellipsis() {
                 id: 1,
                 tags: &[format!("abcdefghijklmnopqrstuvwxyz{suffix}345")],
                 archived: false,
+                context_only: false,
             }],
         );
         assert_eq!(rows.len(), 3);

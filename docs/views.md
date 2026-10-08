@@ -126,3 +126,5 @@ Invalid catalog or failed selection keeps current view and drafts intact.
 Switching reapplies saved defaults plus explicit startup visibility overrides.
 Ctrl-T toggles completion visibility; turning on a saved zero limit reveals
 all completions. A positive active limit remains in effect while visible.
+Ctrl-K still opens a task hidden by saved selectors or a positive completion
+limit; its list row stays governed by those criteria.
