@@ -1,6 +1,6 @@
 # Editor Undo/Redo Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task inline. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task inline. Steps use checkbox (`- [x]`) syntax for tracking.
 
 **Goal:** Add Ctrl-Z undo/Ctrl-Y redo with exact draft atoms/caret and saved-task history.
 
@@ -16,7 +16,7 @@ Files: `tests/tui_undo_pty.py`, `tests/tui.rs`, `tests/tui_model.rs`.
 
 - [x] Run baseline `cargo test --locked --offline --test tui_model -- --test-threads=1`;
   32 passed, `/tmp/qqq-task-189-baseline.log`.
-- [ ] Add real-frame PTY helpers using shared decoder, separate stdout and temp DB.
+- [x] Add real-frame PTY helpers using shared decoder, separate stdout and temp DB.
   Seed saved task, paste one edit, Ctrl-Z then Ctrl-Y:
 
 ```python
@@ -29,39 +29,41 @@ send(b"\x19")
 wait_editor("Seed changed", len("Seed changed"))
 ```
 
-- [ ] Run focused PTY test; expect missing undo screen, not compile/setup failure.
-- [ ] Add model expectations for graphemes, atomic word/delete/paste/image,
+- [x] Run focused PTY test; expect missing undo screen, not compile/setup failure.
+- [x] Add model expectations for graphemes, atomic word/delete/paste/image,
   no-op redo, new-edit branch, seeds, bounds and saved image identity.
 
 ### 2. Reversible draft changes
 
 Files: `src/tui/draft.rs`, `tests/tui_model.rs`.
 
-- [ ] Add private edit record/history, bounded count/retained bytes. Apply inverse:
+- [x] Add private edit record/history, bounded count/retained bytes. Apply inverse:
 
 ```rust
 let replacement_len = change.atoms.len();
 let replacement = std::mem::take(&mut change.atoms);
 change.atoms = self.atoms.splice(change.start..change.start + change.replace, replacement).collect();
 change.replace = replacement_len;
-std::mem::swap(&mut self.cursor, &mut change.cursor);
-std::mem::swap(&mut self.next_image, &mut change.next_image);
+self.cursor = change.cursor;
+self.next_image = change.next_image;
+std::mem::swap(&mut change.cursor, &mut change.other_cursor);
+std::mem::swap(&mut change.next_image, &mut change.other_next_image);
 ```
 
-- [ ] Route insert/paste/image/Backspace/Delete/word deletion through one splice;
+- [x] Route insert/paste/image/Backspace/Delete/word deletion through one splice;
   calculate word range once. Keep old grapheme joining and atomic token behavior.
   Clear constructor/from_saved history after seed initialization.
-- [ ] `adopt_saved` verifies rendered candidate against saved description using
+- [x] `adopt_saved` verifies rendered candidate against saved description using
   pending image spans/new sorted refs. Convert current/history image atoms to
   stored refs, normalize stored legacy refs, clear staged tags, keep history.
   Snapshot mismatch returns false without mutation; caller loads fresh snapshot.
-- [ ] Run model suite; commit scoped verified implementation checkpoint.
+- [x] Run model suite; commit scoped verified implementation checkpoint.
 
 ### 3. Input/save integration and PTYs
 
 Files: `src/tui/mod.rs`, `tests/tui_undo_pty.py`, `tests/tui.rs`.
 
-- [ ] Handle Ctrl-Z/Y after all popup/filter guards. Set follow-caret only when
+- [x] Handle Ctrl-Z/Y after all popup/filter guards. Set follow-caret only when
   change succeeds; exhausted history reports `Nothing to undo/redo`.
 - [ ] When dashboard keeps saved task, pass previous draft through verified
   saved normalization before load_target. Clearing/new/accepted reload reset;
@@ -85,4 +87,19 @@ Files: `docs/reference.md`, `README.md`, this plan.
 
 ## Evidence
 
-Implementation pending. User selected keeping history after save.
+User selected keeping history after save.
+
+- Initial PTY RED: Ctrl-Z left edited text unchanged;
+  `/tmp/qqq-task-189-red-pty.log`.
+- Saved-state model RED: 40 passed, 2 expected failures;
+  `/tmp/qqq-task-189-model-red.log`. Model GREEN: 42 passed;
+  `/tmp/qqq-task-189-model-green.log`.
+- Post-save PTY RED: history lost after Ctrl-S;
+  `/tmp/qqq-task-189-save-red.log`. GREEN: color and plain scenarios passed;
+  `/tmp/qqq-task-189-save-green.log`.
+- Expanded PTYs: 5 tests / 12 scenarios passed, including parked buffers,
+  resize, popups/filter, empty-save failure, conflict keep/reload, exact paste
+  payload and stored image identity, new-task/add/edit save lifecycle;
+  `/tmp/qqq-task-189-expanded-pty-2.log`. Initial fixture failures corrected
+  view title, image cursor padding and already-blank exit expectations.
+- Broad checks, review, installation and queue completion pending.

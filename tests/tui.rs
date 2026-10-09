@@ -57,6 +57,31 @@ fn tui_editor_undo_redo_changes_draft_without_writing_db() {
     undo_scenario("text_no_color");
 }
 
+#[test]
+fn tui_editor_undo_redo_keeps_atomic_edits_and_buffers() {
+    undo_scenario("edits");
+    undo_scenario("buffers");
+    undo_scenario("resize");
+}
+
+#[test]
+fn tui_editor_undo_redo_ignores_modals_and_keeps_failed_save_history() {
+    undo_scenario("scopes");
+    undo_scenario("conflict");
+}
+
+#[test]
+fn tui_editor_undo_redo_reuses_saved_image_identity_and_paste_bytes() {
+    undo_scenario("tokens");
+}
+
+#[test]
+fn tui_editor_undo_redo_obeys_new_add_and_edit_lifecycles() {
+    for name in ["new", "open_new", "add", "edit"] {
+        undo_scenario(name);
+    }
+}
+
 fn dashboard_scenario(name: &str) {
     let output = Command::new("python3")
         .arg(concat!(

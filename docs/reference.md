@@ -578,6 +578,14 @@ draft, Ctrl-C exits, Ctrl-W deletes previous word on same line, Ctrl-V pastes
 clipboard text or image. Option+Left/Right moves cursor by word. Clipboard paste
 needs desktop clipboard support.
 
+Ctrl-Z undoes description edits; Ctrl-Y redoes them. Each text input, deletion,
+Ctrl-W word deletion or paste is one step, including image/pasteboard items.
+Undo restores content and caret; cursor movement and failed edits keep redo.
+Editing after undo clears redo. History holds up to 256 changes and 64 MiB of
+removed payloads, retaining one oversized change when necessary. Undo/redo
+changes only local description; Ctrl-S commits it. Filter and popup inputs have
+no description undo/redo.
+
 Built-in editors collapse pastes over 1,000 characters into one gold
 `[Pasted Content N chars]` item. Saving stores full payload in Markdown:
 
@@ -705,6 +713,12 @@ Ctrl-S explains removal and keeps draft without recreating task.
 Repeated Ctrl-C keeps confirmation open. Ctrl-V or terminal paste inserts text; pasting
 image file path attaches image. Saves commit immediately. TUI needs terminal
 and writes no stdout, including with `--json`.
+
+Undo/redo history survives Ctrl-S while same task stays open, including saved
+image references without another upload. Retained unsaved drafts carry their own
+history across navigation. Failed saves and cancelled conflicts keep history;
+accepted reload, discard, fresh task load or clearing to new draft starts fresh.
+Navigating away from a clean saved draft uses existing fresh-load behavior.
 
 Ctrl+P opens or restores child draft under selected task; header shows parent ID.
 Current edits stay retained. Each parent has separate child draft; return to parent

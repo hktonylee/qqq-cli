@@ -123,6 +123,7 @@ task to load it, scroll each pane, or use the keyboard:
 | --- | --- |
 | Shift+Up / Shift+Down | Move between tasks and a blank draft |
 | Ctrl+S | Save |
+| Ctrl+Z / Ctrl+Y | Undo / redo description edits; keep history after save |
 | Ctrl+D | Toggle task in bulk selection; `+` marks selected rows |
 | Ctrl+L | Edit task or new draft tags; retain unsaved drafts |
 | Ctrl+K | Go to task ID; retain unsaved drafts |
