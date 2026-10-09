@@ -891,7 +891,8 @@ close with Esc after the active filter clears. State changes
 require confirmation before running; priority and parent changes ask when draft has unsaved edits. Successful
 action refreshes task and list; rejected action keeps draft and shows DB error.
 Action error popup hides caret and ignores Up/Down. `j`/`k` scroll long messages;
-Esc or Enter closes popup and restores editor caret.
+Enter closes popup and restores prior editor or filter focus. Esc clears an active
+filter first; another Esc closes popup and restores editor caret.
 
 ## Dependencies and images
 

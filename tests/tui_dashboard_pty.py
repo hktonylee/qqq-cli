@@ -3894,25 +3894,58 @@ print(json.dumps({"result": result}))
             send(b"\x07a")
             wait_visible(lambda: "Archive task #2?" in visible.text() and "Lose draft?" in visible.text())
             send(b"y")
-            wait_visible(lambda: "Action error" in visible.text() and "Marker00" in visible.text()
-                         and not visible.pending and not visible.decoder.getstate()[0])
-            settle()
+
+            def wait_error_frame(predicate):
+                wait_visible(lambda: predicate() and not visible.cursor_visible
+                             and not visible.pending and not visible.decoder.getstate()[0]
+                             and screen.endswith(b"\x1b[?25l"))
+
+            wait_error_frame(lambda: "Action error" in visible.text() and "Marker00" in visible.text())
             original_popup = visible.text()
-            send(b"\x1b[B")
-            settle()
-            assert visible.text() == original_popup, "Down scrolled action error"
-            send(b"\x1b[A")
-            settle()
-            assert visible.text() == original_popup, "Up scrolled action error"
-            assert not visible.cursor_visible, "Read-only error showed editor caret"
             assert "Up/Down" not in visible.text() and "j/k Scroll" in visible.text()
             assert cli("list") == before_tasks
             send(b"j")
-            wait_visible(lambda: visible.text() != original_popup and not visible.cursor_visible
-                         and not visible.pending and not visible.decoder.getstate()[0])
+            wait_error_frame(lambda: visible.text() != original_popup)
+            first_scroll = visible.text()
+            send(b"j")
+            wait_error_frame(lambda: visible.text() not in (original_popup, first_scroll))
+            second_scroll = visible.text()
+            send(b"kk")
+            wait_error_frame(lambda: visible.text() == original_popup)
+            # j/k provide visible input barriers: delayed arrows cannot cancel each other.
+            send(b"\x1b[Bj")
+            wait_error_frame(lambda: visible.text() == first_scroll)
             send(b"k")
-            wait_visible(lambda: visible.text() == original_popup and not visible.cursor_visible
-                         and not visible.pending and not visible.decoder.getstate()[0])
+            wait_error_frame(lambda: visible.text() == original_popup)
+            send(b"j")
+            wait_error_frame(lambda: visible.text() == first_scroll)
+            send(b"\x1b[Aj")
+            wait_error_frame(lambda: visible.text() == second_scroll)
+            send(b"k")
+            wait_error_frame(lambda: visible.text() == first_scroll)
+            send(b"k")
+            wait_error_frame(lambda: visible.text() == original_popup)
+            send(b"\x1b")
+            wait_caret(lambda: "Action error" not in visible.text() and visible.cursor_visible
+                       and editor_line().rstrip() == "Local Second", (6, editor_row() + 1))
+
+            send(CTRL_SLASH + b"Second")
+            wait_caret(lambda: filter_text() == "Filter: Second", (14, 0))
+            send(b"\x07a")
+            wait_visible(lambda: "Archive task #2?" in visible.text() and "Lose draft?" in visible.text())
+            send(b"y")
+            wait_error_frame(lambda: "Action error" in visible.text() and "Marker00" in visible.text())
+            send(b"\r")
+            wait_caret(lambda: "Action error" not in visible.text() and visible.cursor_visible
+                       and filter_text() == "Filter: Second"
+                       and editor_line().rstrip() == "Local Second", (14, 0))
+            send(b"\x07a")
+            wait_visible(lambda: "Archive task #2?" in visible.text() and "Lose draft?" in visible.text())
+            send(b"y")
+            wait_error_frame(lambda: "Action error" in visible.text() and "Marker00" in visible.text())
+            send(b"\x1b")
+            wait_error_frame(lambda: "Action error" in visible.text()
+                             and not visible.text().splitlines()[0].startswith("Filter:"))
             send(b"\x1b")
             wait_caret(lambda: "Action error" not in visible.text() and visible.cursor_visible
                        and editor_line().rstrip() == "Local Second", (6, editor_row() + 1))

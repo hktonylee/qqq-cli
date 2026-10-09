@@ -754,7 +754,11 @@ fn action_popup_input_errors_and_warnings_keep_roles_and_plain_styles() {
                 let y = content.y + index as u16;
                 assert!(line(buffer, y).contains(&row.text));
                 let (foreground, bold) = match row.kind {
-                    PopupKind::Hint if row.text.starts_with("Tab ") => (Color::Gray, false),
+                    PopupKind::Hint
+                        if row.text.starts_with("Tab ") || row.text.starts_with("j/k ") =>
+                    {
+                        (Color::Gray, false)
+                    }
                     PopupKind::Heading
                     | PopupKind::Action
                     | PopupKind::SelectedAction
