@@ -690,7 +690,7 @@ fn action_popup_input_errors_and_warnings_keep_roles_and_plain_styles() {
         vec![
             PopupRow::new("Action error", PopupKind::Error),
             PopupRow::new("> quoted error", PopupKind::Error),
-            PopupRow::new("j/k Scroll  Esc", PopupKind::Hint),
+            PopupRow::new("Up/Down Esc", PopupKind::Hint),
         ],
         vec![
             PopupRow::new("Archive task #1?", PopupKind::Heading),
@@ -754,11 +754,7 @@ fn action_popup_input_errors_and_warnings_keep_roles_and_plain_styles() {
                 let y = content.y + index as u16;
                 assert!(line(buffer, y).contains(&row.text));
                 let (foreground, bold) = match row.kind {
-                    PopupKind::Hint
-                        if row.text.starts_with("Tab ") || row.text.starts_with("j/k ") =>
-                    {
-                        (Color::Gray, false)
-                    }
+                    PopupKind::Hint if row.text.starts_with("Tab ") => (Color::Gray, false),
                     PopupKind::Heading
                     | PopupKind::Action
                     | PopupKind::SelectedAction

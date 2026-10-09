@@ -653,7 +653,7 @@ fn tui_dashboard_task_actions() {
 }
 
 #[test]
-fn tui_dashboard_action_error_ignores_arrows_and_hides_caret() {
+fn tui_dashboard_action_error_scrolls_without_caret() {
     dashboard_scenario("action_error_arrows");
     dashboard_scenario("action_error_arrows_no_color");
 }

@@ -890,7 +890,7 @@ Reopen and Mark error confirmations preserve filters on Esc. Other menus/prompts
 close with Esc after the active filter clears. State changes
 require confirmation before running; priority and parent changes ask when draft has unsaved edits. Successful
 action refreshes task and list; rejected action keeps draft and shows DB error.
-Action error popup hides caret and ignores Up/Down. `j`/`k` scroll long messages;
+Action error popup hides caret. Up/Down and `j`/`k` scroll long messages;
 Enter closes popup and restores prior editor or filter focus. Esc clears an active
 filter first; another Esc closes popup and restores editor caret.
 
