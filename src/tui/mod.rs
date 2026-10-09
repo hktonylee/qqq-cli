@@ -1186,14 +1186,12 @@ fn compose_inner(
                 render::FILTER_HERDR_KEYS
             } else if filter_focused {
                 render::FILTER_KEYS
+            } else if dashboard && target_id.is_none() && draft_parent_id.is_some() {
+                render::DASHBOARD_CHILD_KEYS
             } else if dashboard && has_herdr_link {
                 render::DASHBOARD_HERDR_KEYS
             } else if dashboard && target_id.is_none() && bulk_selected.is_empty() {
-                if draft_parent_id.is_some() {
-                    render::DASHBOARD_CHILD_KEYS
-                } else {
-                    render::DASHBOARD_NEW_KEYS
-                }
+                render::DASHBOARD_NEW_KEYS
             } else if dashboard {
                 render::DASHBOARD_KEYS
             } else {

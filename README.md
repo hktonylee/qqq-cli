@@ -129,7 +129,7 @@ task to load it, scroll each pane, or use the keyboard:
 | Ctrl+K | Go to task ID; retain unsaved drafts |
 | Ctrl+B | Pick saved project view; retain editor and parked drafts |
 | Ctrl+O | Inspect task blockers and downstream impact; retain drafts |
-| Ctrl+P | Create a child of the selected task |
+| Ctrl+P | Create child of selected task; in child draft, insert parent `#ID` |
 | Ctrl+/ | Filter tasks |
 | Ctrl+G | Open bulk actions when tasks marked, otherwise task actions |
 | Ctrl+H | Open linked Herdr agent; shown only for tasks with a Herdr link |

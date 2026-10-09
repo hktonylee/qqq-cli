@@ -724,6 +724,10 @@ Ctrl+P opens or restores child draft under selected task; header shows parent ID
 Current edits stay retained. Each parent has separate child draft; return to parent
 and press Ctrl+P to continue it. Ctrl-S creates child with dependency;
 Enter or Shift+Enter inserts newline. Navigating away retains child parent context.
+Inside child draft editor, Ctrl+P inserts its parent's plain `#ID` at caret,
+without added spaces. One Ctrl+Z undoes insertion; cursor movement and deletion
+use normal text characters. Save stores exact text; references add no dependency
+or special display behavior. Filter input and popups leave draft unchanged.
 
 Ctrl+B opens saved project views from editor or filter. Arrows select, Enter
 applies, Esc/Ctrl+C cancels; PgUp/PgDn scrolls criteria. `tui --view NAME` opens
