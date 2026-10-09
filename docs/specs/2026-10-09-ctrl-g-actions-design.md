@@ -94,10 +94,12 @@ Any Ctrl-D marks -> Ctrl-G still opens bulk menu, including from unsaved draft.
 Keep current Add tags, Remove tags, Replace tags, Priority, Archive, Unarchive,
 Clear selection. Do not introduce bulk Complete, Mark error, Retry or Reopen.
 
-For mixed states, retain archive/unarchive preview with per-task blockers and
-whole-batch atomic apply. Archiving an unarchived In progress task rejects batch. Existing no-op
-archive/unarchive rows remain represented in preview. Blocker failure keeps
-selection, active draft and parked drafts intact. No silent partial apply.
+For mixed states, retain whole-selection validation before preview. First blocker
+rejects preview; TUI shows error popup. Valid selection gets preview and
+whole-batch atomic apply. Archiving an unarchived In progress task rejects batch.
+Existing no-op archive/unarchive rows remain represented in valid preview.
+Blocker failure keeps selection, active draft and parked drafts intact.
+No silent partial apply or new per-task blocker report.
 
 ## Examples
 
