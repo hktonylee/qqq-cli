@@ -250,6 +250,8 @@ fn tui_single_task_edit_recovers_from_content_conflicts() {
 fn tui_dashboard_actions_popup_keeps_background_and_restores_editor() {
     dashboard_scenario("actions_popup");
     dashboard_scenario("actions_popup_no_color");
+    dashboard_scenario("actions_popup_fragmented");
+    dashboard_scenario("actions_popup_fragmented_no_color");
 }
 
 #[test]

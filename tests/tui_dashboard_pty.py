@@ -31,7 +31,7 @@ CTRL_P = b"\x10"
 with tempfile.TemporaryDirectory(prefix="qqq-dashboard-test-") as folder:
     env = dict(os.environ, HOME=folder, TERM="xterm-256color")
     env.pop("NO_COLOR", None)
-    if scenario in ("no_color", "pasteboard_no_color", "filter_no_color", "details_no_color", "actions_popup_no_color", "wide_layout_no_color", "menu_arrows_no_color", "filter_escape_empty_no_color", "filter_ctrl_c_empty_no_color", "compact_layout_no_color", "handoff_hint_no_color", "menu_retry_new_no_color", "menu_retry_error_no_color", "content_conflict_no_color", "details_assignment_no_color"):
+    if scenario in ("no_color", "pasteboard_no_color", "filter_no_color", "details_no_color", "actions_popup_no_color", "actions_popup_fragmented_no_color", "wide_layout_no_color", "menu_arrows_no_color", "filter_escape_empty_no_color", "filter_ctrl_c_empty_no_color", "compact_layout_no_color", "handoff_hint_no_color", "menu_retry_new_no_color", "menu_retry_error_no_color", "content_conflict_no_color", "details_assignment_no_color"):
         env["NO_COLOR"] = "1"
     elif scenario == "dumb":
         env["TERM"] = "dumb"
@@ -377,6 +377,8 @@ print(json.dumps({"result": result}))
         screen[:] = b""
         visible_at_clear[0] = visible.text()
 
+    read_size = 65536
+
     def capture(data):
         screen.extend(data)
         visible.feed(data)
@@ -395,7 +397,7 @@ print(json.dumps({"result": result}))
             )
             if select.select([master], [], [], 0.05)[0]:
                 try:
-                    capture(os.read(master, 65536))
+                    capture(os.read(master, read_size))
                 except OSError as error:
                     raise AssertionError(f"Editor exited before {needle!r}") from error
             assert child.poll() is None, f"Editor exited before {needle!r}: {screen[-2000:]!r}"
@@ -405,7 +407,7 @@ print(json.dumps({"result": result}))
         while not predicate():
             assert time.monotonic() < deadline, f"Visible screen stalled, cursor={visible.x},{visible.y}, bytes={screen[-500:]!r}:\n{visible.text()}"
             if select.select([master], [], [], 0.05)[0]:
-                capture(os.read(master, 65536))
+                capture(os.read(master, read_size))
             assert child.poll() is None, f"Editor exited before visible state: {screen[-2000:]!r}\n{visible.text()}"
 
     def wait_frame(predicate):
@@ -430,7 +432,7 @@ print(json.dumps({"result": result}))
             assert time.monotonic() < deadline, "Terminal input timed out"
             readable, writable, _ = select.select([master], [master], [], 0.05)
             if readable:
-                capture(os.read(master, 65536))
+                capture(os.read(master, read_size))
             if writable:
                 remaining = remaining[os.write(master, remaining):]
 
@@ -524,7 +526,7 @@ print(json.dumps({"result": result}))
     def settle():
         time.sleep(0.1)
         while select.select([master], [], [], 0)[0]:
-            capture(os.read(master, 65536))
+            capture(os.read(master, read_size))
 
     try:
         wait_visible(lambda: 'Task Editor - New Task' in editor_title())
@@ -2890,16 +2892,20 @@ print(json.dumps({"result": result}))
             clear_capture()
             send(b"\x1b[1;2A")
             wait_visible(lambda: "Task #1 (Completed)" in editor_title())
-        elif scenario in ("actions_popup", "actions_popup_no_color"):
+        elif scenario.startswith("actions_popup"):
             initial_tasks = cli("list")
+            # Force transport fragmentation to expose intermediate paint cursors.
+            if "fragmented" in scenario:
+                read_size = 1
             send(b"\x1b[1;2A")
-            wait_visible(lambda: "Task #2 (New)" in editor_title()
-                         and (visible.x, visible.y) == (6, editor_row() + 1))
+            wait_frame(lambda: "Task #2 (New)" in editor_title()
+                       and editor_line().startswith("Second")
+                       and visible.text().splitlines()[-1].startswith("Ctrl-S Save  Ctrl-D Select"))
             before_popup = visible.text().splitlines()
             send(b"\x07")
-            wait_visible(lambda: visible.text().splitlines()[6][12] == "┌"
-                         and "Task actions #2" in visible.text().splitlines()[7]
-                         and visible.text().splitlines()[17][59] == "┘")
+            wait_caret(lambda: visible.text().splitlines()[6][12] == "┌"
+                       and "Task actions #2" in visible.text().splitlines()[7]
+                       and visible.text().splitlines()[17][59] == "┘", (13, 8))
             popup_rows = visible.text().splitlines()
             menu_labels = ["c Complete", "e Mark error", "o Reopen", "p Priority",
                            "d Set parent", "a Archive"]
@@ -2920,29 +2926,24 @@ print(json.dumps({"result": result}))
             fcntl.ioctl(slave, termios.TIOCSWINSZ, struct.pack("HHHH", 30, 90, 0, 0))
             visible.resize(90, 30)
             os.kill(child.pid, signal.SIGWINCH)
-            wait_visible(lambda: visible.text().splitlines()[9][21] == "┌"
-                         and "Task actions #2" in visible.text().splitlines()[10]
-                         and visible.text().splitlines()[20][68] == "┘"
-                         and (visible.x, visible.y) == (22, 11))
+            wait_caret(lambda: visible.text().splitlines()[9][21] == "┌"
+                       and "Task actions #2" in visible.text().splitlines()[10]
+                       and visible.text().splitlines()[20][68] == "┘", (22, 11))
             settle()
             send(b"p")
-            wait_visible(lambda: "Priority task #2" in visible.text()
-                         and (visible.x, visible.y) == (24, 15))
+            wait_caret(lambda: "Priority task #2" in visible.text(), (24, 15))
             send(b"-9")
-            wait_visible(lambda: "Priority task #2" in visible.text()
-                         and "> -9" in visible.text()
-                         and (visible.x, visible.y) == (26, 15))
+            wait_caret(lambda: "Priority task #2" in visible.text()
+                       and "> -9" in visible.text(), (26, 15))
             assert "c Complete" not in visible.text(), visible.text()
             send(b"\x7f\x7f\x1b[200~" + b" " * 50 + b"5\x1b[201~")
-            wait_visible(lambda: visible.text().splitlines()[15][66] == "5"
-                         and (visible.x, visible.y) == (67, 15))
+            wait_caret(lambda: visible.text().splitlines()[15][66] == "5", (67, 15))
             send(b"\x1b")
-            wait_visible(lambda: "Task #2 (New)" in editor_title()
-                         and editor_line().startswith("Second")
-                         and (visible.x, visible.y) == (6, editor_row() + 1)
-                         and "Priority task #2" not in visible.text())
+            wait_frame(lambda: "Task #2 (New)" in editor_title()
+                       and editor_line().startswith("Second")
+                       and "Priority task #2" not in visible.text())
             assert cli("list") == initial_tasks
-            if scenario == "actions_popup_no_color":
+            if scenario.endswith("no_color"):
                 assert b"\x1b[38;" not in screen and b"\x1b[48;" not in screen, screen[-2000:]
         elif scenario.startswith("menu_error_"):
             task_id = 4 if scenario == "menu_error_new" else 1
