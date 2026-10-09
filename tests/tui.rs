@@ -368,6 +368,12 @@ fn tui_dashboard_ctrl_p_opens_child_draft_with_selected_parent() {
 }
 
 #[test]
+fn tui_dashboard_child_parent_reference_inserts_plain_text_at_caret() {
+    dashboard_scenario("child_reference");
+    dashboard_scenario("child_reference_no_color");
+}
+
+#[test]
 fn tui_dashboard_shift_enter_inserts_newline() {
     dashboard_scenario("shift_enter_text");
 }

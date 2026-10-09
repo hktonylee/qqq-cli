@@ -1189,7 +1189,11 @@ fn compose_inner(
             } else if dashboard && has_herdr_link {
                 render::DASHBOARD_HERDR_KEYS
             } else if dashboard && target_id.is_none() && bulk_selected.is_empty() {
-                render::DASHBOARD_NEW_KEYS
+                if draft_parent_id.is_some() {
+                    render::DASHBOARD_CHILD_KEYS
+                } else {
+                    render::DASHBOARD_NEW_KEYS
+                }
             } else if dashboard {
                 render::DASHBOARD_KEYS
             } else {
@@ -2443,7 +2447,14 @@ fn compose_inner(
                         .modifiers
                         .intersects(KeyModifiers::ALT | KeyModifiers::SUPER)
                 {
-                    if let Some(parent) = target_id {
+                    if let Some(parent) = draft_parent_id.filter(|_| target_id.is_none()) {
+                        if !filter_focused {
+                            draft.insert(&format!("#{parent}"));
+                            editor_follow_cursor = true;
+                            message.clear();
+                            message_is_error = false;
+                        }
+                    } else if let Some(parent) = target_id {
                         let target = Target::New {
                             parent_id: Some(parent),
                         };

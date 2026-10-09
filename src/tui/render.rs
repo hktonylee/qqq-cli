@@ -12,6 +12,7 @@ pub const KEYS: &str = "Ctrl-S Save  Esc Cancel  Ctrl-V Paste";
 pub const NAV_KEYS: &str = "Ctrl-S Save  Shift-Up/Dn Switch Tasks  Esc Cancel";
 pub const ADD_KEYS: &str = "Ctrl-S Save  Shift-Up/Dn Switch Tasks  Esc/Ctrl-C Exit";
 pub const DASHBOARD_NEW_KEYS: &str = "Ctrl-S Save  Ctrl-L Tags  Ctrl-K Go to Task  Ctrl-P Create Child  Ctrl-B Views  Ctrl-G Menu  Shift-Up/Dn Switch Tasks  Ctrl+/ Filter";
+pub const DASHBOARD_CHILD_KEYS: &str = "Ctrl-S Save  Ctrl-L Tags  Ctrl-K Go to Task  Ctrl-P Parent Ref  Ctrl-B Views  Ctrl-G Menu  Shift-Up/Dn Switch Tasks  Ctrl+/ Filter";
 pub const DASHBOARD_KEYS: &str = "Ctrl-S Save  Ctrl-D Select  Ctrl-G Menu  Ctrl-L Tags  Ctrl-K Go to Task  Ctrl-P Create Child  Ctrl-B Views  Shift-Up/Dn Switch Tasks  Ctrl+/ Filter  Ctrl-O Graph";
 pub const DASHBOARD_HERDR_KEYS: &str = "Ctrl-S Save  Ctrl-H Herdr  Ctrl-D Select  Ctrl-G Menu  Ctrl-L Tags  Ctrl-K Go to Task  Ctrl-P Create Child  Ctrl-B Views  Shift-Up/Dn Switch Tasks  Ctrl+/ Filter  Ctrl-O Graph";
 pub const FILTER_KEYS: &str = "Type to Filter  Ctrl-D Select  Ctrl-G Menu  Ctrl-L Tags  Ctrl-K Jump  Ctrl-B Views  Ctrl-T Completed  Backspace Edit  Esc Clear/Close  Tab/Enter Editor  Ctrl-O Graph";

@@ -31,6 +31,8 @@ CTRL_P = b"\x10"
 with tempfile.TemporaryDirectory(prefix="qqq-dashboard-test-") as folder:
     env = dict(os.environ, HOME=folder, TERM="xterm-256color")
     env.pop("NO_COLOR", None)
+    if scenario == "child_reference_no_color":
+        env["NO_COLOR"] = "1"
     if scenario in ("no_color", "pasteboard_no_color", "filter_no_color", "details_no_color", "actions_popup_no_color", "actions_popup_fragmented_no_color", "wide_layout_no_color", "menu_arrows_no_color", "filter_escape_empty_no_color", "filter_ctrl_c_empty_no_color", "compact_layout_no_color", "handoff_hint_no_color", "menu_retry_new_no_color", "menu_retry_error_no_color", "content_conflict_no_color", "details_assignment_no_color"):
         env["NO_COLOR"] = "1"
     elif scenario == "dumb":
@@ -2744,6 +2746,36 @@ print(json.dumps({"result": result}))
             wait_visible(lambda: "Saved #2" in visible.text().splitlines()[-1])
             assert cli("show", "2")["task"]["description"] == "Second\ntail"
             assert len(cli("list")) == 2
+        elif scenario.startswith("child_reference"):
+            initial = cli("list")
+            send(b"\x1b[1;2A")
+            wait_caret(lambda: "Task #2 (New)" in editor_title(), (6, editor_row() + 1))
+            send(CTRL_P)
+            wait_caret(lambda: "New Task (parent #2)" in editor_title(), (0, editor_row() + 1))
+            send(b"Before  after\x01" + b"\x1b[C" * 7)
+            wait_caret(lambda: editor_line().rstrip() == "Before  after", (7, editor_row() + 1))
+            paint_start = len(screen)
+            send(CTRL_P)
+            wait_caret(lambda: editor_line().rstrip() == "Before #2 after", (9, editor_row() + 1))
+            assert "[*]" in editor_title()
+            assert "Ctrl-P Parent Ref" in visible.text().splitlines()[-1]
+            assert cli("list") == initial
+            if scenario.endswith("no_color"):
+                paint = screen[paint_start:]
+                assert b"\x1b[38;" not in paint and b"\x1b[48;" not in paint
+            send(b"\x1a")
+            wait_caret(lambda: editor_line().rstrip() == "Before  after", (7, editor_row() + 1))
+            send(b"\x19")
+            wait_caret(lambda: editor_line().rstrip() == "Before #2 after", (9, editor_row() + 1))
+            send(b"\x7f")
+            wait_caret(lambda: editor_line().rstrip() == "Before # after", (8, editor_row() + 1))
+            send(b"\x1a\x13")
+            wait_caret(lambda: "Task #3 (New)" in editor_title()
+                       and visible.text().splitlines()[-1].startswith("Saved #3")
+                       and editor_line().rstrip() == "Before #2 after", (15, editor_row() + 1))
+            saved = cli("show", "3")["task"]
+            assert saved["description"] == "Before #2 after" and saved["parent_id"] == 2
+
         elif scenario.startswith("child"):
             if scenario == "child_no_selection":
                 send(CTRL_P)
@@ -2763,7 +2795,7 @@ print(json.dumps({"result": result}))
                          and editor_line().strip() == ""
                          and (visible.x, visible.y) == (0, editor_row() + 1))
             assert len(cli("list")) == 2
-            assert "Ctrl-P Create Child" in visible.text().splitlines()[-1], visible.text()
+            assert "Ctrl-P Parent Ref" in visible.text().splitlines()[-1], visible.text()
             if scenario == "child_no_selection":
                 send(b"\x1b[1;2A")
                 wait_visible(lambda: "Task #2 (New)" in editor_title())
