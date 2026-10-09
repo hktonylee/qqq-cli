@@ -653,6 +653,12 @@ fn tui_dashboard_task_actions() {
 }
 
 #[test]
+fn tui_dashboard_action_error_ignores_arrows_and_hides_caret() {
+    dashboard_scenario("action_error_arrows");
+    dashboard_scenario("action_error_arrows_no_color");
+}
+
+#[test]
 fn tui_dashboard_preflight_fails_absent_owner_and_reopen_recovers() {
     for scenario in [
         "orphan_reopen",

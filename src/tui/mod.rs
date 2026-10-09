@@ -409,7 +409,7 @@ fn action_lines(ui: &ActionUi, width: usize, height: usize) -> Vec<render::Popup
                     .take(available)
                     .map(|text| PopupRow::new(text, PopupKind::Error)),
             );
-            lines.push(PopupRow::new("Up/Down Esc", PopupKind::Hint));
+            lines.push(PopupRow::new("j/k Scroll  Esc", PopupKind::Hint));
             lines
         }
     }
@@ -1387,7 +1387,7 @@ fn compose_inner(
                                 &confirmation,
                                 Some(Confirmation::Action { action, .. })
                                     if action.is_completion() || action.is_reopening() || action.is_error_marking()
-                            ),
+                            ) || matches!(&action_ui, Some(ActionUi::Error { .. })),
                             details: target_id.map(|_| dashboard::DetailsView {
                                 rows: &details_rows,
                                 top: &mut details_top,
@@ -2401,11 +2401,11 @@ fn compose_inner(
                         },
                         ActionUi::Error { text, mut top } => match key.code {
                             KeyCode::Esc | KeyCode::Enter => (),
-                            KeyCode::Up | KeyCode::Char('k') => {
+                            KeyCode::Char('k') => {
                                 top = top.saturating_sub(1);
                                 action_ui = Some(ActionUi::Error { text, top });
                             }
-                            KeyCode::Down | KeyCode::Char('j') => {
+                            KeyCode::Char('j') => {
                                 top = top.saturating_add(1);
                                 action_ui = Some(ActionUi::Error { text, top });
                             }

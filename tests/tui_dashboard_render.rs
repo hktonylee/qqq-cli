@@ -690,7 +690,7 @@ fn action_popup_input_errors_and_warnings_keep_roles_and_plain_styles() {
         vec![
             PopupRow::new("Action error", PopupKind::Error),
             PopupRow::new("> quoted error", PopupKind::Error),
-            PopupRow::new("Up/Down Esc", PopupKind::Hint),
+            PopupRow::new("j/k Scroll  Esc", PopupKind::Hint),
         ],
         vec![
             PopupRow::new("Archive task #1?", PopupKind::Heading),

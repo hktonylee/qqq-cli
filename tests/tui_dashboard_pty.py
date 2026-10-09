@@ -33,6 +33,8 @@ with tempfile.TemporaryDirectory(prefix="qqq-dashboard-test-") as folder:
     env.pop("NO_COLOR", None)
     if scenario == "child_reference_no_color":
         env["NO_COLOR"] = "1"
+    if scenario == "action_error_arrows_no_color":
+        env["NO_COLOR"] = "1"
     if scenario in ("no_color", "pasteboard_no_color", "filter_no_color", "details_no_color", "actions_popup_no_color", "actions_popup_fragmented_no_color", "wide_layout_no_color", "menu_arrows_no_color", "filter_escape_empty_no_color", "filter_ctrl_c_empty_no_color", "compact_layout_no_color", "handoff_hint_no_color", "menu_retry_new_no_color", "menu_retry_error_no_color", "content_conflict_no_color", "details_assignment_no_color"):
         env["NO_COLOR"] = "1"
     elif scenario == "dumb":
@@ -3129,7 +3131,7 @@ print(json.dumps({"result": result}))
             def modal_ready(title, hint):
                 wait_visible(lambda: title in visible.text() and hint in visible.text()
                              and not visible.pending
-                             and (not visible.cursor_visible if title.startswith("Mark error task")
+                             and (not visible.cursor_visible if title.startswith(("Mark error task", "Action error"))
                                   else screen.endswith(f"\x1b[{visible.y + 1};{visible.x + 1}H".encode())))
 
             def error_prompt(arrows=False):
@@ -3186,7 +3188,7 @@ print(json.dumps({"result": result}))
                 initial_detail = cli("show", "1")
             send(b"y")
             if scenario in ("menu_error_rejected", "menu_error_live", "menu_error_new"):
-                modal_ready("Action error", "Up/Down Esc")
+                modal_ready("Action error", "j/k Scroll  Esc")
                 assert cli("show", str(task_id)) == initial_detail
                 send(b"\x1b")
                 wait_frame(lambda: "Action error" not in visible.text()
@@ -3880,6 +3882,44 @@ print(json.dumps({"result": result}))
             assert cli("show", "5")["task"]["archived"] is False
             assert child.poll() is None
             assert not select.select([child.stdout], [], [], 0)[0], "TUI wrote stdout"
+        elif scenario.startswith("action_error_arrows"):
+            before_tasks = cli("list")
+            send(b"\x1b[1;2A")
+            wait_caret(lambda: "Task #2 (New)" in editor_title(), (6, editor_row() + 1))
+            send(b"\x01\x1b[200~Local \x1b[201~")
+            wait_caret(lambda: editor_line().rstrip() == "Local Second", (6, editor_row() + 1))
+            error = " ".join(f"Marker{index:02} " + "x" * 45 for index in range(40))
+            with sqlite3.connect(Path(folder) / ".qqq" / "qqq.db") as db:
+                db.execute(f"CREATE TRIGGER reject_archive BEFORE UPDATE OF archived ON tasks WHEN NEW.id=2 BEGIN SELECT RAISE(ABORT, '{error}'); END")
+            send(b"\x07a")
+            wait_visible(lambda: "Archive task #2?" in visible.text() and "Lose draft?" in visible.text())
+            send(b"y")
+            wait_visible(lambda: "Action error" in visible.text() and "Marker00" in visible.text()
+                         and not visible.pending and not visible.decoder.getstate()[0])
+            settle()
+            original_popup = visible.text()
+            send(b"\x1b[B")
+            settle()
+            assert visible.text() == original_popup, "Down scrolled action error"
+            send(b"\x1b[A")
+            settle()
+            assert visible.text() == original_popup, "Up scrolled action error"
+            assert not visible.cursor_visible, "Read-only error showed editor caret"
+            assert "Up/Down" not in visible.text() and "j/k Scroll" in visible.text()
+            assert cli("list") == before_tasks
+            send(b"j")
+            wait_visible(lambda: visible.text() != original_popup and not visible.cursor_visible
+                         and not visible.pending and not visible.decoder.getstate()[0])
+            send(b"k")
+            wait_visible(lambda: visible.text() == original_popup and not visible.cursor_visible
+                         and not visible.pending and not visible.decoder.getstate()[0])
+            send(b"\x1b")
+            wait_caret(lambda: "Action error" not in visible.text() and visible.cursor_visible
+                       and editor_line().rstrip() == "Local Second", (6, editor_row() + 1))
+            assert cli("list") == before_tasks
+            send(b"\x1a")
+            wait_caret(lambda: editor_line().rstrip() == "Second", (0, editor_row() + 1))
+
         elif scenario == "actions_rejected":
             def rejected_action(label, task_id, letter, prompt, error, before_confirm=None):
                 clear_capture()
