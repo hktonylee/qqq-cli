@@ -68,17 +68,17 @@ Files: `src/tui/mod.rs`, `tests/tui_undo_pty.py`, `tests/tui.rs`.
 - [ ] When dashboard keeps saved task, pass previous draft through verified
   saved normalization before load_target. Clearing/new/accepted reload reset;
   parked unsaved drafts retain history by existing move ownership.
-- [ ] Cover text/Unicode, caret/delete/word, branch, save, image/paste bytes,
+- [x] Cover text/Unicode, caret/delete/word, branch, save, image/paste bytes,
   buffers, modal/filter, failed save/conflict, add/edit, no-color/compact/resize.
   Expect current DB unchanged until explicit Ctrl-S; saved images never duplicate.
-- [ ] Run focused PTYs/model, existing TUI/render/DB checks; commit feature.
+- [x] Run focused PTYs/model, existing TUI/render/DB checks; commit feature.
 
 ### 4. Documentation and completion
 
 Files: `docs/reference.md`, `README.md`, this plan.
 
-- [ ] Document keys, one-input edit steps, save/history/reset scope and bounds.
-- [ ] Run full locked/offline serial tests, fmt, strict all-target Clippy, release.
+- [x] Document keys, one-input edit steps, save/history/reset scope and bounds.
+- [x] Run full locked/offline serial tests, fmt, strict all-target Clippy, release.
   Request independent read-only review; fix important findings with focused tests.
 - [ ] Rebase current master, fast-forward clean root, install current qqq.
   Run installed undo PTYs/compatibility; compare release/install SHA; doctor.
@@ -102,7 +102,7 @@ User selected keeping history after save.
   payload and stored image identity, new-task/add/edit save lifecycle;
   `/tmp/qqq-task-189-expanded-pty-2.log`. Initial fixture failures corrected
   view title, image cursor padding and already-blank exit expectations.
-- Broad checks, review, installation and queue completion pending.
+- Installation and queue completion pending.
 - Initial full suite: 861 tests across 47 binaries passed;
   `/tmp/qqq-task-189-full.log`.
 - Review found post-save race: same-name image appended by another writer could
@@ -115,3 +115,10 @@ User selected keeping history after save.
   `/tmp/qqq-task-189-race-pty-2.log`. Resize fixture waits for settled resized
   frame before keys; sending key concurrently with SIGWINCH caused one lost-key
   fixture failure in prior run.
+
+- Final combined verification on `0264088`: 863 tests across 47 binaries passed;
+  `/tmp/qqq-task-189-full-final.log`. Formatting, strict all-target Clippy and
+  optimized release build passed; `/tmp/qqq-task-189-fmt.log`,
+  `/tmp/qqq-task-189-clippy.log`, `/tmp/qqq-task-189-release.log`.
+- Independent read-only review confirmed committed-revision race fixed in
+  `0264088`; no remaining actionable findings. Reviewer did not run tests.

@@ -16,7 +16,8 @@ User explicitly chose to keep history after Ctrl-S while same task stays open.
   fresh history; existing clean-buffer navigation policy remains unchanged.
 - Save keeps history when editor keeps saved task open. Normalize newly stored
   image refs in active draft and affected history, preserving atom positions.
-  Verify candidate content exactly matches saved snapshot before carrying history;
+  Require snapshot revision to match actual revision returned by save transaction,
+  then verify candidate content exactly matches saved snapshot before carrying history;
   unexpected external reload starts fresh history. Undo itself never changes DB,
   revision, tags, ownership or task status. Failed saves/conflict cancellation keep
   history; accepted conflict reload starts fresh. Saving undone text uses existing
