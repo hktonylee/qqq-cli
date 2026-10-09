@@ -4,3 +4,4 @@
 .qqq-upgrades/
 qqq.db
 qqq.db-*
+__pycache__/

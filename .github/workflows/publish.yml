@@ -23,6 +23,7 @@ concurrency:
 
 env:
   CARGO_TERM_COLOR: always
+  PYTHONDONTWRITEBYTECODE: "1"
 
 jobs:
   publish:
