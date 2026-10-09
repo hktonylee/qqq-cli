@@ -2530,15 +2530,19 @@ fn compose_inner(
                     }
                     continue;
                 }
-                if key.modifiers.contains(KeyModifiers::SHIFT)
-                    && !matches!(mode, Mode::Edit { .. })
+                let shift_navigation = key.modifiers.contains(KeyModifiers::SHIFT)
+                    && !key.modifiers.intersects(
+                        KeyModifiers::CONTROL | KeyModifiers::ALT | KeyModifiers::SUPER,
+                    )
+                    && matches!(key.code, KeyCode::Up | KeyCode::Down);
+                let control_navigation = control
                     && !key
                         .modifiers
-                        .intersects(KeyModifiers::CONTROL | KeyModifiers::ALT | KeyModifiers::SUPER)
-                    && matches!(key.code, KeyCode::Up | KeyCode::Down)
-                {
+                        .intersects(KeyModifiers::ALT | KeyModifiers::SUPER)
+                    && matches!(key.code, KeyCode::Char(',' | '.'));
+                if !matches!(mode, Mode::Edit { .. }) && (shift_navigation || control_navigation) {
                     if let Some(db) = mode.db() {
-                        let older = key.code == KeyCode::Up;
+                        let older = matches!(key.code, KeyCode::Up | KeyCode::Char(','));
                         match adjacent_target(
                             db,
                             target_id,

@@ -338,6 +338,16 @@ fn tui_dashboard_navigation_follows_displayed_tree_order() {
 }
 
 #[test]
+fn tui_dashboard_ctrl_punctuation_follows_tree_order_without_footer_hints() {
+    dashboard_scenario("ctrl_punctuation_tree");
+}
+
+#[test]
+fn tui_dashboard_ctrl_punctuation_preserves_buffers_and_filter() {
+    dashboard_scenario("ctrl_punctuation_buffers");
+}
+
+#[test]
 fn tui_dashboard_cursor_ends_loaded_and_saved_tasks() {
     dashboard_scenario("cursor_end");
 }

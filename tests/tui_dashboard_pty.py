@@ -172,7 +172,7 @@ print(json.dumps({"result": {"pane": pane}}))
         cli("message", "2", "\n".join(f"Message line {index:02}" for index in range(1, 31)))
         for index in range(3, 21):
             cli("add", f"Task {index}")
-    elif scenario == "tree_navigation":
+    elif scenario in ("tree_navigation", "ctrl_punctuation_tree"):
         cli("add", "Parent")
         cli("add", "Other root")
         cli("add", "Child\nWrapped child detail", "--parent", "1")
@@ -561,7 +561,7 @@ print(json.dumps({"result": result}))
                              and editor_line().startswith("Second"))
                 settle()
                 assert b"\x1b[38;" not in screen and b"\x1b[48;" not in screen, screen[-2000:]
-        if not scenario.startswith(("wide_layout", "menu_retry_", "menu_error_", "long_description_", "completed_toggle", "force_complete", "force_reopen", "force_error", "orphan_reopen", "views_startup", "views_visibility", "scroll_multiline")) and scenario not in ("buffers_scroll", "handoff_scroll", "ctrl_c_new_scroll", "live_refresh_scroll", "tree_navigation", "scroll", "wheel", "click", "click_filter", "workflow", "workflow_empty", "workflow_status", "filter", "filter_no_color", "archive_hidden", "archive_included", "actions_basic", "actions_rejected", "actions_hidden", "jump_archived"):
+        if not scenario.startswith(("wide_layout", "menu_retry_", "menu_error_", "long_description_", "completed_toggle", "force_complete", "force_reopen", "force_error", "orphan_reopen", "views_startup", "views_visibility", "scroll_multiline")) and scenario not in ("buffers_scroll", "handoff_scroll", "ctrl_c_new_scroll", "live_refresh_scroll", "tree_navigation", "ctrl_punctuation_tree", "scroll", "wheel", "click", "click_filter", "workflow", "workflow_empty", "workflow_status", "filter", "filter_no_color", "archive_hidden", "archive_included", "actions_basic", "actions_rejected", "actions_hidden", "jump_archived"):
             read_until(b"Second")
             assert "First" in visible.text() and "Second" in visible.text(), visible.text()
         assert not select.select([child.stdout], [], [], 0)[0], "TUI wrote stdout while open"
@@ -2563,19 +2563,59 @@ print(json.dumps({"result": result}))
             wait_visible(lambda: "Refreshed row" in visible.text().splitlines()[3])
             assert "Task #20 (" in editor_title()
             assert editor_line().startswith("Task 20")
-        elif scenario == "tree_navigation":
-            expected = (2, 3, 1)
-            for task_id in expected:
-                clear_capture()
-                send(b"\x1b[1;2A")
-                wait_visible(lambda: f"Task #{task_id} (" in editor_title())
-            clear_capture()
-            send(b"\x1b[1;2B")
-            wait_visible(lambda: "Task #3 (" in editor_title())
-            send(b"\x1b[1;2B")
+        elif scenario in ("tree_navigation", "ctrl_punctuation_tree"):
+            keys = ((b"\x1b[44;5u", b"\x1b[46;5u"),
+                    (b"\x1b[44;5:1u", b"\x1b[46;5:2u")) if scenario == "ctrl_punctuation_tree" else (
+                        (b"\x1b[1;2A", b"\x1b[1;2B"),)
+            for older, newer in keys:
+                for task_id in (2, 3, 1):
+                    clear_capture()
+                    send(older)
+                    wait_visible(lambda: f"Task #{task_id} (" in editor_title())
+                send(older)
+                wait_visible(lambda: visible.text().splitlines()[-1].startswith("No older task"))
+                for task_id in (3, 2):
+                    send(newer)
+                    wait_visible(lambda: f"Task #{task_id} (" in editor_title())
+                send(newer)
+                wait_visible(lambda: "New Task" in editor_title())
+                send(newer)
+                wait_visible(lambda: visible.text().splitlines()[-1].startswith("Already at new task"))
+            send(b",.")
+            wait_visible(lambda: editor_line().startswith(",.")
+                         and visible.text().splitlines()[-1].startswith("Ctrl-S Save"))
+            fcntl.ioctl(slave, termios.TIOCSWINSZ, struct.pack("HHHH", 24, 220, 0, 0))
+            visible.resize(220, 24)
+            os.kill(child.pid, signal.SIGWINCH)
+            wait_visible(lambda: "Shift-Up/Dn Switch Tasks" in visible.text().splitlines()[-1]
+                         and "Ctrl+/ Filter" in visible.text().splitlines()[-1])
+            assert "Ctrl+," not in visible.text().splitlines()[-1], visible.text()
+            assert "Ctrl+." not in visible.text().splitlines()[-1], visible.text()
+            send(b"\x7f\x7f")
+            wait_visible(lambda: editor_line().strip() == "")
+        elif scenario == "ctrl_punctuation_buffers":
+            initial_tasks = cli("list")
+            older, newer = b"\x1b[44;5u", b"\x1b[46;5u"
+            send(b"Draft" + older)
             wait_visible(lambda: "Task #2 (" in editor_title())
-            send(b"\x1b[1;2B")
-            wait_visible(lambda: "New Task" in editor_title())
+            send(b"\x05 edited" + older)
+            wait_visible(lambda: "Task #1 (" in editor_title())
+            send(newer)
+            wait_visible(lambda: "Task #2 (" in editor_title()
+                         and editor_line().startswith("Second edited"))
+            send(newer)
+            wait_visible(lambda: "New Task" in editor_title() and editor_line().startswith("Draft"))
+            send(CTRL_SLASH + b"second")
+            wait_visible(lambda: filter_text() == "Filter: second")
+            send(older)
+            wait_visible(lambda: "Task #2 (" in editor_title()
+                         and editor_line().startswith("Second edited"))
+            send(older)
+            wait_visible(lambda: visible.text().splitlines()[-1].startswith("No older task"))
+            assert filter_text() == "Filter: second", visible.text()
+            send(newer)
+            wait_visible(lambda: "New Task" in editor_title() and editor_line().startswith("Draft"))
+            assert cli("list") == initial_tasks
         elif scenario.startswith("escape_staged_"):
             initial_tasks = cli("list")
             child_draft = scenario == "escape_staged_child"
