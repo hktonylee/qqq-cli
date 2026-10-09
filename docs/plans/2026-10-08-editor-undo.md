@@ -82,8 +82,9 @@ Files: `docs/reference.md`, `README.md`, this plan.
   Request independent read-only review; fix important findings with focused tests.
 - [x] Rebase current master, fast-forward clean root, install current qqq.
   Run installed undo PTYs/compatibility; compare release/install SHA; doctor.
-- [ ] Record evidence, qqq message/complete/read-back #189, clean worktree/branch,
-  resume one persistent queue waiter. No unrelated changes or remote publication.
+- [x] Record evidence, qqq message/complete/read-back #189.
+  Clean owned worktree/branch and resume one persistent queue waiter after
+  completion evidence commit. No unrelated changes or remote publication.
 
 ## Evidence
 
@@ -102,7 +103,7 @@ User selected keeping history after save.
   payload and stored image identity, new-task/add/edit save lifecycle;
   `/tmp/qqq-task-189-expanded-pty-2.log`. Initial fixture failures corrected
   view title, image cursor padding and already-blank exit expectations.
-- Queue completion and workspace cleanup pending.
+- Queue completion verified; owned workspace cleanup and persistent waiter handoff follow this record.
 - Initial full suite: 861 tests across 47 binaries passed;
   `/tmp/qqq-task-189-full.log`.
 - Review found post-save race: same-name image appended by another writer could
@@ -130,3 +131,6 @@ User selected keeping history after save.
   35 passed; `/tmp/qqq-task-189-installed-compatibility.log`.
 - Installed doctor: ok, no issues, schema 13, 191 tasks, 9 images.
   No schema or release version changes; no remote push, CI or publication run.
+
+- qqq completion read back: #189 completed at `2026-10-09T02:25:11.911Z`;
+  claim/complete events share exact owner identity. Final evidence message #123.
