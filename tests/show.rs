@@ -43,7 +43,13 @@ fn show_groups_description_and_aligns_complete_metadata() {
         "{shown}"
     );
     let mut columns = Vec::new();
-    for label in ["Parent:", "Created:", "Updated:", "Harness", "Orchestrator"] {
+    for label in [
+        "Parent:",
+        "Created:",
+        "Updated:",
+        "Harness",
+        "Orchestrator Session",
+    ] {
         let row = shown
             .lines()
             .find(|row| row.trim_start().starts_with(label))
@@ -107,7 +113,7 @@ fn show_combines_assignment_sessions_and_names_without_changing_json() {
         rows,
         [
             ("Harness", "session-1 (codex)"),
-            ("Orchestrator", "default (herdr)")
+            ("Orchestrator Session", "default (herdr)")
         ],
         "{shown}"
     );

@@ -176,7 +176,7 @@ pub(super) fn render(value: &Value, color: bool) -> String {
             color,
         ),
         row(
-            "Orchestrator",
+            "Orchestrator Session",
             &session_with_name(task, "orchestrator_session", "orchestrator_name"),
             color,
         ),

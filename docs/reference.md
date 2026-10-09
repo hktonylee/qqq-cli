@@ -678,7 +678,9 @@ Details use a double-line box with two spaces inside each side; short panes
 retain padding without borders. Text wraps to the inner width.
 Details share `show` header and layout: `#ID · Status`, Description, Messages,
 Details, Assignment, Images, History and Herdr sections. Fields align their
-values; Created/Updated occupy separate rows. Messages follow creation order,
+values; Created/Updated occupy separate rows. Assignment lists Harness and
+Orchestrator Session; session values include stored names such as `default (herdr)`.
+Messages follow creation order,
 with indented headers and bodies; empty collections show `None`. IDs are bold,
 statuses colored, labels/timestamps dim. Styles survive wrapping and scroll.
 Each task preview shows at most three wrapped lines; clipped previews end with
