@@ -80,7 +80,7 @@ Files: `docs/reference.md`, `README.md`, this plan.
 - [x] Document keys, one-input edit steps, save/history/reset scope and bounds.
 - [x] Run full locked/offline serial tests, fmt, strict all-target Clippy, release.
   Request independent read-only review; fix important findings with focused tests.
-- [ ] Rebase current master, fast-forward clean root, install current qqq.
+- [x] Rebase current master, fast-forward clean root, install current qqq.
   Run installed undo PTYs/compatibility; compare release/install SHA; doctor.
 - [ ] Record evidence, qqq message/complete/read-back #189, clean worktree/branch,
   resume one persistent queue waiter. No unrelated changes or remote publication.
@@ -102,7 +102,7 @@ User selected keeping history after save.
   payload and stored image identity, new-task/add/edit save lifecycle;
   `/tmp/qqq-task-189-expanded-pty-2.log`. Initial fixture failures corrected
   view title, image cursor padding and already-blank exit expectations.
-- Installation and queue completion pending.
+- Queue completion and workspace cleanup pending.
 - Initial full suite: 861 tests across 47 binaries passed;
   `/tmp/qqq-task-189-full.log`.
 - Review found post-save race: same-name image appended by another writer could
@@ -122,3 +122,11 @@ User selected keeping history after save.
   `/tmp/qqq-task-189-clippy.log`, `/tmp/qqq-task-189-release.log`.
 - Independent read-only review confirmed committed-revision race fixed in
   `0264088`; no remaining actionable findings. Reviewer did not run tests.
+
+- Local master fast-forwarded to `7a22240`; installed qqq 0.6.0 from root.
+  Installed/release SHA-256: `d244571477994c843c37ee848cca5db277a49c5904679c64f488955debf5af60`.
+  `/tmp/qqq-task-189-install.log`. All 12 installed undo PTY scenarios passed;
+  `/tmp/qqq-task-189-installed-pty.log`. Installed historical compatibility:
+  35 passed; `/tmp/qqq-task-189-installed-compatibility.log`.
+- Installed doctor: ok, no issues, schema 13, 191 tasks, 9 images.
+  No schema or release version changes; no remote push, CI or publication run.
