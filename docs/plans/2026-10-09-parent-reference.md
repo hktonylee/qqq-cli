@@ -38,8 +38,9 @@ if let Some(parent) = draft_parent_id.filter(|_| target_id.is_none()) {
   dirty buffer restore, failed save, successful save/reload, filter/popup scope.
 - [x] Update README.md Ctrl-P row and docs/reference.md child-draft paragraph.
 - [x] Run fmt, strict Clippy, full tests, release build; review, commit feature.
-- [ ] Rebase, fast-forward master, install, verify installed PTY/compatibility.
-  Record qqq evidence, complete/readback #194, clean worktree, resume waiter.
+- [x] Rebase, fast-forward master, install, verify installed PTY/compatibility.
+  Record qqq evidence, complete/readback #194. Normal worktree cleanup and
+  continuation use one persistent queue waiter.
 
 ## Verification
 
@@ -51,3 +52,9 @@ if let Some(parent) = draft_parent_id.filter(|_| target_id.is_none()) {
 - Review found stale child hint with bulk marks; regression reproduced RED,
   fix passed all three PTY paths; follow-up review found no further issues.
 - Plain text only: no reference atoms, chips, parsing, or schema changes.
+
+Installed delivery: qqq 0.7.0, three reference PTY paths and 35 historical
+compatibility tests passed. Installed and both release binaries match SHA256
+f1532791d97964cf7647b334893a4643a3369c3f379e2aae33d8cf68f3c66d46.
+Doctor reported no issues at schema 13. Task #194 completed and read back;
+claim/complete session matched. Queue evidence message #130.
