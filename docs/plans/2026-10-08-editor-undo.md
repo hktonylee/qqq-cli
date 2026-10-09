@@ -103,3 +103,15 @@ User selected keeping history after save.
   `/tmp/qqq-task-189-expanded-pty-2.log`. Initial fixture failures corrected
   view title, image cursor padding and already-blank exit expectations.
 - Broad checks, review, installation and queue completion pending.
+- Initial full suite: 861 tests across 47 binaries passed;
+  `/tmp/qqq-task-189-full.log`.
+- Review found post-save race: same-name image appended by another writer could
+  satisfy description match, replacing local image identity. Deterministic RED
+  reproduced it; `/tmp/qqq-task-189-race-red.log`. Save callbacks now return
+  committed task ID/revision; post-save snapshot must match that exact revision
+  before adopting history. Trigger deltas vary, so no guessed increment.
+- Race regressions: 2 passed, `/tmp/qqq-task-189-race-green.log`.
+  All 12 undo PTY scenarios passed after guard;
+  `/tmp/qqq-task-189-race-pty-2.log`. Resize fixture waits for settled resized
+  frame before keys; sending key concurrently with SIGWINCH caused one lost-key
+  fixture failure in prior run.

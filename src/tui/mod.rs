@@ -47,6 +47,20 @@ pub struct Outcome {
     pub expected_revision: Option<i64>,
 }
 
+pub struct SavedTask {
+    id: i64,
+    content_revision: i64,
+}
+
+impl From<&crate::db::Task> for SavedTask {
+    fn from(task: &crate::db::Task) -> Self {
+        Self {
+            id: task.id,
+            content_revision: task.content_revision,
+        }
+    }
+}
+
 #[derive(Clone, Default)]
 struct Baseline {
     description: String,
@@ -518,9 +532,20 @@ fn task_target(db: &crate::db::Db, id: i64) -> Result<Target> {
     task_target_with_archived(db, id).map(|(target, _)| target)
 }
 
-fn saved_target(db: &crate::db::Db, id: i64, previous: &mut Draft) -> Result<Target> {
-    let snapshot = db.content_snapshot(id)?;
-    let draft = if previous.adopt_saved(&snapshot.task.description, id, &snapshot.references)? {
+fn saved_target(db: &crate::db::Db, saved: SavedTask, previous: &mut Draft) -> Result<Target> {
+    let snapshot = db.content_snapshot(saved.id)?;
+    target_after_save(snapshot, saved.content_revision, previous)
+}
+
+fn target_after_save(
+    snapshot: crate::db::ContentSnapshot,
+    content_revision: i64,
+    previous: &mut Draft,
+) -> Result<Target> {
+    let id = snapshot.task.id;
+    let draft = if snapshot.task.content_revision == content_revision
+        && previous.adopt_saved(&snapshot.task.description, id, &snapshot.references)?
+    {
         std::mem::replace(previous, Draft::new(""))
     } else {
         Draft::from_saved(&snapshot.task.description, id, &snapshot.references)?
@@ -710,11 +735,11 @@ enum Mode<'a, 'b> {
     Single(Option<&'a crate::db::Db>),
     Edit {
         db: &'a mut crate::db::Db,
-        save: &'b mut dyn FnMut(&mut crate::db::Db, Outcome) -> Result<i64>,
+        save: &'b mut dyn FnMut(&mut crate::db::Db, Outcome) -> Result<SavedTask>,
     },
     Continuous {
         db: &'a mut crate::db::Db,
-        save: &'b mut dyn FnMut(&mut crate::db::Db, Outcome) -> Result<i64>,
+        save: &'b mut dyn FnMut(&mut crate::db::Db, Outcome) -> Result<SavedTask>,
         action: Option<&'b mut ActionHandler<'b>>,
         completion: Option<&'b mut CompletionHandler<'b>>,
         dashboard: bool,
@@ -793,7 +818,7 @@ pub fn compose_existing(
     db: &mut crate::db::Db,
     snapshot: crate::db::ContentSnapshot,
     description: Option<&str>,
-    save: &mut dyn FnMut(&mut crate::db::Db, Outcome) -> Result<i64>,
+    save: &mut dyn FnMut(&mut crate::db::Db, Outcome) -> Result<SavedTask>,
 ) -> Result<()> {
     let task = snapshot.task;
     let draft = Draft::from_saved(
@@ -812,7 +837,7 @@ pub fn compose_existing(
 }
 pub fn compose_continuously(
     db: &mut crate::db::Db,
-    save: &mut dyn FnMut(&mut crate::db::Db, Outcome) -> Result<i64>,
+    save: &mut dyn FnMut(&mut crate::db::Db, Outcome) -> Result<SavedTask>,
 ) -> Result<()> {
     compose_inner(
         "",
@@ -835,7 +860,7 @@ pub fn compose_dashboard(
     include_archived: bool,
     after_save_new: AfterSaveNew,
     view_context: crate::views::ViewContext,
-    save: &mut dyn FnMut(&mut crate::db::Db, Outcome) -> Result<i64>,
+    save: &mut dyn FnMut(&mut crate::db::Db, Outcome) -> Result<SavedTask>,
     completion: &mut CompletionHandler<'_>,
     action: &mut ActionHandler<'_>,
 ) -> Result<()> {
@@ -2664,9 +2689,10 @@ fn compose_inner(
                                 match &mut mode {
                                     Mode::Single(_) => return Ok(Some(outcome)),
                                     Mode::Continuous { db, save, .. } | Mode::Edit { db, save } => {
-                                        match save(db, outcome).and_then(|id| {
+                                        match save(db, outcome).and_then(|saved| {
+                                            let id = saved.id;
                                             let target = if keep_saved {
-                                                saved_target(db, id, &mut draft)?
+                                                saved_target(db, saved, &mut draft)?
                                             } else {
                                                 Target::New { parent_id: None }
                                             };
@@ -2831,6 +2857,103 @@ mod tests {
     use super::tag_input;
     use crate::output::{Format, render};
     use serde_json::json;
+
+    #[test]
+    fn post_save_external_same_name_image_starts_fresh_history() {
+        use crate::{
+            db::{ContentSnapshot, Task},
+            images::{ImageInput, ImageReference},
+        };
+        let mut previous = super::Draft::new("Seed ");
+        previous
+            .image(ImageInput {
+                name: "same.png".into(),
+                data: b"\x89PNG\r\n\x1a\noriginal bytes".to_vec(),
+            })
+            .unwrap();
+        let references = [7, 8]
+            .map(|id| ImageReference {
+                id,
+                name: "same.png".into(),
+                media_type: "image/png".into(),
+            })
+            .to_vec();
+        // Writer A committed image 7; writer B appended different bytes as image 8
+        // and replaced the description before A's post-save snapshot was read.
+        let description = format!("Seed {}", references[1].markdown(2).unwrap());
+        let snapshot = ContentSnapshot {
+            task: Task {
+                id: 2,
+                description: description.clone(),
+                content_revision: 9,
+                status: "new".into(),
+                priority: 0,
+                archived: false,
+                identity: Default::default(),
+                created_at: String::new(),
+                updated_at: String::new(),
+                parent_id: None,
+                prerequisites: Vec::new(),
+                tags: Vec::new(),
+                context_only: false,
+            },
+            references,
+        };
+        let super::Target::Task { mut draft, .. } =
+            super::target_after_save(snapshot, 8, &mut previous).unwrap()
+        else {
+            panic!("saved task expected");
+        };
+        assert_eq!(draft.finish().unwrap().description, description);
+        assert!(draft.finish().unwrap().images.is_empty());
+        assert!(
+            !draft.undo(),
+            "external snapshot must reset old image history"
+        );
+        assert_eq!(
+            previous.finish().unwrap().images[0].data,
+            b"\x89PNG\r\n\x1a\noriginal bytes"
+        );
+    }
+
+    #[test]
+    fn post_save_unchanged_text_history_checks_actual_committed_revision() {
+        use crate::db::{ContentSnapshot, Task};
+        // Unchanged save keeps its revision; external edit/revert can restore the
+        // exact same description at a newer revision and must reset history.
+        for revision in [5, 6] {
+            let mut previous = super::Draft::new("Seed");
+            previous.insert("!");
+            let snapshot = ContentSnapshot {
+                task: Task {
+                    id: 2,
+                    description: "Seed!".into(),
+                    content_revision: revision,
+                    status: "new".into(),
+                    priority: 0,
+                    archived: false,
+                    identity: Default::default(),
+                    created_at: String::new(),
+                    updated_at: String::new(),
+                    parent_id: None,
+                    prerequisites: Vec::new(),
+                    tags: Vec::new(),
+                    context_only: false,
+                },
+                references: Vec::new(),
+            };
+            let super::Target::Task { mut draft, .. } =
+                super::target_after_save(snapshot, 5, &mut previous).unwrap()
+            else {
+                panic!("saved task expected");
+            };
+            assert_eq!(draft.undo(), revision == 5);
+            assert_eq!(
+                draft.fragments().concat(),
+                if revision == 5 { "Seed" } else { "Seed!" }
+            );
+        }
+    }
 
     #[test]
     fn multiline_tag_popup_keeps_separate_rows_and_empty_final_caret() {

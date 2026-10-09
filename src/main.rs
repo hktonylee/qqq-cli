@@ -680,9 +680,9 @@ fn execute(
                             ),
                         }?;
                         first_images.clear();
-                        let id = task.id;
+                        let committed = tui::SavedTask::from(&task);
                         saved.push(task);
-                        Ok(id)
+                        Ok(committed)
                     })?;
                     json!(saved)
                 }
@@ -743,7 +743,7 @@ fn execute(
                             },
                         ),
                     }?;
-                    Ok(task.id)
+                    Ok(tui::SavedTask::from(&task))
                 },
                 &mut |db, id| {
                     let owner = match resolved_owner(session_input, project_dir, db) {
@@ -915,9 +915,9 @@ fn execute(
                                 priority,
                                 outcome.expected_revision,
                             )?;
-                            let id = task.id;
+                            let committed = tui::SavedTask::from(&task);
                             saved = Some(task);
-                            Ok(id)
+                            Ok(committed)
                         },
                     )?;
                     json!(saved.context("Editor cancelled; task not saved")?)
