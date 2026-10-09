@@ -518,6 +518,22 @@ fn task_target(db: &crate::db::Db, id: i64) -> Result<Target> {
     task_target_with_archived(db, id).map(|(target, _)| target)
 }
 
+fn saved_target(db: &crate::db::Db, id: i64, previous: &mut Draft) -> Result<Target> {
+    let snapshot = db.content_snapshot(id)?;
+    let draft = if previous.adopt_saved(&snapshot.task.description, id, &snapshot.references)? {
+        std::mem::replace(previous, Draft::new(""))
+    } else {
+        Draft::from_saved(&snapshot.task.description, id, &snapshot.references)?
+    };
+    Ok(Target::Task {
+        id,
+        description: snapshot.task.description,
+        status: snapshot.task.status,
+        revision: snapshot.task.content_revision,
+        draft,
+    })
+}
+
 fn task_target_with_archived(db: &crate::db::Db, id: i64) -> Result<(Target, bool)> {
     let snapshot = db.content_snapshot(id)?;
     let archived = snapshot.task.archived;
@@ -2613,6 +2629,23 @@ fn compose_inner(
                 }
                 if control {
                     match key.code {
+                        KeyCode::Char(character @ ('z' | 'Z' | 'y' | 'Y'))
+                            if !key
+                                .modifiers
+                                .intersects(KeyModifiers::ALT | KeyModifiers::SUPER) =>
+                        {
+                            let undo = matches!(character, 'z' | 'Z');
+                            let changed = if undo { draft.undo() } else { draft.redo() };
+                            message_is_error = false;
+                            message = if changed {
+                                editor_follow_cursor = true;
+                                String::new()
+                            } else if undo {
+                                "Nothing to undo".into()
+                            } else {
+                                "Nothing to redo".into()
+                            };
+                        }
                         KeyCode::Char('s') => match draft.finish() {
                             Ok(composition) => {
                                 let keep_saved = dashboard
@@ -2633,7 +2666,7 @@ fn compose_inner(
                                     Mode::Continuous { db, save, .. } | Mode::Edit { db, save } => {
                                         match save(db, outcome).and_then(|id| {
                                             let target = if keep_saved {
-                                                task_target(db, id)?
+                                                saved_target(db, id, &mut draft)?
                                             } else {
                                                 Target::New { parent_id: None }
                                             };

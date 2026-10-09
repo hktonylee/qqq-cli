@@ -33,6 +33,30 @@ fn history_scenario(name: &str) {
     );
 }
 
+fn undo_scenario(name: &str) {
+    let output = Command::new("python3")
+        .arg(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/tests/tui_undo_pty.py"
+        ))
+        .arg(env!("CARGO_BIN_EXE_qqq"))
+        .arg(name)
+        .output()
+        .unwrap();
+    assert!(
+        output.status.success(),
+        "{}\n{}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+}
+
+#[test]
+fn tui_editor_undo_redo_changes_draft_without_writing_db() {
+    undo_scenario("text");
+    undo_scenario("text_no_color");
+}
+
 fn dashboard_scenario(name: &str) {
     let output = Command::new("python3")
         .arg(concat!(

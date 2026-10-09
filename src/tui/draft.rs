@@ -1,5 +1,6 @@
 use crate::images::{ImageInput, ImageReference};
 use anyhow::{Result, ensure};
+use std::collections::{HashMap, VecDeque};
 use std::ops::Range;
 use unicode_segmentation::UnicodeSegmentation;
 
@@ -121,6 +122,44 @@ fn find_pasteboard(description: &str, from: usize) -> Option<PasteboardBlock<'_>
     None
 }
 impl Atom {
+    fn adopt_images(&mut self, saved: &HashMap<usize, (String, String)>) {
+        if let Self::Image { id, .. } = self {
+            if let Some((name, markdown)) = saved.get(id) {
+                *self = Self::StoredImage {
+                    id: *id,
+                    name: name.clone(),
+                    original: markdown.clone(),
+                    markdown: markdown.clone(),
+                };
+            }
+        } else if let Self::StoredImage {
+            original, markdown, ..
+        } = self
+        {
+            original.clone_from(markdown);
+        }
+    }
+
+    fn retained_bytes(&self) -> usize {
+        match self {
+            Self::Text(text) => text.capacity(),
+            Self::Paste { text, source, .. } => {
+                text.capacity()
+                    + match source {
+                        PasteSource::New => 0,
+                        PasteSource::StoredFence(original) => original.capacity(),
+                    }
+            }
+            Self::Image { input, .. } => input.name.capacity() + input.data.capacity(),
+            Self::StoredImage {
+                name,
+                original,
+                markdown,
+                ..
+            } => name.capacity() + original.capacity() + markdown.capacity(),
+        }
+    }
+
     fn is_whitespace(&self) -> bool {
         matches!(self, Self::Text(text) if text.chars().all(char::is_whitespace))
     }
@@ -150,10 +189,82 @@ impl Atom {
         }
     }
 }
+const HISTORY_LIMIT: usize = 256;
+const HISTORY_BYTES: usize = 64 * 1024 * 1024;
+
+struct Change {
+    start: usize,
+    replace: usize,
+    atoms: Vec<Atom>,
+    cursor: usize,
+    other_cursor: usize,
+    next_image: usize,
+    other_next_image: usize,
+}
+
+impl Change {
+    fn retained_bytes(&self) -> usize {
+        std::mem::size_of::<Self>()
+            + self.atoms.capacity() * std::mem::size_of::<Atom>()
+            + self.atoms.iter().map(Atom::retained_bytes).sum::<usize>()
+    }
+}
+
+#[derive(Default)]
+struct History {
+    undo: VecDeque<Change>,
+    redo: VecDeque<Change>,
+    bytes: usize,
+}
+
+impl History {
+    fn record(&mut self, change: Change) {
+        self.bytes -= self.redo.iter().map(Change::retained_bytes).sum::<usize>();
+        self.redo.clear();
+        self.push_undo(change);
+    }
+
+    fn push_undo(&mut self, change: Change) {
+        self.bytes += change.retained_bytes();
+        self.undo.push_back(change);
+        self.trim();
+    }
+
+    fn push_redo(&mut self, change: Change) {
+        self.bytes += change.retained_bytes();
+        self.redo.push_back(change);
+        self.trim();
+    }
+
+    fn trim(&mut self) {
+        while self.undo.len() + self.redo.len() > 1
+            && (self.undo.len() + self.redo.len() > HISTORY_LIMIT || self.bytes > HISTORY_BYTES)
+        {
+            let discarded = self
+                .undo
+                .pop_front()
+                .or_else(|| self.redo.pop_front())
+                .unwrap();
+            self.bytes -= discarded.retained_bytes();
+        }
+    }
+
+    fn recount(&mut self) {
+        self.bytes = self
+            .undo
+            .iter()
+            .chain(&self.redo)
+            .map(Change::retained_bytes)
+            .sum();
+        self.trim();
+    }
+}
+
 pub struct Draft {
     atoms: Vec<Atom>,
     cursor: usize,
     next_image: usize,
+    history: History,
     pub(super) tags: Vec<String>,
 }
 impl Draft {
@@ -162,9 +273,11 @@ impl Draft {
             atoms: Vec::new(),
             cursor: 0,
             next_image: 1,
+            history: History::default(),
             tags: Vec::new(),
         };
         draft.insert(description);
+        draft.history = History::default();
         draft
     }
 
@@ -252,89 +365,168 @@ impl Draft {
             draft.cursor += 1;
             cursor = position + original.len();
         }
+        draft.history = History::default();
         Ok(draft)
     }
+
+    fn edit(&mut self, range: Range<usize>, atoms: Vec<Atom>, cursor: usize, next_image: usize) {
+        if range.is_empty() && atoms.is_empty() {
+            return;
+        }
+        let start = range.start;
+        let replace = atoms.len();
+        let removed = self.atoms.splice(range, atoms).collect();
+        self.history.record(Change {
+            start,
+            replace,
+            atoms: removed,
+            cursor: self.cursor,
+            other_cursor: cursor,
+            next_image: self.next_image,
+            other_next_image: next_image,
+        });
+        self.cursor = cursor;
+        self.next_image = next_image;
+    }
+
+    fn invert(&mut self, change: &mut Change) {
+        let replacement = std::mem::take(&mut change.atoms);
+        let replace = replacement.len();
+        change.atoms = self
+            .atoms
+            .splice(change.start..change.start + change.replace, replacement)
+            .collect();
+        change.replace = replace;
+        self.cursor = change.cursor;
+        self.next_image = change.next_image;
+        std::mem::swap(&mut change.cursor, &mut change.other_cursor);
+        std::mem::swap(&mut change.next_image, &mut change.other_next_image);
+    }
+
+    pub fn undo(&mut self) -> bool {
+        let Some(mut change) = self.history.undo.pop_back() else {
+            return false;
+        };
+        self.history.bytes -= change.retained_bytes();
+        self.invert(&mut change);
+        self.history.push_redo(change);
+        true
+    }
+
+    pub fn redo(&mut self) -> bool {
+        let Some(mut change) = self.history.redo.pop_back() else {
+            return false;
+        };
+        self.history.bytes -= change.retained_bytes();
+        self.invert(&mut change);
+        self.history.push_undo(change);
+        true
+    }
+
     pub fn insert(&mut self, text: &str) {
+        let mut start = self.cursor;
+        let mut atoms = Vec::new();
         for grapheme in text.graphemes(true) {
-            if let Some(Atom::Text(previous)) = self
-                .cursor
-                .checked_sub(1)
-                .and_then(|index| self.atoms.get_mut(index))
-            {
+            if let Some(Atom::Text(previous)) = atoms.last_mut() {
                 let joined = format!("{previous}{grapheme}");
                 if joined.graphemes(true).count() == 1 {
                     *previous = joined;
                     continue;
                 }
+            } else if atoms.is_empty() {
+                if let Some(Atom::Text(previous)) = self
+                    .cursor
+                    .checked_sub(1)
+                    .and_then(|index| self.atoms.get(index))
+                {
+                    let joined = format!("{previous}{grapheme}");
+                    if joined.graphemes(true).count() == 1 {
+                        start -= 1;
+                        atoms.push(Atom::Text(joined));
+                        continue;
+                    }
+                }
             }
-            self.atoms
-                .insert(self.cursor, Atom::Text(grapheme.to_owned()));
-            self.cursor += 1;
+            atoms.push(Atom::Text(grapheme.to_owned()));
         }
+        let cursor = start + atoms.len();
+        self.edit(start..self.cursor, atoms, cursor, self.next_image);
     }
     pub fn paste(&mut self, text: &str) {
         let chars = text.chars().count();
         if chars > 1000 {
-            self.atoms.insert(
-                self.cursor,
-                Atom::Paste {
+            self.edit(
+                self.cursor..self.cursor,
+                vec![Atom::Paste {
                     text: text.to_owned(),
                     chars,
                     source: PasteSource::New,
-                },
+                }],
+                self.cursor + 1,
+                self.next_image,
             );
-            self.cursor += 1;
         } else {
             self.insert(text);
         }
     }
     pub fn image(&mut self, input: ImageInput) -> Result<()> {
         input.media_type()?;
-        self.atoms.insert(
-            self.cursor,
-            Atom::Image {
+        self.edit(
+            self.cursor..self.cursor,
+            vec![Atom::Image {
                 id: self.next_image,
                 input,
-            },
+            }],
+            self.cursor + 1,
+            self.next_image + 1,
         );
-        self.next_image += 1;
-        self.cursor += 1;
         Ok(())
     }
     pub fn backspace(&mut self) {
         if self.cursor > 0 {
-            self.cursor -= 1;
-            self.atoms.remove(self.cursor);
+            self.edit(
+                self.cursor - 1..self.cursor,
+                Vec::new(),
+                self.cursor - 1,
+                self.next_image,
+            );
         }
     }
     pub fn delete_previous_word(&mut self) {
-        while self.cursor > 0
-            && matches!(&self.atoms[self.cursor - 1], Atom::Text(text)
+        let mut start = self.cursor;
+        while start > 0
+            && matches!(&self.atoms[start - 1], Atom::Text(text)
                 if !matches!(text.as_str(), "\n" | "\r\n")
                     && text.chars().all(char::is_whitespace))
         {
-            self.backspace();
+            start -= 1;
         }
         let mut removed_word = false;
-        while self.cursor > 0 {
-            match &self.atoms[self.cursor - 1] {
+        while start > 0 {
+            match &self.atoms[start - 1] {
                 Atom::Text(text) if !text.chars().all(char::is_whitespace) => {
-                    self.backspace();
+                    start -= 1;
                     removed_word = true;
                 }
                 Atom::Paste { .. } | Atom::Image { .. } | Atom::StoredImage { .. }
                     if !removed_word =>
                 {
-                    self.backspace();
+                    start -= 1;
                     break;
                 }
                 _ => break,
             }
         }
+        self.edit(start..self.cursor, Vec::new(), start, self.next_image);
     }
     pub fn delete(&mut self) {
         if self.cursor < self.atoms.len() {
-            self.atoms.remove(self.cursor);
+            self.edit(
+                self.cursor..self.cursor + 1,
+                Vec::new(),
+                self.cursor,
+                self.next_image,
+            );
         }
     }
     pub fn left(&mut self) {
@@ -412,6 +604,54 @@ impl Draft {
                 .iter()
                 .any(|atom| matches!(atom, Atom::Image { .. }))
             || self.contents(false).description != baseline
+    }
+    pub fn adopt_saved(
+        &mut self,
+        description: &str,
+        task_id: i64,
+        references: &[ImageReference],
+    ) -> Result<bool> {
+        let pending = self
+            .atoms
+            .iter()
+            .filter_map(|atom| match atom {
+                Atom::Image { id, input } => Some((*id, input)),
+                _ => None,
+            })
+            .collect::<Vec<_>>();
+        let Some(start) = references.len().checked_sub(pending.len()) else {
+            return Ok(false);
+        };
+        let mut saved = HashMap::new();
+        let mut candidate = self.contents(true);
+        for ((id, input), (reference, span)) in pending
+            .iter()
+            .zip(references[start..].iter().zip(&candidate.image_spans))
+            .rev()
+        {
+            if input.name != reference.name || input.media_type()? != reference.media_type {
+                return Ok(false);
+            }
+            let markdown = reference.markdown(task_id)?;
+            candidate.description.replace_range(span.clone(), &markdown);
+            saved.insert(*id, (reference.name.clone(), markdown));
+        }
+        if candidate.description != description {
+            return Ok(false);
+        }
+        for atom in self.atoms.iter_mut().chain(
+            self.history
+                .undo
+                .iter_mut()
+                .chain(&mut self.history.redo)
+                .flat_map(|change| &mut change.atoms),
+        ) {
+            atom.adopt_images(&saved);
+        }
+        self.tags.clear();
+        self.cursor = self.atoms.len();
+        self.history.recount();
+        Ok(true)
     }
     fn contents(&self, normalize_legacy: bool) -> Composition {
         let mut text = String::new();

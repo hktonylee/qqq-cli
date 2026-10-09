@@ -650,3 +650,246 @@ fn saved_long_text_around_pasteboard_and_image_only_collapses_explicit_fence() {
     assert_eq!(draft.finish().unwrap().description, description);
     assert!(!draft.is_dirty_against(&description));
 }
+
+#[test]
+fn undo_redo_restores_unicode_edits_and_action_carets() {
+    let mut draft = Draft::new("Ae");
+    assert!(!draft.undo());
+    draft.insert("\u{301}");
+    draft.insert("👩‍💻");
+    assert_eq!(draft.cursor(), 3);
+    draft.home();
+    assert!(draft.undo());
+    assert_eq!(draft.fragments().concat(), "Ae\u{301}");
+    assert_eq!(draft.cursor(), 2);
+    assert!(draft.undo());
+    assert_eq!(draft.fragments().concat(), "Ae");
+    assert!(draft.redo());
+    draft.home();
+    assert!(draft.redo());
+    assert_eq!(draft.fragments().concat(), "Ae\u{301}👩‍💻");
+    assert_eq!(draft.cursor(), 3);
+    assert!(!draft.redo());
+}
+
+#[test]
+fn undo_redo_treats_word_and_forward_deletion_as_one_edit() {
+    let mut draft = Draft::new("alpha beta   ");
+    draft.delete_previous_word();
+    assert_eq!(draft.fragments().concat(), "alpha ");
+    assert!(draft.undo());
+    assert_eq!(draft.fragments().concat(), "alpha beta   ");
+    assert_eq!(draft.cursor(), 13);
+    assert!(!draft.undo());
+    assert!(draft.redo());
+    draft.home();
+    draft.delete();
+    assert_eq!(draft.fragments().concat(), "lpha ");
+    assert!(draft.undo());
+    assert_eq!(draft.fragments().concat(), "alpha ");
+    assert_eq!(draft.cursor(), 0);
+    assert!(draft.redo());
+    assert_eq!(draft.cursor(), 0);
+}
+
+#[test]
+fn no_op_edits_motion_and_failed_images_preserve_redo() {
+    let mut draft = Draft::new("Seed");
+    draft.insert("!");
+    assert!(draft.undo());
+    draft.home();
+    draft.backspace();
+    draft.delete_previous_word();
+    draft.insert("");
+    draft.paste("");
+    assert!(
+        draft
+            .image(ImageInput {
+                name: "bad.png".into(),
+                data: b"bad".to_vec()
+            })
+            .is_err()
+    );
+    assert!(draft.redo());
+    assert_eq!(draft.fragments().concat(), "Seed!");
+    assert_eq!(draft.cursor(), 5);
+    assert!(draft.undo());
+    draft.end();
+    draft.delete();
+    assert!(draft.redo());
+}
+
+#[test]
+fn new_edit_after_undo_invalidates_only_redo_branch() {
+    let mut draft = Draft::new("Seed");
+    draft.insert(" first");
+    draft.insert(" second");
+    assert!(draft.undo());
+    draft.insert(" replacement");
+    assert!(!draft.redo());
+    assert!(draft.undo());
+    assert_eq!(draft.fragments().concat(), "Seed first");
+    assert!(draft.undo());
+    assert_eq!(draft.fragments().concat(), "Seed");
+}
+
+#[test]
+fn undo_redo_preserves_paste_bytes_and_atomic_image_numbering() {
+    let payload = format!("A\r\n```\n{}\n", "界".repeat(1001));
+    let input = ImageInput {
+        name: "x.png".into(),
+        data: b"\x89PNG\r\n\x1a\nbytes".to_vec(),
+    };
+    let mut draft = Draft::new("Seed ");
+    draft.paste(&payload);
+    let pasted = draft.finish().unwrap().description;
+    draft.image(input.clone()).unwrap();
+    let with_image = draft.finish().unwrap();
+    assert!(draft.undo());
+    assert_eq!(draft.finish().unwrap().description, pasted);
+    assert!(draft.undo());
+    assert_eq!(draft.fragments().concat(), "Seed ");
+    assert!(draft.redo());
+    assert!(draft.redo());
+    assert_eq!(draft.finish().unwrap().description, with_image.description);
+    assert_eq!(draft.finish().unwrap().images[0].data, input.data);
+    assert!(draft.undo());
+    draft.image(input).unwrap();
+    assert!(draft.fragments().last().unwrap().starts_with("[Image #1:"));
+    assert!(!draft.redo());
+    draft.backspace();
+    assert!(draft.undo());
+    assert_eq!(
+        draft.finish().unwrap().images[0].data,
+        with_image.images[0].data
+    );
+}
+
+#[test]
+fn fresh_saved_content_has_no_initial_undo_steps() {
+    let refs = [ImageReference {
+        id: 7,
+        name: "x.png".into(),
+        media_type: "image/png".into(),
+    }];
+    let body = format!(
+        "Before {}\n```pasteboard\n{}\n```",
+        refs[0].markdown(2).unwrap(),
+        "x".repeat(1001)
+    );
+    let mut draft = Draft::from_saved(&body, 2, &refs).unwrap();
+    assert!(!draft.undo());
+    assert!(!draft.redo());
+    draft.backspace();
+    assert!(draft.undo());
+    assert_eq!(draft.finish().unwrap().description, body);
+    assert!(!draft.undo());
+}
+
+#[test]
+fn undo_history_retains_latest_256_changes() {
+    let mut draft = Draft::new("Seed");
+    for _ in 0..300 {
+        draft.insert("x");
+    }
+    for _ in 0..256 {
+        assert!(draft.undo());
+    }
+    assert!(!draft.undo());
+    assert_eq!(
+        draft.fragments().concat(),
+        format!("Seed{}", "x".repeat(44))
+    );
+    for _ in 0..256 {
+        assert!(draft.redo());
+    }
+    assert!(!draft.redo());
+    assert_eq!(draft.cursor(), 304);
+}
+
+#[test]
+fn undo_history_bounds_large_removed_payloads_without_corrupting_redo() {
+    let payload = "x".repeat(17 * 1024 * 1024);
+    let mut draft = Draft::new("Seed");
+    for _ in 0..5 {
+        draft.paste(&payload);
+    }
+    for _ in 0..4 {
+        assert!(draft.undo());
+    }
+    let mut redone = 0;
+    while draft.redo() {
+        redone += 1;
+    }
+    assert!(
+        redone > 0 && redone <= 3,
+        "64 MiB budget retained {redone} large payloads"
+    );
+    assert_eq!(
+        draft
+            .paste_mask()
+            .iter()
+            .filter(|&&is_paste| is_paste)
+            .count(),
+        1 + redone
+    );
+}
+
+#[test]
+fn save_keeps_history_and_converts_all_reachable_pending_image_states() {
+    let reference = ImageReference {
+        id: 7,
+        name: "x.png".into(),
+        media_type: "image/png".into(),
+    };
+    let mut draft = Draft::new("Seed ");
+    draft
+        .image(ImageInput {
+            name: "x.png".into(),
+            data: b"\x89PNG\r\n\x1a\nbytes".to_vec(),
+        })
+        .unwrap();
+    draft.backspace();
+    assert!(draft.undo());
+    draft.insert("!");
+    let saved = format!("Seed {}!", reference.markdown(2).unwrap());
+    draft.tags = vec!["staged".into()];
+    assert!(draft.adopt_saved(&saved, 2, &[reference]).unwrap());
+    assert!(draft.finish().unwrap().images.is_empty());
+    assert!(!draft.is_dirty_against(&saved));
+    assert!(draft.undo());
+    assert!(draft.undo()); // redo the prior image deletion, using stored identity
+    assert_eq!(draft.fragments().concat(), "Seed ");
+    assert!(draft.redo());
+    assert!(draft.redo());
+    assert_eq!(draft.finish().unwrap().description, saved);
+    assert!(draft.finish().unwrap().images.is_empty());
+    assert!(!draft.is_dirty_against(&saved));
+}
+
+#[test]
+fn save_keeps_uncommitted_redo_image_and_checks_snapshot_before_mutating() {
+    let mut draft = Draft::new("Seed");
+    let input = ImageInput {
+        name: "x.png".into(),
+        data: b"\x89PNG\r\n\x1a\nbytes".to_vec(),
+    };
+    draft.image(input.clone()).unwrap();
+    assert!(draft.undo());
+    assert!(draft.adopt_saved("Seed", 2, &[]).unwrap());
+    assert!(draft.redo());
+    assert_eq!(draft.finish().unwrap().images[0].data, input.data);
+    let ref_image = ImageReference {
+        id: 7,
+        name: "x.png".into(),
+        media_type: "image/png".into(),
+    };
+    assert!(
+        !draft
+            .adopt_saved("External change", 2, &[ref_image])
+            .unwrap()
+    );
+    assert_eq!(draft.finish().unwrap().images[0].data, input.data);
+    assert!(draft.undo());
+    assert_eq!(draft.fragments().concat(), "Seed");
+}
