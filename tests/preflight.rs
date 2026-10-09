@@ -312,18 +312,19 @@ fn dead_harness_fails_before_show_preserving_data_and_exactly_one_reason() {
 }
 
 #[test]
-fn stopped_or_absent_saved_orchestrator_fails_before_list() {
+fn unavailable_agents_remain_unknown_even_when_registry_says_stopped_or_absent() {
     for sessions in [json!([]), json!([{"name":"work","running":false}])] {
         let f = Fixture::new();
         fs::write(f.dir.path().join("fail"), "").unwrap();
         f.write("sessions", json!({"sessions":sessions}));
-        assert_eq!(f.ok(&["list"])[0]["status"], "error");
-        let shown = f.ok(&["show", "1"]);
+        let path = f.dir.path().join(".qqq/qqq.db");
+        let before = fs::read(&path).unwrap();
+        assert_eq!(f.ok(&["list"])[0]["status"], "in_progress");
+        assert_eq!(fs::read(path).unwrap(), before);
         assert!(
-            shown["messages"][1]["body"]
-                .as_str()
+            !fs::read_to_string(f.dir.path().join("calls"))
                 .unwrap()
-                .contains("orchestrator")
+                .contains("session list")
         );
     }
 }
@@ -368,6 +369,7 @@ fn live_and_unknown_owner_evidence_leave_db_bytes_unchanged() {
                 pane["agent"] = Value::Null;
                 pane["agent_session"] = Value::Null;
                 f.write("agents", json!({"result":{"agents":[pane]}}));
+                f.write("sessions", json!({"sessions":[]}));
             }
             "foreign-binding" => {
                 let process = json!({"machine":"another-machine","pid":42,"started_at":"start","executable":"codex"});
@@ -417,6 +419,7 @@ fn live_and_unknown_owner_evidence_leave_db_bytes_unchanged() {
 #[test]
 fn hung_herdr_probe_is_unknown_and_command_finishes_within_timeout() {
     let f = Fixture::new();
+    f.write("sessions", json!({"sessions":[]}));
     let script = fs::read_to_string(f.dir.path().join("herdr"))
         .unwrap()
         .lines()
@@ -434,6 +437,35 @@ fn hung_herdr_probe_is_unknown_and_command_finishes_within_timeout() {
     let started = std::time::Instant::now();
     assert_eq!(f.ok(&["show", "1"])["task"]["status"], "in_progress");
     assert!(started.elapsed() < std::time::Duration::from_secs(6));
+}
+
+#[test]
+fn slow_reachable_owner_survives_preflight_even_when_registry_says_stopped() {
+    let f = Fixture::new();
+    f.write(
+        "sessions",
+        json!({"sessions":[{"name":"work","running":false}]}),
+    );
+    let script = fs::read_to_string(f.dir.path().join("herdr"))
+        .unwrap()
+        .replace(
+            "'agent list') [ -f \"$QQQ_TEST_FAIL\" ] && exit 1; /bin/cat \"$QQQ_TEST_AGENTS\";;",
+            "'agent list') /bin/sleep 3; exec /bin/cat \"$QQQ_TEST_AGENTS\";;",
+        );
+    fs::write(f.dir.path().join("herdr"), script).unwrap();
+    let path = f.dir.path().join(".qqq/qqq.db");
+    let before = fs::read(&path).unwrap();
+    // Handoff's unbounded lookup can find the owner after preflight times out.
+    assert_eq!(f.ok(&["herdr", "find", "1"])["pane_id"], "w1:p1");
+    assert_eq!(
+        f.db()
+            .query_row("SELECT status FROM tasks WHERE id=1", [], |row| {
+                row.get::<_, String>(0)
+            })
+            .unwrap(),
+        "in_progress"
+    );
+    assert_eq!(fs::read(path).unwrap(), before);
 }
 
 #[test]

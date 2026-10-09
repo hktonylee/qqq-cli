@@ -1168,11 +1168,11 @@ Native Codex claims bind actual harness ancestor PID, start time, executable and
 machine identity privately to current claim. Missing/reused PID or zombie proves
 death on same machine; another machine or unavailable process data stays unknown.
 Manual session tokens alone do not identify process. Saved Herdr server and agent
-identity/terminal establish liveness; stopped/missing saved server or successful
-agent list without owner proves death. Failed/malformed/timeout probes stay
-unknown unless separate evidence proves stopped server. Probes time out after
-two seconds. Claim, link and process guards prevent stale checks from failing
-reassigned work.
+identity/terminal establish liveness; a successful, valid agent list without owner
+proves death. Failed/malformed/timeout probes stay unknown, even if Herdr’s local
+session registry reports saved server stopped or absent. Registry state alone
+does not establish owner liveness. Probes time out after two seconds. Claim, link
+and process guards prevent stale checks from failing reassigned work.
 
 Use `qqq edit ID --set-status new` to retry errors. `qqq reopen ID` also recovers
 auto-failed owners; archive/unarchive preserves that option. TUI actions apply

@@ -1,15 +1,13 @@
 //! Synchronous, evidence-based cleanup before command execution.
 use crate::{
     db::{Db, SCHEMA_VERSION, StoredLink},
-    herdr::{self, Pane},
+    herdr,
 };
 use anyhow::Result;
 use rusqlite::{Connection, OpenFlags, TransactionBehavior, params};
-use serde::Deserialize;
 use std::{
     collections::HashMap,
     path::{Path, PathBuf},
-    process::Command,
     sync::OnceLock,
     time::Duration,
 };
@@ -64,36 +62,6 @@ struct Death {
     reason: String,
 }
 
-enum Server {
-    Agents(Vec<Pane>),
-    Dead,
-    Unknown,
-}
-
-#[derive(Deserialize)]
-struct Sessions {
-    sessions: Vec<ServerStatus>,
-}
-#[derive(Deserialize)]
-struct ServerStatus {
-    name: String,
-    running: bool,
-}
-
-fn sessions() -> Option<Sessions> {
-    let output = crate::process::probe(Command::new("herdr").args(["session", "list", "--json"]))?;
-    let sessions: Sessions = serde_json::from_slice(&output).ok()?;
-    let mut names = std::collections::HashSet::new();
-    if sessions
-        .sessions
-        .iter()
-        .any(|session| session.name.trim().is_empty() || !names.insert(&session.name))
-    {
-        return None;
-    }
-    Some(sessions)
-}
-
 fn observe(conn: &Connection) -> Result<Vec<Death>> {
     let claims = conn
         .prepare(
@@ -133,7 +101,6 @@ fn observe(conn: &Connection) -> Result<Vec<Death>> {
         })?
         .collect::<rusqlite::Result<Vec<_>>>()?;
     let mut servers = HashMap::new();
-    let mut session_snapshot = None;
     let mut deaths = Vec::new();
     let mut process_snapshot = None;
     let mut machine_snapshot = None;
@@ -190,44 +157,19 @@ fn observe(conn: &Connection) -> Result<Vec<Death>> {
         else {
             continue;
         };
-        let state = servers.entry(server.to_owned()).or_insert_with(|| {
-            match herdr::probe_owner_agents(server) {
-                Some(agents) => Server::Agents(agents),
-                None => {
-                    let snapshot = session_snapshot.get_or_insert_with(sessions);
-                    match snapshot.as_ref() {
-                        Some(sessions)
-                            if !sessions
-                                .sessions
-                                .iter()
-                                .any(|session| session.name == server && session.running) =>
-                        {
-                            Server::Dead
-                        }
-                        _ => Server::Unknown,
-                    }
-                }
-            }
-        });
-        let reason = match state {
-            Server::Agents(agents)
-                if !agents
-                    .iter()
-                    .any(|pane| herdr::matches_owner(&stored.link, pane)) =>
-            {
-                Some(format!(
-                    "Owner preflight: {} harness {} ({}) is no longer live on Herdr server {server}",
-                    stored.link.identity.agent,
-                    stored.link.identity.value,
-                    stored.link.identity.kind
-                ))
-            }
-            Server::Dead => Some(format!(
-                "Owner preflight: Herdr orchestrator server {server} is stopped or absent"
-            )),
-            _ => None,
-        };
-        if let Some(reason) = reason {
+        let agents = servers
+            .entry(server.to_owned())
+            .or_insert_with(|| herdr::probe_owner_agents(server));
+        // Registry state cannot prove death after a failed or timed-out owner probe.
+        let Some(agents) = agents else { continue };
+        if !agents
+            .iter()
+            .any(|pane| herdr::matches_owner(&stored.link, pane))
+        {
+            let reason = format!(
+                "Owner preflight: {} harness {} ({}) is no longer live on Herdr server {server}",
+                stored.link.identity.agent, stored.link.identity.value, stored.link.identity.kind
+            );
             deaths.push(Death { claim, reason });
         }
     }
