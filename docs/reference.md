@@ -704,8 +704,9 @@ returning focus to editor while preserving draft. From editor, Esc clears editor
 before exiting on next press. Selected tasks and dirty new drafts ask before
 discarding unsaved content; `y` clears editor, `n` keeps draft for editing or Ctrl-S save.
 Ctrl-C returns selected task to blank draft, asking before discarding edits.
-Ctrl-C in dirty new draft asks before exit. After active new draft is approved,
-Ctrl-C or Esc exit prompts for every retained dirty draft, including hidden,
+Ctrl-C immediately clears a nonempty new or child draft, including text, tags,
+images, paste items and undo history; child parent stays selected. Next Ctrl-C
+exits only once active new draft is empty. Ctrl-C or Esc exit prompts for every retained dirty draft, including hidden,
 archived or deleted tasks and child drafts. Prompts identify draft and preview it;
 `y` advances, `n`, Enter or Esc cancels whole exit and preserves all drafts,
 including earlier approvals. App exits after every draft is approved. Blank draft
@@ -839,8 +840,9 @@ With focused filter or nonempty query, Esc clears query and closes filter focus.
 nonempty query, preserving current focus. Selected task and editor draft stay intact, including while
 popup or confirmation is open. With empty focused filter, next Ctrl-C closes filter
 and returns focus to editor without changing opened task or draft. Next Esc follows
-editor clearing flow; later Ctrl-C follows editor cancel flow. Dirty drafts ask
-before discard.
+editor clearing flow; later Ctrl-C follows editor cancel flow. Esc asks before
+discarding dirty drafts; Ctrl-C asks for saved-task edits, clears a nonempty new
+draft immediately, and exits from an empty new draft after retained-draft approvals.
 
 Ctrl-G opens centered actions popup for selected task; dashboard stays visible
 around it. Prompts, confirmations and errors share popup; small terminals use

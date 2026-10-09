@@ -503,13 +503,15 @@ fn tui_dashboard_escape_clears_filter_editor_then_exits() {
 }
 
 #[test]
-fn tui_dashboard_ctrl_c_confirms_dirty_new_drafts() {
-    dashboard_scenario("ctrl_c_new_keep");
+fn tui_dashboard_ctrl_c_clears_dirty_new_drafts_before_exit() {
+    dashboard_scenario("ctrl_c_new_text");
     dashboard_scenario("ctrl_c_new_filter");
     dashboard_scenario("ctrl_c_new_scroll");
-    dashboard_scenario("ctrl_c_new_discard");
     dashboard_scenario("ctrl_c_new_image");
     dashboard_scenario("ctrl_c_new_whitespace");
+    dashboard_scenario("ctrl_c_new_tags");
+    dashboard_scenario("ctrl_c_new_paste");
+    dashboard_scenario("ctrl_c_new_child");
 }
 
 #[test]

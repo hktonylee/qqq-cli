@@ -1992,8 +1992,11 @@ print(json.dumps({"result": result}))
                 assert "Discard" not in visible.text(), visible.text()
             send(b"\x1b" if scenario == "buffers_exit_escape" else b"\x03")
             if scenario == "buffers_exit_active_new":
-                wait_visible(lambda: visible.text().splitlines()[-1].startswith("Discard draft?"))
-                send(b"y")
+                wait_visible(lambda: "New Task" in editor_title() and "[*]" not in editor_title()
+                             and editor_line().strip() == ""
+                             and visible.text().splitlines()[-1].startswith("Ctrl-S Save"))
+                assert child.poll() is None and cli("list") == initial_tasks
+                send(b"\x03")
             wait_visible(lambda: visible.text().splitlines()[-1].startswith("Discard task #1?"))
             assert "First one" in visible.text(), visible.text()
             if scenario == "buffers_exit_resize":
@@ -2022,7 +2025,7 @@ print(json.dumps({"result": result}))
             wait_visible(lambda: not visible.text().splitlines()[-1].startswith("Discard"))
             assert child.poll() is None
             if scenario == "buffers_exit_active_new":
-                assert editor_line().startswith("New unsaved"), visible.text()
+                assert editor_line().strip() == "", visible.text()
             if scenario != "buffers_exit_deleted":
                 assert cli("list") == initial_tasks
                 send(b"\x1b[1;2A")
@@ -2035,9 +2038,6 @@ print(json.dumps({"result": result}))
                 send(b"\x1b[1;2B")
                 wait_visible(lambda: "New Task" in editor_title())
             send(b"\x03")
-            if scenario == "buffers_exit_active_new":
-                wait_visible(lambda: visible.text().splitlines()[-1].startswith("Discard draft?"))
-                send(b"y")
             wait_visible(lambda: visible.text().splitlines()[-1].startswith("Discard task #1?"))
             send(b"y")
             wait_visible(lambda: visible.text().splitlines()[-1].startswith("Discard task #2?"))
@@ -2413,6 +2413,11 @@ print(json.dumps({"result": result}))
                 assert cli("show", "2")["task"]["description"] == "ChangedSecond"
         elif scenario.startswith("ctrl_c_new_"):
             initial_tasks = cli("list")
+            if scenario == "ctrl_c_new_child":
+                send(b"\x1b[1;2A")
+                wait_visible(lambda: "Task #2 (" in editor_title())
+                send(CTRL_P)
+                wait_visible(lambda: "New Task (parent #2)" in editor_title())
             if scenario == "ctrl_c_new_image":
                 image_path = Path(folder) / "unsaved.png"
                 image_path.write_bytes(base64.b64decode(
@@ -2420,6 +2425,20 @@ print(json.dumps({"result": result}))
                 ))
                 send(b"\x1b[200~" + str(image_path).encode() + b"\x1b[201~")
                 wait_visible(lambda: "[Image #1: unsaved.png]" in visible.text())
+            elif scenario == "ctrl_c_new_tags":
+                send(b"\x0c")
+                wait_visible(lambda: "Tags new task" in visible.text())
+                send(b"drafttag\x13")
+                wait_visible(lambda: "Tags new task" not in visible.text()
+                             and visible.text().splitlines()[-1].startswith("Draft tags saved")
+                             and "[*]" in editor_title())
+                send(b"\x0c")
+                wait_visible(lambda: "Tags new task" in visible.text() and "drafttag" in visible.text())
+                send(b"\x1b")
+                wait_visible(lambda: "Tags new task" not in visible.text())
+            elif scenario == "ctrl_c_new_paste":
+                send(b"\x1b[200~" + b"x" * 1001 + b"\x1b[201~")
+                wait_visible(lambda: "[Pasted Content 1001 chars]" in editor_line())
             else:
                 send(b"   " if scenario == "ctrl_c_new_whitespace" else b"Unsaved draft")
                 wait_visible(lambda: visible.x > 0 and visible.y == editor_row() + 1)
@@ -2448,30 +2467,34 @@ print(json.dumps({"result": result}))
                              and (visible.x, visible.y) == (len("Unsaved draft"), editor_row() + 1))
                 assert child.poll() is None and cli("list") == initial_tasks
                 send(b"\x03")
-            read_until(b"Discard draft? (y/N)")
+            wait_visible(lambda: "New Task" in editor_title() and "[*]" not in editor_title()
+                         and editor_line().strip() == ""
+                         and visible.text().splitlines()[-1].startswith("Ctrl-S Save")
+                         and (visible.x, visible.y) == (0, editor_row() + 1))
             assert cli("list") == initial_tasks
             assert child.poll() is None
-            settle()
+            assert "Discard" not in visible.text() and "drafttag" not in visible.text(), visible.text()
+            if scenario == "ctrl_c_new_child":
+                assert "parent #2" in editor_title(), visible.text()
             if scenario == "ctrl_c_new_scroll":
                 assert visible.text().splitlines()[:list_bottom() + 1] == scrolled_list, visible.text()
-            clear_capture()
+            send(b"\x1a")
+            wait_visible(lambda: visible.text().splitlines()[-1].startswith("Nothing to undo"))
+            send(b"\x19")
+            wait_visible(lambda: visible.text().splitlines()[-1].startswith("Nothing to redo"))
+            assert editor_line().strip() == "", visible.text()
+            if scenario == "ctrl_c_new_tags":
+                send(b"\x0c")
+                wait_visible(lambda: "Tags new task" in visible.text())
+                assert "drafttag" not in visible.text(), visible.text()
+                send(b"\x1b")
+                wait_visible(lambda: "Tags new task" not in visible.text())
             send(b"\x03")
-            wait_visible(lambda: bool(screen)
-                         and visible.text().splitlines()[-1].startswith("Discard draft? (y/N)"))
-            assert child.poll() is None
-            if scenario == "ctrl_c_new_scroll":
-                send(b"n")
-                wait_visible(lambda: visible.text().splitlines()[-1].startswith("Ctrl-S Save")
-                             and editor_line().startswith("Unsaved draft"))
-                assert visible.text().splitlines()[:list_bottom() + 1] == scrolled_list, visible.text()
-                assert cli("list") == initial_tasks
-            if scenario in ("ctrl_c_new_keep", "ctrl_c_new_filter"):
-                send(b"n")
-                wait_visible(lambda: visible.text().splitlines()[-1].startswith("Ctrl-S Save")
-                             and editor_line().startswith("Unsaved draft"))
-                send(b"\x13")
-                wait_visible(lambda: "Task #3 (" in editor_title())
-                assert cli("show", "3")["task"]["description"] == "Unsaved draft"
+            deadline = time.monotonic() + 5
+            while child.poll() is None:
+                assert time.monotonic() < deadline, "Second Ctrl-C did not exit empty New Task"
+                settle()
+            assert cli("list") == initial_tasks
         elif scenario in ("live_title", "live_title_filtered"):
             cli("edit", "2", "--priority", "8")
             send(b"\x1b[1;2A")
@@ -4626,9 +4649,6 @@ print(json.dumps({"result": result}))
                              and (visible.x, visible.y) == (0, editor_row() + 1))
                 assert child.poll() is None and cli("list") == initial_tasks
                 send(b"\x03")
-            elif scenario in ("ctrl_c_new_discard", "ctrl_c_new_image", "ctrl_c_new_whitespace"):
-                send(b"y")
-                assert cli("list") == initial_tasks
             else:
                 if scenario.startswith("escape_") or scenario in ("empty", "empty_json", "workflow_empty"):
                     send(b"\x1b")

@@ -1899,11 +1899,24 @@ fn compose_inner(
                 if dashboard
                     && target_id.is_none()
                     && cancel_key
-                    && draft.is_dirty_against(&baseline.description)
+                    && confirmation.is_none()
+                    && action_ui.is_none()
+                    && !draft.is_empty()
                 {
-                    confirmation = Some(Confirmation::Exit);
-                    action_ui = None;
+                    editor_follow_cursor = load_target(
+                        Target::New {
+                            parent_id: draft_parent_id,
+                        },
+                        &mut draft,
+                        &mut target_id,
+                        &mut target_status,
+                        &mut draft_parent_id,
+                        &mut baseline,
+                        &mut top,
+                    );
                     filter_focused = false;
+                    message.clear();
+                    message_is_error = false;
                     continue;
                 }
                 let editor_escape =

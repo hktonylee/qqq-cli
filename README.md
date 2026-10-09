@@ -134,6 +134,7 @@ task to load it, scroll each pane, or use the keyboard:
 | Ctrl+G | Open bulk actions when tasks marked, otherwise task actions |
 | Ctrl+H | Open linked Herdr agent; shown only for tasks with a Herdr link |
 | Esc | Close the filter, clear the editor, then exit; changed drafts ask before discard |
+| Ctrl+C | Clear nonempty New Task; press again to exit when empty |
 
 Ctrl+G menu includes `e Mark error`. Enter reason, confirm with `y`; marking
 error requires ownership of an in-progress task.
