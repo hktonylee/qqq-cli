@@ -757,6 +757,13 @@ fn tui_dashboard_completed_toggle_preserves_drafts_and_filters_live_tasks() {
 }
 
 #[test]
+fn tui_dashboard_archived_toggle_preserves_drafts_and_combines_filters() {
+    dashboard_scenario("archived_toggle");
+    dashboard_scenario("archived_toggle_no_color");
+    dashboard_scenario("archived_toggle_included");
+}
+
+#[test]
 fn tui_dashboard_plain_and_alt_slash_insert_literal_slash() {
     dashboard_scenario("slash_edit");
 }

@@ -816,12 +816,16 @@ Left-click editor text to place caret. Task-row clicks retain unsaved drafts,
 using same restoration behavior as Shift-Up/Down.
 
 Ctrl+/ focuses filter and shows `Filter:` with editable caret, even when empty.
-Filter bar stays visible while focused, query is nonempty, or completed tasks are
-hidden. Empty unfocused query reserves no row when completed tasks are shown.
-Right-edge `[✓ Completed]` button includes completed tasks; click to switch to
-`[× Completed]` and hide them. Ctrl-T toggles the same state while filter is
-focused. Narrow list panes show compact `[✓]` / `[×]`. Visibility resets when TUI
-opens again. Toggle preserves query, opened task, unsaved drafts and DB; navigation
+Filter bar stays visible while focused, query is nonempty, completed tasks are
+hidden, or archived tasks are included. Empty unfocused query reserves no row
+when completed tasks are shown and archived tasks are hidden.
+Right-edge `[✓ Completed] [× Archived]` buttons control visibility independently.
+Click Completed or press Ctrl-T while filter is focused to hide/show completed
+tasks. Archived defaults off; click Archived or press Ctrl-A while filter is
+focused to include/hide archived tasks. `--include-archived` and saved views can
+start with Archived enabled. Narrow list panes show `[✓C] [×A]` with the same
+click targets. Visibility resets to startup settings when TUI opens again.
+Toggle preserves query, opened task, unsaved drafts and DB; navigation
 uses visible tasks. Unfinished children remain visible when completed parents are
 hidden. Type to match any part of full description, ignoring case.
 Matching tasks retain visible parent chain;

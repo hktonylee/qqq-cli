@@ -31,6 +31,7 @@ pub struct View<'a> {
     pub query: &'a str,
     pub focused: bool,
     pub show_completed: bool,
+    pub include_archived: bool,
     pub bulk_selected: Option<&'a BTreeSet<i64>>,
     pub top: &'a mut usize,
     pub follow_selected: bool,
@@ -51,6 +52,7 @@ pub enum ClickTarget {
     Task(i64),
     Editor(usize),
     ToggleCompleted,
+    ToggleArchived,
 }
 
 pub struct Panes {
@@ -291,12 +293,23 @@ fn list_content(area: Rect, filter_visible: bool) -> Rect {
     )
 }
 
-pub fn filter_visible(query: &str, focused: bool, show_completed: bool) -> bool {
-    focused || !query.is_empty() || !show_completed
+pub fn filter_visible(
+    query: &str,
+    focused: bool,
+    show_completed: bool,
+    include_archived: bool,
+) -> bool {
+    focused || !query.is_empty() || !show_completed || include_archived
 }
 
 pub fn completed_button(list: Rect) -> Rect {
-    let width = if list.width >= 24 { 13 } else { 3 };
+    let archived = archived_button(list);
+    let width = if list.width >= 37 { 13 } else { 4 };
+    Rect::new(archived.x.saturating_sub(width + 1), list.y, width, 1)
+}
+
+pub fn archived_button(list: Rect) -> Rect {
+    let width = if list.width >= 37 { 12 } else { 4 };
     Rect::new(list.x + list.width.saturating_sub(width), list.y, width, 1)
 }
 
@@ -350,6 +363,9 @@ pub fn click_target(
     if hit.filter_visible && completed_button(list).contains(Position::new(column, row)) {
         return Some(ClickTarget::ToggleCompleted);
     }
+    if hit.filter_visible && archived_button(list).contains(Position::new(column, row)) {
+        return Some(ClickTarget::ToggleArchived);
+    }
     let content = list_content(list, hit.filter_visible);
     if content.contains(Position::new(column, row)) {
         let index = hit.list_top + usize::from(row - content.y);
@@ -382,7 +398,13 @@ fn text_tail(text: &str, available: usize) -> (String, usize) {
 }
 
 fn filter_line(query: &str, width: usize, focused: bool, color: bool) -> (Line<'static>, u16) {
-    let label = if width >= 10 { "Filter: " } else { "F: " };
+    let label = if width >= 10 {
+        "Filter: "
+    } else if width >= 5 {
+        "F: "
+    } else {
+        ""
+    };
     let (tail, used) = text_tail(query, width.saturating_sub(label.len() + 1));
     let label_style = if color && focused {
         Style::default()
@@ -622,8 +644,12 @@ pub fn draw(
         details: details_area,
         editor: editor_area,
     } = panes(area);
-    let filter_visible =
-        filter_visible(list_view.query, list_view.focused, list_view.show_completed);
+    let filter_visible = filter_visible(
+        list_view.query,
+        list_view.focused,
+        list_view.show_completed,
+        list_view.include_archived,
+    );
     let content = list_content(list, filter_visible);
     let list_height = usize::from(content.height);
     *list_view.top = if list_view.follow_selected {
@@ -653,28 +679,30 @@ pub fn draw(
             Paragraph::new(filter).style(filter_style),
             Rect::new(list.x, list.y, query_width, 1),
         );
-        let mark = if list_view.show_completed {
-            '✓'
-        } else {
-            '×'
-        };
-        let label = if button.width == 13 {
-            format!("[{mark} Completed]")
-        } else {
-            format!("[{mark}]")
-        };
-        let button_style = if color {
-            filter_style
-                .fg(if list_view.show_completed {
-                    ACCENT
-                } else {
-                    Color::Gray
-                })
-                .add_modifier(Modifier::BOLD)
-        } else {
-            filter_style
-        };
-        frame.render_widget(Paragraph::new(label).style(button_style), button);
+        for (button, enabled, name, compact) in [
+            (button, list_view.show_completed, "Completed", "C"),
+            (
+                archived_button(list),
+                list_view.include_archived,
+                "Archived",
+                "A",
+            ),
+        ] {
+            let mark = if enabled { '✓' } else { '×' };
+            let label = if button.width > 4 {
+                format!("[{mark} {name}]")
+            } else {
+                format!("[{mark}{compact}]")
+            };
+            let button_style = if color {
+                filter_style
+                    .fg(if enabled { ACCENT } else { Color::Gray })
+                    .add_modifier(Modifier::BOLD)
+            } else {
+                filter_style
+            };
+            frame.render_widget(Paragraph::new(label).style(button_style), button);
+        }
         if list_view.focused && !list_view.hide_cursor {
             frame.set_cursor_position((list.x + filter_cursor, list.y));
         }

@@ -37,7 +37,7 @@ with tempfile.TemporaryDirectory(prefix="qqq-dashboard-test-") as folder:
         env["NO_COLOR"] = "1"
     elif scenario == "dumb":
         env["TERM"] = "dumb"
-    if scenario.startswith(("buffers_", "long_description_", "prerequisites", "dirty_marker", "completed_toggle", "jump", "menu_error_", "force_complete", "force_reopen", "force_error", "list_selection", "tags", "orphan_reopen", "views", "graph", "scroll_multiline")) and scenario.endswith("no_color"):
+    if scenario.startswith(("buffers_", "long_description_", "prerequisites", "dirty_marker", "completed_toggle", "archived_toggle", "jump", "menu_error_", "force_complete", "force_reopen", "force_error", "list_selection", "tags", "orphan_reopen", "views", "graph", "scroll_multiline")) and scenario.endswith("no_color"):
         env["NO_COLOR"] = "1"
     for name in ("EDITOR", "QQQ_SESSION", "HERDR_ENV", "HERDR_PANE_ID", "CODEX_THREAD_ID", "CODEX_SESSION_ID"):
         env.pop(name, None)
@@ -188,6 +188,15 @@ print(json.dumps({"result": {"pane": pane}}))
         cli("add", "Other")
         for index in range(4, 21):
             cli("add", f"Needle {index}")
+    elif scenario.startswith("archived_toggle"):
+        cli("add", "Needle visible")
+        cli("add", "Needle hidden")
+        cli("archive", "2")
+        cli("add", "Needle finished", "--priority", "10")
+        cli("next", "--local", "--session", "worker")
+        cli("complete", "3", "--session", "worker")
+        cli("archive", "3")
+        cli("add", "Other")
     elif scenario.startswith("completed_toggle"):
         cli("add", "Finished parent")
         cli("add", "Needle child", "--parent", "1")
@@ -363,7 +372,7 @@ print(json.dumps({"result": result}))
         args.extend(["--session", "reviewer"])
     elif scenario != "force_error_sessionless" and (scenario in ("actions_basic", "actions_rejected", "actions_narrow") or scenario.startswith(("menu_retry_", "menu_error_", "force_reopen", "force_error")) or (scenario.startswith("force_complete") and not scenario.startswith("force_complete_herdr_") and scenario not in ("force_complete_sessionless", "force_complete_owner_db_error"))):
         args.extend(["--session", "other" if scenario == "menu_error_rejected" else "worker"])
-    if scenario in ("archive_included", "actions_basic", "actions_rejected"):
+    if scenario in ("archive_included", "actions_basic", "actions_rejected", "archived_toggle_included"):
         args.append("--include-archived")
     if scenario.startswith("views_startup"):
         args.extend(["--view", "Backend", "--tag", "backend", "--query", "First", "--status", "new"])
@@ -422,7 +431,10 @@ print(json.dumps({"result": result}))
                 query = filter_text().removeprefix("Filter:").lstrip()
                 cursor = (8 + len(query), 0)
             else:
-                cursor = (len(editor_line().rstrip()), editor_row() + 1)
+                row = editor_row()
+                if row is None:
+                    return False
+                cursor = (len(editor_line().rstrip()), row + 1)
             return ((visible.x, visible.y) == cursor
                     and screen.endswith(f"\x1b[{cursor[1] + 1};{cursor[0] + 1}H".encode()))
         wait_visible(ready)
@@ -461,15 +473,18 @@ print(json.dumps({"result": result}))
 
     def filter_text():
         width = list_width()
-        button_width = 13 if width >= 24 else 3
-        return visible.text().splitlines()[0][:width - button_width - 1].rstrip()
+        controls_width = 26 if width >= 37 else 9
+        return visible.text().splitlines()[0][:width - controls_width - 1].rstrip()
 
     def list_text():
         return "\n".join(row[:list_width()] for row in visible.text().splitlines()[:list_bottom() + 1])
 
     def completed_button_text():
         width = list_width()
-        return visible.text().splitlines()[0][width - (13 if width >= 24 else 3):width]
+        archived_width = 12 if width >= 37 else 4
+        button_width = 13 if width >= 37 else 4
+        end = width - archived_width - 1
+        return visible.text().splitlines()[0][end - button_width:end]
 
     def editor_row():
         return next((index for index, row in enumerate(visible.text().splitlines())
@@ -535,7 +550,7 @@ print(json.dumps({"result": result}))
         wait_visible(lambda: visible.text().splitlines()[-1].startswith("Ctrl-S Save")
                      and (visible.x, visible.y) == (0, editor_row() + 1))
         assert visible.text().splitlines()[0].strip(), visible.text()
-        if scenario != "views_visibility":
+        if scenario not in ("views_visibility", "archive_included", "actions_basic", "actions_rejected", "archived_toggle_included"):
             assert not visible.text().splitlines()[0].startswith("Filter:"), visible.text()
         assert not any(line.split()[:3] == ["ID", "STATUS", "TASK"]
                        for line in visible.text().splitlines()[:list_bottom() + 1]), visible.text()
@@ -561,7 +576,7 @@ print(json.dumps({"result": result}))
                              and editor_line().startswith("Second"))
                 settle()
                 assert b"\x1b[38;" not in screen and b"\x1b[48;" not in screen, screen[-2000:]
-        if not scenario.startswith(("wide_layout", "menu_retry_", "menu_error_", "long_description_", "completed_toggle", "force_complete", "force_reopen", "force_error", "orphan_reopen", "views_startup", "views_visibility", "scroll_multiline")) and scenario not in ("buffers_scroll", "handoff_scroll", "ctrl_c_new_scroll", "live_refresh_scroll", "tree_navigation", "ctrl_punctuation_tree", "scroll", "wheel", "click", "click_filter", "workflow", "workflow_empty", "workflow_status", "filter", "filter_no_color", "archive_hidden", "archive_included", "actions_basic", "actions_rejected", "actions_hidden", "jump_archived"):
+        if not scenario.startswith(("wide_layout", "menu_retry_", "menu_error_", "long_description_", "completed_toggle", "archived_toggle", "force_complete", "force_reopen", "force_error", "orphan_reopen", "views_startup", "views_visibility", "scroll_multiline")) and scenario not in ("buffers_scroll", "handoff_scroll", "ctrl_c_new_scroll", "live_refresh_scroll", "tree_navigation", "ctrl_punctuation_tree", "scroll", "wheel", "click", "click_filter", "workflow", "workflow_empty", "workflow_status", "filter", "filter_no_color", "archive_hidden", "archive_included", "actions_basic", "actions_rejected", "actions_hidden", "jump_archived"):
             read_until(b"Second")
             assert "First" in visible.text() and "Second" in visible.text(), visible.text()
         assert not select.select([child.stdout], [], [], 0)[0], "TUI wrote stdout while open"
@@ -4158,6 +4173,63 @@ print(json.dumps({"result": result}))
             send(b"\x1b[1;2A")
             read_until(b"No older task")
             wait_visible(lambda: "First" in visible.text().splitlines()[0])
+        elif scenario.startswith("archived_toggle"):
+            initial_tasks = cli("list", "--include-archived")
+            if scenario.endswith("no_color"):
+                assert b"\x1b[38;" not in screen and b"\x1b[48;" not in screen
+            send(b"Unsaved")
+            wait_frame(lambda: editor_line().startswith("Unsaved"))
+            send(CTRL_SLASH)
+            included = scenario.endswith("included")
+            wait_frame(lambda: ("[✓ Archived]" if included else "[× Archived]") in visible.text().splitlines()[0])
+            assert ("Needle hidden" in list_text()) == included, visible.text()
+            if not included:
+                click(list_width() - 11, 1)
+                wait_frame(lambda: "[✓ Archived]" in visible.text().splitlines()[0]
+                           and "Needle hidden" in list_text() and "Needle finished" in list_text())
+            send(b"needle")
+            wait_frame(lambda: filter_text() == "Filter: needle" and "Other" not in list_text())
+            send(b"\x14")
+            wait_frame(lambda: completed_button_text() == "[× Completed]"
+                       and "Needle finished" not in list_text() and "Needle hidden" in list_text())
+            send(b"\x01")
+            wait_frame(lambda: "[× Archived]" in visible.text().splitlines()[0]
+                       and "Needle hidden" not in list_text() and "Needle visible" in list_text())
+            assert editor_line().startswith("Unsaved"), visible.text()
+            send(b"\x01\x1b[1;2A")
+            wait_frame(lambda: "Task #2 (New)" in editor_title())
+            send(b"\t retained")
+            wait_frame(lambda: editor_line().startswith("Needle hidden retained"))
+            send(CTRL_SLASH + b"\x01")
+            wait_frame(lambda: "Needle hidden" not in list_text())
+            assert editor_line().startswith("Needle hidden retained"), visible.text()
+            send(b"\x1b[1;2A")
+            wait_frame(lambda: "Task #1 (New)" in editor_title())
+            send(b"\x01\x1b[1;2B")
+            wait_frame(lambda: "Task #2 (New)" in editor_title()
+                       and editor_line().startswith("Needle hidden retained"))
+            send(b"\x14\x15\x1b")
+            wait_frame(lambda: "[✓ Archived]" in visible.text().splitlines()[0]
+                       and filter_text() == "Filter:" and visible.y != 0)
+            for width in (24, 50, 150, 72):
+                fcntl.ioctl(slave, termios.TIOCSWINSZ, struct.pack("HHHH", 24, width, 0, 0))
+                visible.resize(width, 24)
+                clear_capture()
+                os.kill(child.pid, signal.SIGWINCH)
+                wait_frame(lambda: ("[✓A]" if width == 24 else "[✓ Archived]") in visible.text().splitlines()[0])
+                click(list_width() - (3 if width == 24 else 11), 1)
+                wait_frame(lambda: "Needle hidden" not in list_text() and "Needle visible" in list_text())
+                send(CTRL_SLASH + b"\x01\x1b")
+                wait_frame(lambda: ("[✓A]" if width == 24 else "[✓ Archived]") in visible.text().splitlines()[0]
+                           and visible.y != 0)
+            assert editor_line().startswith("Needle hidden retained"), visible.text()
+            assert cli("list", "--include-archived") == initial_tasks
+            send(CTRL_SLASH + b"\x01")
+            wait_frame(lambda: "[× Archived]" in visible.text().splitlines()[0] and "Needle hidden" not in list_text())
+            cli("unarchive", "2")
+            wait_frame(lambda: "Needle hidden" in list_text())
+            send(b"\x1b")
+            wait_frame(lambda: not visible.text().splitlines()[0].startswith("Filter:") and visible.y != 0)
         elif scenario.startswith("completed_toggle"):
             initial_tasks = cli("list")
             send(b"Unsaved")
@@ -4169,7 +4241,7 @@ print(json.dumps({"result": result}))
             wait_frame(lambda: editor_line().startswith("Finished parent retained") and "[*]" in list_text())
             send(CTRL_SLASH)
             wait_frame(lambda: completed_button_text() == "[✓ Completed]" and (visible.x, visible.y) == (8, 0))
-            click(list_width() - 12, 1)
+            click(list_width() - 25, 1)
             wait_frame(lambda: completed_button_text() == "[× Completed]" and "Finished parent" not in list_text())
             assert "Needle child" in list_text() and "Needle other" in list_text(), visible.text()
             child_row = next(row for row in list_text().splitlines() if "Needle child" in row)
@@ -4178,7 +4250,7 @@ print(json.dumps({"result": result}))
             assert editor_line().startswith("Finished parent retained") and (visible.x, visible.y) == (8, 0), visible.text()
             send(b"needle")
             wait_frame(lambda: filter_text() == "Filter: needle" and "Finished parent" not in list_text())
-            click(list_width() - 12, 1)
+            click(list_width() - 25, 1)
             wait_frame(lambda: completed_button_text() == "[✓ Completed]" and "Finished parent" in list_text())
             send(b"\x14")
             wait_frame(lambda: completed_button_text() == "[× Completed]" and "Finished parent" not in list_text())
@@ -4196,7 +4268,7 @@ print(json.dumps({"result": result}))
             send(CTRL_SLASH + b"\x14\x1b[1;2A")
             wait_frame(lambda: "Task #1 (Completed)" in editor_title() and editor_line().startswith("Finished parent retained"))
             assert "[*]" in list_text(), visible.text()
-            click(list_width() - 12, 1)
+            click(list_width() - 25, 1)
             wait_frame(lambda: completed_button_text() == "[× Completed]" and "Finished parent" not in list_text())
             assert cli("list") == initial_tasks
             cli("next", "--local", "--session", "worker")
@@ -4212,16 +4284,16 @@ print(json.dumps({"result": result}))
                              and "Needle other" in list_text() and "Needle child" not in list_text()
                              and visible.y == 0 and not visible.pending
                              and screen.endswith(f"\x1b[1;{visible.x + 1}H".encode()))
-                click(list_width() - 12, 1)
+                click(list_width() - 25, 1)
                 wait_frame(lambda: completed_button_text() == "[✓ Completed]" and "Needle child" in list_text())
-                click(list_width() - 12, 1)
+                click(list_width() - 25, 1)
                 wait_frame(lambda: completed_button_text() == "[× Completed]" and "Needle child" not in list_text())
             assert editor_line().startswith("Finished parent retained"), visible.text()
             send(b"\x1b")
             wait_frame(lambda: completed_button_text() == "[× Completed]"
                        and (visible.x, visible.y) == (len("Finished parent retained"), editor_row() + 1)
                        and visible.text().splitlines()[-1].startswith("Ctrl-S Save"))
-            click(list_width() - 12, 1)
+            click(list_width() - 25, 1)
             wait_frame(lambda: not visible.text().splitlines()[0].startswith("Filter:") and "Finished parent" in list_text())
             assert (visible.x, visible.y) == (len("Finished parent retained"), editor_row() + 1), visible.text()
             send(b"\x1b[1;2B" * 3)

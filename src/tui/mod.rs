@@ -1009,8 +1009,12 @@ fn compose_inner(
     let mut buffers = DraftBuffers::default();
     loop {
         let size = terminal::size()?;
-        let filter_visible =
-            dashboard::filter_visible(&filter_query, filter_focused, show_completed);
+        let filter_visible = dashboard::filter_visible(
+            &filter_query,
+            filter_focused,
+            show_completed,
+            include_archived,
+        );
         if details_id != target_id {
             details_top = 0;
             details_id = target_id;
@@ -1374,6 +1378,7 @@ fn compose_inner(
                             query: &filter_query,
                             focused: filter_focused,
                             show_completed,
+                            include_archived,
                             bulk_selected: Some(&bulk_selected),
                             top: &mut list_top,
                             follow_selected: list_follow_selected,
@@ -1567,6 +1572,11 @@ fn compose_inner(
                 ) {
                     Some(dashboard::ClickTarget::ToggleCompleted) => {
                         show_completed = !show_completed;
+                        list_top = 0;
+                        list_follow_selected = true;
+                    }
+                    Some(dashboard::ClickTarget::ToggleArchived) => {
+                        include_archived = !include_archived;
                         list_top = 0;
                         list_follow_selected = true;
                     }
@@ -2614,6 +2624,10 @@ fn compose_inner(
                 if filter_focused {
                     if control && key.code == KeyCode::Char('t') {
                         show_completed = !show_completed;
+                        list_top = 0;
+                        list_follow_selected = true;
+                    } else if control && key.code == KeyCode::Char('a') {
+                        include_archived = !include_archived;
                         list_top = 0;
                         list_follow_selected = true;
                     } else if control && key.code == KeyCode::Char('u') {

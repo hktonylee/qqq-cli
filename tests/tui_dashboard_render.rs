@@ -83,6 +83,7 @@ fn task_tags_keep_color_across_status_selection_dirty_and_compact_rows() {
                                         query: "",
                                         focused: false,
                                         show_completed: true,
+                                        include_archived: false,
                                         bulk_selected: None,
                                         top: &mut 0,
                                         follow_selected: true,
@@ -198,6 +199,7 @@ fn task_list_selection_reclaims_one_column() {
                                 query: "",
                                 focused: false,
                                 show_completed: true,
+                                include_archived: false,
                                 bulk_selected: None,
                                 top: &mut 0,
                                 follow_selected: true,
@@ -253,6 +255,7 @@ fn completed_filter_button_reserves_query_caret_space() {
                 None,
                 dashboard::View {
                     show_completed: true,
+                    include_archived: false,
                     bulk_selected: None,
                     query: &"界e\u{301}".repeat(40),
                     focused: true,
@@ -275,132 +278,155 @@ fn completed_filter_button_reserves_query_caret_space() {
         })
         .unwrap();
     let bar = line(terminal.backend().buffer(), 0);
-    assert!(bar.ends_with("[✓ Completed]"), "{bar}");
-    assert!(terminal.get_cursor_position().unwrap().x < 58);
+    assert!(bar.ends_with("[✓ Completed] [× Archived]"), "{bar}");
+    assert!(terminal.get_cursor_position().unwrap().x < 45);
 }
 
 #[test]
-fn completed_filter_button_render_and_hit_cells_agree_at_every_layout() {
-    for width in [12, 13, 23, 24, 50, 72, 150] {
+fn visibility_filter_buttons_render_and_hit_cells_agree_at_every_layout() {
+    for width in [12, 13, 23, 24, 36, 37, 50, 72, 150] {
         for color in [true, false] {
             for show_completed in [true, false] {
-                let layout = render::Layout::new(&["Draft".into()], &[], width.into());
-                let chrome = render::Chrome {
-                    title: "Editor",
-                    title_status_color: None,
-                    keys: render::KEYS,
-                    message: "",
-                };
-                let rows = panel::rows("1 New Task", usize::from(width));
-                let mut terminal = Terminal::new(TestBackend::new(width, 24)).unwrap();
-                terminal
-                    .draw(|frame| {
-                        dashboard::draw(
-                            frame,
-                            &rows,
-                            &HashMap::new(),
-                            None,
-                            dashboard::View {
-                                query: &"界e\u{301}".repeat(40),
-                                focused: true,
-                                show_completed,
-                                bulk_selected: None,
-                                top: &mut 0,
-                                follow_selected: true,
-                                modal_lines: None,
-                                hide_cursor: false,
-                                details: None,
-                            },
-                            render::DashboardEditor {
-                                layout: &layout,
-                                cursor: 0,
-                                top: &mut 0,
-                                chrome: &chrome,
-                                message_is_error: false,
-                                follow_cursor: true,
-                            },
-                            color,
-                        );
-                    })
-                    .unwrap();
-                let list = dashboard::panes(ratatui::layout::Rect::new(0, 0, width, 24)).list;
-                let button_width = if list.width >= 24 { 13 } else { 3 };
-                let start = list.width - button_width;
-                let expected = match (button_width, show_completed) {
-                    (13, true) => "[✓ Completed]",
-                    (13, false) => "[× Completed]",
-                    (_, true) => "[✓]",
-                    (_, false) => "[×]",
-                };
-                let button: String = (start..list.width)
-                    .map(|x| terminal.backend().buffer()[(x, 0)].symbol())
-                    .collect();
-                assert_eq!(button, expected);
-                assert!(terminal.get_cursor_position().unwrap().x < start - 1);
-                for column in 0..width {
-                    let target = dashboard::click_target(
-                        (width, 24),
-                        column,
-                        0,
-                        dashboard::HitState {
-                            rows: &rows,
-                            filter_visible: true,
-                            list_top: 0,
-                            editor_top: 0,
-                            layout: &layout,
-                        },
-                    );
+                for include_archived in [true, false] {
+                    let layout = render::Layout::new(&["Draft".into()], &[], width.into());
+                    let chrome = render::Chrome {
+                        title: "Editor",
+                        title_status_color: None,
+                        keys: render::KEYS,
+                        message: "",
+                    };
+                    let rows = panel::rows("1 New Task", usize::from(width));
+                    let mut terminal = Terminal::new(TestBackend::new(width, 24)).unwrap();
+                    terminal
+                        .draw(|frame| {
+                            dashboard::draw(
+                                frame,
+                                &rows,
+                                &HashMap::new(),
+                                None,
+                                dashboard::View {
+                                    query: &"界e\u{301}".repeat(40),
+                                    focused: true,
+                                    show_completed,
+                                    include_archived,
+                                    bulk_selected: None,
+                                    top: &mut 0,
+                                    follow_selected: true,
+                                    modal_lines: None,
+                                    hide_cursor: false,
+                                    details: None,
+                                },
+                                render::DashboardEditor {
+                                    layout: &layout,
+                                    cursor: 0,
+                                    top: &mut 0,
+                                    chrome: &chrome,
+                                    message_is_error: false,
+                                    follow_cursor: true,
+                                },
+                                color,
+                            );
+                        })
+                        .unwrap();
+                    let list = dashboard::panes(ratatui::layout::Rect::new(0, 0, width, 24)).list;
+                    let button_width = if list.width >= 37 { 13 } else { 4 };
+                    let archived_width = if list.width >= 37 { 12 } else { 4 };
+                    let archived_start = list.width - archived_width;
+                    let start = archived_start - button_width - 1;
+                    let expected = match (button_width, show_completed) {
+                        (13, true) => "[✓ Completed]",
+                        (13, false) => "[× Completed]",
+                        (_, true) => "[✓C]",
+                        (_, false) => "[×C]",
+                    };
+                    let button: String = (start..start + button_width)
+                        .map(|x| terminal.backend().buffer()[(x, 0)].symbol())
+                        .collect();
+                    assert_eq!(button, expected);
+                    let archived: String = (archived_start..list.width)
+                        .map(|x| terminal.backend().buffer()[(x, 0)].symbol())
+                        .collect();
+                    let mark = if include_archived { '✓' } else { '×' };
                     assert_eq!(
-                        target,
-                        if (start..list.width).contains(&column) {
-                            Some(dashboard::ClickTarget::ToggleCompleted)
+                        archived,
+                        if archived_width == 12 {
+                            format!("[{mark} Archived]")
                         } else {
-                            None
+                            format!("[{mark}A]")
                         }
                     );
+                    assert!(terminal.get_cursor_position().unwrap().x < start - 1);
+                    for column in 0..width {
+                        let target = dashboard::click_target(
+                            (width, 24),
+                            column,
+                            0,
+                            dashboard::HitState {
+                                rows: &rows,
+                                filter_visible: true,
+                                list_top: 0,
+                                editor_top: 0,
+                                layout: &layout,
+                            },
+                        );
+                        assert_eq!(
+                            target,
+                            if (start..start + button_width).contains(&column) {
+                                Some(dashboard::ClickTarget::ToggleCompleted)
+                            } else if (archived_start..list.width).contains(&column) {
+                                Some(dashboard::ClickTarget::ToggleArchived)
+                            } else {
+                                None
+                            }
+                        );
+                    }
+                    assert_eq!(
+                        dashboard::click_target(
+                            (width, 24),
+                            start,
+                            1,
+                            dashboard::HitState {
+                                rows: &rows,
+                                filter_visible: true,
+                                list_top: 0,
+                                editor_top: 0,
+                                layout: &layout
+                            }
+                        ),
+                        Some(dashboard::ClickTarget::Task(1))
+                    );
+                    for (x, enabled) in
+                        [(start, show_completed), (archived_start, include_archived)]
+                    {
+                        let cell = &terminal.backend().buffer()[(x, 0)];
+                        assert_eq!(
+                            cell.fg,
+                            if !color {
+                                Color::Reset
+                            } else if enabled {
+                                Color::Indexed(81)
+                            } else {
+                                Color::Gray
+                            }
+                        );
+                        assert_eq!(
+                            cell.bg,
+                            if color {
+                                Color::Indexed(236)
+                            } else {
+                                Color::Reset
+                            }
+                        );
+                        assert_eq!(
+                            cell.modifier,
+                            if color {
+                                Modifier::BOLD
+                            } else {
+                                Modifier::empty()
+                            }
+                        );
+                    }
                 }
-                assert_eq!(
-                    dashboard::click_target(
-                        (width, 24),
-                        start,
-                        1,
-                        dashboard::HitState {
-                            rows: &rows,
-                            filter_visible: true,
-                            list_top: 0,
-                            editor_top: 0,
-                            layout: &layout
-                        }
-                    ),
-                    Some(dashboard::ClickTarget::Task(1))
-                );
-                let cell = &terminal.backend().buffer()[(start, 0)];
-                assert_eq!(
-                    cell.fg,
-                    if !color {
-                        Color::Reset
-                    } else if show_completed {
-                        Color::Indexed(81)
-                    } else {
-                        Color::Gray
-                    }
-                );
-                assert_eq!(
-                    cell.bg,
-                    if color {
-                        Color::Indexed(236)
-                    } else {
-                        Color::Reset
-                    }
-                );
-                assert_eq!(
-                    cell.modifier,
-                    if color {
-                        Modifier::BOLD
-                    } else {
-                        Modifier::empty()
-                    }
-                );
             }
         }
     }
@@ -408,11 +434,17 @@ fn completed_filter_button_render_and_hit_cells_agree_at_every_layout() {
 
 #[test]
 fn hidden_completed_state_keeps_empty_unfocused_filter_bar_visible() {
-    assert!(!dashboard::filter_visible("", false, true));
+    assert!(!dashboard::filter_visible("", false, true, false));
+    assert!(dashboard::filter_visible("", false, true, true));
     for (query, focused, show_completed) in
         [("", false, false), ("", true, true), ("query", false, true)]
     {
-        assert!(dashboard::filter_visible(query, focused, show_completed));
+        assert!(dashboard::filter_visible(
+            query,
+            focused,
+            show_completed,
+            false
+        ));
     }
     let layout = render::Layout::new(&["Draft".into()], &[], 72);
     let chrome = render::Chrome {
@@ -433,6 +465,7 @@ fn hidden_completed_state_keeps_empty_unfocused_filter_bar_visible() {
                     query: "",
                     focused: false,
                     show_completed: false,
+                    include_archived: false,
                     bulk_selected: None,
                     top: &mut 0,
                     follow_selected: true,
@@ -452,7 +485,7 @@ fn hidden_completed_state_keeps_empty_unfocused_filter_bar_visible() {
             )
         })
         .unwrap();
-    assert!(line(terminal.backend().buffer(), 0).ends_with("[× Completed]"));
+    assert!(line(terminal.backend().buffer(), 0).ends_with("[× Completed] [× Archived]"));
     assert!(line(terminal.backend().buffer(), 1).starts_with("No matching tasks."));
     assert_eq!(
         terminal.get_cursor_position().unwrap(),
@@ -537,6 +570,7 @@ fn action_popup_preserves_background_and_clears_overlaid_styles() {
                         Some(1),
                         dashboard::View {
                             show_completed: true,
+                            include_archived: false,
                             bulk_selected: None,
                             query: "",
                             focused: false,
@@ -689,6 +723,7 @@ fn action_popup_input_errors_and_warnings_keep_roles_and_plain_styles() {
                         None,
                         dashboard::View {
                             show_completed: true,
+                            include_archived: false,
                             bulk_selected: None,
                             query: "",
                             focused: false,
@@ -785,6 +820,7 @@ fn blank_draft_keeps_details_pane_and_editor_position() {
                 None,
                 dashboard::View {
                     show_completed: true,
+                    include_archived: false,
                     bulk_selected: None,
                     query: "",
                     focused: false,
@@ -923,6 +959,7 @@ fn selected_task_renders_details_between_list_and_editor() {
                         Some(1),
                         dashboard::View {
                             show_completed: true,
+                            include_archived: false,
                             bulk_selected: None,
                             query: "",
                             focused: false,
@@ -1031,6 +1068,7 @@ fn details_scroll_clamps_without_moving_editor() {
                 Some(1),
                 dashboard::View {
                     show_completed: true,
+                    include_archived: false,
                     bulk_selected: None,
                     query: "",
                     focused: false,
@@ -1270,6 +1308,7 @@ fn multiline_selection_fits_preview_while_manual_scrolling_keeps_partial_rows() 
                                         query: if filter { "Selected" } else { "" },
                                         focused: filter,
                                         show_completed: true,
+                                        include_archived: false,
                                         bulk_selected: None,
                                         top: &mut top,
                                         follow_selected,
@@ -1335,6 +1374,7 @@ fn manual_list_scroll_does_not_snap_to_selected_task() {
                 Some(10),
                 dashboard::View {
                     show_completed: true,
+                    include_archived: false,
                     bulk_selected: None,
                     query: "",
                     focused: false,
@@ -1367,6 +1407,7 @@ fn manual_list_scroll_does_not_snap_to_selected_task() {
                 Some(10),
                 dashboard::View {
                     show_completed: true,
+                    include_archived: false,
                     bulk_selected: None,
                     query: "",
                     focused: false,
@@ -1426,6 +1467,7 @@ fn manual_editor_scroll_keeps_viewport_then_keyboard_reveals_caret() {
                 None,
                 dashboard::View {
                     show_completed: true,
+                    include_archived: false,
                     bulk_selected: None,
                     query: "",
                     focused: false,
@@ -1459,6 +1501,7 @@ fn manual_editor_scroll_keeps_viewport_then_keyboard_reveals_caret() {
                 None,
                 dashboard::View {
                     show_completed: true,
+                    include_archived: false,
                     bulk_selected: None,
                     query: "",
                     focused: false,
@@ -1519,6 +1562,7 @@ fn manual_offsets_clamp_after_resize() {
                 Some(10),
                 dashboard::View {
                     show_completed: true,
+                    include_archived: false,
                     bulk_selected: None,
                     query: "",
                     focused: false,
@@ -1609,6 +1653,7 @@ fn empty_filter_reserves_list_row_while_focused() {
                     Some(8),
                     dashboard::View {
                         show_completed: true,
+                        include_archived: false,
                         bulk_selected: None,
                         query: "",
                         focused,
@@ -1664,6 +1709,7 @@ fn filter_bar_shows_empty_result_and_takes_cursor_only_while_focused() {
                             Some(99),
                             dashboard::View {
                                 show_completed: true,
+                                include_archived: false,
                                 bulk_selected: None,
                                 query,
                                 focused,
@@ -1714,7 +1760,7 @@ fn filter_bar_shows_empty_result_and_takes_cursor_only_while_focused() {
                     }
                     8
                 };
-                for x in editable_start..59 {
+                for x in editable_start..46 {
                     assert_eq!(
                         buffer[(x, 0)].bg,
                         buffer[(x, 14)].bg,
@@ -1777,6 +1823,7 @@ fn small_dashboard_keeps_filter_row_and_plain_style() {
                 None,
                 dashboard::View {
                     show_completed: true,
+                    include_archived: false,
                     bulk_selected: None,
                     query: "abcdefghijklmnop",
                     focused: true,
@@ -1799,10 +1846,10 @@ fn small_dashboard_keeps_filter_row_and_plain_style() {
         })
         .unwrap();
     assert_eq!(terminal.get_cursor_position().unwrap().y, 0);
-    assert!(terminal.get_cursor_position().unwrap().x < 8);
+    assert!(terminal.get_cursor_position().unwrap().x < 2);
     let buffer = terminal.backend().buffer();
-    assert!(line(buffer, 0).starts_with("F: "));
-    assert!(line(buffer, 0).ends_with("[✓]"));
+    assert_eq!(line(buffer, 0), "p  [✓C] [×A]");
+    assert!(line(buffer, 0).ends_with("[✓C] [×A]"));
     for y in 0..8 {
         for x in 0..12 {
             assert_eq!(buffer[(x, y)].fg, Color::Reset);
@@ -1831,6 +1878,7 @@ fn minimum_dashboard_height_still_shows_selected_task() {
                 Some(1),
                 dashboard::View {
                     show_completed: true,
+                    include_archived: false,
                     bulk_selected: None,
                     query: "",
                     focused: false,
@@ -1880,6 +1928,7 @@ fn split_dashboard_keeps_list_above_editor() {
                 Some(1),
                 dashboard::View {
                     show_completed: true,
+                    include_archived: false,
                     bulk_selected: None,
                     query: "",
                     focused: false,
@@ -1936,6 +1985,7 @@ fn narrow_dashboard_shows_plain_resize_hint() {
                 None,
                 dashboard::View {
                     show_completed: true,
+                    include_archived: false,
                     bulk_selected: None,
                     query: "",
                     focused: false,
@@ -1983,6 +2033,7 @@ fn no_color_dashboard_keeps_default_cell_styles() {
                 Some(1),
                 dashboard::View {
                     show_completed: true,
+                    include_archived: false,
                     bulk_selected: None,
                     query: "",
                     focused: false,
@@ -2047,6 +2098,7 @@ fn status_selection_and_editor_images_use_distinct_colors() {
                     selected,
                     dashboard::View {
                         show_completed: true,
+                        include_archived: false,
                         bulk_selected: None,
                         query: "",
                         focused: false,
@@ -2139,6 +2191,7 @@ fn dashboard_paste_label_uses_gold_while_body_stays_neutral() {
                 None,
                 dashboard::View {
                     show_completed: true,
+                    include_archived: false,
                     bulk_selected: None,
                     query: "",
                     focused: false,
@@ -2198,6 +2251,7 @@ fn hotkey_footer_colors_shortcuts_and_clears_styles_for_messages() {
                             None,
                             dashboard::View {
                                 show_completed: true,
+                                include_archived: false,
                                 bulk_selected: None,
                                 query: "",
                                 focused: false,
@@ -2243,6 +2297,7 @@ fn hotkey_footer_colors_shortcuts_and_clears_styles_for_messages() {
                             "Tab/Enter",
                             "Ctrl-V",
                             "Ctrl-T",
+                            "Ctrl-A",
                         ]
                         .iter()
                         .any(|key| {
@@ -2420,6 +2475,7 @@ fn wide_dashboard_keeps_spacer_below_full_selected_list() {
                         Some(20),
                         dashboard::View {
                             show_completed: true,
+                            include_archived: false,
                             bulk_selected: None,
                             query,
                             focused,
@@ -2484,6 +2540,7 @@ fn wide_dashboard_renders_both_upper_panes_and_full_width_editor() {
                     Some(1),
                     dashboard::View {
                         show_completed: true,
+                        include_archived: false,
                         bulk_selected: None,
                         query: "Selected",
                         focused: true,
@@ -2551,6 +2608,7 @@ fn failed_save_footer_uses_error_color() {
                 None,
                 dashboard::View {
                     show_completed: true,
+                    include_archived: false,
                     bulk_selected: None,
                     query: "",
                     focused: false,
@@ -2627,6 +2685,7 @@ fn dirty_marker_is_distinct_aligned_and_keeps_task_hit_targets() {
                             selected,
                             dashboard::View {
                                 show_completed: true,
+                                include_archived: false,
                                 bulk_selected: None,
                                 query: "",
                                 focused: false,
