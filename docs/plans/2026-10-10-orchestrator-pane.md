@@ -48,13 +48,20 @@ No migration; explicit overrides and recorded history retain existing behavior.
 - [x] Run `CARGO_TARGET_DIR=/app/qqq/target/task203 cargo clippy --offline --locked --all-targets -- -D warnings` and release build.
 - [x] Request independent code review; resolve substantiated findings and rerun
   affected checks. Commit verified fix using bracketed Title Case message.
-- [ ] Rebase onto current master; verify integration and fast-forward root.
-- [ ] Install verified release; check artifact hash, help and controlled live
+- [x] Rebase onto current master; verify integration and fast-forward root.
+- [x] Install verified release; check artifact hash, help and controlled live
   pane metadata. Refresh owned task #211 explicitly, verify owner retained.
-- [ ] Record qqq evidence, complete #211, read back completion.
+- [x] Record qqq evidence, complete #211, read back completion.
 
 Queue worker resumes one `qqq next --wait --local --json` after delivery, retaining
 waiter until it yields work.
 
 Verification checkpoint: 61 focused cases passed; full suite, strict Clippy,
-release build, fmt and independent review passed on combined master base.
+release build, fmt and independent review passed on combined master base. Full
+suite: 872 passed, zero failures across 46 test binaries.
+
+Delivery: fix commit `fb4733810d9996422b4d605f0e02de003bfce47c` fast-forwarded
+into master. Installed artifact hash matched verified release; live CLI smoke
+passed. Task #211 explicitly refreshed to `term_65d82099dd77446` with harness
+session, saved link/server and claim event retained. Evidence message #145;
+completion read back successfully. No remote CI run.
