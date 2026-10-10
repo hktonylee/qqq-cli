@@ -259,6 +259,8 @@ print(json.dumps({"result": {"pane": pane}}))
             cli("next", "--local", "--session", "finished", "--filter", "id == 1")
             cli("complete", "1", "--session", "finished")
             cli("view", "save", "Backend", "--tag", "backend", "--max-completed", "0")
+    if scenario == "views_create_empty":
+        (Path(folder) / ".qqq-views.json").unlink()
     if scenario == "jump_archived":
         cli("archive", "2")
         for index in range(3, 21):
@@ -608,6 +610,96 @@ print(json.dumps({"result": result}))
             send(b"\x0fX")
             wait_frame(lambda: editor_line().rstrip() == "UnsavedX")
             assert cli("list", "--all") == initial
+        elif scenario.startswith("views_create"):
+            initial = cli("list")
+            catalog_path = Path(folder) / ".qqq-views.json"
+            initial_catalog = catalog_path.read_bytes() if catalog_path.exists() else None
+            send(b"\x1b[1;2A")
+            wait_frame(lambda: "Task #2 (New)" in editor_title() and editor_line().startswith("Second"))
+            def retained_editor_ready():
+                row = editor_row()
+                if row is None:
+                    return False
+                cursor = (len("Second retained") - 1, row + 1)
+                return (editor_line().startswith("Second retained")
+                        and (visible.x, visible.y) == cursor and visible.cursor_visible
+                        and not visible.pending and not visible.decoder.getstate()[0]
+                        and screen.endswith(f"\x1b[{cursor[1] + 1};{cursor[0] + 1}H".encode()))
+
+            send(b" retained\x1b[D")
+            wait_visible(retained_editor_ready)
+            if scenario == "views_create_filter":
+                send(CTRL_SLASH + b"First")
+                wait_frame(lambda: filter_text() == "Filter: First" and "First" in list_text())
+            send(b"\x02")
+            wait_visible(lambda: "Choose view" in visible.text() and "New view" in visible.text())
+            assert "New view" in visible.text(), visible.text()
+            send(b"n")
+            wait_visible(lambda: "Create view" in visible.text() and "Name" in visible.text())
+            send(b"Discarded\x1b")
+            wait_visible(lambda: "Choose view" in visible.text() and "Create view" not in visible.text())
+            assert (catalog_path.read_bytes() if catalog_path.exists() else None) == initial_catalog
+            send(b"n")
+            wait_visible(lambda: "Create view" in visible.text() and "Name" in visible.text())
+            if scenario == "views_create_errors":
+                send(b"\x13")
+                wait_visible(lambda: "View names must be nonempty" in visible.text())
+                send(b"Raced")
+                cli("view", "save", "Raced", "--query", "Second")
+                raced = catalog_path.read_bytes()
+                send(b"\x13")
+                wait_visible(lambda: "already exists" in visible.text() and "Raced" in visible.text())
+                assert catalog_path.read_bytes() == raced
+                send(b"\x15")
+            send(b"\x1b[200~" + "Focus 界".encode() + b"\x1b[201~")
+            send(b"\tbackend\rbackend\t")
+            wait_visible(lambda: "Create view" in visible.text() and "Luau filter" in visible.text())
+            if scenario == "views_create_errors":
+                send(b"unknown == 1\x13")
+                wait_visible(lambda: "Invalid --filter expression" in visible.text())
+                assert catalog_path.read_bytes() == raced
+                send(b"\x15")
+            send(b"priority >= 0\tFirst\tnew,error\tready\t\x15show\t\x150")
+            wait_visible(lambda: "Completed limit" in visible.text() and "> 0" in visible.text())
+            if scenario == "views_create_narrow":
+                for width, height in [(12, 8), (32, 12), (72, 24)]:
+                    fcntl.ioctl(slave, termios.TIOCSWINSZ, struct.pack("HHHH", height, width, 0, 0))
+                    visible.resize(width, height)
+                    os.kill(child.pid, signal.SIGWINCH)
+                    wait_visible(lambda: "Create" in visible.text() and visible.cursor_visible)
+                    settle()
+            if scenario == "views_create_errors":
+                intact = catalog_path.read_bytes()
+                catalog_path.write_text('{"version":2,"views":[]}')
+                send(b"\x13")
+                wait_visible(lambda: "Invalid project views file" in visible.text())
+                assert catalog_path.read_text() == '{"version":2,"views":[]}'
+                catalog_path.write_bytes(intact)
+            cli("view", "save", "Concurrent", "--query", "Second")
+            send(b"\x13")
+            wait_visible(lambda: "Choose view" in visible.text() and "Focus 界" in visible.text()
+                         and "Create view" not in visible.text())
+            definition = cli("view", "show", "Focus 界")
+            assert definition == {
+                "name": "Focus 界", "criteria": {
+                    "tags": ["backend"], "filter": "priority >= 0", "query": "First",
+                    "statuses": ["new", "error"], "readiness": "ready",
+                }, "include_archived": True, "max_completed": 0,
+            }, definition
+            assert cli("view", "show", "Concurrent")["criteria"]["query"] == "Second"
+            assert cli("list") == initial
+            assert [task["id"] for task in cli("list", "--view", "Focus 界")] == [1]
+            send(b"\r")
+            wait_visible(lambda: "View: Focus 界" in editor_title() and "First" in list_text()
+                         and "Second" not in list_text() and editor_line().startswith("Second retained"))
+            if scenario == "views_create_filter":
+                assert filter_text() == "Filter: First", visible.text()
+                assert visible.text().splitlines()[-1].startswith("Type to Filter"), visible.text()
+            else:
+                wait_visible(retained_editor_ready)
+            assert cli("list") == initial
+            if scenario.endswith("no_color"):
+                assert b"\x1b[38;" not in screen and b"\x1b[48;" not in screen, screen[-2000:]
         elif scenario == "views_visibility":
             wait_frame(lambda: "View: Backend" in editor_title() and completed_button_text() == "[× Completed]"
                        and "First" not in list_text() and "Second" not in list_text())
@@ -656,9 +748,9 @@ print(json.dumps({"result": result}))
             for width, height, first, second in [
                 (72, 24, "Up/Down Pick  Enter Apply", "PgUp/PgDn Details  Esc Cancel"),
                 (48, 24, "Up/Down Pick  Enter Apply", "PgUp/PgDn Details  Esc Cancel"),
-                (30, 14, "↑↓ Pick  Enter Apply", "Pg↑↓ Scroll  Esc"),
-                (22, 14, "↑↓ Pick  Enter", "Pg↑↓ Scroll  Esc"),
-                (20, 14, "↑↓ Pick  Enter", "Pg↑↓  Esc"),
+                (30, 14, "↑↓ Pick  Enter  n New", "Pg↑↓ Scroll  Esc"),
+                (22, 14, "↑↓  Enter  n", "Pg↑↓ Scroll  Esc"),
+                (20, 14, "↑↓  Enter  n", "Pg↑↓  Esc"),
                 (12, 8, "↑↓  Enter", "Pg↑↓  Esc"),
                 (72, 24, "Up/Down Pick  Enter Apply", "PgUp/PgDn Details  Esc Cancel"),
             ]:

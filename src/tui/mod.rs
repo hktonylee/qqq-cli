@@ -11,6 +11,7 @@ mod jump;
 mod panel;
 mod render;
 mod tag_input;
+mod view_form;
 mod view_picker;
 
 use crate::config::AfterSaveNew;
@@ -1446,8 +1447,8 @@ fn compose_inner(
         };
         match input {
             Event::Paste(text) if confirmation.is_none() && conflict_ui.is_none() => {
-                if view_ui.is_some() {
-                    continue;
+                if let Some(ui) = view_ui.as_mut() {
+                    ui.paste(&text);
                 } else if let Some(ui) = bulk_ui.as_mut() {
                     ui.paste(&text);
                 } else if let Some(ui) = jump_ui.as_mut() {
@@ -1616,6 +1617,15 @@ fn compose_inner(
                                     view_ui = Some(ui);
                                 }
                             }
+                        }
+                        Some(view_picker::Action::Save(view)) => {
+                            let context =
+                                view_context.as_ref().expect("dashboard has view context");
+                            match crate::views::create(&context.path, view) {
+                                Ok(view) => ui.created(view),
+                                Err(error) => ui.set_error(format!("{error:#}")),
+                            }
+                            view_ui = Some(ui);
                         }
                         Some(view_picker::Action::Cancel) => (),
                         None => view_ui = Some(ui),

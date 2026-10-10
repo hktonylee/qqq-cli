@@ -52,7 +52,7 @@ fn valid_name(name: &str) -> Result<()> {
     Ok(())
 }
 
-fn validate(view: &mut SavedView) -> Result<()> {
+pub(crate) fn validate(view: &mut SavedView) -> Result<()> {
     valid_name(&view.name)?;
     ensure!(
         view.max_completed.is_none_or(|limit| limit >= 0),
@@ -176,6 +176,26 @@ pub fn save(path: &Path, mut view: SavedView) -> Result<SavedView> {
         } else {
             catalog.views.push(view.clone());
         }
+        Ok(view)
+    })
+}
+
+pub fn create(path: &Path, mut view: SavedView) -> Result<SavedView> {
+    validate(&mut view)?;
+    update(path, |catalog| {
+        ensure!(
+            !catalog
+                .views
+                .iter()
+                .any(|existing| existing.name == view.name),
+            Info::invalid_argument(
+                "NAME",
+                format!("View {:?} already exists; choose another name", view.name)
+            )
+            .detail("view", view.name.as_str())
+            .detail("reason", "duplicate_view")
+        );
+        catalog.views.push(view.clone());
         Ok(view)
     })
 }
@@ -315,4 +335,54 @@ pub fn render(value: &serde_json::Value) -> String {
     }
     let view: SavedView = serde_json::from_value(value.clone()).expect("view output is typed");
     describe(&view).join("\n")
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::sync::{Arc, Barrier};
+
+    #[test]
+    fn concurrent_creations_reject_same_name_without_replacing_winner() {
+        let directory = tempfile::tempdir().unwrap();
+        std::fs::create_dir(directory.path().join(".qqq")).unwrap();
+        let path = directory.path().join(".qqq-views.json");
+        let barrier = Arc::new(Barrier::new(2));
+        let threads = ["First", "Second"].map(|query| {
+            let path = path.clone();
+            let barrier = barrier.clone();
+            std::thread::spawn(move || {
+                barrier.wait();
+                create(
+                    &path,
+                    SavedView {
+                        name: "Shared".into(),
+                        criteria: Selectors {
+                            query: Some(query.into()),
+                            ..Default::default()
+                        },
+                        include_archived: false,
+                        max_completed: None,
+                    },
+                )
+            })
+        });
+        let results = threads.map(|thread| thread.join().unwrap());
+        assert_eq!(results.iter().filter(|result| result.is_ok()).count(), 1);
+        assert!(
+            results
+                .iter()
+                .find_map(|result| result.as_ref().err())
+                .unwrap()
+                .to_string()
+                .contains("already exists")
+        );
+        let winner = results.into_iter().find_map(Result::ok).unwrap();
+        let catalog = load(&path).unwrap();
+        assert_eq!(catalog.views.len(), 1);
+        assert_eq!(catalog.views[0].criteria.query, winner.criteria.query);
+        let bytes = std::fs::read(&path).unwrap();
+        assert!(create(&path, winner).is_err());
+        assert_eq!(std::fs::read(&path).unwrap(), bytes);
+    }
 }

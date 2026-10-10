@@ -733,8 +733,10 @@ use normal text characters. Save stores exact text; references add no dependency
 or special display behavior. Filter input and popups leave draft unchanged.
 
 Ctrl+B opens saved project views from editor or filter. Arrows select, Enter
-applies, Esc/Ctrl+C cancels; PgUp/PgDn scrolls criteria. `tui --view NAME` opens
-the same definition as CLI lists/workers. Switching retains opened task,
+applies, Esc/Ctrl+C cancels; PgUp/PgDn scrolls criteria. Press `n` in picker to
+create view; Tab/Shift-Tab changes field, Ctrl-S saves, Esc/Ctrl-C returns to
+picker. Duplicate names and invalid values keep form for correction.
+`tui --view NAME` opens same definition as CLI lists/workers. Switching retains opened task,
 dirty/parked drafts, staged tags, caret/scroll and live query/focus, including when
 the task disappears from the view. Picker reloads `.qqq-views.json` when opened;
 active definition stays fixed until another selection. See [named views](views.md).

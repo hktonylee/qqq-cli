@@ -24,9 +24,12 @@ fn view_picker_footer_styles_every_shortcut_in_both_rows() {
         (
             72,
             24,
-            ["Up/Down Pick  Enter Apply", "PgUp/PgDn Details  Esc Cancel"],
+            [
+                "Up/Down Pick  Enter Apply  n New view",
+                "PgUp/PgDn Details  Esc Cancel",
+            ],
         ),
-        (12, 8, ["↑↓  Enter", "Pg↑↓  Esc"]),
+        (12, 8, ["↑↓  Enter  n", "Pg↑↓  Esc"]),
     ] {
         let rows: Vec<_> = hints
             .iter()

@@ -178,6 +178,24 @@ fn tui_dashboard_view_picker_footer_fits_resized_popup() {
 }
 
 #[test]
+fn tui_dashboard_creates_named_views_without_changing_drafts() {
+    for scenario in [
+        "views_create",
+        "views_create_no_color",
+        "views_create_narrow",
+        "views_create_filter",
+        "views_create_empty",
+    ] {
+        dashboard_scenario(scenario);
+    }
+}
+
+#[test]
+fn tui_dashboard_view_creation_keeps_invalid_and_duplicate_inputs_for_retry() {
+    dashboard_scenario("views_create_errors");
+}
+
+#[test]
 fn tui_dashboard_named_views_preserve_open_dirty_task() {
     dashboard_scenario("views");
     dashboard_scenario("views_no_color");

@@ -120,6 +120,23 @@ title. Picker supports narrow/resized terminals and `NO_COLOR`.
 Shortcut help uses two rows when one row would overflow, shortening labels in
 small popups while keeping selection, apply, scroll and cancel keys visible.
 
+Press `n` in picker to create a view, including when no views exist. Form starts
+with blank name/selectors, hidden archives and unlimited completions. Tab and
+Shift-Tab move through name, tags, Luau filter, query, statuses, readiness,
+archive visibility and completion limit. Enter adds lines for tags/filter/query;
+in other fields it advances. Tags accept one per line or comma-separated labels.
+Statuses accept comma-separated `new,in_progress,completed,error`; blank means
+any. Readiness accepts `ready`, `blocked` or blank. Archives accept `hide` or
+`show`; completion limit accepts `all`, blank, zero or positive count.
+
+Ctrl-S validates and saves to project catalog, returning to picker with new view
+selected. Enter applies it. Esc or Ctrl-C returns to picker without saving form.
+Invalid values, duplicate names and write failures keep inputs for correction
+and retry. Creation rejects existing exact name under catalog writer lock,
+including names created concurrently; it preserves other definitions. CLI
+`qqq view save` retains replacement behavior. Creating a view preserves current
+selection, filter and task drafts until explicitly applied.
+
 Opening picker reloads and validates the catalog. Applying a view retains
 opened task, unsaved descriptions, staged new-task tags, parked drafts, caret,
 editor/detail scroll and live filter text/focus. A hidden opened task remains

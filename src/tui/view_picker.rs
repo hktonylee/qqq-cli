@@ -5,14 +5,16 @@ use unicode_width::UnicodeWidthStr;
 
 fn footer_hints(width: usize) -> Vec<PopupRow> {
     let first = [
-        "Up/Down Pick  Enter Apply",
-        "↑↓ Pick  Enter Apply",
-        "↑↓ Pick  Enter",
-        "↑↓  Enter",
+        "Up/Down Pick  Enter Apply  n New view",
+        "↑↓ Pick  Enter Apply  n New view",
+        "↑↓ Pick  Enter  n New",
+        "↑↓ Pick  Enter  n",
+        "↑↓  Enter  n",
+        "↑↓  ↵  n",
     ]
     .into_iter()
     .find(|text| text.width() <= width)
-    .unwrap_or("↑↓  Enter");
+    .unwrap_or("↑↓  ↵  n");
     let second = [
         "PgUp/PgDn Details  Esc Cancel",
         "Pg↑↓ Scroll  Esc",
@@ -34,6 +36,7 @@ fn footer_hints(width: usize) -> Vec<PopupRow> {
 
 pub(super) enum Action {
     Apply(Option<SavedView>),
+    Save(SavedView),
     Cancel,
 }
 
@@ -42,6 +45,7 @@ pub(super) struct Picker {
     selected: usize,
     preview_top: usize,
     error: String,
+    form: Option<super::view_form::Form>,
 }
 
 impl Picker {
@@ -54,13 +58,45 @@ impl Picker {
             selected,
             preview_top: 0,
             error: String::new(),
+            form: None,
         }
     }
     pub fn set_error(&mut self, error: String) {
+        if let Some(form) = &mut self.form {
+            form.set_error(error);
+            return;
+        }
         self.error = error;
         self.preview_top = 0;
     }
+    pub fn paste(&mut self, text: &str) {
+        if let Some(form) = &mut self.form {
+            form.paste(text);
+        }
+    }
+    pub fn created(&mut self, view: SavedView) {
+        let name = view.name.clone();
+        self.views.push(view);
+        self.views.sort_by(|left, right| left.name.cmp(&right.name));
+        self.selected = self
+            .views
+            .iter()
+            .position(|view| view.name == name)
+            .expect("created view exists")
+            + 1;
+        self.preview_top = 0;
+        self.error.clear();
+        self.form = None;
+    }
     pub fn key(&mut self, key: KeyEvent) -> Option<Action> {
+        if let Some(form) = &mut self.form {
+            match form.key(key) {
+                Some(super::view_form::Action::Save(view)) => return Some(Action::Save(view)),
+                Some(super::view_form::Action::Cancel) => self.form = None,
+                None => (),
+            }
+            return None;
+        }
         if key.code == KeyCode::Esc
             || (key.modifiers == KeyModifiers::CONTROL && key.code == KeyCode::Char('c'))
         {
@@ -74,6 +110,7 @@ impl Picker {
         }
         let previous = self.selected;
         match key.code {
+            KeyCode::Char('n') => self.form = Some(super::view_form::Form::new()),
             KeyCode::Up => self.selected = self.selected.saturating_sub(1),
             KeyCode::Down => self.selected = (self.selected + 1).min(self.views.len()),
             KeyCode::Home => self.selected = 0,
@@ -96,6 +133,9 @@ impl Picker {
         None
     }
     pub fn rows(&mut self, width: usize, height: usize) -> Vec<PopupRow> {
+        if let Some(form) = &self.form {
+            return form.rows(width, height);
+        }
         let height = height.max(3);
         let hints = footer_hints(width);
         let heading_height = usize::from(height > hints.len() + 1);
@@ -238,7 +278,8 @@ mod tests {
                         .join(" ");
                     assert!(text.contains("Up/Down") || text.contains("↑↓"));
                     assert!(text.contains("PgUp/PgDn") || text.contains("Pg↑↓"));
-                    assert!(text.contains("Enter") && text.contains("Esc"));
+                    assert!((text.contains("Enter") || text.contains("↵")) && text.contains("Esc"));
+                    assert!(text.split_whitespace().any(|word| word == "n"));
                     if height >= 5 {
                         assert!(rows.iter().any(|row| row.kind
                             == if error.is_empty() {
