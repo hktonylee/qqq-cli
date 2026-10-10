@@ -645,6 +645,50 @@ print(json.dumps({"result": result}))
             wait_frame(lambda: "View:" not in editor_title() and filter_text() == "Filter: Second" and "No matching tasks." in list_text())
             assert editor_line().startswith("Unsaved"), visible.text()
             assert visible.text().splitlines()[-1].startswith("Type to Filter"), visible.text()
+        elif scenario.startswith("views_footer"):
+            initial = cli("list")
+            send(b"\x1b[1;2A")
+            wait_frame(lambda: "Task #2 (New)" in editor_title() and editor_line().startswith("Second"))
+            send(b"X")
+            wait_frame(lambda: editor_line().startswith("SecondX"))
+            send(b"\x02\x1b[B")
+            wait_visible(lambda: "> Backend" in visible.text())
+            for width, height, first, second in [
+                (72, 24, "Up/Down Pick  Enter Apply", "PgUp/PgDn Details  Esc Cancel"),
+                (48, 24, "Up/Down Pick  Enter Apply", "PgUp/PgDn Details  Esc Cancel"),
+                (30, 14, "↑↓ Pick  Enter Apply", "Pg↑↓ Scroll  Esc"),
+                (22, 14, "↑↓ Pick  Enter", "Pg↑↓ Scroll  Esc"),
+                (20, 14, "↑↓ Pick  Enter", "Pg↑↓  Esc"),
+                (12, 8, "↑↓  Enter", "Pg↑↓  Esc"),
+                (72, 24, "Up/Down Pick  Enter Apply", "PgUp/PgDn Details  Esc Cancel"),
+            ]:
+                if (visible.width, visible.height) != (width, height):
+                    fcntl.ioctl(slave, termios.TIOCSWINSZ, struct.pack("HHHH", height, width, 0, 0))
+                    visible.resize(width, height)
+                    clear_capture()
+                    os.kill(child.pid, signal.SIGWINCH)
+                bordered = width >= 20 and height >= 14
+                popup_width = min(width - 4 if bordered else width, 48)
+                content_x = (width - popup_width) // 2 + int(bordered)
+                wait_visible(lambda: any(row.find(first) == content_x for row in visible.text().splitlines())
+                             and any(row.find(second) == content_x for row in visible.text().splitlines())
+                             and "> Backend" in visible.text() and not visible.pending)
+                settle()
+                lines = visible.text().splitlines()
+                first_row = next(index for index, row in enumerate(lines) if first in row)
+                second_row = next(index for index, row in enumerate(lines) if second in row)
+                assert second_row == first_row + 1, visible.text()
+                send(b"\x1b[6~\x1b[5~")
+                settle()
+                assert first in visible.text() and second in visible.text(), visible.text()
+            send(b"\x1b")
+            wait_frame(lambda: editor_line().startswith("SecondX") and "Choose view" not in visible.text())
+            assert cli("list") == initial
+            send(b"\x02\x1b[B\r")
+            wait_frame(lambda: "View: Backend" in editor_title() and editor_line().startswith("SecondX"))
+            assert cli("list") == initial
+            if scenario.endswith("no_color"):
+                assert b"\x1b[38;" not in screen and b"\x1b[48;" not in screen
         elif scenario.startswith("views"):
             initial = cli("list")
             send(b"\x1b[1;2A")

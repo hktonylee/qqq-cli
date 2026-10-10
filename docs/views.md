@@ -117,6 +117,8 @@ criteria shown below; Home/End selects first/last entry. PgUp/PgDn scrolls long
 criteria. Enter applies; Esc or Ctrl-C cancels. First entry, `All tasks (no view)`,
 keeps explicit startup selectors and visibility. Active view appears in editor
 title. Picker supports narrow/resized terminals and `NO_COLOR`.
+Shortcut help uses two rows when one row would overflow, shortening labels in
+small popups while keeping selection, apply, scroll and cancel keys visible.
 
 Opening picker reloads and validates the catalog. Applying a view retains
 opened task, unsaved descriptions, staged new-task tags, parked drafts, caret,

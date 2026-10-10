@@ -1,6 +1,36 @@
 use super::render::{PopupKind, PopupRow};
 use crate::views::SavedView;
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
+use unicode_width::UnicodeWidthStr;
+
+fn footer_hints(width: usize) -> Vec<PopupRow> {
+    let first = [
+        "Up/Down Pick  Enter Apply",
+        "↑↓ Pick  Enter Apply",
+        "↑↓ Pick  Enter",
+        "↑↓  Enter",
+    ]
+    .into_iter()
+    .find(|text| text.width() <= width)
+    .unwrap_or("↑↓  Enter");
+    let second = [
+        "PgUp/PgDn Details  Esc Cancel",
+        "Pg↑↓ Scroll  Esc",
+        "Pg↑↓  Esc",
+    ]
+    .into_iter()
+    .find(|text| text.width() <= width)
+    .unwrap_or("Pg↑↓  Esc");
+    let combined = format!("{first}  {second}");
+    if combined.width() <= width {
+        vec![PopupRow::new(combined, PopupKind::Hint)]
+    } else {
+        vec![
+            PopupRow::new(first, PopupKind::Hint),
+            PopupRow::new(second, PopupKind::Hint),
+        ]
+    }
+}
 
 pub(super) enum Action {
     Apply(Option<SavedView>),
@@ -67,13 +97,21 @@ impl Picker {
     }
     pub fn rows(&mut self, width: usize, height: usize) -> Vec<PopupRow> {
         let height = height.max(3);
+        let hints = footer_hints(width);
+        let heading_height = usize::from(height > hints.len() + 1);
         let count = self.views.len() + 1;
-        let visible = (height / 3).max(1).min(count);
+        let visible = (height / 3)
+            .max(1)
+            .min(count)
+            .min(height - hints.len() - heading_height);
         let start = self
             .selected
             .saturating_sub(visible - 1)
             .min(count - visible);
-        let mut rows = vec![PopupRow::new("Choose view", PopupKind::Heading)];
+        let mut rows = Vec::new();
+        if heading_height > 0 {
+            rows.push(PopupRow::new("Choose view", PopupKind::Heading));
+        }
         for index in start..start + visible {
             let name = if index == 0 {
                 "All tasks (no view)"
@@ -100,7 +138,7 @@ impl Picker {
             .iter()
             .flat_map(|line| super::wrap_modal(line, width))
             .collect();
-        let available = height.saturating_sub(rows.len() + 1);
+        let available = height.saturating_sub(rows.len() + hints.len());
         self.preview_top = self
             .preview_top
             .min(preview.len().saturating_sub(available.max(1)));
@@ -116,14 +154,7 @@ impl Picker {
                 .take(available)
                 .map(|line| PopupRow::new(line, kind)),
         );
-        rows.push(PopupRow::new(
-            if width >= 44 {
-                "Up/Down pick Enter apply PgUp/PgDn details Esc"
-            } else {
-                "↑↓ Enter Esc Pg↑↓"
-            },
-            PopupKind::Hint,
-        ));
+        rows.extend(hints);
         rows
     }
 }
@@ -171,6 +202,56 @@ mod tests {
             Some(Action::Apply(None))
         ));
     }
+    #[test]
+    fn footer_hints_fit_width_keep_all_keys_and_leave_selection_visible() {
+        use unicode_width::UnicodeWidthStr;
+        for width in [10, 12, 16, 20, 28, 29, 44, 45, 46, 54, 72] {
+            for height in [3, 4, 8, 18] {
+                for error in ["", "Load failed"] {
+                    let mut picker = Picker::new(definitions(), Some("View 29"));
+                    picker.set_error(error.into());
+                    let rows = picker.rows(width, height);
+                    assert!(rows.len() <= height);
+                    assert_eq!(
+                        rows.iter()
+                            .filter(|row| row.kind == PopupKind::SelectedAction)
+                            .count(),
+                        1
+                    );
+                    let hints: Vec<_> = rows
+                        .iter()
+                        .filter(|row| row.kind == PopupKind::Hint)
+                        .collect();
+                    assert!((1..=2).contains(&hints.len()));
+                    for hint in &hints {
+                        assert!(hint.text.width() <= width, "width {width}: {}", hint.text);
+                    }
+                    assert!(
+                        rows[rows.len() - hints.len()..]
+                            .iter()
+                            .all(|row| row.kind == PopupKind::Hint)
+                    );
+                    let text = hints
+                        .iter()
+                        .map(|row| row.text.as_str())
+                        .collect::<Vec<_>>()
+                        .join(" ");
+                    assert!(text.contains("Up/Down") || text.contains("↑↓"));
+                    assert!(text.contains("PgUp/PgDn") || text.contains("Pg↑↓"));
+                    assert!(text.contains("Enter") && text.contains("Esc"));
+                    if height >= 5 {
+                        assert!(rows.iter().any(|row| row.kind
+                            == if error.is_empty() {
+                                PopupKind::Body
+                            } else {
+                                PopupKind::Error
+                            }));
+                    }
+                }
+            }
+        }
+    }
+
     #[test]
     fn narrow_rows_keep_selected_and_preview_scroll_bounded() {
         let mut picker = Picker::new(definitions(), Some("View 29"));

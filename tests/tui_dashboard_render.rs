@@ -17,6 +17,56 @@ use ratatui::{
 use std::collections::HashMap;
 
 #[test]
+fn view_picker_footer_styles_every_shortcut_in_both_rows() {
+    use render::{PopupKind, PopupRow};
+    use unicode_width::UnicodeWidthStr;
+    for (width, height, hints) in [
+        (
+            72,
+            24,
+            ["Up/Down Pick  Enter Apply", "PgUp/PgDn Details  Esc Cancel"],
+        ),
+        (12, 8, ["↑↓  Enter", "Pg↑↓  Esc"]),
+    ] {
+        let rows: Vec<_> = hints
+            .iter()
+            .map(|text| PopupRow::new(*text, PopupKind::Hint))
+            .collect();
+        let content =
+            dashboard::popup_layout(ratatui::layout::Rect::new(0, 0, width, height), rows.len())
+                .content;
+        for color in [true, false] {
+            let mut terminal = Terminal::new(TestBackend::new(width, height)).unwrap();
+            terminal
+                .draw(|frame| dashboard::popup(frame, &rows, color, true))
+                .unwrap();
+            let buffer = terminal.backend().buffer();
+            for (index, text) in hints.iter().enumerate() {
+                let y = content.y + index as u16;
+                assert!(line(buffer, y).contains(text));
+                for key in text.split("  ").map(|part| part.split(' ').next().unwrap()) {
+                    let start = text.find(key).unwrap();
+                    let x = content.x + text[..start].width() as u16;
+                    for offset in 0..key.width() as u16 {
+                        let cell = &buffer[(x + offset, y)];
+                        assert_eq!(
+                            cell.fg,
+                            if color {
+                                Color::Indexed(81)
+                            } else {
+                                Color::Reset
+                            },
+                            "{key}"
+                        );
+                        assert_eq!(cell.modifier.contains(Modifier::BOLD), color, "{key}");
+                    }
+                }
+            }
+        }
+    }
+}
+
+#[test]
 fn task_tags_keep_color_across_status_selection_dirty_and_compact_rows() {
     let labels = ["界 面".into(), "bug".into()];
     let layout = render::Layout::new(&["Draft".into()], &[], 72);

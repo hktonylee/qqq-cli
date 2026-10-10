@@ -172,6 +172,12 @@ fn tui_dashboard_removed_ctrl_o_keeps_editor_and_filter_input_active() {
 }
 
 #[test]
+fn tui_dashboard_view_picker_footer_fits_resized_popup() {
+    dashboard_scenario("views_footer");
+    dashboard_scenario("views_footer_no_color");
+}
+
+#[test]
 fn tui_dashboard_named_views_preserve_open_dirty_task() {
     dashboard_scenario("views");
     dashboard_scenario("views_no_color");
