@@ -236,6 +236,7 @@ fn action_menu_available(key: char, status: &str) -> bool {
     match key {
         'c' | 'e' => status != "completed",
         'r' => status == "error",
+        'o' => status != "error",
         _ => true,
     }
 }
@@ -3022,11 +3023,12 @@ mod tests {
                 if status != "completed" {
                     expected.extend(["c Complete", "e Mark error"]);
                 }
-                if status == "error" {
-                    expected.push("r Retry error");
-                }
+                expected.push(if status == "error" {
+                    "r Retry error"
+                } else {
+                    "o Reopen"
+                });
                 expected.extend([
-                    "o Reopen",
                     "",
                     "p Priority",
                     "d Set parent",

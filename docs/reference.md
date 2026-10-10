@@ -549,9 +549,9 @@ remain usable because fresh claims replace saved links. New links privately
 record current claim association. CLI and lowercase `y` in TUI Reopen use same checks.
 
 TUI Reopen confirmation offers `y` to reopen normally or uppercase `Y` to force
-reopen a completed, in-progress or error task. Force reopen skips owner-liveness
-checks and permits manual errors; it clears the task's recorded assignment even
-when an owner remains live. Archive and dependency availability checks still
+reopen a completed or in-progress task. Error tasks, including preflight-generated
+errors, use Ctrl-G → Retry error. Force reopen skips owner-liveness checks and
+clears recorded assignment even when an owner remains live. Archive and dependency availability checks still
 apply, and a new task cannot reopen. `n`, Enter or Esc cancels. Confirmation hides
 the cursor and ignores editing/navigation input; Ctrl-C leaves it open.
 Cancellation preserves the active filter, dirty draft and caret. Successful
@@ -843,15 +843,17 @@ Ctrl-G opens centered actions popup for selected task; dashboard stays visible
 around it. Prompts, confirmations and errors share popup; small terminals use
 compact view, scrolling menu to keep selected action visible.
 Actions form three groups separated by empty rows: status (`Complete`,
-`Mark error`, optional `Retry error`, `Reopen`), settings (`Priority`,
-`Set parent`), and visibility (`Archive`/`Unarchive`). Empty rows are never
+`Mark error`, `Retry error` for error tasks or `Reopen` for other tasks), settings
+(`Priority`, `Set parent`), and visibility (`Archive`/`Unarchive`). Empty rows are never
 selectable. Cyan titles/shortcuts, muted help, gold prompts/warnings and soft-red
 errors distinguish popup states. Up/Down selects action, wrapping at ends;
 Enter activates selected row. Dark accent tint and `>` mark selection; plain
 mode keeps marker. Letter shortcuts activate actions directly. Press `c` to complete owned task,
-`r` to retry error task, `o` to open Reopen confirmation (`y` normal, `Y` force), `a` to archive or
-unarchive, `p` to set priority (-100..100), or `d` to set parent by positive
-task ID or `none`. Retry appears only for error tasks; non-error tasks ignore `r`.
+`r` to retry error task, `o` on non-error tasks to open Reopen confirmation
+(`y` normal, `Y` force), `a` to archive or unarchive, `p` to set priority
+(-100..100), or `d` to set parent by positive
+task ID or `none`. Error tasks show Retry error and ignore `o`; non-error tasks show
+Reopen and ignore `r`.
 Completed tasks hide Complete and Mark error; their menus ignore `c` and `e`.
 Press `e` for Mark error and enter a nonempty reason. Lowercase `y` keeps current
 owner checks: only an in-progress task owned by the current session can fail.
@@ -1162,8 +1164,9 @@ does not establish owner liveness. Probes time out after two seconds. Claim, lin
 and process guards prevent stale checks from failing reassigned work.
 
 Use `qqq edit ID --set-status new` to retry errors. `qqq reopen ID` also recovers
-auto-failed owners; archive/unarchive preserves that option. TUI actions apply
-same rules. Idle TUI/watch/wait does not rescan until another qqq command runs.
+auto-failed owners; archive/unarchive preserves that CLI option. TUI Error tasks
+use Ctrl-G → Retry error. Idle TUI/watch/wait does not rescan until another qqq
+command runs.
 
 ### Return or retry work
 

@@ -673,7 +673,7 @@ fn tui_dashboard_action_error_scrolls_without_caret() {
 }
 
 #[test]
-fn tui_dashboard_preflight_fails_absent_owner_and_reopen_recovers() {
+fn tui_dashboard_preflight_fails_absent_owner_and_retry_recovers() {
     for scenario in [
         "orphan_reopen",
         "orphan_reopen_no_color",
