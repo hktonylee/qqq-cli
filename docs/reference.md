@@ -679,7 +679,7 @@ retain padding without borders. Text wraps to the inner width.
 Details share `show` header and layout: `#ID · Status`, Description, Messages,
 Details, Assignment, Images, History and Herdr sections. Fields align their
 values; Created/Updated occupy separate rows. Assignment lists Harness and
-Orchestrator Session; session values include stored names such as `default (herdr)`.
+Orchestrator Session; session values include stored IDs such as `term_65d8208adfc4145 (herdr)`.
 Messages follow creation order,
 with indented headers and bodies; empty collections show `None`. IDs are bold,
 statuses colored, labels/timestamps dim. Styles survive wrapping and scroll.
@@ -1114,10 +1114,10 @@ available. Session flags are optional in these contexts:
 
 | Context | Automatic identity | Saved metadata |
 | --- | --- | --- |
-| Herdr pane, any reported harness | Pane agent-session identity, or terminal ID plus agent kind | Reported harness name/session, Herdr server name, saved pane link |
+| Herdr pane, any reported harness | Pane agent-session identity, or terminal ID plus agent kind | Reported harness name/session, Herdr terminal/pane ID, saved pane link |
 | Standalone Codex | `CODEX_THREAD_ID`, then `CODEX_SESSION_ID` | `codex`, displayed Codex session; no orchestrator or Herdr link |
-| Unique Herdr agent at project root | Matching pane identity | Reported harness name/session, Herdr server name, saved pane link |
-| Dispatched child | Inherited `QQQ_SESSION` resolves reserved claim | Child harness and Herdr link saved before prompt |
+| Unique Herdr agent at project root | Matching pane identity | Reported harness name/session, Herdr terminal/pane ID, saved pane link |
+| Dispatched child | Inherited `QQQ_SESSION` resolves reserved claim | Child harness, terminal/pane ID and Herdr link saved before prompt |
 
 Outside Herdr, built-in native environment discovery currently covers Codex.
 Other harnesses use reported Herdr pane identity. qqq does not guess sessions
@@ -1126,8 +1126,13 @@ from unrelated environment variables. Explicit session flags remain overrides.
 For automatic Codex claims, displayed `harness_session` uses `CODEX_SESSION_ID`
 when set, including inside Herdr. Without it, resolved owner ID supplies display.
 Claim keys and Herdr links keep resolved identity; `--harness-session` overrides
-display. Repeated claims retain saved metadata unless explicit assignment flags
-override it.
+display. Herdr `orchestrator_session` records task runner's nonblank
+`terminal_id`, falling back to `pane_id` when terminal ID is missing or blank.
+Dispatched assignments use child pane. Saved Herdr link keeps server name
+separately for lookup routing; server name is not Orchestrator Session.
+Repeated claims retain saved metadata unless explicit assignment flags override
+it. Existing assignments keep previously recorded values; fresh claims and
+active link updates use terminal/pane ID.
 
 Completion, release and error marking require owner. Use original session token
 or uniquely matching displayed `harness_session`; add `--harness-name` when

@@ -64,7 +64,7 @@ struct Cli {
     /// Override orchestrator name (for example herdr).
     #[arg(long, global = true)]
     orchestrator_name: Option<String>,
-    /// Override orchestrator server session.
+    /// Override orchestrator terminal or pane session.
     #[arg(long, global = true)]
     orchestrator_session: Option<String>,
     #[command(subcommand)]

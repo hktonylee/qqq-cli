@@ -18,9 +18,9 @@ All default variables for `qqq list --filter` and `qqq next --filter`. Names are
 | `harness_name` | string or nil | Recorded coding harness, such as `"codex"`. |
 | `harness_session` | string or nil | Recorded public harness session. |
 | `orchestrator_name` | string or nil | Recorded orchestrator, such as `"herdr"`. |
-| `orchestrator_session` | string or nil | Recorded orchestrator server session. |
+| `orchestrator_session` | string or nil | Recorded orchestrator terminal/pane session; Herdr uses terminal ID, falling back to pane ID. |
 
-Ownership variables describe current row before any new claim. New tasks usually have nil ownership fields; filters on those fields mostly help `list`. Existing ownership persists independently of `next --filter` matching. Completing/releasing tasks clears current assignment fields.
+Ownership variables describe current row before any new claim. New tasks usually have nil ownership fields; filters on those fields mostly help `list`. Existing ownership persists independently of `next --filter` matching. Completion retains recorded assignment fields; release clears them.
 
 ```sh
 qqq list --filter 'parent_id == nil and priority >= 0'
