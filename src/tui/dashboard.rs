@@ -229,12 +229,19 @@ pub(super) fn popup(
 
 pub fn panes(area: Rect) -> Panes {
     if area.width < COMPACT_COLUMNS {
-        let list_height = area.height.div_ceil(2);
-        let editor_y = area.y + list_height;
+        let list_height = area.height.div_ceil(3);
+        let details_height = area.height / 3;
+        let details_y = area.y + list_height;
+        let editor_y = details_y + details_height;
         return Panes {
             list: Rect::new(area.x, area.y, area.width, list_height),
-            details: Rect::new(area.x, editor_y, area.width, 0),
-            editor: Rect::new(area.x, editor_y, area.width, area.height - list_height),
+            details: Rect::new(area.x, details_y, area.width, details_height),
+            editor: Rect::new(
+                area.x,
+                editor_y,
+                area.width,
+                area.height - list_height - details_height,
+            ),
         };
     }
     let list_height = ((u32::from(area.height) * 35 + 50) / 100) as u16;

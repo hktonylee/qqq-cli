@@ -293,7 +293,7 @@ fn tui_dashboard_groups_assignment_sessions_and_names() {
 }
 
 #[test]
-fn tui_dashboard_compact_layout_hides_status_and_details() {
+fn tui_dashboard_compact_layout_shows_details_in_equal_thirds() {
     dashboard_scenario("compact_layout");
     dashboard_scenario("compact_layout_no_color");
 }

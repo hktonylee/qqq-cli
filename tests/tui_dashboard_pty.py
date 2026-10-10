@@ -458,11 +458,13 @@ print(json.dumps({"result": result}))
         send(f"\x1b[<0;{column};{row}M\x1b[<0;{column};{row}m".encode())
 
     def list_bottom():
-        if visible.width < 60 or visible.width >= 150:
+        if visible.width < 60:
+            return (visible.height + 2) // 3 - 1
+        if visible.width >= 150:
             row = editor_row()
             return row - 1 if row is not None else 3
         # Details box starts immediately after final task-list row.
-        # Compact panes lack borders; minimum layout retains four list rows.
+        # Minimum standard layout retains four list rows.
         return next((index - 1 for index, row in enumerate(visible.text().splitlines())
                      if row.startswith("╔")), 3)
 
@@ -931,21 +933,37 @@ print(json.dumps({"result": result}))
                 fcntl.ioctl(slave, termios.TIOCSWINSZ, struct.pack("HHHH", height, width, 0, 0))
                 visible.resize(width, height)
                 os.kill(child.pid, signal.SIGWINCH)
-                editor_y = (height + 1) // 2 if width < 60 else 13
+                editor_y = (height + 2) // 3 + height // 3 if width < 60 else 13
                 wait_visible(lambda: editor_row() == editor_y
                              and (visible.x, visible.y) == (8 if dirty else 0, editor_y + 1)
                              and (not dirty or editor_line().startswith("Changed Second")))
                 settle()
 
             resize_compact(59)
-            upper = "\n".join(visible.text().splitlines()[:editor_row()])
+            upper = list_text()
             assert "First" in upper and "Second" in upper and "New" not in upper, visible.text()
-            assert not any(symbol in visible.text() for symbol in "╔╚║"), visible.text()
+            assert "╔" in visible.text() and "║" in visible.text(), visible.text()
+            assert "Select task to view details." in details_text(), visible.text()
             click(6, task_row("Second"))
-            wait_visible(lambda: "Task #2 (New)" in editor_title() and editor_line().startswith("Second"))
+            wait_visible(lambda: "Task #2 (New)" in editor_title() and editor_line().startswith("Second")
+                         and details_text().startswith("#2 · New"))
             send(b"\x01Changed ")
             wait_visible(lambda: editor_line().rstrip() == "Changed Second"
-                         and (visible.x, visible.y) == (8, 13))
+                         and (visible.x, visible.y) == (8, editor_row() + 1))
+            caret = (visible.x, visible.y)
+            before_details = details_text()
+            send(b"\x1b[6~")
+            wait_caret(lambda: details_text() != before_details
+                       and editor_line().rstrip() == "Changed Second", caret)
+            send(b"\x1b[5~")
+            wait_caret(lambda: details_text().startswith("#2 · New"), caret)
+            send(f"\x1b[<65;6;{list_bottom() + 3}M".encode())
+            wait_caret(lambda: not details_text().startswith("#2 · New"), caret)
+            send(f"\x1b[<64;6;{list_bottom() + 3}M".encode())
+            wait_caret(lambda: details_text().startswith("#2 · New"), caret)
+            click(5, list_bottom() + 3)
+            settle()
+            assert (visible.x, visible.y) == caret and editor_line().rstrip() == "Changed Second"
             send(CTRL_SLASH)
             wait_visible(lambda: filter_text() == "Filter:"
                          and (visible.x, visible.y) == (8, 0))
@@ -954,20 +972,20 @@ print(json.dumps({"result": result}))
             assert "Task #2 (New)" in editor_title() and editor_line().startswith("Changed Second"), visible.text()
             send(b"first")
             wait_visible(lambda: filter_text() == "Filter: first"
-                         and "Second" not in "\n".join(visible.text().splitlines()[1:editor_row()]))
+                         and "Second" not in list_text())
             send(b"\x1b")
             wait_visible(lambda: not visible.text().splitlines()[0].startswith("Filter:")
-                         and editor_line().startswith("Changed Second") and (visible.x, visible.y) == (8, 13))
+                         and editor_line().startswith("Changed Second") and (visible.x, visible.y) == (8, editor_row() + 1))
             resize_compact(58, height=25, dirty=True)
             resize_compact(50, dirty=True)
-            assert "New" not in "\n".join(visible.text().splitlines()[:editor_row()]), visible.text()
-            assert not any(symbol in visible.text() for symbol in "╔╚║"), visible.text()
+            assert "New" not in list_text(), visible.text()
+            assert "╔" in visible.text() and "║" in visible.text(), visible.text()
             resize_compact(60, dirty=True)
             assert "New" in "\n".join(visible.text().splitlines()[:8]), visible.text()
             assert "╔" in visible.text(), visible.text()
             resize_compact(150, dirty=True)
             resize_compact(59, dirty=True)
-            assert "New" not in "\n".join(visible.text().splitlines()[:editor_row()]), visible.text()
+            assert "New" not in list_text(), visible.text()
             assert cli("list") == initial_tasks
             if scenario.endswith("no_color"):
                 assert b"\x1b[38;" not in screen and b"\x1b[48;" not in screen, screen[-2000:]
@@ -1629,7 +1647,8 @@ print(json.dumps({"result": result}))
                 wait_visible(lambda: "New Task" in editor_title()
                              and (visible.x, visible.y) == (0, editor_row() + 1)
                              and visible.text().splitlines()[-1].startswith("Ctrl-S Save")
-                             and not visible.pending and screen.endswith(b"\x1b[8;1H"))
+                             and not visible.pending
+                             and screen.endswith(f"\x1b[{editor_row() + 2};1H".encode()))
                 open_jump()
                 send(b"9" * 40 + b"\r")
                 wait_visible(lambda: "positive" in visible.text() and jump_frame_ready())
@@ -1923,7 +1942,7 @@ print(json.dumps({"result": result}))
                 fcntl.ioctl(slave, termios.TIOCSWINSZ, struct.pack("HHHH", 24, 50, 0, 0))
                 visible.resize(50, 24)
                 os.kill(child.pid, signal.SIGWINCH)
-                wait_visible(lambda: editor_row() == 12)
+                wait_visible(lambda: editor_row() == 16)
             initial_tasks = cli("list")
             send(b"\x1b[1;2A")
             wait_visible(lambda: "Task #2 (" in editor_title() and editor_line().startswith("Second"))
@@ -2197,8 +2216,8 @@ print(json.dumps({"result": result}))
             fcntl.ioctl(slave, termios.TIOCSWINSZ, struct.pack("HHHH", 24, 49, 0, 0))
             visible.resize(49, 24)
             wait_visible(lambda: "Task #2 (" in editor_title()
-                         and editor_line().startswith("Changed Second") and hint_visible(True))
-            assert not details_text(), visible.text()
+                         and editor_line().startswith("Changed Second") and hint_visible(True)
+                         and editor_row() == 16 and details_text().startswith("#2 · New"))
             with sqlite3.connect(Path(folder) / ".qqq/qqq.db") as connection:
                 connection.execute("DELETE FROM herdr_links WHERE task_id=2")
             wait_visible(lambda: hint_visible(False) and editor_line().startswith("Changed Second"))
@@ -3938,7 +3957,7 @@ print(json.dumps({"result": result}))
             wait_visible(lambda: editor_row() is not None
                          and editor_line().startswith("First")
                          and (visible.x, visible.y) == (len("First"), editor_row() + 1)
-                         and screen.endswith(b"\x1b[6;6H"))
+                         and screen.endswith(f"\x1b[{editor_row() + 2};6H".encode()))
             settle()
             send(b"\x07")
             wait_visible(lambda: "c Complete" in visible.text() and
@@ -4234,9 +4253,17 @@ print(json.dumps({"result": result}))
                 visible.resize(width, 24)
                 clear_capture()
                 os.kill(child.pid, signal.SIGWINCH)
-                wait_frame(lambda: ("[✓A]" if width == 24 else "[✓ Archived]") in visible.text().splitlines()[0])
+                label = "[✓A]" if width == 24 else "[✓ Archived]"
+                # Buffered old-width frames can contain same label. Wait for
+                # new pane geometry before sending coordinates for that width.
+                wait_frame(lambda: editor_row() == (16 if width < 60 else 13)
+                           and visible.text().splitlines()[0][list_width() - len(label):list_width()] == label)
+                settle()
                 click(list_width() - (3 if width == 24 else 11), 1)
-                wait_frame(lambda: "Needle hidden" not in list_text() and "Needle visible" in list_text())
+                # With empty query and default visibility, disabling Archived
+                # hides filter row. Narrow rows truncate archived task titles.
+                wait_frame(lambda: not visible.text().splitlines()[0].startswith("Filter:")
+                           and "Needle hidden" not in list_text() and "Needle visible" in list_text())
                 send(CTRL_SLASH + b"\x01\x1b")
                 wait_frame(lambda: ("[✓A]" if width == 24 else "[✓ Archived]") in visible.text().splitlines()[0]
                            and visible.y != 0)
@@ -4302,6 +4329,7 @@ print(json.dumps({"result": result}))
                              and "Needle other" in list_text() and "Needle child" not in list_text()
                              and visible.y == 0 and not visible.pending
                              and screen.endswith(f"\x1b[1;{visible.x + 1}H".encode()))
+                settle()
                 click(list_width() - 25, 1)
                 wait_frame(lambda: completed_button_text() == "[✓ Completed]" and "Needle child" in list_text())
                 click(list_width() - 25, 1)

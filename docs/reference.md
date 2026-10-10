@@ -663,8 +663,9 @@ do not cause content conflicts.
 qqq tui
 ```
 
-Below 60 columns, compact layout hides task status labels and details/messages.
-Task list and editor each use half terminal height, rounded to rows.
+Below 60 columns, compact layout hides task list status labels. Task list,
+details/messages and editor stack in that order, each using one third of terminal
+height, rounded to rows. Pane heights differ by at most one row.
 From 60 through 149 columns, task list, details/messages and editor stay visible at 35%,
 20% and 45% of terminal height, rounded to rows. At 150 columns or wider, list
 and details share upper rows: list uses 60% of width, details 40%. Editor spans

@@ -2331,17 +2331,26 @@ fn hotkey_footer_colors_shortcuts_and_clears_styles_for_messages() {
 }
 
 #[test]
-fn compact_dashboard_uses_equal_panels_below_60_columns() {
+fn compact_dashboard_uses_three_equal_panels_below_60_columns() {
     use ratatui::layout::Rect;
     for width in [12, 17, 49, 50, 59] {
         for height in [8, 9, 24, 31, 100] {
             let panes = dashboard::panes(Rect::new(2, 3, width, height));
-            assert_eq!(panes.list.height, height.div_ceil(2));
-            assert_eq!(panes.editor.height, height / 2);
-            assert_eq!(panes.editor.y, 3 + panes.list.height);
-            assert_eq!(panes.details.height, 0);
-            assert_eq!(panes.list.width, width);
-            assert_eq!(panes.editor.width, width);
+            assert_eq!(panes.list.height, height.div_ceil(3));
+            assert_eq!(panes.details.height, height / 3);
+            assert_eq!(panes.details.y, 3 + panes.list.height);
+            assert_eq!(panes.editor.y, panes.details.y + panes.details.height);
+            assert_eq!(
+                panes.list.height + panes.details.height + panes.editor.height,
+                height
+            );
+            let heights = [panes.list.height, panes.details.height, panes.editor.height];
+            assert!(heights.iter().max().unwrap() - heights.iter().min().unwrap() <= 1);
+            assert!(panes.editor.height >= 3);
+            for area in [panes.list, panes.details, panes.editor] {
+                assert_eq!(area.x, 2);
+                assert_eq!(area.width, width);
+            }
         }
     }
     let panes = dashboard::panes(Rect::new(0, 0, 60, 24));
@@ -2349,17 +2358,106 @@ fn compact_dashboard_uses_equal_panels_below_60_columns() {
     assert_eq!(panes.details.height, 5);
     assert_eq!(panes.editor.y, 13);
     assert_eq!(
-        dashboard::wheel_area((59, 24), 5, 11, false),
-        Some(dashboard::WheelArea::List(12))
+        dashboard::wheel_area((59, 24), 5, 7, false),
+        Some(dashboard::WheelArea::List(8))
     );
     assert_eq!(
-        dashboard::wheel_area((59, 24), 5, 11, true),
-        Some(dashboard::WheelArea::List(11))
+        dashboard::wheel_area((59, 24), 5, 7, true),
+        Some(dashboard::WheelArea::List(7))
     );
     assert_eq!(
-        dashboard::wheel_area((59, 24), 5, 13, false),
-        Some(dashboard::WheelArea::Editor(10))
+        dashboard::wheel_area((59, 24), 5, 9, false),
+        Some(dashboard::WheelArea::Details(6))
     );
+    assert_eq!(dashboard::wheel_area((59, 24), 5, 8, false), None);
+    assert_eq!(
+        dashboard::wheel_area((59, 24), 5, 17, false),
+        Some(dashboard::WheelArea::Editor(6))
+    );
+}
+
+#[test]
+fn compact_details_render_and_scroll_without_moving_draft() {
+    use ratatui::layout::Rect;
+    let detail_rows: Vec<_> = (0..16)
+        .map(|index| render::DetailRow::new(format!("Detail {index}"), render::DetailKind::Body))
+        .collect();
+    let rows = panel::rows("1 First", 50);
+    let chrome = render::Chrome {
+        title: "Editor",
+        title_status_color: None,
+        keys: render::KEYS,
+        message: "",
+    };
+    for (width, height) in [(12, 8), (50, 9), (59, 24), (50, 25)] {
+        for color in [true, false] {
+            let panes = dashboard::panes(Rect::new(0, 0, width, height));
+            let content = dashboard::details_content(panes.details);
+            let layout = render::Layout::new(&["Draft".into()], &[], width.into());
+            let mut details_top = 99;
+            let mut editor_top = 0;
+            let mut terminal = Terminal::new(TestBackend::new(width, height)).unwrap();
+            terminal
+                .draw(|frame| {
+                    dashboard::draw(
+                        frame,
+                        &rows,
+                        &HashMap::from([(1, "new")]),
+                        Some(1),
+                        dashboard::View {
+                            query: "",
+                            focused: false,
+                            show_completed: true,
+                            include_archived: false,
+                            bulk_selected: None,
+                            top: &mut 0,
+                            follow_selected: true,
+                            modal_lines: None,
+                            hide_cursor: false,
+                            details: Some(dashboard::DetailsView {
+                                rows: &detail_rows,
+                                top: &mut details_top,
+                            }),
+                        },
+                        render::DashboardEditor {
+                            layout: &layout,
+                            cursor: 0,
+                            top: &mut editor_top,
+                            chrome: &chrome,
+                            message_is_error: false,
+                            follow_cursor: true,
+                        },
+                        color,
+                    );
+                })
+                .unwrap();
+            let buffer = terminal.backend().buffer();
+            assert_eq!(details_top, detail_rows.len() - usize::from(content.height));
+            assert!(line(buffer, 0).contains("1 First"));
+            let text: String = (content.x..content.x + content.width)
+                .map(|x| buffer[(x, content.y)].symbol())
+                .collect();
+            assert_eq!(
+                text.trim_end(),
+                render::clipped(&format!("Detail {details_top}"), content.width.into())
+            );
+            assert!(line(buffer, panes.editor.y).starts_with("Editor"));
+            assert!(line(buffer, panes.editor.y + 1).starts_with("Draft"));
+            assert_eq!(editor_top, 0);
+            assert_eq!(
+                terminal.get_cursor_position().unwrap(),
+                Position::new(0, panes.editor.y + 1)
+            );
+            assert_eq!(
+                dashboard::wheel_area((width, height), content.x, content.y, false),
+                Some(dashboard::WheelArea::Details(content.height.into()))
+            );
+            assert_eq!(
+                click((width, height), content.x, content.y, &rows, 0, 0, &layout),
+                None
+            );
+        }
+    }
 }
 
 #[test]
