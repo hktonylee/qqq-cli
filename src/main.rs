@@ -11,7 +11,6 @@ mod dispatch;
 mod doctor;
 mod editor;
 mod errors;
-mod graph;
 mod herdr;
 mod identity;
 mod images;
@@ -79,13 +78,6 @@ enum EditStatus {
 
 #[derive(Subcommand)]
 enum Commands {
-    /// Inspect dependency blockers and hypothetical downstream completion impact without writes.
-    Graph {
-        #[arg(allow_negative_numbers = true)]
-        id: i64,
-        #[command(flatten)]
-        options: graph::Options,
-    },
     /// Read or edit ~/.config/qqq/config.toml; no project database required.
     #[command(group(ArgGroup::new("action").required(true).args(["list", "get", "unset", "key"])))]
     Config {
@@ -413,10 +405,6 @@ fn execute(
     view_context: Option<views::ViewContext>,
 ) -> Result<Value> {
     let filter = selection.filter.as_ref();
-    if let Commands::Graph { id, options } = &cli.command {
-        let (db, _) = db::Db::open_read_only()?;
-        return Ok(json!(db.graph(*id, *options)?));
-    }
     if let Commands::View { command } = &cli.command {
         let path = views::path()?;
         return Ok(match command {
@@ -1056,7 +1044,6 @@ fn execute(
         Commands::Backup { destination } => snapshot::backup::run(&mut db, &path, &destination)?,
         Commands::Restore { .. } => unreachable!("restore handled before database open"),
         Commands::Doctor => unreachable!("doctor handled before database open"),
-        Commands::Graph { .. } => unreachable!("graph handled before writable database open"),
         Commands::Message { id, body } => db.message(id, &body, session_input)?,
         Commands::Herdr { command } => match command {
             HerdrCommand::Link {
@@ -1221,7 +1208,7 @@ fn run(cli: Cli) -> Result<(Option<String>, bool)> {
     // Init's DB open checks its own active owners; restore has no live target DB.
     if !matches!(
         &cli.command,
-        Commands::Init | Commands::Restore { .. } | Commands::View { .. } | Commands::Graph { .. }
+        Commands::Init | Commands::Restore { .. } | Commands::View { .. }
     ) {
         preflight::current_project()?;
     }
@@ -1245,7 +1232,6 @@ fn run(cli: Cli) -> Result<(Option<String>, bool)> {
             let columns = if matches!(
                 &format,
                 output::Format::Tasks
-                    | output::Format::Graph
                     | output::Format::PriorityTasks
                     | output::Format::OnelinePriorityTasks
             ) {

@@ -207,7 +207,7 @@ with tempfile.TemporaryDirectory(prefix="qqq-undo-test-") as directory:
             # All modal/filter guards run before task editor history dispatch.
             for shortcut, title in ((b"\x1f", "Filter"), (b"\x0c", "Tags"),
                                     (b"\x0b", "Go to task"), (b"\x07", "Task actions"),
-                                    (b"\x02", "Choose view"), (b"\x0f", "Dependency graph")):
+                                    (b"\x02", "Choose view")):
                 send(shortcut)
                 wait(lambda: title.lower() in visible.text().lower())
                 send(b"\x1a\x19\x1b")

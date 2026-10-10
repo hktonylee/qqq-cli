@@ -2282,7 +2282,6 @@ fn hotkey_footer_colors_shortcuts_and_clears_styles_for_messages() {
                         && [
                             "Ctrl-S",
                             "Ctrl-B",
-                            "Ctrl-O",
                             "Ctrl-H",
                             "Ctrl-D",
                             "Ctrl-L",

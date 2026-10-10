@@ -6,7 +6,6 @@ mod conflict;
 mod dashboard;
 mod details;
 pub mod draft;
-mod graph_inspector;
 mod handoff;
 mod jump;
 mod panel;
@@ -880,7 +879,6 @@ pub fn compose_dashboard(
     )
     .map(|_| ())
 }
-#[derive(Clone)]
 struct DashboardSnapshot {
     tasks: Vec<crate::db::Task>,
     selected: Vec<crate::db::Task>,
@@ -1002,8 +1000,6 @@ fn compose_inner(
     let mut view_ui: Option<view_picker::Picker> = None;
     let mut bulk_ui: Option<bulk::View> = None;
     let mut bulk_selected = std::collections::BTreeSet::new();
-    let mut graph_ui: Option<graph_inspector::Inspector> = None;
-    let mut graph_background: Option<DashboardSnapshot> = None;
     let mut save_revision_override = None;
     let mut saved_any = false;
     let mut buffers = DraftBuffers::default();
@@ -1044,7 +1040,7 @@ fn compose_inner(
         let (dashboard_tasks, selected_tasks, list_version, details_rows, has_herdr_link) =
             if dashboard {
                 let db = mode.db().expect("dashboard has database");
-                let mut frame = match dashboard_snapshot(
+                let mut frame = dashboard_snapshot(
                     db,
                     target_id,
                     size,
@@ -1052,29 +1048,7 @@ fn compose_inner(
                         .as_ref()
                         .expect("dashboard prepares selection"),
                     &filter_query,
-                ) {
-                    Ok(frame) => {
-                        if graph_ui.is_some() {
-                            graph_background = Some(frame.clone());
-                        } else {
-                            graph_background = None;
-                        }
-                        frame
-                    }
-                    Err(error) => {
-                        let Some(mut previous) = graph_background.clone() else {
-                            return Err(error);
-                        };
-                        previous.version = db.data_version().unwrap_or(previous.version);
-                        if let Some(ui) = &mut graph_ui {
-                            ui.set_error(&error, previous.version);
-                        } else {
-                            message = format!("{error:#}; local drafts kept");
-                            message_is_error = true;
-                        }
-                        previous
-                    }
-                };
+                )?;
                 if let Some(task) = frame.tasks.iter().find(|task| Some(task.id) == target_id) {
                     target_status = Some(task.status.clone());
                     if let Some(ActionUi::Menu {
@@ -1294,27 +1268,13 @@ fn compose_inner(
                 usize::MAX,
             )
             .content;
-            if let Some(ui) = &mut graph_ui {
-                ui.refresh(
-                    mode.db().expect("dashboard has database"),
-                    list_version.expect("dashboard captures version"),
-                );
-            }
-            let modal_lines = graph_ui
+            let modal_lines = view_ui
                 .as_mut()
                 .map(|ui| {
                     ui.rows(
                         usize::from(popup_content.width),
                         usize::from(popup_content.height),
                     )
-                })
-                .or_else(|| {
-                    view_ui.as_mut().map(|ui| {
-                        ui.rows(
-                            usize::from(popup_content.width),
-                            usize::from(popup_content.height),
-                        )
-                    })
                 })
                 .or_else(|| {
                     conflict_ui.as_ref().map(|ui| {
@@ -1432,11 +1392,7 @@ fn compose_inner(
                 let timeout = refresh_deadline.saturating_duration_since(Instant::now());
                 if !event::poll(timeout)? || Instant::now() >= refresh_deadline {
                     let db = mode.db().expect("dashboard has database");
-                    let version = match db.data_version() {
-                        Ok(version) => version,
-                        Err(_) if graph_ui.is_some() || graph_background.is_some() => break None,
-                        Err(error) => return Err(error),
-                    };
+                    let version = db.data_version()?;
                     if Some(version) != list_version {
                         break None;
                     }
@@ -1453,7 +1409,6 @@ fn compose_inner(
                     && conflict_ui.is_none()
                     && view_ui.is_none()
                     && bulk_ui.is_none()
-                    && graph_ui.is_none()
                     && match mouse.kind {
                         MouseEventKind::ScrollUp | MouseEventKind::ScrollDown => {
                             dashboard::wheel_area(size, mouse.column, mouse.row, filter_visible)
@@ -1485,7 +1440,7 @@ fn compose_inner(
         };
         match input {
             Event::Paste(text) if confirmation.is_none() && conflict_ui.is_none() => {
-                if view_ui.is_some() || graph_ui.is_some() {
+                if view_ui.is_some() {
                     continue;
                 } else if let Some(ui) = bulk_ui.as_mut() {
                     ui.paste(&text);
@@ -1625,17 +1580,6 @@ fn compose_inner(
                 }
             }
             Event::Key(mut key) if key.kind != KeyEventKind::Release => {
-                if let Some(ui) = &mut graph_ui {
-                    let area = dashboard::popup_layout(
-                        ratatui::layout::Rect::new(0, 0, size.0, size.1),
-                        usize::MAX,
-                    )
-                    .content;
-                    if ui.key(key, usize::from(area.height)) {
-                        graph_ui = None;
-                    }
-                    continue;
-                }
                 if let Some(mut ui) = view_ui.take() {
                     match ui.key(key) {
                         Some(view_picker::Action::Apply(view)) => {
@@ -1809,36 +1753,6 @@ fn compose_inner(
                     }
                 }
                 let control = key.modifiers.contains(KeyModifiers::CONTROL);
-                if dashboard
-                    && control
-                    && key.code == KeyCode::Char('o')
-                    && !key
-                        .modifiers
-                        .intersects(KeyModifiers::ALT | KeyModifiers::SUPER)
-                    && confirmation.is_none()
-                    && action_ui.is_none()
-                {
-                    if let Some(id) = target_id {
-                        graph_background = Some(DashboardSnapshot {
-                            tasks: dashboard_tasks
-                                .as_ref()
-                                .expect("dashboard has tasks")
-                                .clone(),
-                            selected: selected_tasks
-                                .as_ref()
-                                .expect("dashboard has selection")
-                                .clone(),
-                            version: list_version.expect("dashboard has version"),
-                            details: details_rows.clone(),
-                            has_herdr_link,
-                        });
-                        graph_ui = Some(graph_inspector::Inspector::new(id));
-                    } else {
-                        message = "Select task to inspect dependency graph".into();
-                        message_is_error = false;
-                    }
-                    continue;
-                }
                 if dashboard
                     && control
                     && key.code == KeyCode::Char('b')

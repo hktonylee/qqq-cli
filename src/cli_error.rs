@@ -12,14 +12,8 @@ use serde_json::{Value, json};
 use std::{ffi::OsString, io::Write};
 
 pub fn requests_json(arguments: &[OsString], agent_caller: &mut Option<bool>) -> bool {
-    output_override(arguments).unwrap_or_else(|| {
-        if crate::aliases::command_index(arguments).is_some_and(|index| arguments[index] == "graph")
-        {
-            crate::session::native_agent_context()
-        } else {
-            *agent_caller.get_or_insert_with(crate::session::is_agent_caller)
-        }
-    })
+    output_override(arguments)
+        .unwrap_or_else(|| *agent_caller.get_or_insert_with(crate::session::is_agent_caller))
 }
 
 pub fn output_override(arguments: &[OsString]) -> Option<bool> {
@@ -72,7 +66,6 @@ pub fn command_name(command: &Commands) -> &'static str {
     match command {
         Commands::Config { .. } => "config",
         Commands::View { .. } => "view",
-        Commands::Graph { .. } => "graph",
         Commands::Init => "init",
         Commands::Add { .. } => "add",
         Commands::Import { .. } => "import",

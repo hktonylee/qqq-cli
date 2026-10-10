@@ -41,6 +41,30 @@ fn project() -> TempDir {
 }
 
 #[test]
+fn removed_graph_command_is_rejected_without_opening_project() {
+    let dir = TempDir::new().unwrap();
+    let out = human_command(dir.path())
+        .args(["--human", "graph", "1"])
+        .output()
+        .unwrap();
+    assert_eq!(out.status.code(), Some(2));
+    assert!(String::from_utf8_lossy(&out.stderr).contains("unrecognized subcommand 'graph'"));
+    assert!(!dir.path().join(".qqq").exists());
+}
+
+#[test]
+fn help_omits_removed_graph_command() {
+    let dir = TempDir::new().unwrap();
+    let out = run(dir.path(), &["--help"]);
+    assert!(out.status.success());
+    assert!(
+        !String::from_utf8_lossy(&out.stdout)
+            .lines()
+            .any(|line| line.trim_start().starts_with("graph "))
+    );
+}
+
+#[test]
 fn next_dry_run_previews_priority_filter_and_readiness_without_claim() {
     let dir = project();
     let p = dir.path();

@@ -130,67 +130,6 @@ esac
 }
 
 #[test]
-fn bare_and_alias_graph_output_defaults_never_probe_herdr() {
-    let f = Fixture::new();
-    f.gone();
-    let config_dir = f.dir.path().join(".config/qqq");
-    fs::create_dir_all(&config_dir).unwrap();
-    fs::write(
-        config_dir.join("config.toml"),
-        "[alias]\ninspect = 'graph'\ninspect_nested = 'inspect'\n",
-    )
-    .unwrap();
-    let before = fs::read(f.dir.path().join(".qqq/qqq.db")).unwrap();
-    for command in ["graph", "inspect", "inspect_nested"] {
-        let out = f
-            .bare_command()
-            .env("HERDR_ENV", "1")
-            .env("HERDR_PANE_ID", "w1:p1")
-            .args([command, "1"])
-            .output()
-            .unwrap();
-        assert!(out.status.success() && out.stderr.is_empty());
-        assert!(
-            String::from_utf8(out.stdout)
-                .unwrap()
-                .starts_with("Dependency graph #1")
-        );
-        assert_eq!(fs::read_to_string(f.dir.path().join("calls")).unwrap(), "");
-    }
-    let out = f
-        .bare_command()
-        .env("HERDR_ENV", "1")
-        .env("HERDR_PANE_ID", "w1:p1")
-        .env("CODEX_THREAD_ID", "native-context")
-        .args(["inspect_nested", "1"])
-        .output()
-        .unwrap();
-    assert_eq!(
-        serde_json::from_slice::<Value>(&out.stdout).unwrap()["task_id"],
-        1
-    );
-    assert!(out.stderr.is_empty());
-    assert_eq!(fs::read_to_string(f.dir.path().join("calls")).unwrap(), "");
-    assert_eq!(fs::read(f.dir.path().join(".qqq/qqq.db")).unwrap(), before);
-}
-
-#[test]
-fn graph_inspection_skips_stale_owner_and_herdr_probes() {
-    let f = Fixture::new();
-    f.gone();
-    fs::write(f.dir.path().join("fail"), "offline").unwrap();
-    let db_path = f.dir.path().join(".qqq/qqq.db");
-    let before = fs::read(&db_path).unwrap();
-    let report = f.ok(&["graph", "1"]);
-    assert_eq!(report["focus"]["status"], "in_progress");
-    assert_eq!(fs::read(&db_path).unwrap(), before);
-    assert_eq!(fs::read_to_string(f.dir.path().join("calls")).unwrap(), "");
-    // Ordinary commands retain owner recovery; graph is the read-only exception.
-    fs::remove_file(f.dir.path().join("fail")).unwrap();
-    assert_eq!(f.ok(&["show", "1"])["task"]["status"], "error");
-}
-
-#[test]
 fn missing_or_malformed_named_views_precede_owner_preflight() {
     let f = Fixture::new();
     f.gone();

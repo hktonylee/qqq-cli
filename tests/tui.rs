@@ -166,14 +166,9 @@ fn tui_bulk_selection_and_confirmation_support_compact_and_no_color() {
 }
 
 #[test]
-fn tui_dashboard_graph_inspector_preserves_drafts() {
-    dashboard_scenario("graph");
-    dashboard_scenario("graph_no_color");
-}
-
-#[test]
-fn tui_dashboard_graph_read_failure_and_recovery_keep_drafts_alive() {
-    dashboard_scenario("graph_failure");
+fn tui_dashboard_removed_ctrl_o_keeps_editor_and_filter_input_active() {
+    dashboard_scenario("removed_ctrl_o");
+    dashboard_scenario("removed_ctrl_o_no_color");
 }
 
 #[test]
