@@ -2160,7 +2160,7 @@ fn compose_inner(
                                     });
                                     None
                                 }
-                                KeyCode::Esc => None,
+                                KeyCode::Esc | KeyCode::Char('q') => None,
                                 _ => {
                                     action_ui = Some(ActionUi::Menu {
                                         id,

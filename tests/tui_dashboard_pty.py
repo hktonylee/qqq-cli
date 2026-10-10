@@ -41,7 +41,7 @@ with tempfile.TemporaryDirectory(prefix="qqq-dashboard-test-") as folder:
         env["NO_COLOR"] = "1"
     elif scenario == "dumb":
         env["TERM"] = "dumb"
-    if scenario.startswith(("buffers_", "long_description_", "prerequisites", "dirty_marker", "completed_toggle", "archived_toggle", "jump", "menu_error_", "force_complete", "force_reopen", "force_error", "list_selection", "tags", "orphan_reopen", "views", "scroll_multiline")) and scenario.endswith("no_color"):
+    if scenario.startswith(("buffers_", "long_description_", "prerequisites", "dirty_marker", "completed_toggle", "archived_toggle", "jump", "menu_error_", "menu_quit", "force_complete", "force_reopen", "force_error", "list_selection", "tags", "orphan_reopen", "views", "scroll_multiline")) and scenario.endswith("no_color"):
         env["NO_COLOR"] = "1"
     for name in ("EDITOR", "QQQ_SESSION", "HERDR_ENV", "HERDR_PANE_ID", "CODEX_THREAD_ID", "CODEX_SESSION_ID"):
         env.pop(name, None)
@@ -3379,6 +3379,59 @@ print(json.dumps({"result": result}))
                              and editor_line().startswith(label) and visible.cursor_visible)
             else:
                 assert cli("list") == initial_tasks
+            if scenario.endswith("no_color"):
+                assert b"\x1b[38;" not in screen and b"\x1b[48;" not in screen, screen[-2000:]
+        elif scenario.startswith("menu_quit"):
+            send(b"\x1b[1;2A")
+            wait_frame(lambda: "Task #2 (New)" in editor_title())
+            if scenario == "menu_quit_narrow":
+                fcntl.ioctl(slave, termios.TIOCSWINSZ, struct.pack("HHHH", 24, 40, 0, 0))
+                visible.resize(40, 24)
+                os.kill(child.pid, signal.SIGWINCH)
+                wait_frame(lambda: editor_line().startswith("Second"))
+            initial_tasks = cli("list", "--all")
+            send(b" draft\x1b[D\x1b[D")
+            caret = (len("Second dra"), editor_row() + 1)
+            wait_caret(lambda: editor_line().startswith("Second draft"), caret)
+            editor_footer = visible.text().splitlines()[-1]
+
+            def selected_action(key):
+                return any(part.strip().startswith(f"> {key} ")
+                           for line in visible.text().splitlines() for part in line.split("│"))
+
+            def open_menu():
+                send(b"\x07")
+                wait_visible(lambda: selected_action("c"))
+
+            open_menu()
+            # Modified q stays ignored; next arrow proves menu still owns input.
+            send(b"\x11\x1b[B")
+            wait_visible(lambda: selected_action("e"))
+            assert visible.text().splitlines()[-1] == editor_footer, visible.text()
+            send(b"q")
+            wait_caret(lambda: "Task actions" not in visible.text()
+                       and editor_line().startswith("Second draft") and visible.cursor_visible,
+                       caret)
+            assert visible.text().splitlines()[-1] == editor_footer, visible.text()
+            assert cli("list", "--all") == initial_tasks
+            assert child.poll() is None
+
+            # Outside menu, q remains ordinary editor/filter input.
+            send(b"q")
+            wait_caret(lambda: editor_line().startswith("Second draqft"),
+                       (caret[0] + 1, caret[1]))
+            send(CTRL_SLASH + b"Se")
+            wait_frame(lambda: filter_text() == "Filter: Se")
+            filter_footer = visible.text().splitlines()[-1]
+            open_menu()
+            assert visible.text().splitlines()[-1] == filter_footer, visible.text()
+            send(b"q")
+            wait_frame(lambda: "Task actions" not in visible.text()
+                       and filter_text() == "Filter: Se" and visible.cursor_visible)
+            assert editor_line().startswith("Second draqft"), visible.text()
+            send(b"q")
+            wait_frame(lambda: filter_text() == "Filter: Seq")
+            assert cli("list", "--all") == initial_tasks
             if scenario.endswith("no_color"):
                 assert b"\x1b[38;" not in screen and b"\x1b[48;" not in screen, screen[-2000:]
         elif scenario.startswith("menu_arrows"):

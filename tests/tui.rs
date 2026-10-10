@@ -579,6 +579,13 @@ fn tui_dashboard_workflow_states_and_cleanup() {
 }
 
 #[test]
+fn tui_dashboard_q_closes_action_menu_without_changing_draft_or_filter() {
+    for name in ["menu_quit", "menu_quit_no_color", "menu_quit_narrow"] {
+        dashboard_scenario(name);
+    }
+}
+
+#[test]
 fn tui_dashboard_menu_arrows() {
     dashboard_scenario("menu_arrows");
     dashboard_scenario("menu_arrows_no_color");
