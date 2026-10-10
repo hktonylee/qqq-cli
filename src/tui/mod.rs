@@ -235,7 +235,8 @@ const ACTION_MENU_GROUPS: [&[(char, &str)]; 3] = [
 
 fn action_menu_available(key: char, status: &str) -> bool {
     match key {
-        'c' | 'e' => status != "completed",
+        'c' => status != "completed",
+        'e' => !matches!(status, "completed" | "error"),
         'r' => status == "error",
         'o' => status != "error",
         _ => true,
@@ -3031,7 +3032,10 @@ mod tests {
             for archived in [false, true] {
                 let mut expected = vec!["Task actions #1"];
                 if status != "completed" {
-                    expected.extend(["c Complete", "e Mark error"]);
+                    expected.push("c Complete");
+                }
+                if matches!(status, "new" | "in_progress") {
+                    expected.push("e Mark error");
                 }
                 expected.push(if status == "error" {
                     "r Retry error"
@@ -3098,6 +3102,9 @@ mod tests {
                         rows.len() <= height,
                         "height {height}, selection {selected}"
                     );
+                    if matches!(status, "error" | "completed") {
+                        assert!(rows.iter().all(|row| !row.text.starts_with("e ")));
+                    }
                     let selected_rows = rows
                         .iter()
                         .filter(|row| row.kind == PopupKind::SelectedAction)

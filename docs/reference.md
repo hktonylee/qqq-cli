@@ -855,7 +855,7 @@ mode keeps marker. Letter shortcuts activate actions directly. Press `c` to comp
 (`y` normal, `Y` force), `a` to archive or unarchive, `p` to set priority
 (-100..100), or `d` to set parent by positive
 task ID or `none`. Error tasks show Retry error and ignore `o`; non-error tasks show
-Reopen and ignore `r`.
+Reopen and ignore `r`. Error tasks hide Mark error and ignore `e`.
 Completed tasks hide Complete and Mark error; their menus ignore `c` and `e`.
 Press `e` for Mark error and enter a nonempty reason. Lowercase `y` keeps current
 owner checks: only an in-progress task owned by the current session can fail.

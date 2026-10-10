@@ -3552,6 +3552,10 @@ print(json.dumps({"result": result}))
             click(5, task_row(label))
             wait_visible(lambda: f"Task #{task_id} (" in editor_title()
                          and editor_line().startswith(label))
+            if status == "error":
+                send(b" retained")
+                wait_frame(lambda: editor_line().startswith(label + " retained"))
+                dirty_caret = (visible.x, visible.y)
 
             def selected_action(key):
                 return any(part.strip().startswith(f"> {key} ")
@@ -3567,21 +3571,28 @@ print(json.dumps({"result": result}))
             settle()
             assert ("r Retry error" in visible.text()) == (status == "error"), visible.text()
             assert ("o Reopen" in visible.text()) == (status != "error"), visible.text()
+            assert ("e Mark error" in visible.text()) == (status in ("new", "in_progress")), visible.text()
             if scenario == "menu_retry_live":
-                send(b"\x1b[B" * 2)
+                send(b"\x1b[B")
                 wait_visible(lambda: selected_action("r"))
                 cli("edit", str(task_id), "--set-status", "new")
                 wait_visible(lambda: "r Retry error" not in visible.text()
-                             and selected_action("o"))
+                             and "e Mark error" in visible.text() and selected_action("e"))
                 send(b"r")
                 settle()
                 assert f"Task actions #{task_id}" in visible.text(), visible.text()
-                assert selected_action("o"), visible.text()
+                assert selected_action("e"), visible.text()
                 assert cli("next", "--local", "--session", "external")["id"] == task_id
                 cli("edit", str(task_id), "--set-status", "error",
                     "--reason", "Failed again", "--session", "external")
                 wait_visible(lambda: "r Retry error" in visible.text()
-                             and "o Reopen" not in visible.text() and selected_action("r"))
+                             and "o Reopen" not in visible.text()
+                             and "e Mark error" not in visible.text() and selected_action("r"))
+                error_detail = cli("show", str(task_id))
+                send(b"e")
+                settle()
+                assert selected_action("r"), visible.text()
+                assert cli("show", str(task_id)) == error_detail
             elif status != "error":
                 send(b"r")
                 settle()
@@ -3591,8 +3602,21 @@ print(json.dumps({"result": result}))
                 if status != "completed":
                     send(b"\x1b[B" * 2)
             else:
-                # Hidden Reopen shortcut must stay inactive; arrows still navigate.
-                send(b"o" + b"\x1b[B" * 2)
+                # Hidden status shortcuts stay inactive; arrows skip removed action.
+                error_detail = cli("show", str(task_id))
+                send(b"oe")
+                settle()
+                assert selected_action("c"), visible.text()
+                assert "Error task" not in visible.text(), visible.text()
+                assert cli("show", str(task_id)) == error_detail
+                send(b"\x1b")
+                wait_caret(lambda: editor_line().startswith(label + " retained"), dirty_caret)
+                open_menu()
+                send(b"\x1b[A")
+                wait_visible(lambda: selected_action("a"))
+                send(b"\x1b[B")
+                wait_visible(lambda: selected_action("c"))
+                send(b"\x1b[B")
             wait_visible(lambda: selected_action("r" if status == "error" else "o"))
             if scenario != "menu_retry_live":
                 assert cli("list") == initial_tasks
