@@ -593,6 +593,18 @@ fn tui_dashboard_menu_arrows() {
 }
 
 #[test]
+fn tui_dashboard_completed_menu_hides_complete_and_error_actions() {
+    for name in [
+        "completed_menu",
+        "completed_menu_no_color",
+        "completed_menu_narrow",
+        "completed_menu_live",
+    ] {
+        dashboard_scenario(name);
+    }
+}
+
+#[test]
 fn tui_dashboard_retry_menu_action_requires_error_status() {
     for scenario in [
         "menu_retry_new",

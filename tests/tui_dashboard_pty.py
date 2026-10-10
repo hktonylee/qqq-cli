@@ -41,7 +41,7 @@ with tempfile.TemporaryDirectory(prefix="qqq-dashboard-test-") as folder:
         env["NO_COLOR"] = "1"
     elif scenario == "dumb":
         env["TERM"] = "dumb"
-    if scenario.startswith(("buffers_", "long_description_", "prerequisites", "dirty_marker", "completed_toggle", "archived_toggle", "jump", "menu_error_", "menu_quit", "force_complete", "force_reopen", "force_error", "list_selection", "tags", "orphan_reopen", "views", "scroll_multiline")) and scenario.endswith("no_color"):
+    if scenario.startswith(("buffers_", "long_description_", "prerequisites", "dirty_marker", "completed_toggle", "completed_menu", "archived_toggle", "jump", "menu_error_", "menu_quit", "force_complete", "force_reopen", "force_error", "list_selection", "tags", "orphan_reopen", "views", "scroll_multiline")) and scenario.endswith("no_color"):
         env["NO_COLOR"] = "1"
     for name in ("EDITOR", "QQQ_SESSION", "HERDR_ENV", "HERDR_PANE_ID", "CODEX_THREAD_ID", "CODEX_SESSION_ID"):
         env.pop(name, None)
@@ -150,6 +150,11 @@ print(json.dumps({"result": {"pane": pane}}))
             env["HERDR_PANE_ID"] = "w1:p1"
             if "initial_failure" in scenario:
                 (Path(folder) / "herdr-fail").touch()
+    elif scenario.startswith("completed_menu"):
+        cli("add", "Done")
+        cli("next", "--local", "--session", "finished")
+        cli("complete", "1", "--session", "finished")
+        cli("add", "Fresh")
     elif scenario in ("actions_basic", "actions_rejected") or scenario.startswith(("menu_retry_", "menu_error_")):
         cli("add", "Owned item")
         cli("add", "Failed item")
@@ -577,7 +582,7 @@ print(json.dumps({"result": result}))
                              and editor_line().startswith("Second"))
                 settle()
                 assert b"\x1b[38;" not in screen and b"\x1b[48;" not in screen, screen[-2000:]
-        if not scenario.startswith(("wide_layout", "menu_retry_", "menu_error_", "long_description_", "completed_toggle", "archived_toggle", "force_complete", "force_reopen", "force_error", "orphan_reopen", "views_startup", "views_visibility", "scroll_multiline")) and scenario not in ("buffers_scroll", "handoff_scroll", "ctrl_c_new_scroll", "live_refresh_scroll", "tree_navigation", "ctrl_punctuation_tree", "scroll", "wheel", "click", "click_filter", "workflow", "workflow_empty", "workflow_status", "filter", "filter_no_color", "archive_hidden", "archive_included", "actions_basic", "actions_rejected", "actions_hidden", "jump_archived"):
+        if not scenario.startswith(("wide_layout", "menu_retry_", "menu_error_", "long_description_", "completed_toggle", "completed_menu", "archived_toggle", "force_complete", "force_reopen", "force_error", "orphan_reopen", "views_startup", "views_visibility", "scroll_multiline")) and scenario not in ("buffers_scroll", "handoff_scroll", "ctrl_c_new_scroll", "live_refresh_scroll", "tree_navigation", "ctrl_punctuation_tree", "scroll", "wheel", "click", "click_filter", "workflow", "workflow_empty", "workflow_status", "filter", "filter_no_color", "archive_hidden", "archive_included", "actions_basic", "actions_rejected", "actions_hidden", "jump_archived"):
             read_until(b"Second")
             assert "First" in visible.text() and "Second" in visible.text(), visible.text()
         assert not select.select([child.stdout], [], [], 0)[0], "TUI wrote stdout while open"
@@ -3147,7 +3152,7 @@ print(json.dumps({"result": result}))
                     fcntl.ioctl(slave, termios.TIOCSWINSZ, struct.pack("HHHH", 12, 32, 0, 0))
                     visible.resize(32, 12)
                     wait_visible(lambda: editor_line().startswith("Foreign item retained"))
-                for task_id in [1, 3, 5]:
+                for task_id in [1, 3]:
                     if task_id != 1:
                         send(f"\x0b{task_id}\r".encode())
                         wait_visible(lambda: f"Task #{task_id} (" in editor_title())
@@ -3322,6 +3327,74 @@ print(json.dumps({"result": result}))
                 assert detail["events"][-1]["session"] == "reviewer"
             if scenario.endswith("no_color"):
                 assert b"\x1b[38;" not in screen and b"\x1b[48;" not in screen
+        elif scenario.startswith("completed_menu"):
+            click(5, task_row("Done"))
+            wait_frame(lambda: "Task #1 (Completed)" in editor_title()
+                       and editor_line().startswith("Done"))
+            send(b" local")
+            wait_frame(lambda: editor_line().startswith("Done local"))
+            initial_detail = cli("show", "1")
+            if scenario == "completed_menu_narrow":
+                fcntl.ioctl(slave, termios.TIOCSWINSZ, struct.pack("HHHH", 8, 12, 0, 0))
+                visible.resize(12, 8)
+                os.kill(child.pid, signal.SIGWINCH)
+                wait_frame(lambda: editor_row() == 5 and editor_line().startswith("Done local"))
+                settle()
+
+            def selected_action(key):
+                return any(part.strip().startswith(f"> {key} ")
+                           for line in visible.text().splitlines() for part in line.split("│"))
+
+            def open_menu():
+                send(b"\x07")
+                wait_visible(lambda: selected_action("o"))
+
+            def close_menu():
+                send(b"\x1b")
+                wait_frame(lambda: editor_line().startswith("Done local"))
+
+            open_menu()
+            settle()
+            for label in ("c Complete", "e Mark error", "r Retry error"):
+                assert label not in visible.text(), visible.text()
+            for key in (b"c", b"e"):
+                send(key)
+                settle()
+                assert selected_action("o"), visible.text()
+                assert cli("show", "1") == initial_detail
+            send(b"\x1b[A")
+            wait_visible(lambda: selected_action("a"))
+            send(b"\x1b[B")
+            wait_visible(lambda: selected_action("o"))
+            for key in "pdao":
+                send(b"\x1b[B")
+                wait_visible(lambda key=key: selected_action(key))
+            send(b"\r")
+            wait_visible(lambda: "Reopen task" in visible.text())
+            send(b"n")
+            wait_frame(lambda: editor_line().startswith("Done local"))
+            assert cli("show", "1") == initial_detail
+            if scenario == "completed_menu_live":
+                open_menu()
+                send(b"\x1b[B")
+                wait_visible(lambda: selected_action("p"))
+                cli("reopen", "1")
+                wait_visible(lambda: "c Complete" in visible.text()
+                             and "e Mark error" in visible.text() and selected_action("p"))
+                send(b"\x1b[A" * 2)
+                wait_visible(lambda: selected_action("e"))
+                assert cli("next", "--local", "--session", "external")["id"] == 1
+                cli("complete", "1", "--session", "external")
+                wait_visible(lambda: "c Complete" not in visible.text()
+                             and "e Mark error" not in visible.text() and selected_action("p"))
+                for key in (b"c", b"e"):
+                    send(key)
+                    settle()
+                    assert selected_action("p"), visible.text()
+            close_menu()
+            assert cli("show", "1")["task"]["description"] == "Done"
+            if scenario.endswith("no_color"):
+                assert b"\x1b[38;" not in screen and b"\x1b[48;" not in screen
         elif scenario.startswith("menu_retry_"):
             status = scenario.removeprefix("menu_retry_").removesuffix("_no_color")
             if status == "live":
@@ -3344,7 +3417,7 @@ print(json.dumps({"result": result}))
             def open_menu():
                 send(b"\x07")
                 wait_visible(lambda: f"Task actions #{task_id}" in visible.text()
-                             and selected_action("c")
+                             and selected_action("o" if status == "completed" else "c")
                              and "Up/Down Select" in visible.text())
 
             open_menu()
@@ -3371,8 +3444,9 @@ print(json.dumps({"result": result}))
                 settle()
                 assert f"Task actions #{task_id}" in visible.text(), visible.text()
                 assert "Retry task" not in visible.text(), visible.text()
-                assert selected_action("c"), visible.text()
-                send(b"\x1b[B" * 2)
+                assert selected_action("o" if status == "completed" else "c"), visible.text()
+                if status != "completed":
+                    send(b"\x1b[B" * 2)
             else:
                 send(b"\x1b[B" * 2)
             wait_visible(lambda: selected_action("r" if status == "error" else "o"))
@@ -3723,13 +3797,15 @@ print(json.dumps({"result": result}))
             click(5, task_row("Finished item"))
             wait_visible(lambda: "Task #5 (Completed)" in editor_title())
             task_before = cli("show", "5")
-            send(b"\x07c")
-            passive_popup("Force complete task #5?")
-            send(b"Y")
-            wait_visible(lambda: "Task 5 must be unfinished to force complete" in visible.text())
+            send(b"\x07")
+            wait_visible(lambda: "Task actions #5" in visible.text() and "> o Reopen" in visible.text())
+            assert "c Complete" not in visible.text() and "e Mark error" not in visible.text(), visible.text()
+            send(b"c")
+            settle()
+            assert "Task actions #5" in visible.text(), visible.text()
             assert cli("show", "5") == task_before
             send(b"\x1b")
-            wait_visible(lambda: "Action error" not in visible.text())
+            wait_visible(lambda: "Task actions #5" not in visible.text())
             if scenario.endswith("no_color"):
                 assert b"\x1b[38;" not in screen and b"\x1b[48;" not in screen, screen[-2000:]
         elif scenario == "actions_basic":
@@ -3742,7 +3818,7 @@ print(json.dumps({"result": result}))
             def action(letter, prompt):
                 clear_capture()
                 send(b"\x07")
-                wait_visible(lambda: "Task actions" in visible.text() and "c Complete" in visible.text())
+                wait_visible(lambda: "Task actions" in visible.text() and "o Reopen" in visible.text())
                 clear_capture()
                 send(letter.encode())
                 read_until(prompt.encode())

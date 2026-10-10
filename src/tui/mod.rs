@@ -232,19 +232,27 @@ const ACTION_MENU_GROUPS: [&[(char, &str)]; 3] = [
     &[('a', "Archive")],
 ];
 
-fn action_menu_items(can_retry: bool) -> impl Iterator<Item = (char, &'static str)> {
+fn action_menu_available(key: char, status: &str) -> bool {
+    match key {
+        'c' | 'e' => status != "completed",
+        'r' => status == "error",
+        _ => true,
+    }
+}
+
+fn action_menu_items(status: &str) -> impl Iterator<Item = (char, &'static str)> + '_ {
     ACTION_MENU_GROUPS
         .into_iter()
         .flatten()
         .copied()
-        .filter(move |(key, _)| can_retry || *key != 'r')
+        .filter(move |(key, _)| action_menu_available(*key, status))
 }
 
 enum ActionUi {
     Menu {
         id: i64,
         archived: bool,
-        can_retry: bool,
+        status: String,
         selected: usize,
     },
     Input {
@@ -295,7 +303,7 @@ fn action_lines(ui: &ActionUi, width: usize, height: usize) -> Vec<render::Popup
         ActionUi::Menu {
             id,
             archived,
-            can_retry,
+            status,
             selected,
         } => {
             let mut lines = vec![PopupRow::new(
@@ -308,7 +316,7 @@ fn action_lines(ui: &ActionUi, width: usize, height: usize) -> Vec<render::Popup
                     lines.push(PopupRow::new("", PopupKind::Body));
                 }
                 for &(key, label) in group {
-                    if key == 'r' && !can_retry {
+                    if !action_menu_available(key, status) {
                         continue;
                     }
                     let label = if key == 'a' && *archived {
@@ -1052,22 +1060,19 @@ fn compose_inner(
                 if let Some(task) = frame.tasks.iter().find(|task| Some(task.id) == target_id) {
                     target_status = Some(task.status.clone());
                     if let Some(ActionUi::Menu {
-                        can_retry,
-                        selected,
-                        ..
+                        status, selected, ..
                     }) = &mut action_ui
                     {
-                        let retry = task.status == "error";
-                        if *can_retry != retry {
-                            let key = action_menu_items(*can_retry)
+                        if *status != task.status {
+                            let key = action_menu_items(status)
                                 .nth(*selected)
                                 .expect("menu selection is valid")
                                 .0;
-                            *can_retry = retry;
-                            *selected = action_menu_items(retry)
+                            *status = task.status.clone();
+                            *selected = action_menu_items(status)
                                 .position(|(candidate, _)| candidate == key)
                                 .unwrap_or_else(|| {
-                                    (*selected).min(action_menu_items(retry).count() - 1)
+                                    (*selected).min(action_menu_items(status).count() - 1)
                                 });
                         }
                     }
@@ -2088,10 +2093,10 @@ fn compose_inner(
                         ActionUi::Menu {
                             id,
                             archived,
-                            can_retry,
+                            status,
                             mut selected,
                         } => {
-                            let count = action_menu_items(can_retry).count();
+                            let count = action_menu_items(&status).count();
                             if matches!(key.code, KeyCode::Up | KeyCode::Down) {
                                 selected = if key.code == KeyCode::Up {
                                     (selected + count - 1) % count
@@ -2101,14 +2106,14 @@ fn compose_inner(
                                 action_ui = Some(ActionUi::Menu {
                                     id,
                                     archived,
-                                    can_retry,
+                                    status,
                                     selected,
                                 });
                                 continue;
                             }
                             let activation = if key.code == KeyCode::Enter {
                                 KeyCode::Char(
-                                    action_menu_items(can_retry)
+                                    action_menu_items(&status)
                                         .nth(selected)
                                         .expect("menu selection is valid")
                                         .0,
@@ -2116,6 +2121,17 @@ fn compose_inner(
                             } else {
                                 key.code
                             };
+                            if matches!(activation, KeyCode::Char(action)
+                                if !action_menu_available(action, &status))
+                            {
+                                action_ui = Some(ActionUi::Menu {
+                                    id,
+                                    archived,
+                                    status,
+                                    selected,
+                                });
+                                continue;
+                            }
                             let chosen = match activation {
                                 KeyCode::Char('c') => match mode.completion_action(id) {
                                     Ok(action) => Some(action),
@@ -2127,7 +2143,7 @@ fn compose_inner(
                                         None
                                     }
                                 },
-                                KeyCode::Char('r') if can_retry => Some(TaskAction::Retry(id)),
+                                KeyCode::Char('r') => Some(TaskAction::Retry(id)),
                                 KeyCode::Char('o') => Some(TaskAction::Reopen(id)),
                                 KeyCode::Char('a') => Some(TaskAction::SetArchived(id, !archived)),
                                 KeyCode::Char('p') => {
@@ -2165,7 +2181,7 @@ fn compose_inner(
                                     action_ui = Some(ActionUi::Menu {
                                         id,
                                         archived,
-                                        can_retry,
+                                        status,
                                         selected,
                                     });
                                     None
@@ -2449,7 +2465,7 @@ fn compose_inner(
                                 action_ui = Some(ActionUi::Menu {
                                     id,
                                     archived: task.archived,
-                                    can_retry: task.status == "error",
+                                    status: task.status,
                                     selected: 0,
                                 });
                                 message.clear();
@@ -3000,10 +3016,13 @@ mod tests {
     #[test]
     fn grouped_action_menu_labels_separators_and_selection() {
         use super::{ActionUi, action_lines, action_menu_items, render::PopupKind};
-        for can_retry in [false, true] {
+        for status in ["new", "in_progress", "error", "completed"] {
             for archived in [false, true] {
-                let mut expected = vec!["Task actions #1", "c Complete", "e Mark error"];
-                if can_retry {
+                let mut expected = vec!["Task actions #1"];
+                if status != "completed" {
+                    expected.extend(["c Complete", "e Mark error"]);
+                }
+                if status == "error" {
                     expected.push("r Retry error");
                 }
                 expected.extend([
@@ -3015,12 +3034,12 @@ mod tests {
                     if archived { "a Unarchive" } else { "a Archive" },
                     "Up/Down Select  Enter Apply  Esc Cancel",
                 ]);
-                for selected in 0..action_menu_items(can_retry).count() {
+                for selected in 0..action_menu_items(status).count() {
                     let rows = action_lines(
                         &ActionUi::Menu {
                             id: 1,
                             archived,
-                            can_retry,
+                            status: status.into(),
                             selected,
                         },
                         46,
@@ -3037,7 +3056,7 @@ mod tests {
                     assert_eq!(selected_rows.len(), 1);
                     assert_eq!(
                         selected_rows[0].text.chars().next(),
-                        Some(action_menu_items(can_retry).nth(selected).unwrap().0)
+                        Some(action_menu_items(status).nth(selected).unwrap().0)
                     );
                     for row in rows.iter().filter(|row| row.text.is_empty()) {
                         assert_eq!(row.kind, PopupKind::Body);
@@ -3050,14 +3069,14 @@ mod tests {
     #[test]
     fn grouped_action_menu_keeps_selected_action_visible_at_small_heights() {
         use super::{ActionUi, action_lines, action_menu_items, render::PopupKind};
-        for can_retry in [false, true] {
+        for status in ["new", "in_progress", "error", "completed"] {
             for height in 1..=12 {
-                for selected in 0..action_menu_items(can_retry).count() {
+                for selected in 0..action_menu_items(status).count() {
                     let rows = action_lines(
                         &ActionUi::Menu {
                             id: 1,
                             archived: false,
-                            can_retry,
+                            status: status.into(),
                             selected,
                         },
                         12,
@@ -3074,7 +3093,7 @@ mod tests {
                     assert_eq!(selected_rows.len(), 1);
                     assert_eq!(
                         selected_rows[0].text.chars().next(),
-                        Some(action_menu_items(can_retry).nth(selected).unwrap().0)
+                        Some(action_menu_items(status).nth(selected).unwrap().0)
                     );
                     if height >= 2 {
                         assert_eq!(rows.last().unwrap().kind, PopupKind::Hint);

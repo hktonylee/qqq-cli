@@ -852,9 +852,10 @@ mode keeps marker. Letter shortcuts activate actions directly. Press `c` to comp
 `r` to retry error task, `o` to open Reopen confirmation (`y` normal, `Y` force), `a` to archive or
 unarchive, `p` to set priority (-100..100), or `d` to set parent by positive
 task ID or `none`. Retry appears only for error tasks; non-error tasks ignore `r`.
+Completed tasks hide Complete and Mark error; their menus ignore `c` and `e`.
 Press `e` for Mark error and enter a nonempty reason. Lowercase `y` keeps current
 owner checks: only an in-progress task owned by the current session can fail.
-Uppercase `Y` forces a New, In progress or Completed task to Error without owner
+Uppercase `Y` forces a New or In progress task to Error without owner
 or Herdr lookup; already-Error tasks reject either action. Archive state, saved
 content, dependency edges and Herdr links stay intact. Reason is recorded as a task message
 with an error event; claim and assignment clear while saved content stays intact.
@@ -864,7 +865,7 @@ before discarding an active dirty draft, including at minimum terminal size.
 Reason input keeps its caret; confirmation hides it and ignores editing,
 navigation and Ctrl-C. `n`, Enter or Esc cancels, preserving filter and dirty caret.
 Arrows skip hidden actions; Enter activates displayed selection.
-Open menu refreshes Retry availability after external status changes, keeping
+Open menu refreshes action availability after external status changes, keeping
 selected action when available.
 Complete checks current session ownership when activated. Without a matching
 claim, popup asks `Force complete task #ID?` and warns
