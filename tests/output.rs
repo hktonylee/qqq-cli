@@ -14,12 +14,14 @@ fn command(dir: &Path) -> Command {
     c
 }
 fn text(dir: &Path, args: &[&str]) -> String {
+    text_with_status(dir, args, 0)
+}
+fn empty_text(dir: &Path, args: &[&str]) -> String {
+    text_with_status(dir, args, 1)
+}
+fn text_with_status(dir: &Path, args: &[&str], status: i32) -> String {
     let out = command(dir).args(args).output().unwrap();
-    assert!(
-        out.status.success(),
-        "{args:?}: {}",
-        String::from_utf8_lossy(&out.stderr)
-    );
+    assert_eq!(out.status.code(), Some(status), "{args:?}");
     assert!(out.stderr.is_empty());
     String::from_utf8(out.stdout).unwrap()
 }
@@ -55,10 +57,10 @@ fn next_dry_run_reports_stored_task_and_empty_queue() {
     let dir = project();
     let p = dir.path();
     assert_eq!(
-        text(p, &["next", "--dry-run"]),
+        empty_text(p, &["next", "--dry-run"]),
         "No task available for pickup.\n"
     );
-    assert_eq!(text(p, &["next", "--dry-run", "--json"]), "null\n");
+    assert_eq!(empty_text(p, &["next", "--dry-run", "--json"]), "null\n");
     text(p, &["add", "Preview"]);
     let preview = text(p, &["next", "--dry-run"]);
     assert!(preview.contains("#1"));
@@ -68,7 +70,7 @@ fn next_dry_run_reports_stored_task_and_empty_queue() {
     assert_eq!(text(p, &["next", "--dry-run"]), preview);
     text(p, &["next", "--local", "--session", "owner"]);
     assert_eq!(
-        text(p, &["next", "--dry-run", "--session", "owner"]),
+        empty_text(p, &["next", "--dry-run", "--session", "owner"]),
         "No task available for pickup.\n"
     );
 }
@@ -159,7 +161,7 @@ fn human_tasks_show_descriptions_dependencies_and_ownership() {
     let p = d.path();
     assert_eq!(text(p, &["list"]), "No tasks yet.\n");
     assert_eq!(
-        text(p, &["next", "--session", "a"]),
+        empty_text(p, &["next", "--session", "a"]),
         "No task available for pickup.\n"
     );
     let added = text(p, &["add", "Build API\n\nFirst line\nSecond line"]);
@@ -274,7 +276,10 @@ fn global_json_flag_preserves_machine_output_and_errors() {
     let list: Value = serde_json::from_str(&text(p, &["list", "--json"])).unwrap();
     assert_eq!(list[0], task);
     text(p, &["next", "--session", "a"]);
-    assert_eq!(text(p, &["next", "--session", "b", "--json"]), "null\n");
+    assert_eq!(
+        empty_text(p, &["next", "--session", "b", "--json"]),
+        "null\n"
+    );
     for args in [vec!["show", "999"], vec!["--json", "show", "999"]] {
         let json = args.contains(&"--json");
         let out = command(p).args(args).output().unwrap();

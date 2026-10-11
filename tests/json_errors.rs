@@ -1,3 +1,6 @@
+#[path = "common/next_output.rs"]
+mod next_output;
+
 use serde_json::Value;
 use std::{
     fs,
@@ -27,6 +30,9 @@ fn run(root: &Path, args: &[&str]) -> Output {
 }
 
 fn ok(root: &Path, args: &[&str]) -> Value {
+    if args.first() == Some(&"next") {
+        return next_output::json(run(root, args));
+    }
     let output = run(root, args);
     assert!(
         output.status.success(),
@@ -448,7 +454,7 @@ printf 'Local retained text' > "$1"
 }
 
 #[test]
-fn json_help_version_doctor_empty_queue_and_success_keep_existing_contract() {
+fn json_help_version_doctor_and_empty_pickup_use_correct_exit_status() {
     let root = project();
     for args in [["--help"], ["--version"]] {
         let output = run(root.path(), &args);

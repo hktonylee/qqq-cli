@@ -1,3 +1,6 @@
+#[path = "common/next_output.rs"]
+mod next_output;
+
 use rusqlite::Connection;
 use serde_json::Value;
 use std::{
@@ -32,6 +35,9 @@ fn parsed(output: Output) -> Value {
     serde_json::from_slice(&output.stdout).unwrap()
 }
 fn ok(path: &Path, args: &[&str]) -> Value {
+    if args.first() == Some(&"next") {
+        return next_output::json(run(path, args));
+    }
     parsed(run(path, args))
 }
 fn project() -> TempDir {

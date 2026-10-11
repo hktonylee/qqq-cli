@@ -63,6 +63,9 @@ qqq next --local --session agent-1
 
 The last command claims **Build client**. Completing its parent made it ready.
 Repeated `next` calls return your active task until you complete or release it.
+If no task is available, `next` exits with status 1 and prints the pickup message
+(or `null` with JSON output). This also applies to `--dry-run`; `--wait` keeps
+waiting instead. `--explain` remains a successful diagnostic, even for an empty queue.
 
 For your own project, run `qqq init` at its root and use the IDs returned by `add`.
 Commands also work from subdirectories. Add `.qqq/` to your `.gitignore`.

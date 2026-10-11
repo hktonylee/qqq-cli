@@ -1,3 +1,6 @@
+#[path = "common/next_output.rs"]
+mod next_output;
+
 use serde_json::{Value, json};
 use std::{
     path::Path,
@@ -23,6 +26,9 @@ fn run(dir: &Path, args: &[&str]) -> Output {
     command(dir).arg("--json").args(args).output().unwrap()
 }
 fn ok(dir: &Path, args: &[&str]) -> Value {
+    if args.first() == Some(&"next") {
+        return next_output::json(run(dir, args));
+    }
     let output = run(dir, args);
     assert!(
         output.status.success(),
@@ -381,7 +387,8 @@ fn tag_selectors_preserve_human_and_agent_default_output() {
         .args(["--human", "next", "--dry-run", "--tag", "absent"])
         .output()
         .unwrap();
-    assert!(human.status.success());
+    assert_eq!(human.status.code(), Some(1));
+    assert!(human.stderr.is_empty());
     assert_eq!(human.stdout, b"No task available for pickup.\n");
     let human = command(p)
         .args(["--human", "list", "--tag", "--json"])
@@ -464,12 +471,7 @@ fn tag_wait_and_dry_run_wait_ignore_partial_matches_until_tag_edit() {
             thread::sleep(Duration::from_millis(25));
         }
         let output = waiter.0.take().unwrap().wait_with_output().unwrap();
-        assert!(
-            output.status.success(),
-            "{}",
-            String::from_utf8_lossy(&output.stderr)
-        );
-        let task: Value = serde_json::from_slice(&output.stdout).unwrap();
+        let task = next_output::json(output);
         assert_eq!(task["id"], 2);
         assert_eq!(task["status"], if dry_run { "new" } else { "in_progress" });
         assert_eq!(ok(p, &["show", "1"])["task"]["status"], "new");
@@ -510,12 +512,7 @@ fn concurrent_tag_claims_are_distinct_and_preserve_unmatched_tasks() {
     let mut empty = 0;
     for child in children {
         let output = child.wait_with_output().unwrap();
-        assert!(
-            output.status.success(),
-            "{}",
-            String::from_utf8_lossy(&output.stderr)
-        );
-        let task: Value = serde_json::from_slice(&output.stdout).unwrap();
+        let task = next_output::json(output);
         if task.is_null() {
             empty += 1;
         } else {

@@ -1,3 +1,6 @@
+#[path = "common/next_output.rs"]
+mod next_output;
+
 use rusqlite::Connection;
 use serde_json::{Value, json};
 use std::{
@@ -22,6 +25,9 @@ fn run(dir: &Path, args: &[&str]) -> Output {
     command(dir).args(args).output().unwrap()
 }
 fn ok(dir: &Path, args: &[&str]) -> Value {
+    if args.first() == Some(&"next") {
+        return next_output::json(run(dir, args));
+    }
     let out = run(dir, args);
     assert!(
         out.status.success(),
@@ -134,8 +140,7 @@ fn concurrent_sessions_cannot_claim_blocked_children() {
             .into_iter()
             .map(|child| {
                 let out = child.wait_with_output().unwrap();
-                assert!(out.status.success());
-                serde_json::from_slice::<Value>(&out.stdout).unwrap()
+                next_output::json(out)
             })
             .collect::<Vec<_>>()
     };

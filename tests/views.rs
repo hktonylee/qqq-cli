@@ -1,3 +1,6 @@
+#[path = "common/next_output.rs"]
+mod next_output;
+
 use serde_json::{Value, json};
 use std::{
     path::Path,
@@ -22,6 +25,9 @@ fn run(dir: &Path, args: &[&str]) -> Output {
     command(dir).arg("--json").args(args).output().unwrap()
 }
 fn ok(dir: &Path, args: &[&str]) -> Value {
+    if args.first() == Some(&"next") {
+        return next_output::json(run(dir, args));
+    }
     let out = run(dir, args);
     assert!(
         out.status.success(),
@@ -570,12 +576,7 @@ fn named_view_wait_and_preview_wait_recheck_readiness_and_explicit_tags() {
             thread::sleep(Duration::from_millis(25));
         }
         let out = waiter.0.take().unwrap().wait_with_output().unwrap();
-        assert!(
-            out.status.success(),
-            "{}",
-            String::from_utf8_lossy(&out.stderr)
-        );
-        let task: Value = serde_json::from_slice(&out.stdout).unwrap();
+        let task = next_output::json(out);
         assert_eq!(task["id"], 2);
         assert_eq!(task["status"], if preview { "new" } else { "in_progress" });
         assert_eq!(ok(p, &["show", "2"])["task"]["status"], task["status"]);
@@ -671,12 +672,7 @@ fn named_views_preserve_atomic_claims_priority_and_owned_reuse() {
     let mut empty = 0;
     for (owner, child) in ["a", "b", "c"].into_iter().zip(children) {
         let out = child.wait_with_output().unwrap();
-        assert!(
-            out.status.success(),
-            "{}",
-            String::from_utf8_lossy(&out.stderr)
-        );
-        let task: Value = serde_json::from_slice(&out.stdout).unwrap();
+        let task = next_output::json(out);
         if task.is_null() {
             empty += 1;
         } else {

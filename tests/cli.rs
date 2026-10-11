@@ -1,3 +1,6 @@
+#[path = "common/next_output.rs"]
+mod next_output;
+
 use serde_json::Value;
 use std::{
     path::Path,
@@ -25,6 +28,9 @@ fn run(dir: &Path, args: &[&str]) -> Output {
     command(dir).args(args).output().unwrap()
 }
 fn ok(dir: &Path, args: &[&str]) -> Value {
+    if args.first() == Some(&"next") {
+        return next_output::json(run(dir, args));
+    }
     let out = run(dir, args);
     assert!(
         out.status.success(),

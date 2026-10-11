@@ -1,3 +1,6 @@
+#[path = "common/next_output.rs"]
+mod next_output;
+
 use serde_json::Value;
 use std::{
     fs,
@@ -96,7 +99,7 @@ fn native_agent_defaults_to_json_through_task_lifecycle() {
         json(agent(p).args(["complete", "1"]))["status"],
         "completed"
     );
-    assert!(json(agent(p).args(["next", "--local"])).is_null());
+    assert!(next_output::json(agent(p).args(["next", "--local"]).output().unwrap()).is_null());
 }
 
 #[test]

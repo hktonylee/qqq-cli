@@ -1213,12 +1213,13 @@ fn run(cli: Cli) -> Result<(Option<String>, bool)> {
         preflight::current_project()?;
     }
     let is_doctor = matches!(&cli.command, Commands::Doctor);
+    let is_pickup = matches!(&cli.command, Commands::Next { explain: false, .. });
     let format = output::Format::from(&cli.command);
     let value = execute(cli, &prepared, view_context)?;
     if is_tui {
         return Ok((None, false));
     }
-    let unhealthy = is_doctor && value["ok"] == false;
+    let exit_failure = (is_doctor && value["ok"] == false) || (is_pickup && value.is_null());
     Ok((
         Some(if json {
             serde_json::to_string_pretty(&value).expect("JSON value is serializable")
@@ -1241,7 +1242,7 @@ fn run(cli: Cli) -> Result<(Option<String>, bool)> {
             };
             output::render(format, &value, color, columns)
         }),
-        unhealthy,
+        exit_failure,
     ))
 }
 fn main() {
@@ -1276,9 +1277,9 @@ fn main() {
     errors::set_json_output(json_output);
     let command = cli_error::command_name(&cli.command);
     match run(cli) {
-        Ok((Some(output), unhealthy)) => {
+        Ok((Some(output), exit_failure)) => {
             println!("{output}");
-            if unhealthy {
+            if exit_failure {
                 std::process::exit(1);
             }
         }

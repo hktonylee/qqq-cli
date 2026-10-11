@@ -49,8 +49,11 @@ with tempfile.TemporaryDirectory(prefix="qqq-dashboard-test-") as folder:
     def cli(*args):
         result = subprocess.run([binary, "--json", *args], cwd=folder, env=env,
                                 capture_output=True, timeout=5)
-        assert result.returncode == 0, result.stderr.decode()
-        return json.loads(result.stdout)
+        assert result.stderr == b"", result.stderr.decode()
+        value = json.loads(result.stdout)
+        expected_status = 1 if args[0] == "next" and value is None else 0
+        assert result.returncode == expected_status, (args, result.returncode)
+        return value
 
     cli("init")
     if scenario == "child_open_new":

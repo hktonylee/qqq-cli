@@ -403,8 +403,7 @@ fn concurrent_dependency_edits_and_claims_keep_committed_readiness_and_active_ow
             .unwrap();
         assert!(edit.wait_with_output().unwrap().status.success());
         let out = claim.wait_with_output().unwrap();
-        assert!(out.status.success());
-        let claimed: Value = serde_json::from_slice(&out.stdout).unwrap();
+        let claimed = super::next_output::json(out);
         let task = ok(p, &["show", "2"])["task"].clone();
         assert_eq!(task["prerequisites"].as_array().unwrap().len(), 1);
         if claimed.is_null() {

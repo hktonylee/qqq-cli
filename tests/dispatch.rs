@@ -1,4 +1,7 @@
 #![cfg(unix)]
+#[path = "common/next_output.rs"]
+mod next_output;
+
 use serde_json::Value;
 use std::{
     fs,
@@ -95,6 +98,9 @@ print(json.dumps({'result':result}))
         self.command().args(args).output().unwrap()
     }
     fn ok(&self, args: &[&str]) -> Value {
+        if args.first() == Some(&"next") {
+            return next_output::json(self.run(args));
+        }
         let out = self.run(args);
         assert!(
             out.status.success(),

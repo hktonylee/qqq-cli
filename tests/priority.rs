@@ -1,3 +1,6 @@
+#[path = "common/next_output.rs"]
+mod next_output;
+
 use rusqlite::Connection;
 use serde_json::Value;
 use std::{
@@ -22,6 +25,9 @@ fn command(path: &Path) -> Command {
 }
 
 fn ok(path: &Path, args: &[&str]) -> Value {
+    if args.first() == Some(&"next") {
+        return next_output::json(command(path).args(args).output().unwrap());
+    }
     let output = command(path).args(args).output().unwrap();
     assert!(
         output.status.success(),

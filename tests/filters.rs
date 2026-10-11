@@ -1,3 +1,6 @@
+#[path = "common/next_output.rs"]
+mod next_output;
+
 use serde_json::Value;
 use std::{
     path::Path,
@@ -24,6 +27,9 @@ fn run(dir: &Path, args: &[&str]) -> Output {
     command(dir).args(args).output().unwrap()
 }
 fn ok(dir: &Path, args: &[&str]) -> Value {
+    if args.first() == Some(&"next") {
+        return next_output::json(run(dir, args));
+    }
     let output = run(dir, args);
     assert!(
         output.status.success(),
@@ -290,12 +296,7 @@ fn concurrent_filtered_claims_are_distinct_and_leave_unmatched_tasks_new() {
     let mut empty = 0;
     for child in children {
         let output = child.wait_with_output().unwrap();
-        assert!(
-            output.status.success(),
-            "{}",
-            String::from_utf8_lossy(&output.stderr)
-        );
-        let task: Value = serde_json::from_slice(&output.stdout).unwrap();
+        let task = next_output::json(output);
         if task.is_null() {
             empty += 1;
         } else {
