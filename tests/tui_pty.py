@@ -4,6 +4,7 @@ import fcntl
 import json
 import os
 import pty
+import re
 import select
 import signal
 import sqlite3
@@ -83,6 +84,13 @@ with tempfile.TemporaryDirectory(prefix="qqq-tui-test-") as folder:
                 raise AssertionError(f"Editor exited early: {screen!r}")
 
     def send(data):
+        if os.environ.get("QQQ_TEST_ESCAPE_KEY") == "Q":
+            # Preserve bracketed paste contents and CSI/SS3 terminal sequences.
+            data = re.sub(
+                rb"(\x1b\[200~.*?\x1b\[201~)|\x1b(?![\[O])",
+                lambda match: match[1] if match[1] is not None else b"Q",
+                data, flags=re.DOTALL,
+            )
         # Real terminals drain output while sending input. Keep redraw backpressure
         # from deadlocking a large paste against the PTY's small input buffer.
         remaining = memoryview(data)
@@ -139,7 +147,10 @@ with tempfile.TemporaryDirectory(prefix="qqq-tui-test-") as folder:
             read_until(b"[Pasted Content 1001 chars]")
             assert b"\x1b[38;5;222m" in screen, "Paste accent missing on reload"
             send(b" suffix")
-        elif scenario == "escape_empty":
+        elif scenario == "escape_alias_text":
+            send(b"q\x1b[81;5u\x1b[81;3u")  # Lowercase q, Ctrl-Q, Alt-Q.
+            paste("Q")
+        elif scenario in ("escape_empty", "escape_alias_shift"):
             pass
         elif scenario == "escape_deleted":
             send(b"Draft" + b"\x7f" * 5)
@@ -211,7 +222,7 @@ with tempfile.TemporaryDirectory(prefix="qqq-tui-test-") as folder:
             send(b"\r")
             paste("'" + str(image) + "'")
             read_until(b"[Image #1:")
-        cancelled = scenario in ("cancel", "escape_discard", "escape_image", "escape_whitespace", "escape_narrow", "escape_empty", "escape_deleted")
+        cancelled = scenario in ("cancel", "escape_discard", "escape_image", "escape_whitespace", "escape_narrow", "escape_empty", "escape_deleted", "escape_alias_shift")
         if scenario in ("escape_discard", "escape_image", "escape_whitespace", "escape_narrow"):
             send(b"\x1b")
             read_until(b"Discard draft? (y/N)")
@@ -236,8 +247,8 @@ with tempfile.TemporaryDirectory(prefix="qqq-tui-test-") as folder:
                 send(choice)
                 read_until(b"Ctrl-S")
             send(b"\x13")
-        elif scenario in ("escape_empty", "escape_deleted"):
-            send(b"\x1b")
+        elif scenario in ("escape_empty", "escape_deleted", "escape_alias_shift"):
+            send(b"\x1b[81;2u" if scenario == "escape_alias_shift" else b"\x1b")
         elif scenario in ("continuous", "continuous_flags", "continuous_discard"):
             pass
         else:
@@ -273,7 +284,7 @@ with tempfile.TemporaryDirectory(prefix="qqq-tui-test-") as folder:
             assert child.returncode == 1
             assert stdout == b""
             assert cli("list") == []
-            if scenario in ("escape_empty", "escape_deleted"):
+            if scenario in ("escape_empty", "escape_deleted", "escape_alias_shift"):
                 assert b"Discard" not in screen
         else:
             assert child.returncode == 0, screen[-2000:]
@@ -303,6 +314,8 @@ with tempfile.TemporaryDirectory(prefix="qqq-tui-test-") as folder:
                 flagged_export = Path(folder) / "flag export.png"
                 cli("show", "1", "--export-image", "2", "--output", str(flagged_export))
                 assert flagged_export.read_bytes() == image.read_bytes()
+            elif scenario == "escape_alias_text":
+                assert task["description"] == "qQ"
             elif scenario == "blank":
                 assert task["description"] == "Recovered"
             elif scenario == "ctrl_w":

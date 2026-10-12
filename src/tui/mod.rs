@@ -1588,6 +1588,13 @@ fn compose_inner(
                 }
             }
             Event::Key(mut key) if key.kind != KeyEventKind::Release => {
+                if key.code == KeyCode::Char('Q')
+                    && !key
+                        .modifiers
+                        .intersects(KeyModifiers::CONTROL | KeyModifiers::ALT | KeyModifiers::SUPER)
+                {
+                    key.code = KeyCode::Esc;
+                }
                 if let Some(mut ui) = view_ui.take() {
                     match ui.key(key) {
                         Some(view_picker::Action::Apply(view)) => {

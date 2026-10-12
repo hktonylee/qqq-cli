@@ -52,6 +52,55 @@ fn undo_scenario(name: &str) {
 }
 
 #[test]
+fn tui_uppercase_q_obeys_escape_in_editor_and_modals() {
+    for (script, names) in [
+        (
+            "tui_pty.py",
+            vec![
+                "escape_empty",
+                "escape_alias_shift",
+                "escape_alias_text",
+                "escape_keep",
+                "escape_discard",
+                "escape_edit",
+            ],
+        ),
+        (
+            "tui_dashboard_pty.py",
+            vec![
+                "escape_dirty_selected_filter_confirmation",
+                "jump",
+                "views",
+                "views_create",
+                "tags",
+                "content_conflict",
+                "menu_error_dirty",
+                "action_error_arrows",
+                "buffers_exit_escape",
+                "actions_basic",
+            ],
+        ),
+        ("tui_bulk_pty.py", vec!["basic", "tags"]),
+    ] {
+        for name in names {
+            let output = Command::new("python3")
+                .arg(format!("{}/tests/{script}", env!("CARGO_MANIFEST_DIR")))
+                .arg(env!("CARGO_BIN_EXE_qqq"))
+                .arg(name)
+                .env("QQQ_TEST_ESCAPE_KEY", "Q")
+                .output()
+                .unwrap();
+            assert!(
+                output.status.success(),
+                "{script} {name}: {}\n{}",
+                String::from_utf8_lossy(&output.stdout),
+                String::from_utf8_lossy(&output.stderr)
+            );
+        }
+    }
+}
+
+#[test]
 fn tui_editor_undo_redo_changes_draft_without_writing_db() {
     undo_scenario("text");
     undo_scenario("text_no_color");

@@ -449,6 +449,13 @@ print(json.dumps({"result": result}))
         wait_visible(ready)
 
     def send(data):
+        if os.environ.get("QQQ_TEST_ESCAPE_KEY") == "Q":
+            # Preserve bracketed paste contents and CSI/SS3 terminal sequences.
+            data = re.sub(
+                rb"(\x1b\[200~.*?\x1b\[201~)|\x1b(?![\[O])",
+                lambda match: match[1] if match[1] is not None else b"Q",
+                data, flags=re.DOTALL,
+            )
         remaining = memoryview(data)
         deadline = time.monotonic() + 5
         while remaining:
