@@ -85,6 +85,11 @@ impl View {
         }
     }
     pub fn key(&mut self, key: KeyEvent) -> Intent {
+        let key = if matches!(self.stage, Stage::Input { .. }) {
+            key
+        } else {
+            super::escape_alias(key)
+        };
         if key.code == KeyCode::Esc
             || (key.code == KeyCode::Char('c') && key.modifiers.contains(KeyModifiers::CONTROL))
         {

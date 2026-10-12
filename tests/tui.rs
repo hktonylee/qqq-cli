@@ -52,50 +52,40 @@ fn undo_scenario(name: &str) {
 }
 
 #[test]
-fn tui_uppercase_q_obeys_escape_in_editor_and_modals() {
-    for (script, names) in [
-        (
-            "tui_pty.py",
-            vec![
-                "escape_empty",
-                "escape_alias_shift",
-                "escape_alias_text",
-                "escape_keep",
-                "escape_discard",
-                "escape_edit",
-            ],
-        ),
-        (
-            "tui_dashboard_pty.py",
-            vec![
-                "escape_dirty_selected_filter_confirmation",
-                "jump",
-                "views",
-                "views_create",
-                "tags",
-                "content_conflict",
-                "menu_error_dirty",
-                "action_error_arrows",
-                "buffers_exit_escape",
-                "actions_basic",
-            ],
-        ),
-        ("tui_bulk_pty.py", vec!["basic", "tags", "conflict"]),
-    ] {
-        for name in names {
-            let output = Command::new("python3")
-                .arg(format!("{}/tests/{script}", env!("CARGO_MANIFEST_DIR")))
-                .arg(env!("CARGO_BIN_EXE_qqq"))
-                .arg(name)
-                .env("QQQ_TEST_ESCAPE_KEY", "Q")
-                .output()
-                .unwrap();
-            assert!(
-                output.status.success(),
-                "{script} {name}: {}\n{}",
-                String::from_utf8_lossy(&output.stdout),
-                String::from_utf8_lossy(&output.stderr)
-            );
+fn tui_q_alias_only_cancels_non_text_screens() {
+    for alias in ["q", "Q"] {
+        for (script, names) in [
+            (
+                "tui_pty.py",
+                vec!["escape_alias_text", "escape_keep", "escape_edit"],
+            ),
+            (
+                "tui_dashboard_pty.py",
+                vec![
+                    "q_escape_text",
+                    "views",
+                    "content_conflict",
+                    "action_error_arrows",
+                    "buffers_exit_escape",
+                ],
+            ),
+            ("tui_bulk_pty.py", vec!["basic", "conflict"]),
+        ] {
+            for name in names {
+                let output = Command::new("python3")
+                    .arg(format!("{}/tests/{script}", env!("CARGO_MANIFEST_DIR")))
+                    .arg(env!("CARGO_BIN_EXE_qqq"))
+                    .arg(name)
+                    .env("QQQ_TEST_ESCAPE_KEY", alias)
+                    .output()
+                    .unwrap();
+                assert!(
+                    output.status.success(),
+                    "{script} {name} ({alias}): {}\n{}",
+                    String::from_utf8_lossy(&output.stdout),
+                    String::from_utf8_lossy(&output.stderr)
+                );
+            }
         }
     }
 }
@@ -652,7 +642,7 @@ fn tui_dashboard_workflow_states_and_cleanup() {
 }
 
 #[test]
-fn tui_dashboard_q_closes_action_menu_without_changing_draft_or_filter() {
+fn tui_dashboard_q_obeys_escape_in_menu_and_stays_text_elsewhere() {
     for name in ["menu_quit", "menu_quit_no_color", "menu_quit_narrow"] {
         dashboard_scenario(name);
     }

@@ -271,6 +271,17 @@ enum ActionUi {
     },
 }
 
+fn escape_alias(mut key: event::KeyEvent) -> event::KeyEvent {
+    if matches!(key.code, KeyCode::Char('q' | 'Q'))
+        && !key
+            .modifiers
+            .intersects(KeyModifiers::CONTROL | KeyModifiers::ALT | KeyModifiers::SUPER)
+    {
+        key.code = KeyCode::Esc;
+    }
+    key
+}
+
 fn wrap_modal(text: &str, width: usize) -> Vec<String> {
     let width = width.max(1);
     let mut lines = Vec::new();
@@ -1588,13 +1599,6 @@ fn compose_inner(
                 }
             }
             Event::Key(mut key) if key.kind != KeyEventKind::Release => {
-                if key.code == KeyCode::Char('Q')
-                    && !key
-                        .modifiers
-                        .intersects(KeyModifiers::CONTROL | KeyModifiers::ALT | KeyModifiers::SUPER)
-                {
-                    key.code = KeyCode::Esc;
-                }
                 if let Some(mut ui) = view_ui.take() {
                     match ui.key(key) {
                         Some(view_picker::Action::Apply(view)) => {
@@ -1775,6 +1779,14 @@ fn compose_inner(
                             continue;
                         }
                     }
+                }
+                if confirmation.is_some()
+                    || matches!(
+                        action_ui,
+                        Some(ActionUi::Menu { .. } | ActionUi::Error { .. })
+                    )
+                {
+                    key = escape_alias(key);
                 }
                 let control = key.modifiers.contains(KeyModifiers::CONTROL);
                 if dashboard

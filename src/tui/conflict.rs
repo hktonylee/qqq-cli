@@ -118,6 +118,7 @@ impl View {
     }
 
     pub fn key(&mut self, key: KeyEvent, width: usize, height: usize) -> Option<Action> {
+        let key = super::escape_alias(key);
         if key.modifiers.contains(KeyModifiers::CONTROL) && key.code == KeyCode::Char('c') {
             self.confirmation = None;
             return Some(Action::Keep);

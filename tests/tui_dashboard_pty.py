@@ -448,14 +448,9 @@ print(json.dumps({"result": result}))
                     and screen.endswith(f"\x1b[{cursor[1] + 1};{cursor[0] + 1}H".encode()))
         wait_visible(ready)
 
-    def send(data):
-        if os.environ.get("QQQ_TEST_ESCAPE_KEY") == "Q":
-            # Preserve bracketed paste contents and CSI/SS3 terminal sequences.
-            data = re.sub(
-                rb"(\x1b\[200~.*?\x1b\[201~)|\x1b(?![\[O])",
-                lambda match: match[1] if match[1] is not None else b"Q",
-                data, flags=re.DOTALL,
-            )
+    def send(data, alias_escape=False):
+        if alias_escape and data == b"\x1b" and os.environ.get("QQQ_TEST_ESCAPE_KEY"):
+            data = os.environ["QQQ_TEST_ESCAPE_KEY"].encode()
         remaining = memoryview(data)
         deadline = time.monotonic() + 5
         while remaining:
@@ -620,6 +615,63 @@ print(json.dumps({"result": result}))
             send(b"\x0fX")
             wait_frame(lambda: editor_line().rstrip() == "UnsavedX")
             assert cli("list", "--all") == initial
+        elif scenario == "q_escape_text":
+            initial_tasks = cli("list")
+            send(b"qQ")
+            wait_frame(lambda: editor_line().rstrip() == "qQ")
+            send(CTRL_SLASH + b"qQ")
+            wait_frame(lambda: filter_text() == "Filter: qQ")
+            send(b"\x1b")
+            wait_frame(lambda: editor_line().rstrip() == "qQ"
+                       and not visible.text().splitlines()[0].startswith("Filter:"))
+            send(b"\x0bqQ")
+            wait_visible(lambda: "Go to task" in visible.text() and "> qQ" in visible.text())
+            send(b"\r")
+            wait_visible(lambda: "Enter a positive task ID" in visible.text())
+            send(b"\x1b")
+            wait_frame(lambda: "Go to task" not in visible.text() and editor_line().rstrip() == "qQ")
+            send(b"\x02nqQ")
+            wait_visible(lambda: "Create view" in visible.text() and "> qQ" in visible.text())
+            send(b"\x13")
+            wait_visible(lambda: "Choose view" in visible.text() and "qQ" in visible.text())
+            catalog = json.loads((Path(folder) / ".qqq-views.json").read_text())
+            assert any(view["name"] == "qQ" for view in catalog["views"]), catalog
+            send(b"\x1b", alias_escape=True)
+            wait_frame(lambda: "Choose view" not in visible.text() and editor_line().rstrip() == "qQ")
+            send(b"\x0cqQ")
+            wait_visible(lambda: "Tags" in visible.text() and "> qQ" in visible.text())
+            send(b"\x1b")
+            wait_frame(lambda: editor_line().rstrip() == "qQ" and "Tags new task" not in visible.text())
+            send(b"\x1b")
+            wait_visible(lambda: visible.text().splitlines()[-1].startswith("Discard"))
+            send(b"\x1b", alias_escape=True)
+            wait_frame(lambda: editor_line().rstrip() == "qQ")
+            assert cli("list") == initial_tasks
+            send(b"\x13")
+            wait_visible(lambda: "Saved #3" in visible.text() and "Task #3" in editor_title())
+            saved = cli("show", "3")["task"]
+            assert saved["description"] == "qQ"
+            send(b"\x07")
+            wait_visible(lambda: "Task actions #3" in visible.text())
+            send(b"\x1b", alias_escape=True)
+            wait_frame(lambda: "Task actions #3" not in visible.text() and editor_line().rstrip() == "qQ")
+            for letter, heading in [(b"p", "Priority task #3"), (b"d", "Parent task #3"),
+                                    (b"e", "Error task #3")]:
+                send(b"\x07" + letter + b"qQ")
+                wait_visible(lambda: heading in visible.text() and "> qQ" in visible.text())
+                if letter == b"e":
+                    send(b"\r")
+                    wait_visible(lambda: "Mark error task #3?" in visible.text())
+                    send(b"\x1b", alias_escape=True)
+                else:
+                    send(b"\x1b")
+                wait_frame(lambda: heading not in visible.text() and editor_line().rstrip() == "qQ")
+                assert cli("show", "3")["task"] == saved
+            send(b"\x07a")
+            wait_visible(lambda: "Archive task #3?" in visible.text())
+            send(b"\x1b", alias_escape=True)
+            wait_frame(lambda: "Archive task #3?" not in visible.text() and editor_line().rstrip() == "qQ")
+            assert cli("show", "3")["task"] == saved
         elif scenario.startswith("views_create"):
             initial = cli("list")
             catalog_path = Path(folder) / ".qqq-views.json"
@@ -836,7 +888,7 @@ print(json.dumps({"result": result}))
             wait_frame(lambda: filter_text() == "Filter: Second" and "Second" in list_text() and "First" not in list_text())
             send(b"\x02")
             wait_visible(lambda: "Choose view" in visible.text())
-            send(b"\x1b")
+            send(b"\x1b", alias_escape=True)
             wait_frame(lambda: filter_text() == "Filter: Second" and "View: Backend" in editor_title())
             send(b"\x02")
             wait_visible(lambda: "Choose view" in visible.text())
@@ -854,7 +906,7 @@ print(json.dumps({"result": result}))
                 os.kill(child.pid, signal.SIGWINCH)
                 wait_visible(lambda: "Choose view" in visible.text() and "Frontend" in visible.text())
                 settle()
-            send(b"\x1b")
+            send(b"\x1b", alias_escape=True)
             wait_frame(lambda: filter_text() == "Filter: Second" and "View: Frontend" in editor_title())
             send(b"\x1b")
             wait_visible(lambda: not filter_text().startswith("Filter:"))
@@ -975,7 +1027,7 @@ print(json.dumps({"result": result}))
             wait_visible(lambda: "Local draft" in visible.text() and "Second local" in visible.text())
             send(b"\x1b[F")
             wait_visible(lambda: "[Image: pending.png]" in visible.text())
-            send(b"\x1b")
+            send(b"\x1b", alias_escape=True)
             wait_visible(lambda: "Content conflict #2" not in visible.text() and "[Image #1: pending.png]" in visible.text()
                          and (visible.x, visible.y) == caret)
             send(b"\x13")
@@ -983,7 +1035,7 @@ print(json.dumps({"result": result}))
             for cancel_key in (b"n", b"\x1b"):
                 send(b"o")
                 wait_visible(lambda: "Overwrite DB text?" in visible.text())
-                send(cancel_key)
+                send(cancel_key, alias_escape=True)
                 wait_visible(lambda: "Content conflict #2" in visible.text())
             assert cli("show", "2")["task"] == newer
             fcntl.ioctl(slave, termios.TIOCSWINSZ, struct.pack("HHHH", 24, 59, 0, 0))
@@ -1034,7 +1086,7 @@ print(json.dumps({"result": result}))
             for cancel_key in (b"n", b"\x1b"):
                 send(b"r")
                 wait_visible(lambda: "Reload current DB text?" in visible.text())
-                send(cancel_key)
+                send(cancel_key, alias_escape=True)
                 wait_visible(lambda: "Content conflict #2" in visible.text())
             send(b"r")
             wait_visible(lambda: "Reload current DB text?" in visible.text())
@@ -1073,7 +1125,7 @@ print(json.dumps({"result": result}))
                          and visible.text().splitlines()[-1].startswith("Content conflict for task 2"))
             send(b"\t")
             wait_visible(lambda: "Local draft" in visible.text() and "removed-local" in visible.text())
-            send(b"\x1b")
+            send(b"\x1b", alias_escape=True)
             wait_visible(lambda: "Content conflict #2" not in visible.text() and "removed-local" in visible.text())
             assert [task["id"] for task in cli("list")] == [1]
             assert not (Path(folder) / ".qqq/images/2/2.png").exists()
@@ -2061,7 +2113,7 @@ print(json.dumps({"result": result}))
             send(b"y")
             wait_visible(lambda: visible.text().splitlines()[-1].startswith("Discard task #2?"))
             assert "Second two" in visible.text(), visible.text()
-            send({"buffers_exit_enter": b"\r", "buffers_exit_escape": b"\x1b"}.get(scenario, b"n"))
+            send({"buffers_exit_enter": b"\r", "buffers_exit_escape": b"\x1b"}.get(scenario, b"n"), alias_escape=True)
             wait_visible(lambda: not visible.text().splitlines()[-1].startswith("Discard"))
             assert child.poll() is None
             if scenario == "buffers_exit_active_new":
@@ -3693,17 +3745,24 @@ print(json.dumps({"result": result}))
             send(b"q")
             wait_caret(lambda: editor_line().startswith("Second draqft"),
                        (caret[0] + 1, caret[1]))
-            send(CTRL_SLASH + b"Se")
-            wait_frame(lambda: filter_text() == "Filter: Se")
-            filter_footer = visible.text().splitlines()[-1]
-            open_menu()
-            assert visible.text().splitlines()[-1] == filter_footer, visible.text()
-            send(b"q")
-            wait_frame(lambda: "Task actions" not in visible.text()
-                       and filter_text() == "Filter: Se" and visible.cursor_visible)
-            assert editor_line().startswith("Second draqft"), visible.text()
-            send(b"q")
-            wait_frame(lambda: filter_text() == "Filter: Seq")
+            for cancel_key in (b"\x1b", b"q", b"Q"):
+                send(CTRL_SLASH + b"Se")
+                wait_frame(lambda: filter_text() == "Filter: Se")
+                filter_footer = visible.text().splitlines()[-1]
+                open_menu()
+                assert visible.text().splitlines()[-1] == filter_footer, visible.text()
+                # Escape clears the filter before closing a modal; aliases do the same.
+                send(cancel_key)
+                wait_visible(lambda: "Task actions" in visible.text()
+                             and not visible.text().splitlines()[0].startswith("Filter:")
+                             and visible.text().splitlines()[-1] == editor_footer)
+                send(cancel_key)
+                wait_caret(lambda: "Task actions" not in visible.text()
+                           and editor_line().startswith("Second draqft") and visible.cursor_visible,
+                           (caret[0] + 1, caret[1]))
+                assert cli("list", "--all") == initial_tasks
+            send(CTRL_SLASH + b"SeqQ")
+            wait_frame(lambda: filter_text() == "Filter: SeqQ")
             assert cli("list", "--all") == initial_tasks
             if scenario.endswith("no_color"):
                 assert b"\x1b[38;" not in screen and b"\x1b[48;" not in screen, screen[-2000:]
@@ -4115,7 +4174,7 @@ print(json.dumps({"result": result}))
             send(b"\x1b[A")
             wait_error_frame(lambda: visible.text() == original_popup)
             assert "Up/Down Esc" in visible.text()
-            send(b"\x1b")
+            send(b"\x1b", alias_escape=True)
             wait_caret(lambda: "Action error" not in visible.text() and visible.cursor_visible
                        and editor_line().rstrip() == "Local Second", (6, editor_row() + 1))
 
@@ -4133,10 +4192,10 @@ print(json.dumps({"result": result}))
             wait_visible(lambda: "Archive task #2?" in visible.text() and "Lose draft?" in visible.text())
             send(b"y")
             wait_error_frame(lambda: "Action error" in visible.text() and "Marker00" in visible.text())
-            send(b"\x1b")
+            send(b"\x1b", alias_escape=True)
             wait_error_frame(lambda: "Action error" in visible.text()
                              and not visible.text().splitlines()[0].startswith("Filter:"))
-            send(b"\x1b")
+            send(b"\x1b", alias_escape=True)
             wait_caret(lambda: "Action error" not in visible.text() and visible.cursor_visible
                        and editor_line().rstrip() == "Local Second", (6, editor_row() + 1))
             assert cli("list") == before_tasks

@@ -4,7 +4,6 @@ import fcntl
 import json
 import os
 import pty
-import re
 import select
 import signal
 import struct
@@ -75,14 +74,9 @@ with tempfile.TemporaryDirectory(prefix="qqq-bulk-pty-") as folder:
     def contains(text):
         wait(lambda: text in screen.text())
 
-    def send(data):
-        if os.environ.get("QQQ_TEST_ESCAPE_KEY") == "Q":
-            # Preserve bracketed paste contents and CSI/SS3 terminal sequences.
-            data = re.sub(
-                rb"(\x1b\[200~.*?\x1b\[201~)|\x1b(?![\[O])",
-                lambda match: match[1] if match[1] is not None else b"Q",
-                data, flags=re.DOTALL,
-            )
+    def send(data, alias_escape=False):
+        if alias_escape and data == b"\x1b" and os.environ.get("QQQ_TEST_ESCAPE_KEY"):
+            data = os.environ["QQQ_TEST_ESCAPE_KEY"].encode()
         remaining = memoryview(data)
         deadline = time.monotonic() + 5
         while remaining:
@@ -163,30 +157,32 @@ with tempfile.TemporaryDirectory(prefix="qqq-bulk-pty-") as folder:
         send(b"\x04")
         contains("Bulk selected: 2")
         final_priority = 0
-        if os.environ.get("QQQ_TEST_ESCAPE_KEY") == "Q":
+        if os.environ.get("QQQ_TEST_ESCAPE_KEY"):
             before_cancel = [task(task_id) for task_id in (1, 2, 3)]
-            for key, heading in [(None, "Bulk actions (2)"),
-                                 (b"p", "Bulk priority"), (b"t", "Bulk add tags")]:
-                if key is None:
-                    send(b"\x07")
-                    contains(heading)
-                else:
-                    open_action(key, heading)
-                    send(b"4")
-                send(b"\x1b")
-                wait(lambda: heading not in screen.text()
-                     and "Bulk preview cancelled" in screen.text()
-                     and draft_label in screen.text() and (screen.x, screen.y) == caret)
-            for priority, message, heading in [
-                (b"4", "Bulk preview (2)", "Bulk preview (2)"),
-                (b"101", "Priority must be between -100 and 100", "Bulk priority"),
-            ]:
-                open_action(b"p", "Bulk priority")
-                send(priority + b"\r")
-                contains(message)
+            send(b"\x07")
+            contains("Bulk actions (2)")
+            send(b"\x1b", alias_escape=True)
+            wait(lambda: "Bulk actions (2)" not in screen.text() and (screen.x, screen.y) == caret)
+            for key, heading in [(b"p", "Bulk priority"), (b"t", "Bulk add tags")]:
+                open_action(key, heading)
+                send(b"qQ")
+                contains("> qQ")
                 send(b"\x1b")
                 wait(lambda: heading not in screen.text() and draft_label in screen.text()
                      and (screen.x, screen.y) == caret)
+            open_action(b"p", "Bulk priority")
+            send(b"101\r")
+            contains("Priority must be between -100 and 100")
+            send(b"qQ")
+            contains("> 101qQ")
+            send(b"\x1b")
+            wait(lambda: "Bulk priority" not in screen.text() and (screen.x, screen.y) == caret)
+            open_action(b"p", "Bulk priority")
+            send(b"4\r")
+            contains("Bulk preview (2)")
+            send(b"\x1b", alias_escape=True)
+            wait(lambda: "Bulk preview (2)" not in screen.text() and draft_label in screen.text()
+                 and (screen.x, screen.y) == caret)
             assert [task(task_id) for task_id in (1, 2, 3)] == before_cancel
             assert sum(row.startswith("+") for row in screen.text().splitlines()) == 2
         if scenario.startswith("basic"):
@@ -238,7 +234,7 @@ with tempfile.TemporaryDirectory(prefix="qqq-bulk-pty-") as folder:
             send(b"y")
             contains("Bulk error")
             assert priorities() == [0, 0, 9]
-            send(b"\x1b")
+            send(b"\x1b", alias_escape=True)
             wait(lambda: "Bulk error" not in screen.text() and (screen.x, screen.y) == caret)
             assert any(row.startswith("+") and "Second" in row for row in screen.text().splitlines())
             open_action(b"p", "Bulk priority")

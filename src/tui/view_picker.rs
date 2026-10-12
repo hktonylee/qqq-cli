@@ -97,6 +97,7 @@ impl Picker {
             }
             return None;
         }
+        let key = super::escape_alias(key);
         if key.code == KeyCode::Esc
             || (key.modifiers == KeyModifiers::CONTROL && key.code == KeyCode::Char('c'))
         {
