@@ -163,6 +163,32 @@ with tempfile.TemporaryDirectory(prefix="qqq-bulk-pty-") as folder:
         send(b"\x04")
         contains("Bulk selected: 2")
         final_priority = 0
+        if os.environ.get("QQQ_TEST_ESCAPE_KEY") == "Q":
+            before_cancel = [task(task_id) for task_id in (1, 2, 3)]
+            for key, heading in [(None, "Bulk actions (2)"),
+                                 (b"p", "Bulk priority"), (b"t", "Bulk add tags")]:
+                if key is None:
+                    send(b"\x07")
+                    contains(heading)
+                else:
+                    open_action(key, heading)
+                    send(b"4")
+                send(b"\x1b")
+                wait(lambda: heading not in screen.text()
+                     and "Bulk preview cancelled" in screen.text()
+                     and draft_label in screen.text() and (screen.x, screen.y) == caret)
+            for priority, message, heading in [
+                (b"4", "Bulk preview (2)", "Bulk preview (2)"),
+                (b"101", "Priority must be between -100 and 100", "Bulk priority"),
+            ]:
+                open_action(b"p", "Bulk priority")
+                send(priority + b"\r")
+                contains(message)
+                send(b"\x1b")
+                wait(lambda: heading not in screen.text() and draft_label in screen.text()
+                     and (screen.x, screen.y) == caret)
+            assert [task(task_id) for task_id in (1, 2, 3)] == before_cancel
+            assert sum(row.startswith("+") for row in screen.text().splitlines()) == 2
         if scenario.startswith("basic"):
             open_action(b"p", "Bulk priority")
             send(b"5\r")

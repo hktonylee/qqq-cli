@@ -80,7 +80,7 @@ fn tui_uppercase_q_obeys_escape_in_editor_and_modals() {
                 "actions_basic",
             ],
         ),
-        ("tui_bulk_pty.py", vec!["basic", "tags"]),
+        ("tui_bulk_pty.py", vec!["basic", "tags", "conflict"]),
     ] {
         for name in names {
             let output = Command::new("python3")
