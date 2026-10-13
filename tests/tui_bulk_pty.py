@@ -36,6 +36,8 @@ with tempfile.TemporaryDirectory(prefix="qqq-bulk-pty-") as folder:
         initial_second = "\n".join([f"Line{line:02}" for line in range(1, 21)] + ["Second"])
     for description in ("First", initial_second, "Third"):
         cli("add", description)
+    if scenario == "range_selection":
+        cli("archive", "1")
     if scenario == "archive_active":
         cli("next", "--local", "--session", "foreign", "--filter", "id == 3")
     master, slave = pty.openpty()
@@ -127,6 +129,43 @@ with tempfile.TemporaryDirectory(prefix="qqq-bulk-pty-") as folder:
 
     try:
         contains("New Task")
+        if scenario == "range_selection":
+            assert "Task #1" not in screen.text(), screen.text()
+            send(b"\x04")
+            contains("Select task IDs")
+            send(b"-2\r")
+            contains("Bulk selected: 1")
+            rows = screen.text().splitlines()
+            assert any(row.startswith("+") and "Second" in row for row in rows), screen.text()
+            assert not any(row.startswith("+") and "Third" in row for row in rows), screen.text()
+
+            send(b"\x04")
+            contains("Select task IDs")
+            send(b"2-3\r")
+            contains("Bulk selected: 2")
+            rows = screen.text().splitlines()
+            assert any(row.startswith("+") and "Second" in row for row in rows), screen.text()
+            assert any(row.startswith("+") and "Third" in row for row in rows), screen.text()
+
+            send(b"\x04")
+            contains("Select task IDs")
+            send(b"100-\r")
+            contains("No visible tasks match that range")
+            assert "Select task IDs" in screen.text(), screen.text()
+            send(b"\x1b")
+            contains("Bulk range selection cancelled")
+            assert [task(task_id)["status"] for task_id in (1, 2, 3)] == [
+                "new", "new", "new"
+            ]
+            assert [task(task_id)["archived"] for task_id in (1, 2, 3)] == [
+                True, False, False
+            ]
+            assert sum(row.startswith("+") for row in screen.text().splitlines()) == 2
+            send(b"\x03")
+            assert child.wait(timeout=5) == 0
+            assert child.stdout.read() == b""
+            assert termios.tcgetattr(slave) == before_terminal
+            raise SystemExit(0)
         send(b"\x1b[1;2A")
         contains("Task #3")
         contains("Ctrl-D Select")
