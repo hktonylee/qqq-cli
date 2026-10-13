@@ -171,12 +171,12 @@ pub(super) fn render(value: &Value, color: bool) -> String {
     }
     let assignment = [
         row(
-            "Harness",
+            "Harness:",
             &session_with_name(task, "harness_session", "harness_name"),
             color,
         ),
         row(
-            "Orchestrator Session",
+            "Orchestrator:",
             &session_with_name(task, "orchestrator_session", "orchestrator_name"),
             color,
         ),

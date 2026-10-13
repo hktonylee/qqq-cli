@@ -226,8 +226,8 @@ mod tests {
             ("Archived:", "no"),
             ("Created:", "2026-10-02T12:00:00.000Z"),
             ("Updated:", "2026-10-02T13:00:00.000Z"),
-            ("Harness", "session-1 (codex)"),
-            ("Orchestrator Session", "default (herdr)"),
+            ("Harness:", "session-1 (codex)"),
+            ("Orchestrator:", "default (herdr)"),
         ] {
             let row = detail_rows
                 .iter()
@@ -250,8 +250,8 @@ mod tests {
             "Description:Messages:Details:Assignment:Images:History:Herdr:"
         );
         let muted = styled_text(&detail_rows, DetailKind::Muted);
-        assert!(muted.contains("Harness"));
-        assert!(muted.contains("Orchestrator Session"));
+        assert!(muted.contains("Harness:"));
+        assert!(muted.contains("Orchestrator:"));
         assert!(muted.contains("2026-10-02T14:00:00.000Z"));
         assert!(!muted.contains("reviewer"));
         assert!(!muted.contains("codex"));
@@ -294,12 +294,8 @@ mod tests {
     #[test]
     fn assignment_grouping_preserves_values_roles_and_wrapping() {
         for (label, session_key, name_key) in [
-            ("Harness", "harness_session", "harness_name"),
-            (
-                "Orchestrator Session",
-                "orchestrator_session",
-                "orchestrator_name",
-            ),
+            ("Harness:", "harness_session", "harness_name"),
+            ("Orchestrator:", "orchestrator_session", "orchestrator_name"),
         ] {
             for (session, name, expected) in [
                 (Some("session-1"), Some("codex"), "session-1 (codex)"),

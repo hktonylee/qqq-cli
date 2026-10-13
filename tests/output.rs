@@ -142,8 +142,8 @@ fn human_next_omits_assignment_while_json_and_show_retain_it() {
         assert_eq!(json[key], expected);
     }
     for (label, expected) in [
-        ("Harness", "visible (codex)"),
-        ("Orchestrator Session", "work (herdr)"),
+        ("Harness:", "visible (codex)"),
+        ("Orchestrator:", "work (herdr)"),
     ] {
         assert!(
             shown
@@ -203,7 +203,7 @@ fn human_tasks_show_descriptions_dependencies_and_ownership() {
             .lines()
             .any(|line| line.trim_start().starts_with("Parent:") && line.ends_with("#1"))
     );
-    for name in ["Harness", "Orchestrator Session"] {
+    for name in ["Harness:", "Orchestrator:"] {
         assert!(
             child
                 .lines()

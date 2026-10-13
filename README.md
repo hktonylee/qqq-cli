@@ -140,7 +140,7 @@ archive visibility, with an empty line between groups. Arrows skip empty rows;
 short terminals keep selected action visible while scrolling menu.
 
 Task details and `qqq show` display assignment in two aligned rows:
-`Harness session (name)` and `Orchestrator session (name)`.
+`Harness: session (name)` and `Orchestrator: session (name)`.
 
 `qqq add` opens the built-in editor too. Prefer Vim or another editor? Set
 `EDITOR` and use `qqq add --edit`.

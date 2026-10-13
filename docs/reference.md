@@ -678,8 +678,8 @@ Details use a double-line box with two spaces inside each side; short panes
 retain padding without borders. Text wraps to the inner width.
 Details share `show` header and layout: `#ID · Status`, Description, Messages,
 Details, Assignment, Images, History and Herdr sections. Fields align their
-values; Created/Updated occupy separate rows. Assignment lists Harness and
-Orchestrator Session; session values include stored IDs such as `term_65d8208adfc4145 (herdr)`.
+values; Created/Updated occupy separate rows. Assignment lists `Harness:` and
+`Orchestrator:`; session values include stored IDs such as `term_65d8208adfc4145 (herdr)`.
 Messages follow creation order,
 with indented headers and bodies; empty collections show `None`. IDs are bold,
 statuses colored, labels/timestamps dim. Styles survive wrapping and scroll.

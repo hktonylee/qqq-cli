@@ -104,7 +104,7 @@ fn terminal_caller_identity_auto_claims_waits_completes_and_finds_moved_pane() {
     let text = String::from_utf8(output.stdout).unwrap();
     assert!(
         text.lines().any(|line| {
-            line.trim_start().starts_with("Orchestrator Session")
+            line.trim_start().starts_with("Orchestrator:")
                 && line.trim_end().ends_with("terminal-1 (herdr)")
         }),
         "{text}"

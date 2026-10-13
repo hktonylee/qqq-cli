@@ -47,8 +47,8 @@ fn show_groups_description_and_aligns_complete_metadata() {
         "Parent:",
         "Created:",
         "Updated:",
-        "Harness",
-        "Orchestrator Session",
+        "Harness:",
+        "Orchestrator:",
     ] {
         let row = shown
             .lines()
@@ -112,8 +112,8 @@ fn show_combines_assignment_sessions_and_names_without_changing_json() {
     assert_eq!(
         rows,
         [
-            ("Harness", "session-1 (codex)"),
-            ("Orchestrator Session", "default (herdr)")
+            ("Harness:", "session-1 (codex)"),
+            ("Orchestrator:", "default (herdr)")
         ],
         "{shown}"
     );
