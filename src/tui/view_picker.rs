@@ -162,9 +162,9 @@ impl Picker {
             rows.push(PopupRow::new(
                 name,
                 if index == self.selected {
-                    PopupKind::SelectedAction
+                    PopupKind::SelectedChoice
                 } else {
-                    PopupKind::Action
+                    PopupKind::Choice
                 },
             ));
         }
@@ -255,7 +255,7 @@ mod tests {
                     assert!(rows.len() <= height);
                     assert_eq!(
                         rows.iter()
-                            .filter(|row| row.kind == PopupKind::SelectedAction)
+                            .filter(|row| row.kind == PopupKind::SelectedChoice)
                             .count(),
                         1
                     );
@@ -301,7 +301,7 @@ mod tests {
         assert!(rows.len() <= 7);
         assert!(
             rows.iter()
-                .any(|row| row.text == "View 29" && row.kind == PopupKind::SelectedAction)
+                .any(|row| row.text == "View 29" && row.kind == PopupKind::SelectedChoice)
         );
         picker.key(key(KeyCode::PageDown));
         assert!(

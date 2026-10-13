@@ -47,9 +47,11 @@ fn view_picker_footer_styles_every_shortcut_in_both_rows() {
             for (index, text) in hints.iter().enumerate() {
                 let y = content.y + index as u16;
                 assert!(line(buffer, y).contains(text));
-                for key in text.split("  ").map(|part| part.split(' ').next().unwrap()) {
-                    let start = text.find(key).unwrap();
+                let mut start = 0;
+                for part in text.split("  ") {
+                    let key = part.split(' ').next().unwrap();
                     let x = content.x + text[..start].width() as u16;
+                    start += part.len() + 2;
                     for offset in 0..key.width() as u16 {
                         let cell = &buffer[(x + offset, y)];
                         assert_eq!(
@@ -814,7 +816,9 @@ fn action_popup_input_errors_and_warnings_keep_roles_and_plain_styles() {
                     | PopupKind::Hint => (Color::Indexed(81), true),
                     PopupKind::Input | PopupKind::Warning => (Color::Indexed(222), false),
                     PopupKind::Error => (Color::Indexed(210), index == 0),
-                    PopupKind::Body => (Color::Indexed(252), false),
+                    PopupKind::Body | PopupKind::Choice | PopupKind::SelectedChoice => {
+                        (Color::Indexed(252), false)
+                    }
                 };
                 assert_eq!(
                     buffer[(content.x, y)].fg,

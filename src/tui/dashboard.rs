@@ -113,16 +113,16 @@ fn popup_row_style(kind: render::PopupKind, title: bool, color: bool) -> Style {
                 style
             }
         }
-        PopupKind::Body | PopupKind::Action | PopupKind::Input => body,
-        PopupKind::SelectedAction => body.bg(SELECTION_BG),
+        PopupKind::Body | PopupKind::Action | PopupKind::Choice | PopupKind::Input => body,
+        PopupKind::SelectedAction | PopupKind::SelectedChoice => body.bg(SELECTION_BG),
     }
 }
 
 fn popup_row_line(text: String, kind: render::PopupKind, color: bool) -> Line<'static> {
     use render::PopupKind;
     let marker = match kind {
-        PopupKind::SelectedAction => "> ",
-        PopupKind::Action => "  ",
+        PopupKind::SelectedAction | PopupKind::SelectedChoice => "> ",
+        PopupKind::Action | PopupKind::Choice => "  ",
         _ => "",
     };
     if !color {
@@ -143,6 +143,7 @@ fn popup_row_line(text: String, kind: render::PopupKind, color: bool) -> Line<'s
                 ]),
             }
         }
+        PopupKind::Choice | PopupKind::SelectedChoice => Line::from(format!("{marker}{text}")),
         PopupKind::Hint => hotkey_line(&text, true),
         PopupKind::Input => Line::from(vec![
             Span::styled(
@@ -197,7 +198,10 @@ pub(super) fn popup(
         } else {
             let marker_width = usize::from(matches!(
                 row.kind,
-                PopupKind::Action | PopupKind::SelectedAction
+                PopupKind::Action
+                    | PopupKind::SelectedAction
+                    | PopupKind::Choice
+                    | PopupKind::SelectedChoice
             )) * 2;
             render::clipped(&row.text, width.saturating_sub(marker_width))
         };
@@ -206,7 +210,10 @@ pub(super) fn popup(
                 content.x + (text.width() as u16).min(content.width.saturating_sub(1)),
                 content.y + index as u16,
             );
-        } else if row.kind == PopupKind::SelectedAction {
+        } else if matches!(
+            row.kind,
+            PopupKind::SelectedAction | PopupKind::SelectedChoice
+        ) {
             cursor = (content.x, content.y + index as u16);
         }
         if let Some(column) = row.cursor {
@@ -494,6 +501,7 @@ fn hotkey_line(keys: &str, color: bool) -> Line<'static> {
                     | "S-↵"
                     | "↵"
                     | "y"
+                    | "n"
                     | "n/Esc"
             );
         spans.push(Span::styled(

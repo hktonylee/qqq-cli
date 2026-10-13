@@ -100,6 +100,8 @@ pub enum PopupKind {
     Body,
     Action,
     SelectedAction,
+    Choice,
+    SelectedChoice,
     Hint,
     Input,
     Error,
