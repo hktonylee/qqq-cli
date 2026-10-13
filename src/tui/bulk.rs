@@ -35,6 +35,12 @@ enum Stage {
         cursor: tag_input::Cursor,
         error: String,
     },
+    RangeSelect {
+        visible_ids: Vec<i64>,
+        value: String,
+        cursor: tag_input::Cursor,
+        error: String,
+    },
     Preview(Report),
     Error(String),
 }
@@ -47,7 +53,9 @@ pub(super) struct View {
 pub(super) enum Intent {
     None,
     Close,
+    CancelSelection,
     Clear,
+    Select(Vec<i64>),
     Preview(Actions),
     Apply(Report),
 }
@@ -57,6 +65,19 @@ impl View {
         Self {
             ids,
             stage: Stage::Menu { selected: 0 },
+            top: 0,
+            page: 1,
+        }
+    }
+    pub fn select_range(visible_ids: Vec<i64>) -> Self {
+        Self {
+            ids: Vec::new(),
+            stage: Stage::RangeSelect {
+                visible_ids,
+                value: String::new(),
+                cursor: tag_input::Cursor::at_end(""),
+                error: String::new(),
+            },
             top: 0,
             page: 1,
         }
@@ -78,6 +99,12 @@ impl View {
             cursor,
             error,
             ..
+        }
+        | Stage::RangeSelect {
+            value,
+            cursor,
+            error,
+            ..
         } = &mut self.stage
         {
             cursor.insert(value, &text.replace("\r\n", "\n"));
@@ -85,7 +112,7 @@ impl View {
         }
     }
     pub fn key(&mut self, key: KeyEvent) -> Intent {
-        let key = if matches!(self.stage, Stage::Input { .. }) {
+        let key = if matches!(self.stage, Stage::Input { .. } | Stage::RangeSelect { .. }) {
             key
         } else {
             super::escape_alias(key)
@@ -93,13 +120,23 @@ impl View {
         if key.code == KeyCode::Esc
             || (key.code == KeyCode::Char('c') && key.modifiers.contains(KeyModifiers::CONTROL))
         {
-            return Intent::Close;
+            return if matches!(self.stage, Stage::RangeSelect { .. }) {
+                Intent::CancelSelection
+            } else {
+                Intent::Close
+            };
         }
         if key.modifiers.contains(KeyModifiers::SUPER) {
             return Intent::None;
         }
         if key.modifiers.contains(KeyModifiers::ALT) {
             if let Stage::Input {
+                value,
+                cursor,
+                error,
+                ..
+            }
+            | Stage::RangeSelect {
                 value,
                 cursor,
                 error,
@@ -208,6 +245,34 @@ impl View {
                     cursor.edit(value, error, key);
                 }
             }
+            Stage::RangeSelect {
+                visible_ids,
+                value,
+                cursor,
+                error,
+            } => {
+                if !control && key.code == KeyCode::Enter {
+                    match parse_id_range(value) {
+                        Some((start, end)) => {
+                            let ids: Vec<_> = visible_ids
+                                .iter()
+                                .copied()
+                                .filter(|id| (*id >= start) && (*id <= end))
+                                .collect();
+                            if ids.is_empty() {
+                                *error = "No visible tasks match that range".to_owned();
+                            } else {
+                                return Intent::Select(ids);
+                            }
+                        }
+                        None => {
+                            *error = "Enter a range like 1-5, -5, or 100-".to_owned();
+                        }
+                    }
+                } else {
+                    cursor.edit(value, error, key);
+                }
+            }
             Stage::Preview(report) => {
                 if !control {
                     match key.code {
@@ -240,6 +305,45 @@ impl View {
         };
     }
     pub fn rows(&mut self, width: usize, height: usize) -> Vec<PopupRow> {
+        if let Stage::RangeSelect {
+            value,
+            cursor,
+            error,
+            ..
+        } = &self.stage
+        {
+            let mut rows = tag_input::rows(None, value, cursor, error, width, height);
+            if let Some(heading) = rows
+                .first_mut()
+                .filter(|row| row.kind == PopupKind::Heading)
+            {
+                heading.text = "Select task IDs".to_owned();
+            }
+            let hints: Vec<usize> = rows
+                .iter()
+                .enumerate()
+                .filter_map(|(index, row)| (row.kind == PopupKind::Hint).then_some(index))
+                .collect();
+            if hints.len() > 1 {
+                rows[hints[0]].text = if width >= 26 {
+                    "Range: 1-5, -5, or 100-".to_owned()
+                } else if width >= 16 {
+                    "Range: 1-5, -5".to_owned()
+                } else {
+                    "ID range".to_owned()
+                };
+            }
+            if let Some(index) = hints.last() {
+                rows[*index].text = if "Enter select  Esc cancel".width() <= width {
+                    "Enter select  Esc cancel".to_owned()
+                } else if "↵ select  Esc".width() <= width {
+                    "↵ select  Esc".to_owned()
+                } else {
+                    "Esc".to_owned()
+                };
+            }
+            return rows;
+        }
         if let Stage::Input {
             kind,
             value,
@@ -361,6 +465,7 @@ impl View {
                     .collect(),
                 "Regenerate preview  Esc close  Up/Down",
             ),
+            Stage::RangeSelect { .. } => unreachable!(),
             Stage::Input { .. } => unreachable!(),
         };
         let visible = height.saturating_sub(2);
@@ -389,6 +494,37 @@ impl View {
         rows
     }
 }
+fn parse_id_range(value: &str) -> Option<(i64, i64)> {
+    let value = value.trim();
+    if value.is_empty() {
+        return None;
+    }
+    let parse_id = |text: &str| text.trim().parse::<i64>().ok().filter(|id| *id > 0);
+    let (start, end) = match value.split_once('-') {
+        Some((start, end)) => {
+            if start.trim().is_empty() && end.trim().is_empty() {
+                return None;
+            }
+            let start = if start.trim().is_empty() {
+                1
+            } else {
+                parse_id(start)?
+            };
+            let end = if end.trim().is_empty() {
+                i64::MAX
+            } else {
+                parse_id(end)?
+            };
+            (start, end)
+        }
+        None => {
+            let id = parse_id(value)?;
+            (id, id)
+        }
+    };
+    (start <= end).then_some((start, end))
+}
+
 fn ids(ids: &[i64]) -> String {
     ids.iter()
         .map(|id| format!("#{id}"))

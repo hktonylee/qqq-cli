@@ -1652,9 +1652,18 @@ fn compose_inner(
                             message = "Bulk preview cancelled".to_owned();
                             message_is_error = false;
                         }
+                        bulk::Intent::CancelSelection => {
+                            message = "Bulk range selection cancelled".to_owned();
+                            message_is_error = false;
+                        }
                         bulk::Intent::Clear => {
                             bulk_selected.clear();
                             message = "Bulk selection cleared".to_owned();
+                            message_is_error = false;
+                        }
+                        bulk::Intent::Select(ids) => {
+                            bulk_selected.extend(ids);
+                            message = format!("Bulk selected: {}", bulk_selected.len());
                             message_is_error = false;
                         }
                         bulk::Intent::Preview(actions) => {
@@ -2481,8 +2490,11 @@ fn compose_inner(
                         message = format!("Bulk selected: {}", bulk_selected.len());
                         message_is_error = false;
                     } else {
-                        message = "Select saved task before Ctrl-D".to_owned();
-                        message_is_error = true;
+                        bulk_ui = Some(bulk::View::select_range(
+                            visible_ids.as_deref().unwrap_or_default().to_vec(),
+                        ));
+                        message.clear();
+                        message_is_error = false;
                     }
                     continue;
                 }
