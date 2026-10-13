@@ -13,6 +13,7 @@ mod render;
 mod tag_input;
 mod view_form;
 mod view_picker;
+mod view_templates;
 
 use crate::config::AfterSaveNew;
 use anyhow::{Result, bail, ensure};

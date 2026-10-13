@@ -224,6 +224,7 @@ fn tui_dashboard_creates_named_views_without_changing_drafts() {
         "views_create_narrow",
         "views_create_filter",
         "views_create_empty",
+        "views_create_templates",
     ] {
         dashboard_scenario(scenario);
     }

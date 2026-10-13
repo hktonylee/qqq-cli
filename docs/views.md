@@ -120,19 +120,38 @@ title. Picker supports narrow/resized terminals and `NO_COLOR`.
 Shortcut help uses two rows when one row would overflow, shortening labels in
 small popups while keeping selection, apply, scroll and cancel keys visible.
 
-Press `n` in picker to create a view, including when no views exist. Form starts
-with blank name/selectors, hidden archives and unlimited completions. Tab and
-Shift-Tab move through name, tags, Luau filter, query, statuses, readiness,
-archive visibility and completion limit. Enter adds lines for tags/filter/query;
-in other fields it advances. Tags accept one per line or comma-separated labels.
-Statuses accept comma-separated `new,in_progress,completed,error`; blank means
-any. Readiness accepts `ready`, `blocked` or blank. Archives accept `hide` or
-`show`; completion limit accepts `all`, blank, zero or positive count.
+Press `n` in picker to create a view. Enter name, then one Luau filter expression.
+Tab or Shift-Tab switches between name and script; Enter advances from name or
+adds a line in script. Name stays visible above script. Form starts with
+`not archived`, matching all unarchived tasks. Ctrl-S saves directly from either
+field. Script uses existing [Luau query grammar](filter.md), including comments
+and multiline expressions. Empty/invalid expressions stay open for correction.
+
+Ctrl-F opens optional templates with script preview. Up/Down or Home/End picks;
+Enter inserts editable script, preserving name. Esc, Ctrl-C or q/Q returns to
+form with current script/caret unchanged. Templates:
+
+| Template | Luau expression |
+| --- | --- |
+| Unarchived tasks | `not archived` |
+| Active tasks | `not archived and status ~= "completed"` |
+| By tag | `not archived and has_tag("backend")` |
+| High priority | `not archived and priority >= 5` |
+| Recent tasks | `not archived and datetime(created_time) >= datetime("now", "-7 days")` |
+| All tasks | `true` |
+
+Edit tag, threshold or time range before saving. New TUI views contain only
+script criteria, with archived rows included and no completion limit underneath;
+script decides which rows match. `true` includes archives and completions;
+`not archived and status == "new"` shows unarchived new tasks. Explicit startup
+visibility flags still override saved defaults. Existing views, CLI selector
+options and catalog format remain compatible; dependency readiness and positive
+completion limits remain available through CLI `qqq view save`.
 
 Ctrl-S validates and saves to project catalog, returning to picker with new view
 selected. Enter applies it. Esc or Ctrl-C returns to picker without saving form.
-Invalid values, duplicate names and write failures keep inputs for correction
-and retry. Creation rejects existing exact name under catalog writer lock,
+Invalid expressions/names, duplicate names and write failures keep inputs for
+correction and retry. Creation rejects existing exact name under catalog writer lock,
 including names created concurrently; it preserves other definitions. CLI
 `qqq view save` retains replacement behavior. Creating a view preserves current
 selection, filter and task drafts until explicitly applied.

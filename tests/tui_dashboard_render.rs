@@ -72,6 +72,50 @@ fn view_picker_footer_styles_every_shortcut_in_both_rows() {
 }
 
 #[test]
+fn view_form_shortcuts_keep_styling_at_every_footer_width() {
+    use render::{PopupKind, PopupRow};
+    use unicode_width::UnicodeWidthStr;
+    for (width, height, text) in [
+        (72, 24, "Tab field Ctrl-F templates Ctrl-S save Esc"),
+        (44, 12, "Tab ^F templates ^S save Esc"),
+        (12, 8, "⇥ ^F ^S Esc"),
+    ] {
+        let rows = [PopupRow::new(text, PopupKind::Hint)];
+        let content =
+            dashboard::popup_layout(ratatui::layout::Rect::new(0, 0, width, height), 1).content;
+        for color in [true, false] {
+            let mut terminal = Terminal::new(TestBackend::new(width, height)).unwrap();
+            terminal
+                .draw(|frame| dashboard::popup(frame, &rows, color, true))
+                .unwrap();
+            let buffer = terminal.backend().buffer();
+            assert!(line(buffer, content.y).contains(text));
+            let mut byte = 0;
+            let mut shortcuts = 0;
+            for word in text.split_inclusive(' ') {
+                let key = word.trim_end();
+                if matches!(key, "Tab" | "⇥" | "Ctrl-F" | "^F" | "Ctrl-S" | "^S" | "Esc") {
+                    shortcuts += 1;
+                    let cell = &buffer[(content.x + text[..byte].width() as u16, content.y)];
+                    assert_eq!(
+                        cell.fg,
+                        if color {
+                            Color::Indexed(81)
+                        } else {
+                            Color::Reset
+                        },
+                        "{key}"
+                    );
+                    assert_eq!(cell.modifier.contains(Modifier::BOLD), color, "{key}");
+                }
+                byte += word.len();
+            }
+            assert_eq!(shortcuts, 4);
+        }
+    }
+}
+
+#[test]
 fn task_tags_keep_color_across_status_selection_dirty_and_compact_rows() {
     let labels = ["界 面".into(), "bug".into()];
     let layout = render::Layout::new(&["Draft".into()], &[], 72);
@@ -809,7 +853,6 @@ fn action_popup_input_errors_and_warnings_keep_roles_and_plain_styles() {
                 let y = content.y + index as u16;
                 assert!(line(buffer, y).contains(&row.text));
                 let (foreground, bold) = match row.kind {
-                    PopupKind::Hint if row.text.starts_with("Tab ") => (Color::Gray, false),
                     PopupKind::Heading
                     | PopupKind::Action
                     | PopupKind::SelectedAction

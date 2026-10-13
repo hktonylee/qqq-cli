@@ -714,15 +714,26 @@ print(json.dumps({"result": result}))
                 assert catalog_path.read_bytes() == raced
                 send(b"\x15")
             send(b"\x1b[200~" + "Focus 界".encode() + b"\x1b[201~")
-            send(b"\tbackend\rbackend\t")
-            wait_visible(lambda: "Create view" in visible.text() and "Luau filter" in visible.text())
+            send(b"\t")
+            wait_visible(lambda: "Create view" in visible.text() and "Luau script" in visible.text()
+                         and "not archived" in visible.text())
+            send(b"\x06")
+            wait_visible(lambda: "View templates" in visible.text())
+            send(b"\x1b[B\x1b", alias_escape=True)
+            wait_visible(lambda: "Luau script" in visible.text() and "not archived" in visible.text()
+                         and "View templates" not in visible.text())
+            send(b"\x06\x1b[B\x1b[B\r")
+            wait_visible(lambda: "Luau script" in visible.text() and 'has_tag("backend")' in visible.text())
+            send(b"\x15")
             if scenario == "views_create_errors":
                 send(b"unknown == 1\x13")
                 wait_visible(lambda: "Invalid --filter expression" in visible.text())
                 assert catalog_path.read_bytes() == raced
                 send(b"\x15")
-            send(b"priority >= 0\tFirst\tnew,error\tready\t\x15show\t\x150")
-            wait_visible(lambda: "Completed limit" in visible.text() and "> 0" in visible.text())
+            expression = ('not archived\nand has_tag("backend")\nand priority >= 0'
+                          '\nand like(description, "%First%")\nand (status == "new" or status == "error")')
+            send(b"\x1b[200~" + expression.encode() + b"\x1b[201~")
+            wait_visible(lambda: "Luau script" in visible.text() and "status" in visible.text())
             if scenario == "views_create_narrow":
                 for width, height in [(12, 8), (32, 12), (72, 24)]:
                     fcntl.ioctl(slave, termios.TIOCSWINSZ, struct.pack("HHHH", height, width, 0, 0))
@@ -744,9 +755,9 @@ print(json.dumps({"result": result}))
             definition = cli("view", "show", "Focus 界")
             assert definition == {
                 "name": "Focus 界", "criteria": {
-                    "tags": ["backend"], "filter": "priority >= 0", "query": "First",
-                    "statuses": ["new", "error"], "readiness": "ready",
-                }, "include_archived": True, "max_completed": 0,
+                    "tags": [], "filter": expression, "query": None,
+                    "statuses": [], "readiness": None,
+                }, "include_archived": True, "max_completed": None,
             }, definition
             assert cli("view", "show", "Concurrent")["criteria"]["query"] == "Second"
             assert cli("list") == initial
@@ -762,6 +773,22 @@ print(json.dumps({"result": result}))
             assert cli("list") == initial
             if scenario.endswith("no_color"):
                 assert b"\x1b[38;" not in screen and b"\x1b[48;" not in screen, screen[-2000:]
+            if scenario == "views_create_templates":
+                send(b"\x02nEverything\x06")
+                wait_visible(lambda: "View templates" in visible.text())
+                send(b"\x1b[F\r")
+                wait_visible(lambda: "Luau script" in visible.text() and "> true" in visible.text())
+                send(b"\x13")
+                wait_visible(lambda: "Choose view" in visible.text() and "Everything" in visible.text())
+                all_view = cli("view", "show", "Everything")
+                assert all_view["criteria"]["filter"] == "true", all_view
+                cli("archive", "1")
+                cli("next", "--local", "--session", "view-template-finished", "--filter", "id == 2")
+                cli("complete", "2", "--session", "view-template-finished")
+                assert [task["id"] for task in cli("list", "--view", "Everything")] == [1, 2]
+                send(b"\r")
+                wait_visible(lambda: "View: Everything" in editor_title() and "First" in list_text()
+                             and "Second" in list_text() and editor_line().startswith("Second retained"))
         elif scenario == "views_visibility":
             wait_frame(lambda: "View: Backend" in editor_title() and completed_button_text() == "[× Completed]"
                        and "First" not in list_text() and "Second" not in list_text())
