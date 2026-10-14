@@ -1391,7 +1391,7 @@ fn compose_inner(
             .content;
             let rows = ui.rows(usize::from(area.width), usize::from(area.height));
             let mut popup_terminal = Terminal::new(CrosstermBackend::new(io::stderr()))?;
-            popup_terminal.clear()?;
+            popup_terminal.resize(popup_terminal.size()?.into())?;
             popup_terminal.draw(|frame| dashboard::popup(frame, &rows, terminal.color, true))?;
         } else {
             render::draw(
@@ -2077,10 +2077,9 @@ fn compose_inner(
                             drop(terminal);
                             let result = handoff::attach(server.as_deref());
                             terminal = TerminalGuard::enter(dashboard)?;
-                            dashboard_terminal
-                                .as_mut()
-                                .expect("dashboard has terminal")
-                                .clear()?;
+                            let dashboard_terminal =
+                                dashboard_terminal.as_mut().expect("dashboard has terminal");
+                            dashboard_terminal.resize(dashboard_terminal.size()?.into())?;
                             result
                         }
                         Err(error) => Err(error),

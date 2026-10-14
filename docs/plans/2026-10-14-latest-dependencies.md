@@ -90,8 +90,26 @@ let-chain syntax that the old 1.85 minimum excluded from suggestions.
   to apply its machine-applicable conditional repairs, then `cargo fmt --all`.
 - [x] Inspect every changed condition for the same short-circuit order, bindings,
   branch handling and effects. Keep the strict lint configuration intact.
-- [x] Rerun strict Clippy and all-target compilation on Rust 1.89, then exercise
-  the affected behavior through the existing full suite.
+- [x] Rerun strict Clippy on current stable and all-target compilation on Rust
+  1.89. The full suite in step 3 verifies the affected runtime behavior.
+
+### 2c. Terminal reset compatibility
+
+The full suite exposed four regressions in conflict recovery and Herdr return.
+Ratatui 0.30's `Terminal::clear()` now queries the cursor position before clearing;
+the previous release did not. A focused Herdr-error test reproduces the timeout.
+Fullscreen `Terminal::resize()` clears the viewport and resets the back buffer
+without a cursor query, even when the dimensions stay the same.
+
+**Modify:** `src/tui/mod.rs`.
+
+- [x] Replace the two terminal `clear()` calls with `resize()` using each
+  terminal's current backend size. Preserve fullscreen automatic resizing and
+  force a full redraw after conflict-popup entry or Herdr return.
+- [ ] Rerun all four existing failing terminal tests, strict Clippy, minimum
+  Rust compilation, the full suite and the release build. Request review of the
+  terminal repair; keep the existing PTY fixtures and assertions intact.
+  The four failing scenarios and the related Ctrl-H hint test now pass.
 
 ### 3. Verify and review
 
