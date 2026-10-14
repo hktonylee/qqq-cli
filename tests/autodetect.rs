@@ -81,7 +81,7 @@ fn terminal_caller_identity_auto_claims_waits_completes_and_finds_moved_pane() {
     assert_eq!(task["harness_session"], "terminal-1");
     assert_eq!(task["harness_name"], "codex");
     assert_eq!(task["orchestrator_name"], "herdr");
-    assert_eq!(task["orchestrator_session"], "terminal-1");
+    assert_eq!(task["orchestrator_session"], "w1:p1");
     assert_eq!(
         ok(herdr(p, response, true).args(["next", "--wait"]))["id"],
         1
@@ -90,7 +90,7 @@ fn terminal_caller_identity_auto_claims_waits_completes_and_finds_moved_pane() {
     assert_eq!(detail["herdr"]["identity"]["kind"], "terminal");
     assert_eq!(detail["herdr"]["identity"]["value"], "terminal-1");
     assert_eq!(detail["herdr"]["server"], "default");
-    let listed = ok(command(p).args(["list", "--filter", "orchestrator_session == 'terminal-1'"]));
+    let listed = ok(command(p).args(["list", "--filter", "orchestrator_session == 'w1:p1'"]));
     assert_eq!(listed.as_array().unwrap().len(), 1);
     assert_eq!(listed[0], task);
     let output = Command::new(env!("CARGO_BIN_EXE_qqq"))
@@ -105,7 +105,7 @@ fn terminal_caller_identity_auto_claims_waits_completes_and_finds_moved_pane() {
     assert!(
         text.lines().any(|line| {
             line.trim_start().starts_with("Orchestrator:")
-                && line.trim_end().ends_with("terminal-1 (herdr)")
+                && line.trim_end().ends_with("w1:p1 (herdr)")
         }),
         "{text}"
     );
@@ -146,7 +146,7 @@ fn unique_cwd_terminal_identity_auto_claims_outside_herdr_from_subdirectory() {
         .arg("next"));
     assert_eq!(task["id"], 1);
     assert_eq!(task["harness_session"], "terminal-1");
-    assert_eq!(task["orchestrator_session"], "terminal-1");
+    assert_eq!(task["orchestrator_session"], "w1:p1");
 }
 
 #[test]
@@ -157,7 +157,7 @@ fn reported_session_identity_takes_priority_over_terminal_fallback() {
     pane["agent_session"] = json!({"agent":"codex","kind":"id","value":"hook-session"});
     let task = ok(herdr(p, json!({"result":{"pane":pane}}), true).arg("next"));
     assert_eq!(task["harness_session"], "hook-session");
-    assert_eq!(task["orchestrator_session"], "terminal-1");
+    assert_eq!(task["orchestrator_session"], "w1:p1");
 }
 
 #[test]
@@ -183,13 +183,13 @@ fn missing_or_blank_terminal_records_pane_without_changing_harness() {
 }
 
 #[test]
-fn failed_server_lookup_still_records_terminal_identity() {
+fn failed_server_lookup_still_records_pane_identity() {
     let dir = project();
     let p = dir.path();
     let task = ok(herdr(p, json!({"result":{"pane":pane(p)}}), true)
         .env("HERDR_SOCKET_PATH", "/tmp/missing-server.sock")
         .arg("next"));
-    assert_eq!(task["orchestrator_session"], "terminal-1");
+    assert_eq!(task["orchestrator_session"], "w1:p1");
     let detail = ok(command(p).args(["show", "1"]));
     assert!(detail["herdr"]["server"].is_null());
 }
@@ -238,7 +238,7 @@ fn herdr_codex_claims_display_native_session_without_changing_owner() {
                 }
             );
             assert_eq!(task["orchestrator_name"], "herdr");
-            assert_eq!(task["orchestrator_session"], "terminal-1");
+            assert_eq!(task["orchestrator_session"], "w1:p1");
             let identity = json!({
                 "agent":"codex",
                 "kind":if reported { "id" } else { "terminal" },
@@ -291,7 +291,7 @@ fn other_herdr_harness_ignores_codex_session_env() {
             assert_eq!(task["harness_name"], agent);
             assert_eq!(task["harness_session"], display);
             assert_eq!(task["orchestrator_name"], "herdr");
-            assert_eq!(task["orchestrator_session"], "terminal-1");
+            assert_eq!(task["orchestrator_session"], "w1:p1");
             let detail = ok(command(p).args(["show", "1"]));
             assert_eq!(
                 detail["herdr"]["identity"],
@@ -424,7 +424,7 @@ fn explicit_claim_with_herdr_link_is_not_adopted_as_automatic_owner() {
     let response = json!({"result":{"pane":pane(p)}});
     ok(herdr(p, response.clone(), true).args(["herdr", "link", "1"]));
     let linked = ok(command(p).args(["show", "1"]));
-    assert_eq!(linked["task"]["orchestrator_session"], "terminal-1");
+    assert_eq!(linked["task"]["orchestrator_session"], "w1:p1");
     assert_eq!(linked["events"][0]["session"], "explicit-owner");
     let task = ok(herdr(p, response, true).arg("next"));
     assert_eq!(task["id"], 2);
@@ -466,7 +466,7 @@ fn named_server_auto_fill_and_metadata_overrides_keep_real_link() {
     cmd.env("HERDR_SOCKET_PATH", "/tmp/named.sock")
         .env("QQQ_TEST_SESSIONS", p.join("sessions.json"));
     let task = ok(cmd.arg("next"));
-    assert_eq!(task["orchestrator_session"], "terminal-1");
+    assert_eq!(task["orchestrator_session"], "w1:p1");
     assert_eq!(
         ok(command(p).args(["show", "1"]))["herdr"]["server"],
         "named"
@@ -504,7 +504,7 @@ fn harness_session_override_retains_other_automatic_fields() {
     assert_eq!(task["harness_name"], "codex");
     assert_eq!(task["harness_session"], "override");
     assert_eq!(task["orchestrator_name"], "herdr");
-    assert_eq!(task["orchestrator_session"], "terminal-1");
+    assert_eq!(task["orchestrator_session"], "w1:p1");
     let detail = ok(command(p).args(["show", "1"]));
     assert_eq!(detail["herdr"]["identity"]["value"], "terminal-1");
     ok(command(p).args(["edit", "--complete", "1", "--harness-session", "override"]));

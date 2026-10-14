@@ -55,8 +55,7 @@ elif a[:2]==['agent','prompt']:
     row=db.execute('SELECT t.claim_key,h.link_json,t.harness_name,t.harness_session,t.orchestrator_name,t.orchestrator_session FROM tasks t JOIN herdr_links h ON h.task_id=t.id WHERE t.claim_key=?',(a[2],)).fetchone()
     assert row is not None,'link missing before prompt'
     expected_session=('terminal-' if os.environ.get('NO_ID') else 'session-')+a[2]
-    expected_terminal=a[2] if os.environ.get('NO_TERMINAL') else 'terminal-'+a[2]
-    expected=tuple(os.environ.get('EXPECT_'+key, value) for key,value in zip(['HARNESS_NAME','HARNESS_SESSION','ORCHESTRATOR_NAME','ORCHESTRATOR_SESSION'], ['codex',expected_session,'herdr',expected_terminal]))
+    expected=tuple(os.environ.get('EXPECT_'+key, value) for key,value in zip(['HARNESS_NAME','HARNESS_SESSION','ORCHESTRATOR_NAME','ORCHESTRATOR_SESSION'], ['codex',expected_session,'herdr',a[2]]))
     assert row[2:] == expected, 'identity missing before prompt'
     result={}
 else: raise Exception(a)
@@ -347,7 +346,7 @@ fn dispatch_claims_for_new_agent_links_before_prompt_and_can_find_session() {
     assert_eq!(task["harness_name"], "codex");
     assert_eq!(task["harness_session"], format!("session-{owner}"));
     assert_eq!(task["orchestrator_name"], "herdr");
-    assert_eq!(task["orchestrator_session"], format!("terminal-{owner}"));
+    assert_eq!(task["orchestrator_session"], owner);
     assert_eq!(detail["herdr"]["server"], "default");
     assert_ne!(owner, "caller");
     assert!(owner.starts_with("qqq-dispatch-"));
@@ -494,9 +493,9 @@ fn dispatched_codex_assignment_uses_child_session_not_callers_environment() {
     assert_ne!(task["harness_session"], "parent-codex-session");
     assert_eq!(
         task["orchestrator_session"],
-        detail["herdr"]["pane"]["terminal_id"]
+        detail["herdr"]["pane"]["pane_id"]
     );
-    assert_ne!(task["orchestrator_session"], "terminal-caller");
+    assert_ne!(task["orchestrator_session"], "caller");
 }
 
 #[test]
@@ -588,7 +587,7 @@ fn terminal_fallback_links_exact_terminal_and_missing_identity_aborts() {
     assert_eq!(detail["herdr"]["identity"]["kind"], "terminal");
     assert_eq!(
         detail["task"]["orchestrator_session"],
-        detail["herdr"]["pane"]["terminal_id"]
+        detail["herdr"]["pane"]["pane_id"]
     );
     let owner = detail["herdr"]["pane"]["pane_id"].as_str().unwrap();
     assert_eq!(

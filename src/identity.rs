@@ -30,14 +30,7 @@ impl Identity {
                 harness_name: Some(link.identity.agent.clone()),
                 harness_session: Some(link.identity.value.clone()),
                 orchestrator_name: Some("herdr".into()),
-                orchestrator_session: Some(
-                    link.pane
-                        .terminal_id
-                        .as_ref()
-                        .filter(|terminal| !terminal.trim().is_empty())
-                        .unwrap_or(&link.pane.pane_id)
-                        .clone(),
-                ),
+                orchestrator_session: Some(link.pane.pane_id.clone()),
             },
             None => Self {
                 harness_session: Some(session.into()),
