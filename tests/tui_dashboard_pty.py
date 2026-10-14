@@ -2730,7 +2730,8 @@ print(json.dumps({"result": result}))
             assert editor_line().startswith("Task 20")
         elif scenario in ("tree_navigation", "ctrl_punctuation_tree"):
             keys = ((b"\x1b[44;5u", b"\x1b[46;5u"),
-                    (b"\x1b[44;5:1u", b"\x1b[46;5:2u")) if scenario == "ctrl_punctuation_tree" else (
+                    (b"\x1b[44;5:1u", b"\x1b[46;5:2u"),
+                    (b"\x1b[1;5A", b"\x1b[1;5B")) if scenario == "ctrl_punctuation_tree" else (
                         (b"\x1b[1;2A", b"\x1b[1;2B"),)
             for older, newer in keys:
                 for task_id in (2, 3, 1):
@@ -2756,11 +2757,13 @@ print(json.dumps({"result": result}))
                          and "Ctrl+/ Filter" in visible.text().splitlines()[-1])
             assert "Ctrl+," not in visible.text().splitlines()[-1], visible.text()
             assert "Ctrl+." not in visible.text().splitlines()[-1], visible.text()
+            assert "Ctrl-Up" not in visible.text().splitlines()[-1], visible.text()
+            assert "Ctrl-Dn" not in visible.text().splitlines()[-1], visible.text()
             send(b"\x7f\x7f")
             wait_visible(lambda: editor_line().strip() == "")
         elif scenario == "ctrl_punctuation_buffers":
             initial_tasks = cli("list")
-            older, newer = b"\x1b[44;5u", b"\x1b[46;5u"
+            older, newer = b"\x1b[1;5A", b"\x1b[1;5B"
             send(b"Draft" + older)
             wait_visible(lambda: "Task #2 (" in editor_title())
             send(b"\x05 edited" + older)

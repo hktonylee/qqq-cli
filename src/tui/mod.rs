@@ -2536,7 +2536,10 @@ fn compose_inner(
                     && !key
                         .modifiers
                         .intersects(KeyModifiers::ALT | KeyModifiers::SUPER)
-                    && matches!(key.code, KeyCode::Char(',' | '.'));
+                    && matches!(
+                        key.code,
+                        KeyCode::Up | KeyCode::Down | KeyCode::Char(',' | '.')
+                    );
                 if !matches!(mode, Mode::Edit { .. }) && (shift_navigation || control_navigation) {
                     if let Some(db) = mode.db() {
                         let older = matches!(key.code, KeyCode::Up | KeyCode::Char(','));
