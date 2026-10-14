@@ -140,7 +140,7 @@ fn backup_contains_database_manifest_and_all_images() {
     ok(path, &["add", "Keep", "--image", "a.png"]);
     ok(path, &["message", "1", "A note"]);
     ok(path, &["next", "--session", "worker"]);
-    ok(path, &["complete", "1", "--session", "worker"]);
+    ok(path, &["edit", "--complete", "1", "--session", "worker"]);
     let result = ok(path, &["backup", "snapshot.tar"]);
     assert_eq!(result["tasks"], 1);
     assert_eq!(result["images"], 1);
@@ -329,7 +329,7 @@ fn restore_round_trip_into_new_and_empty_project_locations() {
     ok(path, &["add", "Keep", "--image", "a.png"]);
     ok(path, &["message", "1", "A note"]);
     ok(path, &["next", "--session", "worker"]);
-    ok(path, &["complete", "1", "--session", "worker"]);
+    ok(path, &["edit", "--complete", "1", "--session", "worker"]);
     ok(path, &["backup", "snapshot.tar"]);
     let archive = path.join("snapshot.tar");
     for existing_empty in [false, true] {

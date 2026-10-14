@@ -153,7 +153,7 @@ fn tag_lists_compose_with_filters_and_retain_visible_context() {
             "id == 1",
         ],
     );
-    ok(p, &["complete", "1", "--session", "parent"]);
+    ok(p, &["edit", "--complete", "1", "--session", "parent"]);
     assert_eq!(
         ids(&ok(p, &["list", "--tag", "UI", "--max-completed", "0"])),
         [2, 3]
@@ -258,7 +258,7 @@ fn tag_claims_preserve_readiness_order_and_owned_reuse() {
                 &format!("id == {id}"),
             ],
         );
-        ok(p, &["complete", id, "--session", session]);
+        ok(p, &["edit", "--complete", id, "--session", session]);
         if id == "1" {
             assert!(ok(p, &["next", "--dry-run", "--tag", "frontend"]).is_null());
         }

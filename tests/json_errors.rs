@@ -85,7 +85,7 @@ fn json_missing_tasks_and_project_have_structured_context() {
         vec!["edit", "42", "--archive"],
         vec!["delete", "42"],
         vec!["message", "42", "Hello"],
-        vec!["complete", "42", "--session", "caller"],
+        vec!["edit", "--complete", "42", "--session", "caller"],
     ] {
         let result = error(run(root.path(), &args), "TASK_NOT_FOUND");
         assert_eq!(result["details"]["task_id"], 42);
@@ -158,7 +158,10 @@ fn json_argument_filter_and_state_errors_have_stable_codes() {
         let result = error(run(root.path(), &args), "INVALID_FILTER");
         assert_eq!(result["details"]["argument"], "--filter");
     }
-    let result = error(run(root.path(), &["reopen", "1"]), "INVALID_TRANSITION");
+    let result = error(
+        run(root.path(), &["edit", "--reopen", "1"]),
+        "INVALID_TRANSITION",
+    );
     assert_eq!(result["details"]["task_id"], 1);
     assert_eq!(result["details"]["actual_status"], "new");
     assert_eq!(
@@ -166,7 +169,10 @@ fn json_argument_filter_and_state_errors_have_stable_codes() {
         serde_json::json!(["completed"])
     );
     error(
-        run(root.path(), &["complete", "1", "--session", "caller"]),
+        run(
+            root.path(),
+            &["edit", "--complete", "1", "--session", "caller"],
+        ),
         "INVALID_TRANSITION",
     );
     error(
@@ -188,7 +194,7 @@ fn json_ownership_errors_never_expose_claim_keys_or_identity_values() {
     assert!(output.status.success());
     let before = ok(root.path(), &["show", "1"]);
     for args in [
-        vec!["complete", "1"],
+        vec!["edit", "--complete", "1"],
         vec!["edit", "1", "--set-status", "new", "-d", "Rejected"],
         vec!["edit", "1", "--set-status", "error", "--reason", "Rejected"],
     ] {
@@ -218,7 +224,7 @@ fn json_ownership_errors_never_expose_claim_keys_or_identity_values() {
         assert_eq!(ok(root.path(), &["show", "1"]), before);
     }
     let human = command(root.path())
-        .args(["complete", "1", "--session", "human-caller"])
+        .args(["edit", "--complete", "1", "--session", "human-caller"])
         .output()
         .unwrap();
     assert!(String::from_utf8_lossy(&human.stderr).contains("not claimed by session human-caller"));

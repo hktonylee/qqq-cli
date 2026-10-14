@@ -272,7 +272,7 @@ fn import_existing_parents_follow_ordinary_add_rules_and_preview_resolution() {
     );
     ok(p, &["edit", "1", "--unarchive"]);
     ok(p, &["next", "--local", "--session", "done"]);
-    ok(p, &["complete", "1", "--session", "done"]);
+    ok(p, &["edit", "--complete", "1", "--session", "done"]);
     ok(p, &["edit", "1", "--archive"]);
     assert_eq!(import_ok(p, &value, false)["mapping"]["follow"], 2);
     assert_eq!(ok(p, &["next", "--dry-run"])["id"], 2);

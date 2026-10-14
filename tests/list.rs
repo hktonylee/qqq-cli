@@ -69,7 +69,7 @@ fn repeated_statuses_are_or_filters_and_combine_with_query() {
         ok(p, &["add", description]);
     }
     assert_eq!(ok(p, &["next", "--session", "a"])["id"], 1);
-    ok(p, &["complete", "1", "--session", "a"]);
+    ok(p, &["edit", "--complete", "1", "--session", "a"]);
     assert_eq!(ok(p, &["next", "--session", "a"])["id"], 2);
     assert_eq!(ok(p, &["next", "--session", "b"])["id"], 3);
     ok(
@@ -116,7 +116,7 @@ fn matching_child_includes_visible_ancestors_only_as_context() {
     assert_eq!(tasks[1]["parent_id"], 1);
 
     ok(p, &["next", "--session", "a"]);
-    ok(p, &["complete", "1", "--session", "a"]);
+    ok(p, &["edit", "--complete", "1", "--session", "a"]);
     let limited = ok(p, &["list", "--query", "child", "--max-completed", "0"]);
     assert_eq!(ids(&limited), [2]);
     assert!(limited[0].get("context_only").is_none());
@@ -155,7 +155,7 @@ fn status_filter_respects_completed_limit_and_rejects_invalid_values() {
     let p = dir.path();
     ok(p, &["add", "Finished"]);
     ok(p, &["next", "--session", "a"]);
-    ok(p, &["complete", "1", "--session", "a"]);
+    ok(p, &["edit", "--complete", "1", "--session", "a"]);
     assert_eq!(
         ok(
             p,
@@ -188,7 +188,7 @@ fn completed_limit_keeps_recent_completions_and_all_unfinished_tasks() {
         ok(p, &["next", "--session", session]);
     }
     for (id, session) in [("3", "c"), ("1", "a"), ("2", "b")] {
-        ok(p, &["complete", id, "--session", session]);
+        ok(p, &["edit", "--complete", id, "--session", session]);
     }
     // Editing older completed task must not count as a new completion.
     ok(p, &["edit", "3", "-d", "Edited after completion"]);
@@ -211,7 +211,7 @@ fn human_tree_keeps_children_when_completed_parent_is_hidden() {
     ok(p, &["add", "Visible child", "--parent", "1"]);
     ok(p, &["add", "Visible grandchild", "--parent", "2"]);
     ok(p, &["next", "--session", "a"]);
-    ok(p, &["complete", "1", "--session", "a"]);
+    ok(p, &["edit", "--complete", "1", "--session", "a"]);
     let tasks = ok(p, &["list", "--max-completed", "0"]);
     assert_eq!(ids(&tasks), [2, 3]);
     assert_eq!(tasks[0]["parent_id"], 1);
@@ -255,7 +255,7 @@ fn completed_limit_handles_empty_queue_and_tasks_without_completion_history() {
     conn.execute("UPDATE tasks SET status='new' WHERE id=2", [])
         .unwrap();
     ok(p, &["next", "--session", "a"]);
-    ok(p, &["complete", "2", "--session", "a"]);
+    ok(p, &["edit", "--complete", "2", "--session", "a"]);
     assert_eq!(ids(&ok(p, &["list", "--max-completed", "1"])), [2]);
     let output = command(p)
         .args(["list", "--max-completed", "0"])

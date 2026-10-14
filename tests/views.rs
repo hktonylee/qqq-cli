@@ -151,7 +151,7 @@ fn blocked_selection_uses_parent_and_prerequisites_excludes_archives() {
             "id == 1",
         ],
     );
-    ok(p, &["complete", "1", "--session", "parent"]);
+    ok(p, &["edit", "--complete", "1", "--session", "parent"]);
     assert!(
         ok(p, &["list", "--readiness", "blocked", "--include-archived"])
             .as_array()
@@ -315,7 +315,7 @@ fn saved_and_explicit_selectors_use_and_with_visibility_overrides() {
             "id == 1",
         ],
     );
-    ok(p, &["complete", "1", "--session", "parent"]);
+    ok(p, &["edit", "--complete", "1", "--session", "parent"]);
     assert_eq!(
         ids(&ok(
             p,
@@ -566,7 +566,7 @@ fn named_view_wait_and_preview_wait_recheck_readiness_and_explicit_tags() {
                 "id == 1",
             ],
         );
-        ok(p, &["complete", "1", "--session", "prerequisite"]);
+        ok(p, &["edit", "--complete", "1", "--session", "prerequisite"]);
         let deadline = Instant::now() + Duration::from_secs(5);
         while waiter.0.as_mut().unwrap().try_wait().unwrap().is_none() {
             assert!(

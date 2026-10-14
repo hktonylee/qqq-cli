@@ -320,7 +320,7 @@ fn image_only_negative_edit_preserves_fields_owner_and_existing_images() {
     let p = dir.path();
     ok(p, &["add", "Parent"]);
     ok(p, &["next", "--session", "parent"]);
-    ok(p, &["complete", "1", "--session", "parent"]);
+    ok(p, &["edit", "--complete", "1", "--session", "parent"]);
     ok(
         p,
         &[

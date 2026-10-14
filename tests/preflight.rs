@@ -724,7 +724,7 @@ fn preflight_failed_owner_can_be_explicitly_reopened() {
     f.ok(&["edit", "1", "--archive"]);
     f.ok(&["edit", "1", "--unarchive"]);
     assert_eq!(
-        f.ok(&["reopen", "1", "--session", "reviewer"])["status"],
+        f.ok(&["edit", "--reopen", "1", "--session", "reviewer"])["status"],
         "new"
     );
     assert_eq!(

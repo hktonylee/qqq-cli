@@ -57,7 +57,7 @@ Claim the API task. Once your work is done, record an update and complete it:
 qqq next --local --session agent-1
 # Do the work, then:
 qqq message 1 "API ready" --session agent-1
-qqq complete 1 --session agent-1
+qqq edit 1 --complete --session agent-1
 qqq next --local --session agent-1
 ```
 

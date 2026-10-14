@@ -73,7 +73,10 @@ fn task_responses_use_harness_and_orchestrator_fields() {
         Value::Null,
     );
     assignment(&ok(&d, &["next", "--session", "b"]), json!("b"));
-    assignment(&ok(&d, &["complete", "1", "--session", "b"]), json!("b"));
+    assignment(
+        &ok(&d, &["edit", "--complete", "1", "--session", "b"]),
+        json!("b"),
+    );
     let out = Command::new(env!("CARGO_BIN_EXE_qqq"))
         .current_dir(d.path())
         .args(["--human", "show", "1"])
@@ -143,13 +146,13 @@ fn v2_upgrade_preserves_data_and_enforces_renamed_constraints() {
         vec![1, 2, 3]
     );
     assert!(
-        !run(&d, &["complete", "1", "--session", "wrong"])
+        !run(&d, &["edit", "--complete", "1", "--session", "wrong"])
             .status
             .success()
     );
     assert_eq!(ok(&d, &["next", "--session", "legacy"])["id"], 1);
     assignment(
-        &ok(&d, &["complete", "1", "--session", "legacy"]),
+        &ok(&d, &["edit", "--complete", "1", "--session", "legacy"]),
         json!("legacy-session"),
     );
     assert_eq!(ok(&d, &["next", "--session", "child"])["id"], 2);
@@ -211,12 +214,15 @@ fn explicit_overrides_and_public_session_recover_same_claim() {
         1
     );
     assert!(
-        !run(&d, &["complete", "1", "--session", "wrong"])
+        !run(&d, &["edit", "--complete", "1", "--session", "wrong"])
             .status
             .success()
     );
     assignment(
-        &ok(&d, &["complete", "1", "--harness-session", "public"]),
+        &ok(
+            &d,
+            &["edit", "--complete", "1", "--harness-session", "public"],
+        ),
         json!("public"),
     );
     let detail = ok(&d, &["show", "1"]);
@@ -268,7 +274,8 @@ fn ambiguous_public_sessions_need_harness_name() {
         &ok(
             &d,
             &[
-                "complete",
+                "edit",
+                "--complete",
                 "2",
                 "--harness-session",
                 "shared",
@@ -309,12 +316,15 @@ fn completed_identity_stays_visible_without_resurrecting_claims() {
         assert_eq!(claimed["id"].as_i64().unwrap().to_string(), id);
         let before = ok(&d, &["show", id]);
         assert!(
-            !run(&d, &["complete", id, "--session", "wrong"])
+            !run(&d, &["edit", "--complete", id, "--session", "wrong"])
                 .status
                 .success()
         );
         assert_eq!(ok(&d, &["show", id]), before);
-        let completed = ok(&d, &["complete", id, "--harness-session", "shared-log"]);
+        let completed = ok(
+            &d,
+            &["edit", "--complete", id, "--harness-session", "shared-log"],
+        );
         assert_eq!(completed["status"], "completed");
         let shown = ok(&d, &["show", id]);
         let listed = ok(&d, &["list", "--all"]);
@@ -370,12 +380,15 @@ fn completed_identity_stays_visible_without_resurrecting_claims() {
         3
     );
     assert!(
-        !run(&d, &["complete", "1", "--harness-session", "shared-log"])
-            .status
-            .success()
+        !run(
+            &d,
+            &["edit", "--complete", "1", "--harness-session", "shared-log"]
+        )
+        .status
+        .success()
     );
     assert_eq!(ok(&d, &["show", "3"])["task"], third);
-    let reopened = ok(&d, &["reopen", "1", "--session", "reviewer"]);
+    let reopened = ok(&d, &["edit", "--reopen", "1", "--session", "reviewer"]);
     for field in [
         "harness_name",
         "harness_session",
@@ -513,7 +526,13 @@ fn v4_migration_preserves_error_rows_and_named_dispatched_claims() {
     assignment(
         &ok(
             &d,
-            &["complete", "1", "--harness-session", "legacy-session"],
+            &[
+                "edit",
+                "--complete",
+                "1",
+                "--harness-session",
+                "legacy-session",
+            ],
         ),
         json!("legacy-session"),
     );
@@ -549,11 +568,11 @@ fn exact_legacy_key_wins_over_another_claims_public_session() {
     );
     assert_eq!(ok(&d, &["next", "--local", "--session", "a"])["id"], 1);
     assert!(
-        !run(&d, &["complete", "2", "--session", "a"])
+        !run(&d, &["edit", "--complete", "2", "--session", "a"])
             .status
             .success()
     );
-    ok(&d, &["complete", "2", "--session", "b"]);
+    ok(&d, &["edit", "--complete", "2", "--session", "b"]);
 }
 
 #[test]
@@ -576,7 +595,7 @@ fn stale_public_session_cannot_end_replacement_claim_while_waiting_for_lock() {
         let conn = Connection::open(d.path().join(".qqq/qqq.db")).unwrap();
         conn.execute_batch("BEGIN IMMEDIATE").unwrap();
         let mut args = if action == "complete" {
-            vec!["complete", "1"]
+            vec!["edit", "--complete", "1"]
         } else {
             vec!["edit", "1", "--set-status", action]
         };

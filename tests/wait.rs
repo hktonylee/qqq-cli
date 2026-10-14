@@ -204,7 +204,7 @@ fn concurrent_waiting_previews_skip_owned_and_blocked_tasks_without_reserving() 
     for waiter in &mut waiters {
         waiter.assert_waiting();
     }
-    ok(p, &["complete", "1", "--session", "parent"]);
+    ok(p, &["edit", "--complete", "1", "--session", "parent"]);
     let first = waiters.pop().unwrap().task();
     let second = waiters.pop().unwrap().task();
     assert_eq!(first, second);
@@ -286,7 +286,7 @@ fn wait_skips_blocked_child_until_parent_completes() {
     let mut waiter = Waiter::spawn(p, "worker", true);
     waiter.assert_waiting();
     assert_eq!(ok(p, &["show", "2"])["task"]["status"], "new");
-    ok(p, &["complete", "1", "--session", "parent-owner"]);
+    ok(p, &["edit", "--complete", "1", "--session", "parent-owner"]);
     assert_eq!(waiter.task()["id"], 2);
 }
 

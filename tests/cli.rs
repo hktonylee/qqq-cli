@@ -92,7 +92,7 @@ fn next_dry_run_previews_priority_filter_and_readiness_without_claim() {
             "id == 6",
         ],
     );
-    ok(p, &["complete", "6", "--session", "finished"]);
+    ok(p, &["edit", "--complete", "6", "--session", "finished"]);
     ok(p, &["add", "Failed", "--priority", "100"]);
     ok(
         p,
@@ -227,7 +227,7 @@ fn persistent_ownership_and_fifo() {
     assert_eq!(ok(p, &["next", "--session", "a"])["id"], 1);
     assert_eq!(ok(p, &["next", "--session", "b"])["id"], 2);
     assert!(
-        !run(p, &["complete", "1", "--session", "b"])
+        !run(p, &["edit", "--complete", "1", "--session", "b"])
             .status
             .success()
     );
@@ -239,7 +239,7 @@ fn persistent_ownership_and_fifo() {
     assert!(!run(p, &["next"]).status.success());
     ok(p, &["edit", "1", "--set-status", "new", "--session", "a"]);
     assert_eq!(ok(p, &["next", "--session", "c"])["id"], 1);
-    ok(p, &["complete", "1", "--session", "c"]);
+    ok(p, &["edit", "--complete", "1", "--session", "c"]);
     assert!(ok(p, &["next", "--session", "c"]).is_null());
     assert_eq!(ok(p, &["show", "1"])["task"]["status"], "completed");
     assert_eq!(ok(p, &["show", "1"])["events"].as_array().unwrap().len(), 4);
@@ -523,7 +523,7 @@ printf '%s\n' '{"result":{"pane":{"pane_id":"w1:p1","workspace_id":"w1","tab_id"
     assert!(good.status.success());
     let detail = ok(p, &["show", "1"]);
     assert_eq!(detail["herdr"]["identity"]["value"], "auto-session");
-    let complete = exec("old:p1", &["complete", "1"]);
+    let complete = exec("old:p1", &["edit", "--complete", "1"]);
     assert!(complete.status.success());
     assert_eq!(ok(p, &["show", "1"])["task"]["status"], "completed");
     // Missing session and terminal identity fails rather than using a pane ID.
@@ -607,7 +607,10 @@ fn cwd_lookup_uses_db_directory_from_nested_cwd_without_herdr_env() {
     herdr.ok(&nested, &["herdr", "link", "1"]);
     herdr.ok(&nested, &["edit", "1", "--set-status", "new"]);
     herdr.ok(&nested, &["next"]);
-    assert_eq!(herdr.ok(&nested, &["complete", "1"])["status"], "completed");
+    assert_eq!(
+        herdr.ok(&nested, &["edit", "--complete", "1"])["status"],
+        "completed"
+    );
 }
 #[cfg(unix)]
 #[test]
@@ -727,7 +730,7 @@ fn edit_new_updates_fields_and_release_history_atomically() {
     );
     assert_eq!(ok(p, &["show", "1"]), after);
     ok(p, &["next", "--session", "b"]);
-    ok(p, &["complete", "1", "--session", "b"]);
+    ok(p, &["edit", "--complete", "1", "--session", "b"]);
     let completed = ok(p, &["show", "1"]);
     assert!(
         !run(p, &["edit", "1", "--set-status", "new", "--session", "b"])
@@ -803,7 +806,7 @@ fn show_recent_uses_creation_order_across_statuses_and_id_gaps() {
     conn.execute("UPDATE tasks SET created_at='same timestamp'", [])
         .unwrap();
     ok(p, &["next", "--session", "worker"]);
-    ok(p, &["complete", "1", "--session", "worker"]);
+    ok(p, &["edit", "--complete", "1", "--session", "worker"]);
     ok(p, &["edit", "1", "-d", "Recently edited older task"]);
     assert_eq!(ok(p, &["show", "-1"]), ok(p, &["show", "3"]));
     assert_eq!(ok(p, &["show", "-2"]), ok(p, &["show", "1"]));
@@ -884,3 +887,223 @@ mod prerequisites;
 
 #[path = "cli/tags.rs"]
 mod tags;
+
+#[test]
+fn edit_lifecycle_flags_apply_metadata_and_archive_atomically() {
+    let dir = project();
+    let p = dir.path();
+    ok(p, &["add", "Original"]);
+    let claimed = ok(p, &["next", "--local", "--session", "owner"]);
+    let output = command(p)
+        .env("EDITOR", "qqq-lifecycle-editor-must-not-run")
+        .args([
+            "edit",
+            "-1",
+            "--complete",
+            "--session",
+            "owner",
+            "--description",
+            "Finished",
+            "--priority",
+            "7",
+            "--set-tags",
+            "done",
+            "--archive",
+            "--expected-revision",
+            "1",
+        ])
+        .output()
+        .unwrap();
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let completed: Value = serde_json::from_slice(&output.stdout).unwrap();
+    assert_eq!(completed["status"], "completed");
+    assert_eq!(completed["description"], "Finished");
+    assert_eq!(completed["priority"], 7);
+    assert_eq!(completed["tags"], serde_json::json!(["done"]));
+    assert_eq!(completed["archived"], true);
+    assert_eq!(completed["harness_session"], claimed["harness_session"]);
+    let events = ok(p, &["show", "1"])["events"].clone();
+    assert_eq!(events[1]["action"], "complete");
+    assert_eq!(events[1]["session"], "owner");
+    assert_eq!(events[2]["action"], "archive");
+
+    let output = command(p)
+        .env("EDITOR", "qqq-lifecycle-editor-must-not-run")
+        .args([
+            "edit",
+            "-1",
+            "--reopen",
+            "--unarchive",
+            "--description",
+            "Again",
+            "--priority",
+            "3",
+            "--set-tags",
+            "retry",
+            "--session",
+            "reviewer",
+        ])
+        .output()
+        .unwrap();
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let reopened: Value = serde_json::from_slice(&output.stdout).unwrap();
+    assert_eq!(reopened["status"], "new");
+    assert_eq!(reopened["description"], "Again");
+    assert_eq!(reopened["priority"], 3);
+    assert_eq!(reopened["tags"], serde_json::json!(["retry"]));
+    assert_eq!(reopened["archived"], false);
+    assert!(reopened["harness_session"].is_null());
+    let events = ok(p, &["show", "1"])["events"].clone();
+    assert_eq!(events[3]["action"], "reopen");
+    assert_eq!(events[3]["session"], "reviewer");
+    assert_eq!(events[4]["action"], "unarchive");
+    assert_eq!(
+        ok(p, &["next", "--local", "--session", "next-owner"])["id"],
+        1
+    );
+}
+
+#[test]
+fn edit_lifecycle_failures_leave_claim_content_and_history_unchanged() {
+    let dir = project();
+    let p = dir.path();
+    ok(p, &["add", "Original"]);
+    ok(p, &["next", "--local", "--session", "owner"]);
+    let before = ok(p, &["show", "1"]);
+    for args in [
+        vec![
+            "edit",
+            "1",
+            "--complete",
+            "--session",
+            "wrong",
+            "-d",
+            "Rejected",
+        ],
+        vec![
+            "edit",
+            "1",
+            "--complete",
+            "--session",
+            "owner",
+            "--expected-revision",
+            "2",
+            "-d",
+            "Rejected",
+        ],
+        vec![
+            "edit",
+            "1",
+            "--reopen",
+            "--session",
+            "owner",
+            "-d",
+            "Rejected",
+        ],
+    ] {
+        assert_eq!(run(p, &args).status.code(), Some(1), "{args:?}");
+        assert_eq!(ok(p, &["show", "1"]), before);
+    }
+    let conn = rusqlite::Connection::open(p.join(".qqq/qqq.db")).unwrap();
+    conn.execute_batch("CREATE TRIGGER reject_complete_event BEFORE INSERT ON events WHEN NEW.action='complete' BEGIN SELECT RAISE(ABORT, 'complete event blocked'); END;").unwrap();
+    let failed = run(
+        p,
+        &[
+            "edit",
+            "1",
+            "--complete",
+            "--session",
+            "owner",
+            "-d",
+            "Rejected",
+            "--archive",
+        ],
+    );
+    assert_eq!(failed.status.code(), Some(1));
+    let error: Value = serde_json::from_slice(&failed.stderr).unwrap();
+    assert_eq!(error["code"], "DATABASE_ERROR");
+    assert_eq!(error["details"]["sqlite_extended_code"], 1811);
+    assert_eq!(ok(p, &["show", "1"]), before);
+    conn.execute_batch("DROP TRIGGER reject_complete_event;")
+        .unwrap();
+    ok(p, &["edit", "--complete", "1", "--session", "owner"]);
+    let before = ok(p, &["show", "1"]);
+    let failed = run(
+        p,
+        &[
+            "edit",
+            "1",
+            "--reopen",
+            "--expected-revision",
+            "2",
+            "-d",
+            "Rejected",
+        ],
+    );
+    assert_eq!(failed.status.code(), Some(1));
+    assert_eq!(ok(p, &["show", "1"]), before);
+    conn.execute_batch("CREATE TRIGGER reject_reopen_update BEFORE UPDATE OF description ON tasks WHEN NEW.status='new' BEGIN SELECT RAISE(ABORT, 'reopen edit blocked'); END;").unwrap();
+    let failed = run(
+        p,
+        &[
+            "edit",
+            "1",
+            "--reopen",
+            "--session",
+            "reviewer",
+            "-d",
+            "Rejected",
+            "--priority",
+            "9",
+        ],
+    );
+    assert_eq!(failed.status.code(), Some(1));
+    let error: Value = serde_json::from_slice(&failed.stderr).unwrap();
+    assert_eq!(error["code"], "DATABASE_ERROR");
+    assert_eq!(error["details"]["sqlite_extended_code"], 1811);
+    assert_eq!(ok(p, &["show", "1"]), before);
+}
+
+#[test]
+fn edit_lifecycle_conflicts_and_removed_commands_do_not_mutate_tasks() {
+    let dir = project();
+    let p = dir.path();
+    ok(p, &["add", "Original"]);
+    let before = ok(p, &["show", "1"]);
+    for flag in ["--complete", "--reopen"] {
+        for other in ["--edit", "--set-pending"] {
+            assert_eq!(run(p, &["edit", "1", flag, other]).status.code(), Some(2));
+        }
+        assert_eq!(
+            run(p, &["edit", "1", flag, "--set-status", "new"])
+                .status
+                .code(),
+            Some(2)
+        );
+    }
+    assert_eq!(
+        run(p, &["edit", "1", "--complete", "--reopen"])
+            .status
+            .code(),
+        Some(2)
+    );
+    for removed in ["complete", "reopen"] {
+        assert_eq!(run(p, &[removed, "1"]).status.code(), Some(2));
+    }
+    let help = String::from_utf8(run(p, &["--help"]).stdout).unwrap();
+    assert!(
+        !help
+            .lines()
+            .any(|line| line.trim_start().starts_with("complete ")
+                || line.trim_start().starts_with("reopen "))
+    );
+    assert_eq!(ok(p, &["show", "1"]), before);
+}

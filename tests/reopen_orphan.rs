@@ -112,7 +112,7 @@ impl Fixture {
         let before = self.show();
         let output = self
             .command()
-            .args(["reopen", "1", "--session", "reviewer"])
+            .args(["edit", "--reopen", "1", "--session", "reviewer"])
             .output()
             .unwrap();
         assert_eq!(output.status.code(), Some(1));
@@ -144,7 +144,7 @@ fn orphaned_terminal_and_reported_session_reopen_preserves_task_and_can_reclaim(
             )
             .unwrap();
         fixture.respond(json!({"result":{"agents":[]}}));
-        let reopened = fixture.ok(&["reopen", "-1", "--session", "reviewer"]);
+        let reopened = fixture.ok(&["edit", "--reopen", "-1", "--session", "reviewer"]);
         assert_eq!(reopened["status"], "new");
         for field in [
             "description",
@@ -190,7 +190,7 @@ fn orphaned_terminal_and_reported_session_reopen_preserves_task_and_can_reclaim(
         assert!(fixture.show()["herdr"].is_null());
         let stale = fixture
             .command()
-            .args(["complete", "1", "--session", &old_owner])
+            .args(["edit", "--complete", "1", "--session", &old_owner])
             .output()
             .unwrap();
         assert!(!stale.status.success());
@@ -224,7 +224,7 @@ fn another_agent_kind_with_same_terminal_does_not_keep_owner_alive() {
     let mut other = fixture.pane.clone();
     other["agent"] = json!("claude");
     fixture.respond(json!({"result":{"agents":[other]}}));
-    assert_eq!(fixture.ok(&["reopen", "1"])["status"], "new");
+    assert_eq!(fixture.ok(&["edit", "--reopen", "1"])["status"], "new");
 }
 
 #[test]
@@ -291,7 +291,7 @@ fn legacy_automatic_and_opaque_claim_links_can_recover_existing_work() {
             )
             .unwrap();
         fixture.respond(json!({"result":{"agents":[]}}));
-        assert_eq!(fixture.ok(&["reopen", "1"])["status"], "new");
+        assert_eq!(fixture.ok(&["edit", "--reopen", "1"])["status"], "new");
     }
 }
 
@@ -310,7 +310,7 @@ fn associated_opaque_dispatch_claim_reopens_after_owner_disappears() {
         "owner-id",
     ]);
     fixture.respond(json!({"result":{"agents":[]}}));
-    assert_eq!(fixture.ok(&["reopen", "1"])["status"], "new");
+    assert_eq!(fixture.ok(&["edit", "--reopen", "1"])["status"], "new");
 }
 
 #[test]
@@ -381,7 +381,13 @@ fn concurrent_orphan_reopens_commit_once() {
     let fixture = Fixture::new(true);
     fixture.respond(json!({"result":{"agents":[]}}));
     let children: Vec<_> = (0..2)
-        .map(|_| fixture.command().args(["reopen", "1"]).spawn().unwrap())
+        .map(|_| {
+            fixture
+                .command()
+                .args(["edit", "--reopen", "1"])
+                .spawn()
+                .unwrap()
+        })
         .collect();
     let outputs: Vec<_> = children
         .into_iter()

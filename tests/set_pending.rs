@@ -50,7 +50,7 @@ fn set_pending_releases_claim_and_preserves_content_details_and_history() {
     ok(p, &["add", "Parent"]);
     ok(p, &["add", "Task\n\nDetails", "--parent", "1"]);
     ok(p, &["next", "--local", "--session", "parent"]);
-    ok(p, &["complete", "1", "--session", "parent"]);
+    ok(p, &["edit", "--complete", "1", "--session", "parent"]);
     ok(p, &["message", "2", "Note"]);
     std::fs::write(p.join("x.png"), b"\x89PNG\r\n\x1a\nfixture").unwrap();
     ok(p, &["edit", "2", "--image", "x.png"]);
@@ -152,7 +152,7 @@ fn set_pending_with_new_dependency_waits_for_that_parent() {
     ok(p, &["add", "Old parent"]);
     ok(p, &["add", "Child", "--parent", "1"]);
     ok(p, &["next", "--local", "--session", "parent"]);
-    ok(p, &["complete", "1", "--session", "parent"]);
+    ok(p, &["edit", "--complete", "1", "--session", "parent"]);
     ok(p, &["next", "--local", "--session", "child"]);
     ok(p, &["add", "New parent"]);
     let edited = ok(
@@ -172,7 +172,7 @@ fn set_pending_with_new_dependency_waits_for_that_parent() {
     assert!(edited["harness_session"].is_null());
     assert_eq!(ok(p, &["next", "--local", "--session", "parent"])["id"], 3);
     assert!(ok(p, &["next", "--local", "--session", "child"]).is_null());
-    ok(p, &["complete", "3", "--session", "parent"]);
+    ok(p, &["edit", "--complete", "3", "--session", "parent"]);
     assert_eq!(ok(p, &["next", "--local", "--session", "child"])["id"], 2);
 }
 
@@ -206,7 +206,7 @@ fn set_pending_retries_error_without_session_and_rejects_new_or_completed() {
     assert_eq!(retried["status"], "new");
     assert_eq!(ok(p, &["show", "1"])["events"][2]["session"], "manual");
     ok(p, &["next", "--local", "--session", "worker"]);
-    ok(p, &["complete", "1", "--session", "worker"]);
+    ok(p, &["edit", "--complete", "1", "--session", "worker"]);
     let before = ok(p, &["show", "1"]);
     assert!(
         !run(p, &["edit", "1", "--set-pending", "--session", "worker"])

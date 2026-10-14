@@ -93,7 +93,7 @@ fn aliases_expand_quotes_and_append_literal_arguments() {
 #[test]
 fn alias_chains_support_global_session_before_and_after_alias() {
     let p = Project::new(
-        "[alias]\nn = 'claim'\nclaim = 'next'\ndone = 'complete'\nowned = '--session fixed next'\n",
+        "[alias]\nn = 'claim'\nclaim = 'next'\ndone = 'edit --complete'\nowned = '--session fixed next'\n",
     );
     p.ok(&["add", "First"]);
     assert_eq!(

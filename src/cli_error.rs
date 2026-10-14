@@ -77,8 +77,6 @@ pub fn command_name(command: &Commands) -> &'static str {
         Commands::Delete { .. } => "delete",
         Commands::Next { .. } => "next",
         Commands::Status { .. } => "status",
-        Commands::Complete { .. } => "complete",
-        Commands::Reopen { .. } => "reopen",
         Commands::Backup { .. } => "backup",
         Commands::Restore { .. } => "restore",
         Commands::Doctor => "doctor",

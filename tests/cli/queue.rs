@@ -33,7 +33,7 @@ fn fixture() -> TempDir {
     ok(path, &["add", "Archived item", "--priority", "100"]);
     ok(path, &["edit", "9", "--archive"]);
     assert_eq!(ok(path, &["next", "--local", "--session", "done"])["id"], 6);
-    ok(path, &["complete", "6", "--session", "done"]);
+    ok(path, &["edit", "--complete", "6", "--session", "done"]);
     assert_eq!(
         ok(path, &["next", "--local", "--session", "failed"])["id"],
         7

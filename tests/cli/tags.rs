@@ -88,7 +88,7 @@ fn tag_edits_preserve_owned_task_content_images_and_audit() {
         json!(["saved"])
     );
     assert_eq!(
-        ok(p, &["complete", "1", "--session", "owner"])["tags"],
+        ok(p, &["edit", "--complete", "1", "--session", "owner"])["tags"],
         json!(["saved"])
     );
 }

@@ -244,7 +244,7 @@ fn guarded_content_save_ignores_operational_changes_and_noop_text() {
     run_json(p, &["message", "1", "Progress"]);
     run_json(p, &["next", "--session", "owner"]);
     run_json(p, &["edit", "1", "--priority", "10"]);
-    run_json(p, &["complete", "1", "--session", "owner"]);
+    run_json(p, &["edit", "--complete", "1", "--session", "owner"]);
     let unchanged = run_json(
         p,
         &[
@@ -533,7 +533,7 @@ fn edit_recent_selects_creation_order_across_statuses_and_id_gaps() {
         .unwrap();
     for id in ["1", "3"] {
         run_json(p, &["next", "--session", "recent-edit"]);
-        run_json(p, &["complete", id, "--session", "recent-edit"]);
+        run_json(p, &["edit", "--complete", id, "--session", "recent-edit"]);
     }
     assert_eq!(
         run_json(p, &["edit", "-1", "--description", "Latest"])["id"],

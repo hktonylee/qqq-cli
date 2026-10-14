@@ -41,13 +41,13 @@ with tempfile.TemporaryDirectory(prefix="qqq-history-test-") as folder:
         cli("add", "Third", "--parent", "1")
         for task_id in (1, 2):
             assert cli("next", "--local", "--session", "worker")["id"] == task_id
-            cli("complete", str(task_id), "--session", "worker")
+            cli("edit", "--complete", str(task_id), "--session", "worker")
         assert cli("next", "--local", "--session", "worker")["id"] == 3
     elif scenario in ("status_header", "status_header_no_color"):
         for description in ("Done", "Active", "Failed", "Waiting"):
             cli("add", description)
         assert cli("next", "--local", "--session", "worker-1")["id"] == 1
-        cli("complete", "1", "--session", "worker-1")
+        cli("edit", "--complete", "1", "--session", "worker-1")
         assert cli("next", "--local", "--session", "worker-1")["id"] == 2
         assert cli("next", "--local", "--session", "worker-2")["id"] == 3
         cli("edit", "3", "--set-status", "error", "--reason", "Failed", "--session", "worker-2")

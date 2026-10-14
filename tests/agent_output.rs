@@ -96,7 +96,7 @@ fn native_agent_defaults_to_json_through_task_lifecycle() {
         "in_progress"
     );
     assert_eq!(
-        json(agent(p).args(["complete", "1"]))["status"],
+        json(agent(p).args(["edit", "--complete", "1"]))["status"],
         "completed"
     );
     assert!(next_output::json(agent(p).args(["next", "--local"]).output().unwrap()).is_null());
@@ -232,7 +232,7 @@ fn agent_lists_keep_all_completed_tasks_despite_human_display_limit() {
     for id in ["1", "2"] {
         json(agent(p).args(["add", "Done"]));
         json(agent(p).args(["next", "--local"]));
-        json(agent(p).args(["complete", id]));
+        json(agent(p).args(["edit", "--complete", id]));
     }
     assert_eq!(json(agent(p).arg("list")).as_array().unwrap().len(), 2);
 }

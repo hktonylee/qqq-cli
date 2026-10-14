@@ -217,7 +217,7 @@ fn human_tasks_show_descriptions_dependencies_and_ownership() {
         text(p, &["edit", "1", "--set-status", "new", "--session", "a"]).contains("Status: New")
     );
     text(p, &["next", "--session", "a"]);
-    assert!(text(p, &["complete", "1", "--session", "a"]).contains("Status: Completed"));
+    assert!(text(p, &["edit", "--complete", "1", "--session", "a"]).contains("Status: Completed"));
 }
 
 #[test]
@@ -404,7 +404,7 @@ fn human_list_groups_nested_dependencies_with_correct_tree_branches() {
         text(p, &args);
     }
     text(p, &["next", "--session", "tree"]);
-    text(p, &["complete", "1", "--session", "tree"]);
+    text(p, &["edit", "--complete", "1", "--session", "tree"]);
     text(p, &["next", "--session", "tree"]);
     let list = text(p, &["list"]);
     let rows: Vec<_> = list.lines().collect();

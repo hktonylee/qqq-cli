@@ -269,7 +269,7 @@ fn config_validates_display_setting_and_applies_it_to_human_lists() {
     p.ok(&["init"]);
     p.ok(&["add", "Completed task"]);
     p.ok(&["next", "--session", "worker", "--local"]);
-    p.ok(&["complete", "1", "--session", "worker"]);
+    p.ok(&["edit", "--complete", "1", "--session", "worker"]);
     assert_eq!(
         String::from_utf8(p.run(&["list"]).stdout).unwrap(),
         "No tasks to display.\n"

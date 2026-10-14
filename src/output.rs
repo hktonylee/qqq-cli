@@ -70,9 +70,7 @@ impl From<&Commands> for Format {
             Commands::Status { .. } => Self::QueueOverview,
             Commands::Next { explain: true, .. } => Self::NextExplanation,
             Commands::Next { .. } => Self::NextTask,
-            Commands::Edit { .. } | Commands::Complete { .. } | Commands::Reopen { .. } => {
-                Self::Task
-            }
+            Commands::Edit { .. } => Self::Task,
         }
     }
 }

@@ -59,13 +59,16 @@ fn parent_release_blocks_children_completion_unlocks_chain_in_fifo_order() {
     ok(p, &["edit", "1", "--set-status", "new", "--session", "a"]);
     assert_eq!(ok(p, &["next", "--session", "c"])["id"], 1);
     assert!(ok(p, &["next", "--session", "a"]).is_null());
-    ok(p, &["complete", "1", "--session", "c"]);
+    ok(p, &["edit", "--complete", "1", "--session", "c"]);
     let child = ok(p, &["next", "--session", "a"]);
     assert_eq!(child["id"], 2);
     assert_eq!(child["parent_id"], 1);
     assert_eq!(ok(p, &["next", "--session", "a"]), child);
     assert!(ok(p, &["next", "--session", "c"]).is_null());
-    assert_eq!(ok(p, &["complete", "2", "--session", "a"])["parent_id"], 1);
+    assert_eq!(
+        ok(p, &["edit", "--complete", "2", "--session", "a"])["parent_id"],
+        1
+    );
     assert_eq!(ok(p, &["next", "--session", "c"])["id"], 3);
     ok(p, &["add", "Later child", "--parent", "1"]);
     assert_eq!(ok(p, &["next", "--session", "a"])["id"], 5);
@@ -145,7 +148,7 @@ fn concurrent_sessions_cannot_claim_blocked_children() {
             .collect::<Vec<_>>()
     };
     assert!(claim().iter().all(Value::is_null));
-    ok(p, &["complete", "1", "--session", "parent-owner"]);
+    ok(p, &["edit", "--complete", "1", "--session", "parent-owner"]);
     let mut ids: Vec<_> = claim()
         .iter()
         .map(|task| task["id"].as_i64().unwrap())

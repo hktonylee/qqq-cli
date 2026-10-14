@@ -215,6 +215,12 @@ enum Commands {
         /// Force $EDITOR with supplied fields prefilled, including attachment edits.
         #[arg(short, long, conflicts_with_all = ["set_status", "set_pending"])]
         edit: bool,
+        /// Complete owned task; supplied or discovered session must match owner. Skips editor.
+        #[arg(long, conflicts_with_all = ["reopen", "set_status", "set_pending", "edit"])]
+        complete: bool,
+        /// Reopen completed/auto-failed task or active task with absent Herdr owner. Skips editor.
+        #[arg(long, conflicts_with_all = ["set_status", "set_pending", "edit"])]
+        reopen: bool,
         /// Return owned task/error to new, or mark owned task error with --reason. Skips editor.
         #[arg(long, value_enum)]
         set_status: Option<EditStatus>,
@@ -300,14 +306,6 @@ enum Commands {
     View {
         #[command(subcommand)]
         command: ViewCommand,
-    },
-    /// Mark task completed; supplied or discovered session ID must match recorded owner.
-    Complete { id: i64 },
-    /// Return completed/auto-failed task or active task with absent Herdr owner to new; keep history.
-    Reopen {
-        /// Task ID, or negative creation index: -1 is newest.
-        #[arg(allow_negative_numbers = true)]
-        id: i64,
     },
     /// Write consistent project snapshot with database and attachments.
     Backup { destination: PathBuf },
@@ -828,6 +826,8 @@ fn execute(
             edit,
             set_status,
             set_pending,
+            complete,
+            reopen,
             force,
             images,
             reason,
@@ -862,6 +862,8 @@ fn execute(
             if edit
                 || (description.is_none()
                     && set_status.is_none()
+                    && !complete
+                    && !reopen
                     && set_parent.is_none()
                     && priority.is_none()
                     && tags.is_none()
@@ -936,35 +938,51 @@ fn execute(
                         "Error reason",
                     )?;
                 }
-                let session = match set_status {
-                    Some(EditStatus::New) if force => {
-                        Some(session_input.unwrap_or("manual").to_owned())
+                let session = if complete {
+                    Some(resolved_owner(session_input, project_dir, &db)?.key)
+                } else {
+                    match set_status {
+                        Some(EditStatus::New) if force => {
+                            Some(session_input.unwrap_or("manual").to_owned())
+                        }
+                        Some(EditStatus::New) if task.status == "error" => {
+                            Some(session_input.unwrap_or("manual").to_owned())
+                        }
+                        Some(EditStatus::New | EditStatus::Error) => {
+                            Some(resolved_owner(session_input, project_dir, &db)?.key)
+                        }
+                        None => None,
                     }
-                    Some(EditStatus::New) if task.status == "error" => {
-                        Some(session_input.unwrap_or("manual").to_owned())
-                    }
-                    Some(EditStatus::New | EditStatus::Error) => {
-                        Some(resolved_owner(session_input, project_dir, &db)?.key)
-                    }
-                    None => None,
                 };
-                let transition = match set_status {
-                    Some(EditStatus::New) if force => {
-                        Some(db::EditTransition::ForceNew(session.as_deref().unwrap()))
-                    }
-                    Some(EditStatus::New) if task.status == "error" => {
-                        Some(db::EditTransition::RetryError(session.as_deref().unwrap()))
-                    }
-                    Some(EditStatus::New) => Some(db::EditTransition::New {
+                let transition = if complete {
+                    Some(db::EditTransition::Complete {
                         session: session.as_deref().unwrap(),
                         harness_name: overrides.harness_name.as_deref(),
-                    }),
-                    Some(EditStatus::Error) => Some(db::EditTransition::Error {
-                        session: session.as_deref().unwrap(),
-                        reason: reason.as_deref().unwrap(),
-                        harness_name: overrides.harness_name.as_deref(),
-                    }),
-                    None => None,
+                    })
+                } else if reopen {
+                    Some(db::EditTransition::Reopen {
+                        actor: session_input.unwrap_or("cli"),
+                        force: false,
+                    })
+                } else {
+                    match set_status {
+                        Some(EditStatus::New) if force => {
+                            Some(db::EditTransition::ForceNew(session.as_deref().unwrap()))
+                        }
+                        Some(EditStatus::New) if task.status == "error" => {
+                            Some(db::EditTransition::RetryError(session.as_deref().unwrap()))
+                        }
+                        Some(EditStatus::New) => Some(db::EditTransition::New {
+                            session: session.as_deref().unwrap(),
+                            harness_name: overrides.harness_name.as_deref(),
+                        }),
+                        Some(EditStatus::Error) => Some(db::EditTransition::Error {
+                            session: session.as_deref().unwrap(),
+                            reason: reason.as_deref().unwrap(),
+                            harness_name: overrides.harness_name.as_deref(),
+                        }),
+                        None => None,
+                    }
                 };
                 json!(db.edit_guarded(
                     id,
@@ -1029,14 +1047,6 @@ fn execute(
                 // Claim/read transactions end before waiting; no lock spans the sleep.
                 thread::sleep(Duration::from_millis(250));
             }
-        }
-        Commands::Complete { id } => {
-            let owner = resolved_owner(session_input, project_dir, &db)?;
-            json!(db.complete(id, &owner.key, overrides.harness_name.as_deref())?)
-        }
-        Commands::Reopen { id } => {
-            let id = db.resolve_task_id(id)?;
-            json!(db.reopen(id, session_input.unwrap_or("cli"))?)
         }
         Commands::Backup { destination } => snapshot::backup::run(&mut db, &path, &destination)?,
         Commands::Restore { .. } => unreachable!("restore handled before database open"),

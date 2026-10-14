@@ -115,7 +115,9 @@ fn terminal_caller_identity_auto_claims_waits_completes_and_finds_moved_pane() {
         herdr(p, json!({"result":{"agents":[moved.clone()]}}), false).args(["herdr", "find", "1"]),
     );
     assert_eq!(found["pane_id"], "w2:p9");
-    let done = ok(herdr(p, json!({"result":{"pane":moved.clone()}}), true).args(["complete", "1"]));
+    let done = ok(
+        herdr(p, json!({"result":{"pane":moved.clone()}}), true).args(["edit", "--complete", "1"]),
+    );
     assert_eq!(done["status"], "completed");
     for field in [
         "harness_name",
@@ -200,7 +202,8 @@ fn existing_assignment_retains_recorded_orchestrator_session() {
     let first =
         ok(herdr(p, response.clone(), true).args(["next", "--orchestrator-session", "default"]));
     assert_eq!(ok(herdr(p, response, true).arg("next")), first);
-    let completed = ok(command(p).args(["complete", "1", "--harness-session", "terminal-1"]));
+    let completed =
+        ok(command(p).args(["edit", "--complete", "1", "--harness-session", "terminal-1"]));
     assert_eq!(completed["orchestrator_session"], "default");
 }
 
@@ -259,7 +262,7 @@ fn herdr_codex_claims_display_native_session_without_changing_owner() {
             assert_eq!(
                 ok(herdr(p, response, true)
                     .env("CODEX_SESSION_ID", "native-session")
-                    .args(["complete", "1"]))["status"],
+                    .args(["edit", "--complete", "1"]))["status"],
                 "completed"
             );
         }
@@ -295,7 +298,7 @@ fn other_herdr_harness_ignores_codex_session_env() {
                 json!({"agent":agent,"kind":kind,"value":display})
             );
             assert_eq!(ok(herdr(p, response.clone(), true).arg("next")), task);
-            let completed = ok(herdr(p, response, true).args(["complete", "1"]));
+            let completed = ok(herdr(p, response, true).args(["edit", "--complete", "1"]));
             assert_eq!(completed["status"], "completed");
             for field in [
                 "harness_name",
@@ -369,7 +372,7 @@ fn late_session_reporting_preserves_active_terminal_claim_then_uses_reported_ses
     let response = json!({"result":{"pane":reported_pane}});
     assert_eq!(ok(herdr(p, response.clone(), true).arg("next")), first);
     assert_eq!(
-        ok(herdr(p, response.clone(), true).args(["complete", "1"]))["status"],
+        ok(herdr(p, response.clone(), true).args(["edit", "--complete", "1"]))["status"],
         "completed"
     );
     let second = ok(herdr(p, response, true).arg("next"));
@@ -407,7 +410,7 @@ fn missing_hook_metadata_preserves_active_reported_session_claim() {
     let response = json!({"result":{"pane":pane(p)}});
     assert_eq!(ok(herdr(p, response.clone(), true).arg("next")), first);
     assert_eq!(
-        ok(herdr(p, response, true).args(["complete", "1"]))["status"],
+        ok(herdr(p, response, true).args(["edit", "--complete", "1"]))["status"],
         "completed"
     );
 }
@@ -443,7 +446,7 @@ fn default_link_after_hook_arrives_preserves_active_claim_identity() {
     let link = ok(herdr(p, response.clone(), true).args(["herdr", "link", "1"]));
     assert_eq!(link["identity"]["kind"], "terminal");
     assert_eq!(
-        ok(herdr(p, response, true).args(["complete", "1"]))["status"],
+        ok(herdr(p, response, true).args(["edit", "--complete", "1"]))["status"],
         "completed"
     );
 }
@@ -486,7 +489,7 @@ fn named_server_auto_fill_and_metadata_overrides_keep_real_link() {
     let detail = ok(command(p).args(["show", "1"]));
     assert_eq!(detail["herdr"]["identity"]["agent"], "codex");
     assert_eq!(detail["herdr"]["server"], "named");
-    ok(command(p).args(["complete", "1", "--harness-session", "terminal-1"]));
+    ok(command(p).args(["edit", "--complete", "1", "--harness-session", "terminal-1"]));
 }
 
 #[test]
@@ -504,7 +507,7 @@ fn harness_session_override_retains_other_automatic_fields() {
     assert_eq!(task["orchestrator_session"], "terminal-1");
     let detail = ok(command(p).args(["show", "1"]));
     assert_eq!(detail["herdr"]["identity"]["value"], "terminal-1");
-    ok(command(p).args(["complete", "1", "--harness-session", "override"]));
+    ok(command(p).args(["edit", "--complete", "1", "--harness-session", "override"]));
 }
 
 #[test]
@@ -542,7 +545,7 @@ fn native_codex_thread_claims_waits_releases_and_completes_without_herdr() {
         first
     );
     let wrong = native(p, "other-session")
-        .args(["complete", "1"])
+        .args(["edit", "--complete", "1"])
         .output()
         .unwrap();
     assert_eq!(wrong.status.code(), Some(1));
@@ -554,7 +557,7 @@ fn native_codex_thread_claims_waits_releases_and_completes_without_herdr() {
     let claimed = ok(native(p, "native-session").arg("next"));
     assert_eq!(claimed["harness_name"], "codex");
     assert_eq!(
-        ok(native(p, "native-session").args(["complete", "1"]))["status"],
+        ok(native(p, "native-session").args(["edit", "--complete", "1"]))["status"],
         "completed"
     );
     assert!(
@@ -593,7 +596,7 @@ fn native_codex_keeps_thread_owner_and_displays_session_env() {
     ok(command(p)
         .env("PATH", p)
         .env("CODEX_SESSION_ID", "preferred")
-        .args(["complete", "1"]));
+        .args(["edit", "--complete", "1"]));
     ok(command(p).args(["add", "Legacy"]));
     let legacy = ok(command(p)
         .env("PATH", p)
@@ -621,13 +624,19 @@ fn native_codex_session_env_supports_public_completion_without_granting_wrong_ow
     assert_eq!(task["harness_session"], "native-session");
     let wrong = native(p, "wrong-thread")
         .env("CODEX_SESSION_ID", "native-session")
-        .args(["complete", "1"])
+        .args(["edit", "--complete", "1"])
         .output()
         .unwrap();
     assert_eq!(wrong.status.code(), Some(1));
     assert_eq!(ok(command(p).args(["show", "1"]))["task"], task);
     assert_eq!(
-        ok(command(p).args(["complete", "1", "--harness-session", "native-session"]))["status"],
+        ok(command(p).args([
+            "edit",
+            "--complete",
+            "1",
+            "--harness-session",
+            "native-session"
+        ]))["status"],
         "completed"
     );
 }
@@ -678,7 +687,8 @@ fn native_claim_metadata_overrides_persist_and_raw_session_recovers_owner() {
     assert_eq!(first["orchestrator_name"], "custom-orch");
     assert_eq!(ok(native(p, "native").arg("next")), first);
     ok(command(p).env("PATH", p).args([
-        "complete",
+        "edit",
+        "--complete",
         "1",
         "--harness-name",
         "custom",
@@ -691,7 +701,7 @@ fn native_claim_metadata_overrides_persist_and_raw_session_recovers_owner() {
     assert_eq!(task["harness_session"], "native");
     ok(command(p)
         .env("PATH", p)
-        .args(["complete", "2", "--harness-session", "native"]));
+        .args(["edit", "--complete", "2", "--harness-session", "native"]));
 }
 
 #[test]
@@ -732,7 +742,7 @@ fn exact_herdr_pane_without_marker_takes_priority_over_codex_and_is_targeted() {
     assert!(!calls.contains("--current"), "{calls}");
     ok(herdr(p, response, false)
         .env("HERDR_PANE_ID", "w1:p1")
-        .args(["complete", "1"]));
+        .args(["edit", "--complete", "1"]));
 }
 
 #[test]
@@ -788,7 +798,7 @@ fn manual_herdr_link_discovers_herdr_even_with_native_codex_environment() {
             .unwrap()
             .contains("agent list")
     );
-    ok(native(p, "native").args(["complete", "1"]));
+    ok(native(p, "native").args(["edit", "--complete", "1"]));
 }
 
 #[test]
@@ -841,7 +851,8 @@ fn explicit_harness_session_keeps_local_fallback_when_auto_fill_fails() {
     assert_eq!(task["harness_session"], "explicit");
     assert!(task["harness_name"].is_null());
     ok(native(p, " ").env("HERDR_PANE_ID", " ").args([
-        "complete",
+        "edit",
+        "--complete",
         "1",
         "--harness-session",
         "explicit",

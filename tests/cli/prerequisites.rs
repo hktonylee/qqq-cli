@@ -25,7 +25,7 @@ fn finish(dir: &Path, id: &str, owner: &str) {
         )["id"],
         id.parse::<i64>().unwrap()
     );
-    ok(dir, &["complete", id, "--session", owner]);
+    ok(dir, &["edit", "--complete", id, "--session", owner]);
 }
 
 #[test]
@@ -179,7 +179,7 @@ fn prerequisite_archive_error_reopen_and_active_claim_rules_match_parent_safety(
     ok(p, &["edit", "1", "--archive"]);
     assert_eq!(ok(p, &["next", "--session", "join"])["id"], 2);
     ok(p, &["edit", "1", "--unarchive"]);
-    ok(p, &["reopen", "1"]);
+    ok(p, &["edit", "--reopen", "1"]);
     assert_eq!(ok(p, &["next", "--session", "join"])["id"], 2);
     ok(
         p,
@@ -480,7 +480,7 @@ fn completed_dependents_keep_status_and_reopen_validates_archived_prerequisites(
     finish(p, "2", "b");
     ok(p, &["add", "Downstream", "--depends-on", "2"]);
     let dependent = ok(p, &["show", "2"]);
-    ok(p, &["reopen", "1"]);
+    ok(p, &["edit", "--reopen", "1"]);
     assert_eq!(ok(p, &["show", "2"])["task"]["status"], "completed");
     assert_eq!(ok(p, &["show", "2"])["events"], dependent["events"]);
     assert_eq!(
@@ -488,11 +488,15 @@ fn completed_dependents_keep_status_and_reopen_validates_archived_prerequisites(
         3
     );
     ok(p, &["edit", "1", "--archive"]);
-    fail(p, &["reopen", "2"], "archived unfinished prerequisite");
+    fail(
+        p,
+        &["edit", "--reopen", "2"],
+        "archived unfinished prerequisite",
+    );
     ok(p, &["edit", "2", "--clear-depends-on", "--depends-on", "1"]);
     assert_eq!(ok(p, &["show", "2"])["task"]["status"], "completed");
     ok(p, &["edit", "2", "--clear-depends-on"]);
-    ok(p, &["reopen", "2"]);
+    ok(p, &["edit", "--reopen", "2"]);
     assert!(ok(p, &["next", "--dry-run", "--filter", "id == 3"]).is_null());
 }
 

@@ -285,7 +285,7 @@ fn archive_round_trip_preserves_task_and_history_without_duplicate_events() {
     );
 
     ok(path, &["next", "--session", "worker"]);
-    ok(path, &["complete", "1", "--session", "worker"]);
+    ok(path, &["edit", "--complete", "1", "--session", "worker"]);
     let completed_before = ok(path, &["show", "1"]);
     let completed = ok(path, &["edit", "1", "--archive"]);
     assert_eq!(completed["status"], "completed");
@@ -359,7 +359,10 @@ fn archive_rejects_blocked_children_and_completed_parent_still_releases_child() 
     ok(path, &["edit", "2", "--unarchive"]);
     ok(path, &["edit", "3", "--unarchive"]);
     ok(path, &["next", "--session", "parent-worker"]);
-    ok(path, &["complete", "1", "--session", "parent-worker"]);
+    ok(
+        path,
+        &["edit", "--complete", "1", "--session", "parent-worker"],
+    );
     ok(path, &["edit", "1", "--archive"]);
     assert_eq!(ok(path, &["next", "--session", "child-worker"])["id"], 2);
 }
@@ -414,7 +417,10 @@ fn hidden_completed_task_does_not_consume_visible_completion_limit() {
     for id in 1..=3 {
         ok(path, &["add", &format!("Task {id}")]);
         ok(path, &["next", "--session", "worker"]);
-        ok(path, &["complete", &id.to_string(), "--session", "worker"]);
+        ok(
+            path,
+            &["edit", "--complete", &id.to_string(), "--session", "worker"],
+        );
     }
     ok(path, &["edit", "3", "--archive"]);
     let visible = ok(path, &["list", "--max-completed", "1"]);

@@ -75,7 +75,10 @@ fn setting_and_clearing_parent_changes_fresh_claim_eligibility() {
         ],
     );
     assert!(ok(p, &["next", "--local", "--session", "child-worker"]).is_null());
-    ok(p, &["complete", "2", "--session", "parent-worker"]);
+    ok(
+        p,
+        &["edit", "--complete", "2", "--session", "parent-worker"],
+    );
     assert_eq!(
         ok(p, &["next", "--local", "--session", "child-worker"])["id"],
         1

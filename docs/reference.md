@@ -8,7 +8,7 @@ Detailed behavior and flags for qqq. For a first run, start with the
 - [Install from source](#install-from-source)
 - [List and search](#list-and-show) · [Add and edit](#add-and-edit)
 - [Named project views](views.md)
-- [Archive](#archive-and-unarchive) · [Reopen](#reopen-work)
+- [Archive](#archive-and-unarchive) · [Complete](#complete-work) · [Reopen](#reopen-work)
 - [Bulk metadata actions](#bulk-task-actions)
 - [Editor](#built-in-editor) · [TUI](#task-tui)
 - [Dependencies and images](#dependencies-and-images)
@@ -57,7 +57,7 @@ qqq list --include-archived
 creation ID order. In a terminal with known width, it shows full descriptions
 with wrapped, aligned continuation lines; piped output keeps first-line previews.
 `show` adds messages, images, ownership history and Herdr link. Negative indexes
-work with `show`, `edit`, and `reopen`; `-1` selects newest task.
+work with `show` and `edit`; `-1` selects newest task.
 
 `--oneline` limits terminal and watch views to each description's first line.
 JSON and search still use full descriptions.
@@ -534,14 +534,29 @@ descriptions, images, dependencies and existing history stay intact. Actual
 archive changes add normal archive/unarchive events. Standard synchronous owner
 liveness preflight still runs before command, as described below.
 
+## Complete work
+
+```sh
+qqq edit 12 --complete --session worker
+qqq edit 12 --complete --session worker --description "Finished" --archive
+```
+
+`--complete` requires an in-progress task owned by the supplied or discovered
+session. It clears the active claim, preserves public assignment and saved links,
+and records a `complete` event. `--complete` and `--reopen` skip the editor,
+conflict with each other, `--edit`, `--set-status`, and `--set-pending`, and combine
+with other direct edits in one transaction. `--expected-revision` guards the
+whole operation; failed validation or writes leave task content and lifecycle
+unchanged. The former standalone `complete` and `reopen` commands are removed.
+
 ## Reopen work
 
 ```sh
-qqq reopen 12
-qqq reopen -1 --session reviewer
+qqq edit 12 --reopen
+qqq edit -1 --reopen --session reviewer
 ```
 
-`reopen` returns a completed task to `new` and records a reopen event. An
+`edit --reopen` returns a completed task to `new` and records a reopen event. An
 in-progress task can also reopen when its owning Herdr agent is absent from a
 successful lookup on its saved server. Exact session identity or same terminal
 with same agent kind counts as live, including moved panes and changed session
@@ -564,7 +579,8 @@ description, priority, parent, prerequisites, messages, images, creation time, a
 history. Reopening clears recorded assignment metadata; saved Herdr link stays
 until next claim replaces it. Preflight-generated errors also reopen; ordinary
 manual errors use retry. New tasks fail without changes; repeating
-`reopen` also fails. Archived tasks require `edit --unarchive` first. A
+`edit --reopen` also fails. Archived tasks require `edit --unarchive` first
+or `edit --unarchive --reopen` together. A
 task with an archived unfinished parent or prerequisite cannot reopen until
 dependency is unarchived or completed, or its link removed. Completed descendants
 stay completed; new dependents wait for reopened prerequisite to complete again. Reopened tasks return to default
@@ -1062,7 +1078,7 @@ Use stable, unique session ID per worker:
 export QQQ_SESSION='worker-1'
 qqq next
 qqq message 1 "Running tests"
-qqq complete 1
+qqq edit 1 --complete
 qqq next --wait
 ```
 
@@ -1175,7 +1191,7 @@ session registry reports saved server stopped or absent. Registry state alone
 does not establish owner liveness. Probes time out after two seconds. Claim, link
 and process guards prevent stale checks from failing reassigned work.
 
-Use `qqq edit ID --set-status new` to retry errors. `qqq reopen ID` also recovers
+Use `qqq edit ID --set-status new` to retry errors. `qqq edit ID --reopen` also recovers
 auto-failed owners; archive/unarchive preserves that CLI option. TUI Error tasks
 use Ctrl-G → Retry error. Idle TUI/watch/wait does not rescan until another qqq
 command runs.
@@ -1252,7 +1268,7 @@ after_save_new = "open_saved"
 [alias]
 ls = "list"
 n = "next"
-done = "complete"
+done = "edit --complete"
 bug = "add"
 ```
 
@@ -1292,7 +1308,7 @@ prompt. Empty or blocked queues create no tab. `next --local` skips dispatch.
 Default: disabled.
 
 Dispatched child inherits `QQQ_SESSION` for reserved claim. Worker commands
-`qqq message ID ...`, `qqq complete ID` and `qqq edit ID --set-status error
+`qqq message ID ...`, `qqq edit ID --complete` and `qqq edit ID --set-status error
 --reason ...` use that env automatically; generated prompt requires no session
 parameter. Keep inherited variable set. Child's saved harness/orchestrator fields
 identify spawned agent, separate from dispatch ownership token.

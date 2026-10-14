@@ -151,7 +151,7 @@ pub fn next(
         }
     };
     let prompt = format!(
-        "Work on qqq task #{id} in {cwd}. Task is already assigned to you; keep inherited QQQ_SESSION set so commands use this claim automatically. Do not call qqq next or dispatch another agent. Run {bin} show {id} --json to read task, messages and attachments. Complete requested work, verify changes, record progress using {bin} message {id} '<progress>', then run {bin} complete {id} only when finished. If work fails and needs manual handling, run {bin} edit {id} --set-status error --reason '<failure details>'; task stays out of queue until user explicitly retries. Use next --local only if you need to retrieve this existing claim.",
+        "Work on qqq task #{id} in {cwd}. Task is already assigned to you; keep inherited QQQ_SESSION set so commands use this claim automatically. Do not call qqq next or dispatch another agent. Run {bin} show {id} --json to read task, messages and attachments. Complete requested work, verify changes, record progress using {bin} message {id} '<progress>', then run {bin} edit {id} --complete only when finished. If work fails and needs manual handling, run {bin} edit {id} --set-status error --reason '<failure details>'; task stays out of queue until user explicitly retries. Use next --local only if you need to retrieve this existing claim.",
         id = task.id,
         cwd = quote(cwd),
         bin = quote(executable)

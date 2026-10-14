@@ -127,7 +127,7 @@ fn archive_and_completed_limits_still_bound_context() {
     let p = dir.path();
     ok(p, &["add", "Parent"]);
     ok(p, &["next", "--local", "--session", "parent"]);
-    ok(p, &["complete", "1", "--session", "parent"]);
+    ok(p, &["edit", "--complete", "1", "--session", "parent"]);
     ok(p, &["add", "Child", "--parent", "1"]);
     ok(p, &["add", "Archived", "--priority", "9"]);
     ok(p, &["edit", "3", "--archive"]);
@@ -257,7 +257,7 @@ fn next_filters_only_new_ready_candidates_keeps_owned_task() {
         )["id"],
         1
     );
-    ok(p, &["complete", "1", "--session", "parent"]);
+    ok(p, &["edit", "--complete", "1", "--session", "parent"]);
     assert_eq!(
         ok(
             p,

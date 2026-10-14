@@ -213,7 +213,7 @@ fn priority_only_edits_preserve_status_owner_and_history() {
     assert_eq!(failed["priority"], -10);
 
     ok(path, &["next", "--session", "owner-c"]);
-    ok(path, &["complete", "3", "--session", "owner-c"]);
+    ok(path, &["edit", "--complete", "3", "--session", "owner-c"]);
     let completed = ok(path, &["edit", "3", "--priority", "10"]);
     assert_eq!(completed["status"], "completed");
     assert_eq!(completed["priority"], 10);
@@ -265,7 +265,7 @@ fn claims_highest_ready_priority_then_oldest_id_without_displacing_owner() {
     assert!(ok(path, &["next", "--session", "d"]).is_null());
     ok(path, &["edit", "3", "--priority", "-100"]);
     assert_eq!(ok(path, &["next", "--session", "a"])["id"], 3);
-    ok(path, &["complete", "1", "--session", "c"]);
+    ok(path, &["edit", "--complete", "1", "--session", "c"]);
     assert_eq!(ok(path, &["next", "--session", "d"])["id"], 2);
 }
 

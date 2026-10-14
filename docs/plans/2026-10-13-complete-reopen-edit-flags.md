@@ -1,6 +1,6 @@
 # Complete And Reopen Edit Flags Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task inline. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task inline. Steps use checkbox (`- [x]`) syntax for tracking.
 
 **Goal:** Move complete/reopen commands to atomic direct-edit flags for task #228.
 
@@ -18,21 +18,21 @@ public DB methods for unchanged TUI behavior; route CLI lifecycle flags through
 **Files:** Modify `tests/cli.rs`; use `tests/reopen.rs`, `tests/reopen_orphan.rs`,
 `tests/identity.rs`, and `tests/json_errors.rs` for existing guard coverage.
 
-- [ ] Run the full baseline with `cargo test --locked` and retain its exit status.
-- [ ] Add command-level cases for completing with description/tags/priority and
+- [x] Run the full baseline with `cargo test --locked` and retain its exit status.
+- [x] Add command-level cases for completing with description/tags/priority and
 archiving, reopening with unarchiving and metadata, ownership/revision/late-event
 rollback, skipped editor, removed commands, and conflicting lifecycle options.
 Use the existing `project`, `ok`, `run`, and `command` helpers, snapshot `show`
 before rejected edits, and compare the entire result afterward. Completion
 setup still uses the old syntax until the caller migration in Task 3.
-- [ ] Run `cargo test --locked --test cli edit_lifecycle`; expect parser failures
+- [x] Run `cargo test --locked --test cli edit_lifecycle`; expect parser failures
 for unimplemented `--complete`/`--reopen`, rather than setup errors.
 
 ### Task 2: Add Flags And Shared Transaction Helpers
 
 **Files:** Modify `src/main.rs`, `src/db.rs`, `src/output.rs`, `src/cli_error.rs`.
 
-- [ ] Add these direct-edit flag definitions and include them in the editor-skip
+- [x] Add these direct-edit flag definitions and include them in the editor-skip
 condition and edit destructuring:
 
 ```rust
@@ -42,20 +42,20 @@ complete: bool,
 reopen: bool,
 ```
 
-- [ ] Add `EditTransition::Complete { session, harness_name }` and
+- [x] Add `EditTransition::Complete { session, harness_name }` and
 `EditTransition::Reopen { actor, force }`. Resolve completion owner with the
 existing `resolved_owner`; reopening actor uses `session_input.unwrap_or("cli")`.
 Existing new/error transition resolution remains unchanged.
-- [ ] Extract the existing complete SQL and event into `complete_claim(conn,
+- [x] Extract the existing complete SQL and event into `complete_claim(conn,
 id, session, harness_name) -> Result<()>`. Extract reopen validation/SQL/event
 into `reopen_task(conn, id, actor, force, unarchive) -> Result<()>`. Both take
 `&Connection`; public methods retain their transaction/query/commit wrappers.
 The edit match calls these helpers in its transaction; `unarchive` is true
 only when pending archive metadata equals `Some(false)`. Reopen archive guard
 is `!task.archived || unarchive`; later normal archive validation still runs.
-- [ ] Remove `Commands::Complete` and `Commands::Reopen`, execution arms,
+- [x] Remove `Commands::Complete` and `Commands::Reopen`, execution arms,
 output-format alternatives and error-command-name alternatives.
-- [ ] Run `cargo test --locked --test cli edit_lifecycle`; inspect actual state
+- [x] Run `cargo test --locked --test cli edit_lifecycle`; inspect actual state
 and errors, correct implementation issues, then run formatting checks.
 
 ### Task 3: Migrate Current Callers And Document Contract
@@ -63,19 +63,19 @@ and errors, correct implementation issues, then run formatting checks.
 **Files:** Modify current `tests/**/*.rs`, `tests/*.py` command invocations;
 `src/dispatch.rs`, `tests/dispatch.rs`, `README.md`, and `docs/reference.md`.
 
-- [ ] Migrate command argument arrays from `["complete", ID, ...]` to
+- [x] Migrate command argument arrays from `["complete", ID, ...]` to
 `["edit", "--complete", ID, ...]`, and reopen analogously. Migrate chained
 `.arg("reopen")` calls and Python `cli("complete", ...)`/`cli("reopen", ...)`.
 Keep event action strings and historical compatibility fixture sources intact.
-- [ ] Change the dispatch instruction from `{bin} complete {id}` to
+- [x] Change the dispatch instruction from `{bin} complete {id}` to
 `{bin} edit {id} --complete`; update the corresponding prompt assertion.
-- [ ] Replace current documented shell invocations and the `done` alias with
+- [x] Replace current documented shell invocations and the `done` alias with
 `edit --complete`; document conflicts, editor skipping, transaction rollback,
 revision guards, completion plus archive, and reopen plus unarchive.
-- [ ] Run `cargo test --locked`; all existing suites must pass. Run
+- [x] Run `cargo test --locked`; all existing suites must pass. Run
 `cargo fmt --check`, `git diff --check`, and
 `cargo clippy --locked --all-targets -- -D warnings`.
-- [ ] Review the full diff, request read-only code review, and resolve actionable
+- [x] Review the full diff, request read-only code review, and resolve actionable
 findings. Commit with `[Refactor] Move Completion And Reopen To Edit Flags`.
 
 ### Task 4: Integrate And Verify Installed CLI
@@ -88,3 +88,7 @@ combined metadata/archive behavior, and reject both removed commands.
 - [ ] Record commit and verification in task #228, complete it with
 `qqq edit 228 --complete` using its exact current owner, then resume a single
 persistent `qqq next --wait --json` process.
+
+Verification checkpoint: all 889 tests in 47 suites passed with four test
+threads; strict all-target Clippy, formatting, diff checks, and read-only
+review passed. The baseline terminal-cleanup assertion passed on isolated rerun.

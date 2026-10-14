@@ -202,7 +202,7 @@ fn watch_streams_initial_list_and_committed_changes_without_idle_repeats() {
     watch.idle();
     ok(p, &["next", "--local", "--session", "worker"]);
     assert_eq!(watch.snapshot()[0]["status"], "in_progress");
-    ok(p, &["complete", "1", "--session", "worker"]);
+    ok(p, &["edit", "--complete", "1", "--session", "worker"]);
     assert_eq!(watch.snapshot()[0]["status"], "completed");
 }
 
@@ -212,14 +212,17 @@ fn watch_shows_reopened_task_and_ignores_rejected_reopen() {
     let path = dir.path();
     ok(path, &["add", "Again"]);
     ok(path, &["next", "--local", "--session", "worker"]);
-    ok(path, &["complete", "1", "--session", "worker"]);
+    ok(path, &["edit", "--complete", "1", "--session", "worker"]);
     let mut watch = Watcher::start(path, &["list", "--watch", "--max-completed", "0", "--json"]);
     assert_eq!(watch.snapshot(), serde_json::json!([]));
-    ok(path, &["reopen", "1"]);
+    ok(path, &["edit", "--reopen", "1"]);
     let snapshot = watch.snapshot();
     assert_eq!(snapshot[0]["id"], 1);
     assert_eq!(snapshot[0]["status"], "new");
-    let rejected = command(path).args(["reopen", "1"]).output().unwrap();
+    let rejected = command(path)
+        .args(["edit", "--reopen", "1"])
+        .output()
+        .unwrap();
     assert_eq!(rejected.status.code(), Some(1));
     watch.idle();
 }
@@ -343,7 +346,7 @@ fn watch_keeps_completed_limit_on_every_refresh() {
     assert_eq!(watch.snapshot().as_array().unwrap().len(), 2);
     ok(p, &["next", "--local", "--session", "worker"]);
     assert_eq!(watch.snapshot()[0]["status"], "in_progress");
-    ok(p, &["complete", "1", "--session", "worker"]);
+    ok(p, &["edit", "--complete", "1", "--session", "worker"]);
     let remaining = watch.snapshot();
     assert_eq!(remaining.as_array().unwrap().len(), 1);
     assert_eq!(remaining[0]["description"], "Second");
@@ -357,7 +360,7 @@ fn watch_uses_human_display_default_and_honors_overrides() {
     let p = dir.path();
     ok(p, &["add", "First"]);
     ok(p, &["next", "--local", "--session", "worker"]);
-    ok(p, &["complete", "1", "--session", "worker"]);
+    ok(p, &["edit", "--complete", "1", "--session", "worker"]);
     ok(p, &["add", "Second"]);
     std::fs::create_dir_all(p.join(".config/qqq")).unwrap();
     std::fs::write(
@@ -387,7 +390,7 @@ fn watch_uses_human_display_default_and_honors_overrides() {
     ok(p, &["next", "--local", "--session", "worker"]);
     assert!(watch.line().starts_with("ID"));
     assert!(watch.line().contains("In progress"));
-    ok(p, &["complete", "2", "--session", "worker"]);
+    ok(p, &["edit", "--complete", "2", "--session", "worker"]);
     assert_eq!(watch.line(), "No tasks to display.");
     watch.idle();
 }

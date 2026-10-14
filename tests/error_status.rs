@@ -86,7 +86,7 @@ fn failed_task_needs_explicit_manual_retry_and_retains_details() {
     assert_eq!(detail["events"][1]["action"], "error");
     assert_eq!(detail["events"][1]["session"], "worker");
     assert!(
-        !run(&d, &["complete", "1", "--session", "worker"])
+        !run(&d, &["edit", "--complete", "1", "--session", "worker"])
             .status
             .success()
     );
@@ -231,7 +231,7 @@ fn only_owned_active_tasks_can_enter_error() {
     );
     assert_eq!(ok(&d, &["show", "1"]), before);
     ok(&d, &["next", "--local", "--session", "worker"]);
-    ok(&d, &["complete", "1", "--session", "worker"]);
+    ok(&d, &["edit", "--complete", "1", "--session", "worker"]);
     let before = ok(&d, &["show", "1"]);
     assert!(
         !run(
@@ -265,7 +265,7 @@ fn failed_parent_blocks_children_while_worker_can_take_other_work() {
     assert!(ok(&d, &["next", "--local", "--session", "other"]).is_null());
     ok(&d, &["edit", "1", "--set-status", "new"]);
     assert_eq!(ok(&d, &["next", "--local", "--session", "other"])["id"], 1);
-    ok(&d, &["complete", "1", "--session", "other"]);
+    ok(&d, &["edit", "--complete", "1", "--session", "other"]);
     assert_eq!(ok(&d, &["next", "--local", "--session", "other"])["id"], 2);
 }
 

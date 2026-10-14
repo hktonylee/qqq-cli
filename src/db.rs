@@ -46,6 +46,14 @@ pub struct Db {
 }
 #[derive(Clone, Copy)]
 pub enum EditTransition<'a> {
+    Complete {
+        session: &'a str,
+        harness_name: Option<&'a str>,
+    },
+    Reopen {
+        actor: &'a str,
+        force: bool,
+    },
     New {
         session: &'a str,
         harness_name: Option<&'a str>,
@@ -1159,6 +1167,13 @@ impl Db {
             crate::dependencies::edit(&tx, id, &dependencies)?;
         }
         match transition {
+            Some(EditTransition::Complete {
+                session,
+                harness_name,
+            }) => Self::complete_claim(&tx, id, session, harness_name)?,
+            Some(EditTransition::Reopen { actor, force }) => {
+                Self::reopen_task(&tx, id, actor, force, matches!(archived, Some((false, _))))?;
+            }
             Some(EditTransition::New {
                 session,
                 harness_name,
@@ -1622,12 +1637,7 @@ impl Db {
         let tx = self
             .conn
             .transaction_with_behavior(TransactionBehavior::Immediate)?;
-        let session = Self::owner_key(&tx, session, harness_name)?;
-        ensure!(tx.execute("UPDATE tasks SET status='completed',claim_key=NULL,updated_at=strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE id=? AND status='in_progress' AND claim_key=?",params![id,session])?==1,Self::transition_error_for_owner(&tx, id, &session)?);
-        tx.execute(
-            "INSERT INTO events(task_id,session,action) VALUES (?, ?, 'complete')",
-            params![id, session],
-        )?;
+        Self::complete_claim(&tx, id, session, harness_name)?;
         let task = tx.query_row(
             &format!("SELECT {TASK_COLUMNS} FROM tasks WHERE id=?"),
             [id],
@@ -1635,6 +1645,21 @@ impl Db {
         )?;
         tx.commit()?;
         Ok(task)
+    }
+    fn complete_claim(
+        conn: &Connection,
+        id: i64,
+        session: &str,
+        harness_name: Option<&str>,
+    ) -> Result<()> {
+        nonempty(session, "Session")?;
+        let session = Self::owner_key(conn, session, harness_name)?;
+        ensure!(conn.execute("UPDATE tasks SET status='completed',claim_key=NULL,updated_at=strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE id=? AND status='in_progress' AND claim_key=?",params![id,session])?==1,Self::transition_error_for_owner(conn, id, &session)?);
+        conn.execute(
+            "INSERT INTO events(task_id,session,action) VALUES (?, ?, 'complete')",
+            params![id, session],
+        )?;
+        Ok(())
     }
     pub fn force_complete(&mut self, id: i64, actor: &str) -> Result<Task> {
         nonempty(actor, "Actor")?;
@@ -1713,7 +1738,24 @@ impl Db {
         let tx = self
             .conn
             .transaction_with_behavior(TransactionBehavior::Immediate)?;
-        let task = tx
+        Self::reopen_task(&tx, id, actor, force, false)?;
+        let task = tx.query_row(
+            &format!("SELECT {TASK_COLUMNS} FROM tasks WHERE id=?"),
+            [id],
+            task_row,
+        )?;
+        tx.commit()?;
+        Ok(task)
+    }
+    fn reopen_task(
+        conn: &Connection,
+        id: i64,
+        actor: &str,
+        force: bool,
+        unarchive: bool,
+    ) -> Result<()> {
+        nonempty(actor, "Actor")?;
+        let task = conn
             .query_row(
                 &format!("SELECT {TASK_COLUMNS} FROM tasks WHERE id=?"),
                 [id],
@@ -1723,7 +1765,7 @@ impl Db {
             .with_context(|| crate::errors::Info::missing_task(id))?;
         ensure!(
             task.status == "completed" || task.status == "in_progress"
-                || (task.status == "error" && (force || tx.query_row(
+                || (task.status == "error" && (force || conn.query_row(
                     "SELECT EXISTS(SELECT 1 FROM events WHERE task_id=?1 AND action='error' AND session=?2
                      AND id=(SELECT MAX(id) FROM events WHERE task_id=?1
                      AND action NOT IN ('archive','unarchive')))",
@@ -1740,7 +1782,7 @@ impl Db {
             )
         );
         ensure!(
-            !task.archived,
+            !task.archived || unarchive,
             crate::errors::Info::transition(
                 id,
                 &task.status,
@@ -1750,25 +1792,19 @@ impl Db {
             .detail("actual_archived", true)
             .detail("expected_archived", false)
         );
-        crate::dependencies::ensure_all_available(&tx, id)?;
+        crate::dependencies::ensure_all_available(conn, id)?;
         if task.status == "in_progress" && !force {
-            Self::ensure_orphaned_claim(&tx, &task)?;
+            Self::ensure_orphaned_claim(conn, &task)?;
         }
-        tx.execute(
+        conn.execute(
             "UPDATE tasks SET status='new',claim_key=NULL,harness_name=NULL,harness_session=NULL,orchestrator_name=NULL,orchestrator_session=NULL,updated_at=strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE id=?",
             [id],
         )?;
-        tx.execute(
+        conn.execute(
             "INSERT INTO events(task_id,session,action) VALUES (?,?,'reopen')",
             params![id, actor],
         )?;
-        let task = tx.query_row(
-            &format!("SELECT {TASK_COLUMNS} FROM tasks WHERE id=?"),
-            [id],
-            task_row,
-        )?;
-        tx.commit()?;
-        Ok(task)
+        Ok(())
     }
     fn ensure_orphaned_claim(conn: &Connection, task: &Task) -> Result<()> {
         let (claim, encoded): (Option<String>, Option<String>) = conn.query_row(

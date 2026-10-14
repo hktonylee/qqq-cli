@@ -86,7 +86,7 @@ fn force_without_session_or_herdr_preserves_details_and_releases_claim() {
     ok(p, &["add", "Parent"]);
     ok(p, &["add", "Task\n\nDetails", "--parent", "1"]);
     ok(p, &["next", "--local", "--session", "parent"]);
-    ok(p, &["complete", "1", "--session", "parent"]);
+    ok(p, &["edit", "--complete", "1", "--session", "parent"]);
     ok(p, &["message", "2", "Existing note"]);
     std::fs::write(p.join("x.png"), b"\x89PNG\r\n\x1a\nfixture").unwrap();
     ok(p, &["edit", "2", "--image", "x.png"]);
@@ -304,7 +304,7 @@ fn force_combined_edits_and_release_history_roll_back_on_image_failure() {
     assert_eq!(detail["events"][1]["action"], "release");
     assert_eq!(ok(p, &["next", "--local", "--session", "next"])["id"], 2);
     assert!(ok(p, &["next", "--local", "--session", "owner"]).is_null());
-    ok(p, &["complete", "2", "--session", "next"]);
+    ok(p, &["edit", "--complete", "2", "--session", "next"]);
     assert_eq!(ok(p, &["next", "--local", "--session", "owner"])["id"], 1);
 }
 
@@ -331,7 +331,7 @@ fn force_requires_literal_new_status_and_rejects_new_or_completed_tasks() {
         assert!(!run(p, &args).status.success(), "{args:?}");
         assert_eq!(ok(p, &["show", "1"]), before);
     }
-    ok(p, &["complete", "1", "--session", "owner"]);
+    ok(p, &["edit", "--complete", "1", "--session", "owner"]);
     ok(p, &["add", "New task"]);
     for id in ["1", "2"] {
         let before = ok(p, &["show", id]);

@@ -522,7 +522,7 @@ fn selected_content_owner_dependencies_and_missing_rows_invalidate_preview() {
                     "--filter",
                     "id==3",
                 ]);
-                f.ok(&["complete", "3", "--session", "finisher"]);
+                f.ok(&["edit", "--complete", "3", "--session", "finisher"]);
             }
             _ => unreachable!(),
         }
@@ -684,7 +684,7 @@ fn direct_status_selection_includes_all_completed_rows_and_explicit_archived_ids
             "--filter",
             &selector,
         ]);
-        f.ok(&["complete", id, "--session", "finisher"]);
+        f.ok(&["edit", "--complete", id, "--session", "finisher"]);
     }
     f.ok(&[
         "next",
@@ -754,7 +754,7 @@ fn metadata_apply_preserves_content_claims_links_graph_images_and_history() {
             "--filter",
             &selector,
         ]);
-        f.ok(&["complete", id, "--session", "finisher"]);
+        f.ok(&["edit", "--complete", id, "--session", "finisher"]);
     }
     fs::write(f.path().join("keep.png"), b"\x89PNG\r\n\x1a\nkeep").unwrap();
     f.ok(&[

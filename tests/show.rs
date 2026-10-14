@@ -220,7 +220,7 @@ fn terminal_show_colors_semantics_and_plain_modes_preserve_full_details() {
                     &["edit", "1", "--set-status", "new", "--session", "worker"],
                 );
                 cli(p, &["next", "--local", "--session", "worker"]);
-                cli(p, &["complete", "1", "--session", "worker"]);
+                cli(p, &["edit", "--complete", "1", "--session", "worker"]);
             }
             _ => {}
         }

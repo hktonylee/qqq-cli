@@ -372,7 +372,7 @@ fn dispatch_claims_for_new_agent_links_before_prompt_and_can_find_session() {
     assert_eq!(calls[2], vec!["agent", "get", owner]);
     assert_eq!(&calls[3][..3], ["agent", "prompt", owner]);
     assert!(calls[3][3].contains("show 1"));
-    assert!(calls[3][3].contains("complete 1"));
+    assert!(calls[3][3].contains("edit 1 --complete"));
     assert!(calls[3][3].contains("inherited QQQ_SESSION"));
     assert!(!calls[3][3].contains("--session"));
     assert!(!calls[3][3].contains(owner));
@@ -411,7 +411,7 @@ fn dispatch_claims_for_new_agent_links_before_prompt_and_can_find_session() {
         .command()
         .env("QQQ_SESSION", owner)
         .env("PATH", "/no-herdr")
-        .args(["complete", "1"])
+        .args(["edit", "--complete", "1"])
         .output()
         .unwrap();
     assert!(
@@ -809,7 +809,7 @@ fn dispatch_overrides_keep_generated_token_and_real_child_link() {
     let detail = p.ok(&["show", "1"]);
     assert_eq!(detail["herdr"]["identity"]["agent"], "codex");
     assert_eq!(detail["herdr"]["server"], "default");
-    p.ok(&["complete", "1", "--harness-session", "visible"]);
+    p.ok(&["edit", "--complete", "1", "--harness-session", "visible"]);
 }
 
 #[test]
@@ -878,7 +878,7 @@ fn dispatch_prerequisites_gate_preflight_and_atomic_selection() {
             "--filter",
             &format!("id == {id}"),
         ]);
-        p.ok(&["complete", id, "--session", owner]);
+        p.ok(&["edit", "--complete", id, "--session", owner]);
     }
     assert_eq!(
         p.ok(&["next", "--session", "caller", "--filter", "id == 3"])["id"],

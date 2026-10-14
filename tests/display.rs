@@ -61,7 +61,7 @@ impl Project {
             self.ok(&["next", "--session", session]);
         }
         for (id, session) in [("2", "b"), ("3", "c"), ("1", "a")] {
-            self.ok(&["complete", id, "--session", session]);
+            self.ok(&["edit", "--complete", id, "--session", session]);
         }
         self.ok(&["add", "New task"]);
         self.ok(&["next", "--session", "active"]);
@@ -109,7 +109,7 @@ fn limited_empty_lists_show_no_tasks_to_display() {
     assert_eq!(p.ok(&["list"]), "No tasks to display.\n");
     p.ok(&["add", "Task"]);
     p.ok(&["next", "--session", "a"]);
-    p.ok(&["complete", "1", "--session", "a"]);
+    p.ok(&["edit", "--complete", "1", "--session", "a"]);
     assert_eq!(p.ok(&["list"]), "No tasks to display.\n");
     assert!(p.ok(&["list", "--all"]).contains("Task"));
 }
