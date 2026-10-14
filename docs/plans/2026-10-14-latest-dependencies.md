@@ -106,7 +106,7 @@ without a cursor query, even when the dimensions stay the same.
 - [x] Replace the two terminal `clear()` calls with `resize()` using each
   terminal's current backend size. Preserve fullscreen automatic resizing and
   force a full redraw after conflict-popup entry or Herdr return.
-- [ ] Rerun all four existing failing terminal tests, strict Clippy, minimum
+- [x] Rerun all four existing failing terminal tests, strict Clippy, minimum
   Rust compilation, the full suite and the release build. Request review of the
   terminal repair; keep the existing PTY fixtures and assertions intact.
   The four failing scenarios and the related Ctrl-H hint test now pass.
@@ -115,16 +115,25 @@ without a cursor query, even when the dimensions stay the same.
 
 - [x] Run `cargo fmt --all -- --check` and
   `cargo clippy --locked --all-targets -- -D warnings`.
-- [ ] Run `cargo test --locked -- --test-threads=1` with
+- [x] Run `cargo test --locked -- --test-threads=1` with
   `TMPDIR=/var/tmp/qqq-task231` outside the repository. This covers both
   compatibility-script test selections, clipboard encoding, filters, config,
   ownership and real-terminal interactions. Investigate any failures before
   changing behavior or expectations.
-- [ ] Run `cargo build --locked --release` and `target/release/qqq --help`.
-- [ ] Audit direct versions against the current stable inventory, features,
+  After the terminal repair, all four original failures passed in the full run.
+  One undo/modal test stalled waiting for a discard prompt, then passed four
+  isolated runs without changes. Its failed log is retained in ignored
+  `target/task231-full-tests-undo-stall.log`. The unchanged rerun passed all
+  889 tests across 47 targets, including all 141 terminal tests.
+- [x] Run `cargo build --locked --release` and `target/release/qqq --help`.
+- [x] Audit direct versions against the current stable inventory, features,
   lockfile consistency and the declared minimum. Request independent review
   using requesting-code-review; fix substantiated findings and rerun affected
   checks. Commit the verified upgrade with a bracketed Title Case message.
+  All 20 unique direct dependencies match the latest stable inventory, required
+  features are enabled and the highest declared dependency minimum is Rust 1.89.
+  Independent review found no substantive issues in the upgrade or terminal
+  repair. Verification ran on Linux; macOS CI was not run here.
 
 ### 4. Integrate and deliver
 
@@ -134,9 +143,11 @@ without a cursor query, even when the dimensions stay the same.
 - [ ] Smoke-test the installed command in an isolated temporary project:
   `init`, `add`, `next --local`, `show`, `doctor` and `edit --complete`.
 - [ ] Read current task #231 requirements, complete it with its recorded owner,
-  verify completion, remove only this worktree/merged branch, and resume exactly
-  one blocking `qqq next --wait --local --json` process. Block on its output
-  without repeated model status polling.
+  and verify completion.
+
+After delivery, remove only this worktree/merged branch and resume exactly one
+blocking `qqq next --wait --local --json` process. Block on its output without
+repeated model status polling.
 
 All build/test commands use `CARGO_TARGET_DIR=/app/qqq/target`. Temporary files
 use `/var/tmp/qqq-task231`; `/tmp` is full and directories under the repository
