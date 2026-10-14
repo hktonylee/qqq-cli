@@ -80,15 +80,20 @@ findings. Commit with `[Refactor] Move Completion And Reopen To Edit Flags`.
 
 ### Task 4: Integrate And Verify Installed CLI
 
-- [ ] Rebase onto current `master`, resolve conflicts in the worktree, rerun
+- [x] Rebase onto current `master`, resolve conflicts in the worktree, rerun
 relevant checks if upstream changes warrant it, and fast-forward integrate.
-- [ ] Run `cargo install --path . --locked --force` from integrated checkout.
-- [ ] In a temporary project, claim, `edit --complete`, `edit --reopen`, verify
+- [x] Run `cargo install --path . --locked --force` from integrated checkout.
+- [x] In a temporary project, claim, `edit --complete`, `edit --reopen`, verify
 combined metadata/archive behavior, and reject both removed commands.
-- [ ] Record commit and verification in task #228, complete it with
+- [x] Record commit and verification in task #228, complete it with
 `qqq edit 228 --complete` using its exact current owner, then resume a single
 persistent `qqq next --wait --json` process.
 
 Verification checkpoint: all 889 tests in 47 suites passed with four test
 threads; strict all-target Clippy, formatting, diff checks, and read-only
 review passed. The baseline terminal-cleanup assertion passed on isolated rerun.
+
+Delivery checkpoint: implementation integrated as `92db93d`; release executable
+installed and temporary-project lifecycle/ownership/archive/history smoke passed.
+Task #228 was completed through `edit --complete`, and one persistent blocking
+queue wait was launched.
