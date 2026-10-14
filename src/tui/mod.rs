@@ -1077,19 +1077,18 @@ fn compose_inner(
                     if let Some(ActionUi::Menu {
                         status, selected, ..
                     }) = &mut action_ui
+                        && *status != task.status
                     {
-                        if *status != task.status {
-                            let key = action_menu_items(status)
-                                .nth(*selected)
-                                .expect("menu selection is valid")
-                                .0;
-                            *status = task.status.clone();
-                            *selected = action_menu_items(status)
-                                .position(|(candidate, _)| candidate == key)
-                                .unwrap_or_else(|| {
-                                    (*selected).min(action_menu_items(status).count() - 1)
-                                });
-                        }
+                        let key = action_menu_items(status)
+                            .nth(*selected)
+                            .expect("menu selection is valid")
+                            .0;
+                        *status = task.status.clone();
+                        *selected = action_menu_items(status)
+                            .position(|(candidate, _)| candidate == key)
+                            .unwrap_or_else(|| {
+                                (*selected).min(action_menu_items(status).count() - 1)
+                            });
                     }
                 }
                 if !include_archived {
@@ -2540,63 +2539,64 @@ fn compose_inner(
                         key.code,
                         KeyCode::Up | KeyCode::Down | KeyCode::Char(',' | '.')
                     );
-                if !matches!(mode, Mode::Edit { .. }) && (shift_navigation || control_navigation) {
-                    if let Some(db) = mode.db() {
-                        let older = matches!(key.code, KeyCode::Up | KeyCode::Char(','));
-                        match adjacent_target(
-                            db,
-                            target_id,
-                            older,
-                            include_archived,
-                            visible_ids.as_deref(),
-                        ) {
-                            Ok(Some(target))
-                                if !dashboard && draft.is_dirty_against(&baseline.description) =>
-                            {
-                                confirmation = Some(Confirmation::Switch {
-                                    target,
-                                    focus_editor: false,
-                                });
-                            }
-                            Ok(Some(target)) => {
-                                if dashboard {
-                                    buffers.park(
-                                        DraftKey::current(target_id, draft_parent_id),
-                                        &mut draft,
-                                        &baseline,
-                                        top,
-                                        editor_follow_cursor,
-                                    );
-                                }
-                                editor_follow_cursor = load_target(
-                                    restore_target(target, &mut buffers),
-                                    &mut draft,
-                                    &mut target_id,
-                                    &mut target_status,
-                                    &mut draft_parent_id,
-                                    &mut baseline,
-                                    &mut top,
-                                );
-                                list_follow_selected = true;
-                                message.clear();
-                                message_is_error = false;
-                            }
-                            Ok(None) => {
-                                list_follow_selected = true;
-                                message_is_error = false;
-                                message = if older {
-                                    "No older task".to_owned()
-                                } else {
-                                    "Already at new task".to_owned()
-                                };
-                            }
-                            Err(error) => {
-                                message_is_error = true;
-                                message = format!("{error:#}");
-                            }
+                if !matches!(mode, Mode::Edit { .. })
+                    && (shift_navigation || control_navigation)
+                    && let Some(db) = mode.db()
+                {
+                    let older = matches!(key.code, KeyCode::Up | KeyCode::Char(','));
+                    match adjacent_target(
+                        db,
+                        target_id,
+                        older,
+                        include_archived,
+                        visible_ids.as_deref(),
+                    ) {
+                        Ok(Some(target))
+                            if !dashboard && draft.is_dirty_against(&baseline.description) =>
+                        {
+                            confirmation = Some(Confirmation::Switch {
+                                target,
+                                focus_editor: false,
+                            });
                         }
-                        continue;
+                        Ok(Some(target)) => {
+                            if dashboard {
+                                buffers.park(
+                                    DraftKey::current(target_id, draft_parent_id),
+                                    &mut draft,
+                                    &baseline,
+                                    top,
+                                    editor_follow_cursor,
+                                );
+                            }
+                            editor_follow_cursor = load_target(
+                                restore_target(target, &mut buffers),
+                                &mut draft,
+                                &mut target_id,
+                                &mut target_status,
+                                &mut draft_parent_id,
+                                &mut baseline,
+                                &mut top,
+                            );
+                            list_follow_selected = true;
+                            message.clear();
+                            message_is_error = false;
+                        }
+                        Ok(None) => {
+                            list_follow_selected = true;
+                            message_is_error = false;
+                            message = if older {
+                                "No older task".to_owned()
+                            } else {
+                                "Already at new task".to_owned()
+                            };
+                        }
+                        Err(error) => {
+                            message_is_error = true;
+                            message = format!("{error:#}");
+                        }
                     }
+                    continue;
                 }
                 // Legacy Ctrl+/ sends 0x1f, which Crossterm decodes as Ctrl+7.
                 // Extended keyboard protocols can report Ctrl+/ or Ctrl+_.

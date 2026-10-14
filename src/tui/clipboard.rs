@@ -49,10 +49,10 @@ pub fn path_image(text: &str) -> Result<Option<ImageInput>> {
         return Ok(None);
     };
     let mut path = PathBuf::from(&parts[0]);
-    if let Some(relative) = parts[0].strip_prefix("~/") {
-        if let Some(home) = std::env::var_os("HOME") {
-            path = PathBuf::from(home).join(relative);
-        }
+    if let Some(relative) = parts[0].strip_prefix("~/")
+        && let Some(home) = std::env::var_os("HOME")
+    {
+        path = PathBuf::from(home).join(relative);
     }
     if !path.is_file() {
         return Ok(None);

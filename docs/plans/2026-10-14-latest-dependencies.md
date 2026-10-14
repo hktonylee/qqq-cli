@@ -51,7 +51,7 @@ resolved dependency graph.
   their diagnostics with systematic-debugging and extend this plan with the exact
   API repair before changing source. Do not lower dependency versions to bypass
   compilation failures.
-- [ ] Verify the same all-target compilation on the declared minimum toolchain.
+- [x] Verify the same all-target compilation on the declared minimum toolchain.
 
 ### 2a. Compiler-diagnosed compatibility repairs
 
@@ -77,7 +77,7 @@ unsigned SQLite reads and E0277 for SHA-2's new digest array lacking `LowerHex`.
   The snapshot site uses `hash.finalize()` and the fixture-validation helper
   uses `Sha256::digest(data)`. Existing `hash_reader_reports_size_and_sha256`
   checks the standard known digest; frozen fixture hashes verify exact encoding.
-- [ ] Rerun all-target compilation, then the focused config/clipboard/render/
+- [x] Rerun all-target compilation, then the focused config/clipboard/render/
   identity/filter tests and snapshot hash regression. Extend the plan with exact
   repairs only if fresh diagnostics reveal further upgrade incompatibilities.
 
@@ -86,16 +86,16 @@ unsigned SQLite reads and E0277 for SHA-2's new digest array lacking `LowerHex`.
 Strict Clippy now reports `collapsible_if`: the raised Rust minimum enables
 let-chain syntax that the old 1.85 minimum excluded from suggestions.
 
-- [ ] Run `cargo clippy --fix --allow-dirty --offline --locked --all-targets -- -D warnings`
+- [x] Run `cargo clippy --fix --allow-dirty --offline --locked --all-targets -- -D warnings`
   to apply its machine-applicable conditional repairs, then `cargo fmt --all`.
-- [ ] Inspect every changed condition for the same short-circuit order, bindings,
+- [x] Inspect every changed condition for the same short-circuit order, bindings,
   branch handling and effects. Keep the strict lint configuration intact.
-- [ ] Rerun strict Clippy and all-target compilation on Rust 1.89, then exercise
+- [x] Rerun strict Clippy and all-target compilation on Rust 1.89, then exercise
   the affected behavior through the existing full suite.
 
 ### 3. Verify and review
 
-- [ ] Run `cargo fmt --all -- --check` and
+- [x] Run `cargo fmt --all -- --check` and
   `cargo clippy --locked --all-targets -- -D warnings`.
 - [ ] Run `cargo test --locked -- --test-threads=1` with
   `TMPDIR=/var/tmp/qqq-task231` outside the repository. This covers both

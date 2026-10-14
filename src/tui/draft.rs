@@ -80,39 +80,39 @@ fn find_pasteboard(description: &str, from: usize) -> Option<PasteboardBlock<'_>
             if fence_closes(line, marker, count) {
                 enclosing = None;
             }
-        } else if let Some((marker, count, rest, indent)) = fence_marker(line) {
-            if marker == b'~' || !rest.contains('`') {
-                if marker == b'`'
-                    && indent == 0
-                    && rest.trim_end_matches([' ', '\t', '\r']) == "pasteboard"
-                    && end < description.len()
-                {
-                    let payload_start = end + 1;
-                    let mut line_start = payload_start;
-                    loop {
-                        let line_end = description[line_start..]
-                            .find('\n')
-                            .map_or(description.len(), |offset| line_start + offset);
-                        if fence_closes(&description[line_start..line_end], marker, count) {
-                            let payload_end = if line_start == payload_start {
-                                line_start
-                            } else {
-                                line_start - 1
-                            };
-                            return Some(PasteboardBlock {
-                                start,
-                                end: line_end,
-                                payload: &description[payload_start..payload_end],
-                            });
-                        }
-                        if line_end == description.len() {
-                            break;
-                        }
-                        line_start = line_end + 1;
+        } else if let Some((marker, count, rest, indent)) = fence_marker(line)
+            && (marker == b'~' || !rest.contains('`'))
+        {
+            if marker == b'`'
+                && indent == 0
+                && rest.trim_end_matches([' ', '\t', '\r']) == "pasteboard"
+                && end < description.len()
+            {
+                let payload_start = end + 1;
+                let mut line_start = payload_start;
+                loop {
+                    let line_end = description[line_start..]
+                        .find('\n')
+                        .map_or(description.len(), |offset| line_start + offset);
+                    if fence_closes(&description[line_start..line_end], marker, count) {
+                        let payload_end = if line_start == payload_start {
+                            line_start
+                        } else {
+                            line_start - 1
+                        };
+                        return Some(PasteboardBlock {
+                            start,
+                            end: line_end,
+                            payload: &description[payload_start..payload_end],
+                        });
                     }
+                    if line_end == description.len() {
+                        break;
+                    }
+                    line_start = line_end + 1;
                 }
-                enclosing = Some((marker, count));
             }
+            enclosing = Some((marker, count));
         }
         if end == description.len() {
             break;
@@ -433,18 +433,17 @@ impl Draft {
                     *previous = joined;
                     continue;
                 }
-            } else if atoms.is_empty() {
-                if let Some(Atom::Text(previous)) = self
+            } else if atoms.is_empty()
+                && let Some(Atom::Text(previous)) = self
                     .cursor
                     .checked_sub(1)
                     .and_then(|index| self.atoms.get(index))
-                {
-                    let joined = format!("{previous}{grapheme}");
-                    if joined.graphemes(true).count() == 1 {
-                        start -= 1;
-                        atoms.push(Atom::Text(joined));
-                        continue;
-                    }
+            {
+                let joined = format!("{previous}{grapheme}");
+                if joined.graphemes(true).count() == 1 {
+                    start -= 1;
+                    atoms.push(Atom::Text(joined));
+                    continue;
                 }
             }
             atoms.push(Atom::Text(grapheme.to_owned()));

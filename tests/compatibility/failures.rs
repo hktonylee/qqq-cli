@@ -54,10 +54,8 @@ fn unsupported_versions_legacy_layouts_and_corrupt_db_fail_without_changes() {
                 human,
                 "DATABASE_ERROR",
             );
-            if json {
-                if let Some(reason) = reason {
-                    assert_eq!(error["details"]["reason"], reason);
-                }
+            if json && let Some(reason) = reason {
+                assert_eq!(error["details"]["reason"], reason);
             }
             assert_eq!(
                 hashes_at(&project),

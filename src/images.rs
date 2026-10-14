@@ -70,10 +70,11 @@ impl PendingFiles {
         self.active = false;
         let mut failure = None;
         for path in self.created.iter().rev() {
-            if let Err(error) = fs::remove_file(path) {
-                if error.kind() != std::io::ErrorKind::NotFound && failure.is_none() {
-                    failure = Some((path.clone(), error));
-                }
+            if let Err(error) = fs::remove_file(path)
+                && error.kind() != std::io::ErrorKind::NotFound
+                && failure.is_none()
+            {
+                failure = Some((path.clone(), error));
             }
         }
         self.created.clear();

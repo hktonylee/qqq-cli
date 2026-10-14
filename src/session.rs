@@ -63,10 +63,10 @@ fn native() -> Result<Option<Owner>> {
 }
 
 pub fn owner(explicit: Option<&str>, project_dir: &Path, db: &Db) -> Result<Owner> {
-    if explicit.is_none() {
-        if let Some(owner) = native()? {
-            return Ok(owner);
-        }
+    if explicit.is_none()
+        && let Some(owner) = native()?
+    {
+        return Ok(owner);
     }
     let (key, link) = herdr::owner(explicit, project_dir, db)?;
     let metadata = if link

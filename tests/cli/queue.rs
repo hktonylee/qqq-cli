@@ -673,10 +673,11 @@ fn queue_concurrent_transitions_keep_counts_blockers_selection_and_activity_cohe
                 if is_ready {
                     ready.push(task);
                 }
-                if let Some(parent) = parent {
-                    if is_new && !is_ready {
-                        assert_eq!(row["blockers"][0]["status"], parent["task"]["status"]);
-                    }
+                if let Some(parent) = parent
+                    && is_new
+                    && !is_ready
+                {
+                    assert_eq!(row["blockers"][0]["status"], parent["task"]["status"]);
                 }
                 if task["id"] == 1 || task["id"] == 2 {
                     assert_eq!(row["latest_activity"]["at"], task["updated_at"]);

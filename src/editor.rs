@@ -78,13 +78,13 @@ impl ExternalDraft {
     }
 
     fn cleanup(&self) {
-        if self.temporary.is_none() {
-            if let Err(error) = fs::remove_dir_all(&self.directory) {
-                eprintln!(
-                    "Saved task; cannot remove recovery directory {}: {error}",
-                    self.directory.display()
-                );
-            }
+        if self.temporary.is_none()
+            && let Err(error) = fs::remove_dir_all(&self.directory)
+        {
+            eprintln!(
+                "Saved task; cannot remove recovery directory {}: {error}",
+                self.directory.display()
+            );
         }
     }
 }

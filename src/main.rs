@@ -875,18 +875,18 @@ fn execute(
                     && images.is_empty())
             {
                 let snapshot = db.content_snapshot(id)?;
-                if let Some(expected) = expected_revision {
-                    if expected != snapshot.task.content_revision {
-                        return Err(db::ContentConflict {
-                            task_id: id,
-                            expected_revision: expected,
-                            current: Some(db::CurrentContent {
-                                description: snapshot.task.description,
-                                revision: snapshot.task.content_revision,
-                            }),
-                        }
-                        .into());
+                if let Some(expected) = expected_revision
+                    && expected != snapshot.task.content_revision
+                {
+                    return Err(db::ContentConflict {
+                        task_id: id,
+                        expected_revision: expected,
+                        current: Some(db::CurrentContent {
+                            description: snapshot.task.description,
+                            revision: snapshot.task.content_revision,
+                        }),
                     }
+                    .into());
                 }
                 if editor::uses_builtin(edit) {
                     let mut saved = None;
@@ -1162,15 +1162,15 @@ fn run(cli: Cli) -> Result<(Option<String>, bool)> {
         )?;
     }
     let mut view_context = None;
-    if let Some((selectors, name, visibility)) = inputs {
-        if name.is_some() || matches!(&cli.command, Commands::Tui { .. }) {
-            let path = views::path()?;
-            let catalog = views::load(&path)?;
-            let active = name.map(|name| views::find(&catalog, name)).transpose()?;
-            let context = views::ViewContext::new(path, selectors.clone(), visibility, active)?;
-            prepared = context.prepared.clone();
-            view_context = Some(context);
-        }
+    if let Some((selectors, name, visibility)) = inputs
+        && (name.is_some() || matches!(&cli.command, Commands::Tui { .. }))
+    {
+        let path = views::path()?;
+        let catalog = views::load(&path)?;
+        let active = name.map(|name| views::find(&catalog, name)).transpose()?;
+        let context = views::ViewContext::new(path, selectors.clone(), visibility, active)?;
+        prepared = context.prepared.clone();
+        view_context = Some(context);
     }
     let is_tui = matches!(&cli.command, Commands::Tui { .. });
     let filtered_list = matches!(&cli.command, Commands::List { .. }) && prepared.filter.is_some();

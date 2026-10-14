@@ -603,10 +603,8 @@ impl Db {
             if disable_foreign_keys {
                 conn.pragma_update(None, "foreign_keys", "ON")?;
             }
-            if had_images {
-                if let Err(error) = conn.execute_batch("VACUUM") {
-                    eprintln!("Warning: migrated image bytes; SQLite compaction failed: {error}");
-                }
+            if had_images && let Err(error) = conn.execute_batch("VACUUM") {
+                eprintln!("Warning: migrated image bytes; SQLite compaction failed: {error}");
             }
         }
         let version: i64 = conn.pragma_query_value(None, "user_version", |r| r.get(0))?;
@@ -1479,13 +1477,13 @@ impl Db {
         }
     }
     pub fn peek_next_filtered(&mut self, filter: Option<&CompiledFilter>) -> Result<Option<Task>> {
-        if self.conn.is_readonly(rusqlite::MAIN_DB)? {
-            if let Some(path) = self.conn.path() {
-                // --wait may outlive a writer changing the journaling mode.
-                // Do this before beginning a read transaction (raw fd closes
-                // must not release an active SQLite POSIX lock).
-                ensure_read_only_safe(Path::new(path))?;
-            }
+        if self.conn.is_readonly(rusqlite::MAIN_DB)?
+            && let Some(path) = self.conn.path()
+        {
+            // --wait may outlive a writer changing the journaling mode.
+            // Do this before beginning a read transaction (raw fd closes
+            // must not release an active SQLite POSIX lock).
+            ensure_read_only_safe(Path::new(path))?;
         }
         let tx = self
             .conn
