@@ -399,16 +399,19 @@ impl View {
                     .into_iter()
                     .map(|text| PopupRow::new(text, PopupKind::Body))
                     .collect();
-                rows.extend(ITEMS.iter().enumerate().map(|(index, (key, label))| {
-                    PopupRow::new(
+                for (index, (key, label)) in ITEMS.iter().enumerate() {
+                    if matches!(key, 'p' | 'a' | 'x') {
+                        rows.push(PopupRow::new("", PopupKind::Body));
+                    }
+                    rows.push(PopupRow::new(
                         format!("{key} {label}"),
                         if index == *selected {
                             PopupKind::SelectedAction
                         } else {
                             PopupKind::Action
                         },
-                    )
-                }));
+                    ));
+                }
                 (
                     format!("Bulk actions ({})", self.ids.len()),
                     rows,
