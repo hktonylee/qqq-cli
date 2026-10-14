@@ -6,15 +6,16 @@ version upgrades. Verify releases using crates.io's `max_stable_version`, since
 the most recently published version can be a backport.
 
 Update the manifest constraints that exclude current stable releases, retaining
-the existing exact-pin style and dependency features. Refresh `Cargo.lock` to
+the existing exact-pin style and explicit dependency features. Refresh `Cargo.lock` to
 the newest releases allowed by the resulting dependency graph. Include target
 dependencies and transitive packages; retain immutable historical compatibility
 fixtures.
 
 Latest direct dependencies require Rust 1.88: image 0.25.10, Ratatui 0.30.2 and
-SHA-2 0.11.1. Set the declared minimum to the highest Rust requirement in the
-resolved graph and update the installation requirements in `README.md` and
-`docs/reference.md`. Verify a build with that minimum toolchain.
+SHA-2 0.11.1. The latest resolved graph raises the minimum to Rust 1.89 through
+smol_str 0.3.6 and uuid 1.28.0. Declare that minimum and update the installation
+requirements in `README.md` and `docs/reference.md`. Verify a build with that
+minimum toolchain.
 
 The manifest changes are arboard 3.6.1, image 0.25.10, Ratatui 0.30.2,
 rusqlite 0.40, SHA-2 0.11, TOML 1.1, toml_edit 0.25 and Unicode segmentation

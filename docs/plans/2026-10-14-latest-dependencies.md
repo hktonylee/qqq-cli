@@ -26,7 +26,7 @@ resolved dependency graph.
 
 **Modify:** `Cargo.toml`, `Cargo.lock`, `README.md`, `docs/reference.md`.
 
-- [ ] Set `rust-version = "1.88"` and update these dependency declarations:
+- [x] Set `rust-version = "1.89"` and update these dependency declarations:
   ```toml
   arboard = { version = "=3.6.1", features = ["wayland-data-control"] }
   image = { version = "=0.25.10", default-features = false, features = ["png"] }
@@ -38,19 +38,48 @@ resolved dependency graph.
   unicode-segmentation = "=1.13.3"
   ```
   Remove the obsolete image/Rust 1.85 compatibility comment.
-- [ ] Run `cargo update --ignore-rust-version`, then
+- [x] Run `cargo update --ignore-rust-version`, then
   `cargo metadata --locked --format-version 1` into ignored
   `target/task231-metadata.json`. Compare direct resolved versions to the inventory
   and determine the maximum `rust_version` among resolved package IDs. If this
   exceeds 1.88, set `rust-version` to that value before compiling.
-- [ ] Replace `Requires Rust 1.85+` in `README.md` and `docs/reference.md` with the
+- [x] Replace `Requires Rust 1.85+` in `README.md` and `docs/reference.md` with the
   actual resolved minimum. Install that exact Rust toolchain using
-  `rustup toolchain install <resolved-minimum> --profile minimal`.
+  `rustup toolchain install 1.89.0 --profile minimal`. Resolved smol_str 0.3.6
+  and uuid 1.28.0 require Rust 1.89.
 - [ ] Run `cargo check --locked --all-targets`. If compiler errors occur, inspect
   their diagnostics with systematic-debugging and extend this plan with the exact
   API repair before changing source. Do not lower dependency versions to bypass
   compilation failures.
 - [ ] Verify the same all-target compilation on the declared minimum toolchain.
+
+### 2a. Compiler-diagnosed compatibility repairs
+
+Initial all-target compilation failed with E0433 for `DatabaseName`, E0277 for
+unsigned SQLite reads and E0277 for SHA-2's new digest array lacking `LowerHex`.
+
+**Modify:** `Cargo.toml`, `src/db.rs`, `src/bulk.rs`,
+`src/snapshot/format.rs`, `tests/common/compatibility.rs`.
+
+- [ ] Enable rusqlite's `fallible_uint` feature alongside `bundled` and
+  `functions`, restoring the unsigned conversions previously supplied by default.
+- [ ] Replace `rusqlite::DatabaseName::Main` with `rusqlite::MAIN_DB` in
+  `Db::peek_next_filtered` to use the new database-name API.
+- [ ] Convert the digest bytes to exactly two lowercase hexadecimal digits each
+  at the three existing encoding sites, using this expression with each site's
+  existing digest input:
+  ```rust
+  Sha256::digest(bytes)
+      .iter()
+      .map(|byte| format!("{byte:02x}"))
+      .collect()
+  ```
+  The snapshot site uses `hash.finalize()` and the fixture-validation helper
+  uses `Sha256::digest(data)`. Existing `hash_reader_reports_size_and_sha256`
+  checks the standard known digest; frozen fixture hashes verify exact encoding.
+- [ ] Rerun all-target compilation, then the focused config/clipboard/render/
+  identity/filter tests and snapshot hash regression. Extend the plan with exact
+  repairs only if fresh diagnostics reveal further upgrade incompatibilities.
 
 ### 3. Verify and review
 

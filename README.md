@@ -28,7 +28,7 @@ account needed. Your agent runs the code and checks; qqq tracks the work.
 cargo install qqq-cli --locked
 ```
 
-Requires Rust 1.85+ and a C compiler. The command is `qqq`.
+Requires Rust 1.89+ and a C compiler. The command is `qqq`.
 [Install from source](docs/reference.md#install-from-source) for development features.
 
 ## Try it

@@ -20,7 +20,7 @@ Detailed behavior and flags for qqq. For a first run, start with the
 
 ## Install from source
 
-Requires Rust 1.85+ and a C compiler. This guide follows the development branch;
+Requires Rust 1.89+ and a C compiler. This guide follows the development branch;
 published releases may lag features described here.
 
 ```sh
