@@ -424,20 +424,29 @@ impl View {
                     ),
                 ];
                 for row in &report.tasks {
+                    if row.before == row.after {
+                        continue;
+                    }
                     lines.push(format!("#{}", row.id));
-                    lines.push(format!(
-                        "Tags: {} -> {}",
-                        serde_json::to_string(&row.before.tags).expect("tags serializable"),
-                        serde_json::to_string(&row.after.tags).expect("tags serializable")
-                    ));
-                    lines.push(format!(
-                        "Priority: {} -> {}",
-                        row.before.priority, row.after.priority
-                    ));
-                    lines.push(format!(
-                        "Archived: {} -> {}",
-                        row.before.archived, row.after.archived
-                    ));
+                    if row.before.tags != row.after.tags {
+                        lines.push(format!(
+                            "Tags: {} -> {}",
+                            serde_json::to_string(&row.before.tags).expect("tags serializable"),
+                            serde_json::to_string(&row.after.tags).expect("tags serializable")
+                        ));
+                    }
+                    if row.before.priority != row.after.priority {
+                        lines.push(format!(
+                            "Priority: {} -> {}",
+                            row.before.priority, row.after.priority
+                        ));
+                    }
+                    if row.before.archived != row.after.archived {
+                        lines.push(format!(
+                            "Archived: {} -> {}",
+                            row.before.archived, row.after.archived
+                        ));
+                    }
                 }
                 (
                     format!("Bulk preview ({})", self.ids.len()),
@@ -551,6 +560,35 @@ fn wrap(text: &str, width: usize) -> Vec<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn preview_hides_unchanged_tasks_and_fields() {
+        let report: Report = serde_json::from_value(serde_json::json!({
+            "version": 1, "applied": false, "database": "/test.db",
+            "actions": {"add_tags": [], "remove_tags": [], "set_tags": null,
+                "priority": 1, "archived": null},
+            "selected_ids": [1, 2], "selected_count": 2, "changed_count": 1,
+            "action_count": 1,
+            "tasks": [
+                {"id": 1, "fingerprint": "0".repeat(64),
+                    "before": {"tags": [], "priority": 0, "archived": false},
+                    "after": {"tags": [], "priority": 1, "archived": false}},
+                {"id": 2, "fingerprint": "0".repeat(64),
+                    "before": {"tags": [], "priority": 1, "archived": false},
+                    "after": {"tags": [], "priority": 1, "archived": false}}
+            ]
+        }))
+        .unwrap();
+        let mut ui = View::menu(vec![1, 2]);
+        ui.show_preview(report);
+        let rows = ui.rows(80, 20);
+        assert!(rows.iter().any(|row| row.text == "#1"));
+        assert!(rows.iter().any(|row| row.text == "Priority: 0 -> 1"));
+        assert!(!rows.iter().any(|row| row.text == "#2"));
+        assert!(!rows.iter().any(|row| row.text.starts_with("Tags:")));
+        assert!(!rows.iter().any(|row| row.text.starts_with("Archived:")));
+        assert!(rows.last().unwrap().text.contains("y apply"));
+    }
 
     #[test]
     fn non_input_popups_reserve_confirmation_footer_in_short_screens() {
