@@ -764,6 +764,31 @@ fn inspection_preflight_fails_dead_owner_before_preview_without_claiming_work() 
 }
 
 #[test]
+#[cfg(target_os = "linux")]
+fn legacy_namespace_inode_cannot_prove_owner_process_death() {
+    let (dir, _harness) = native_claim();
+    let db = Connection::open(dir.path().join(".qqq/qqq.db")).unwrap();
+    let original: String = db
+        .query_row("SELECT process_json FROM claim_processes", [], |r| r.get(0))
+        .unwrap();
+    let mut identity: Value = serde_json::from_str(&original).unwrap();
+    let machine = fs::read_to_string("/etc/machine-id").unwrap();
+    let namespace = fs::read_link("/proc/self/ns/pid").unwrap();
+    identity["machine"] = json!(format!("linux:{}:{}", machine.trim(), namespace.display()));
+    identity["started_at"] = json!("a process from a previous namespace lifetime");
+    db.execute(
+        "UPDATE claim_processes SET process_json=?",
+        [identity.to_string()],
+    )
+    .unwrap();
+    let out = native_command(&dir).args(["show", "1"]).output().unwrap();
+    assert!(out.status.success());
+    let shown: Value = serde_json::from_slice(&out.stdout).unwrap();
+    assert_eq!(shown["task"]["status"], "in_progress");
+    assert!(shown["messages"].as_array().unwrap().is_empty());
+}
+
+#[test]
 fn native_pid_reuse_foreign_machine_and_stale_binding_are_distinguished() {
     for mode in ["reuse", "foreign", "stale-event", "mismatched-key"] {
         let (dir, _harness) = native_claim();

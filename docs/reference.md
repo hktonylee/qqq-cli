@@ -1163,6 +1163,9 @@ project; writable opens scan after migration.
 Native Codex claims bind actual harness ancestor PID, start time, executable and
 machine identity privately to current claim. Missing/reused PID or zombie proves
 death on same machine; another machine or unavailable process data stays unknown.
+On Linux, machine identity includes the PID namespace and its PID 1 boot/start
+fingerprint, so recycled namespace inodes cannot prove owner death. Older
+inode-only process records stay unknown until a new claim captures fresh identity.
 Manual session tokens alone do not identify process. Saved Herdr server and agent
 identity/terminal establish liveness; a successful, valid agent list without owner
 proves death. Failed/malformed/timeout probes stay unknown, even if Herdr’s local

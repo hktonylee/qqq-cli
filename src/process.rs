@@ -180,7 +180,14 @@ pub(crate) fn machine() -> Option<String> {
         return None;
     }
     let namespace = std::fs::read_link("/proc/self/ns/pid").ok()?;
-    Some(format!("linux:{}:{}", machine.trim(), namespace.to_str()?))
+    // Namespace inode numbers can be recycled after a sandbox exits. PID 1's
+    // boot/start fingerprint distinguishes each namespace lifetime.
+    let init = start_fingerprint(1, "")?;
+    Some(format!(
+        "linux:{}:{}:{init}",
+        machine.trim(),
+        namespace.to_str()?
+    ))
 }
 
 #[cfg(target_os = "macos")]
