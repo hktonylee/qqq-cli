@@ -121,6 +121,10 @@ pub fn hash_reader(mut reader: impl Read) -> Result<FileMeta> {
     }
     Ok(FileMeta {
         bytes,
-        sha256: format!("{:x}", hash.finalize()),
+        sha256: hash
+            .finalize()
+            .iter()
+            .map(|byte| format!("{byte:02x}"))
+            .collect(),
     })
 }

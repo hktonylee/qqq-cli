@@ -289,7 +289,10 @@ fn fingerprint(conn: &Connection, task: &Task) -> Result<String> {
         |r| r.get(0),
     )?;
     let bytes = serde_json::to_vec(&serde_json::json!({"task":task,"claim":claim,"event":event}))?;
-    Ok(format!("{:x}", Sha256::digest(bytes)))
+    Ok(Sha256::digest(bytes)
+        .iter()
+        .map(|byte| format!("{byte:02x}"))
+        .collect())
 }
 fn task(conn: &Connection, id: i64) -> Result<Option<Task>> {
     Ok(conn

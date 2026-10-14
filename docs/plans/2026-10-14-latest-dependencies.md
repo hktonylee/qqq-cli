@@ -47,7 +47,7 @@ resolved dependency graph.
   actual resolved minimum. Install that exact Rust toolchain using
   `rustup toolchain install 1.89.0 --profile minimal`. Resolved smol_str 0.3.6
   and uuid 1.28.0 require Rust 1.89.
-- [ ] Run `cargo check --locked --all-targets`. If compiler errors occur, inspect
+- [x] Run `cargo check --locked --all-targets`. If compiler errors occur, inspect
   their diagnostics with systematic-debugging and extend this plan with the exact
   API repair before changing source. Do not lower dependency versions to bypass
   compilation failures.
@@ -61,11 +61,11 @@ unsigned SQLite reads and E0277 for SHA-2's new digest array lacking `LowerHex`.
 **Modify:** `Cargo.toml`, `src/db.rs`, `src/bulk.rs`,
 `src/snapshot/format.rs`, `tests/common/compatibility.rs`.
 
-- [ ] Enable rusqlite's `fallible_uint` feature alongside `bundled` and
+- [x] Enable rusqlite's `fallible_uint` feature alongside `bundled` and
   `functions`, restoring the unsigned conversions previously supplied by default.
-- [ ] Replace `rusqlite::DatabaseName::Main` with `rusqlite::MAIN_DB` in
+- [x] Replace `rusqlite::DatabaseName::Main` with `rusqlite::MAIN_DB` in
   `Db::peek_next_filtered` to use the new database-name API.
-- [ ] Convert the digest bytes to exactly two lowercase hexadecimal digits each
+- [x] Convert the digest bytes to exactly two lowercase hexadecimal digits each
   at the three existing encoding sites, using this expression with each site's
   existing digest input:
   ```rust
@@ -80,6 +80,18 @@ unsigned SQLite reads and E0277 for SHA-2's new digest array lacking `LowerHex`.
 - [ ] Rerun all-target compilation, then the focused config/clipboard/render/
   identity/filter tests and snapshot hash regression. Extend the plan with exact
   repairs only if fresh diagnostics reveal further upgrade incompatibilities.
+
+### 2b. Rust-minimum lint compatibility
+
+Strict Clippy now reports `collapsible_if`: the raised Rust minimum enables
+let-chain syntax that the old 1.85 minimum excluded from suggestions.
+
+- [ ] Run `cargo clippy --fix --allow-dirty --offline --locked --all-targets -- -D warnings`
+  to apply its machine-applicable conditional repairs, then `cargo fmt --all`.
+- [ ] Inspect every changed condition for the same short-circuit order, bindings,
+  branch handling and effects. Keep the strict lint configuration intact.
+- [ ] Rerun strict Clippy and all-target compilation on Rust 1.89, then exercise
+  the affected behavior through the existing full suite.
 
 ### 3. Verify and review
 

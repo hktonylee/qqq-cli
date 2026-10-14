@@ -1479,7 +1479,7 @@ impl Db {
         }
     }
     pub fn peek_next_filtered(&mut self, filter: Option<&CompiledFilter>) -> Result<Option<Task>> {
-        if self.conn.is_readonly(rusqlite::DatabaseName::Main)? {
+        if self.conn.is_readonly(rusqlite::MAIN_DB)? {
             if let Some(path) = self.conn.path() {
                 // --wait may outlive a writer changing the journaling mode.
                 // Do this before beginning a read transaction (raw fd closes

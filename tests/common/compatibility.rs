@@ -98,7 +98,10 @@ pub fn expected(entry: &DatabaseFixture) -> Value {
 }
 
 pub fn sha256(data: &[u8]) -> String {
-    format!("{:x}", Sha256::digest(data))
+    Sha256::digest(data)
+        .iter()
+        .map(|byte| format!("{byte:02x}"))
+        .collect()
 }
 
 pub fn assert_file(path: &Path, bytes: u64, hash: &str) {
