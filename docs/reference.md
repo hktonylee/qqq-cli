@@ -57,7 +57,7 @@ qqq list --include-archived
 creation ID order. In a terminal with known width, it shows full descriptions
 with wrapped, aligned continuation lines; piped output keeps first-line previews.
 `show` adds messages, images, ownership history and Herdr link. Negative indexes
-work with `show`, `edit`, `archive`, `unarchive`, and `reopen`; `-1` selects newest task.
+work with `show`, `edit`, and `reopen`; `-1` selects newest task.
 
 `--oneline` limits terminal and watch views to each description's first line.
 JSON and search still use full descriptions.
@@ -440,16 +440,18 @@ ordinary shells human output, with existing `--json`/`--human` overrides.
 ## Archive and unarchive
 
 ```sh
-qqq archive 12
+qqq edit 12 --archive
 qqq list --include-archived
 qqq show 12
-qqq unarchive 12
+qqq edit 12 --unarchive
 ```
 
 Archive keeps task status, description, priority, messages, images, ownership
 history, and dependencies. `show`, `edit`, messages, and image export still work
 by ID. Archive/unarchive add history events; repeated commands change nothing.
-Events record supplied `--session` or `cli` when absent. In-progress tasks
+The flags skip the editor, conflict with each other and `--edit`, and can combine
+with other direct edits in one transaction. `--expected-revision` also guards
+archive changes. Events record supplied `--session` or `cli` when absent. In-progress tasks
 cannot be archived. An unfinished parent or prerequisite cannot be archived
 while a visible unfinished task depends on it. Adding links or unarchiving
 unfinished dependents under archived unfinished dependencies also fails.
@@ -562,7 +564,7 @@ description, priority, parent, prerequisites, messages, images, creation time, a
 history. Reopening clears recorded assignment metadata; saved Herdr link stays
 until next claim replaces it. Preflight-generated errors also reopen; ordinary
 manual errors use retry. New tasks fail without changes; repeating
-`reopen` also fails. Archived tasks require `unarchive` first. A
+`reopen` also fails. Archived tasks require `edit --unarchive` first. A
 task with an archived unfinished parent or prerequisite cannot reopen until
 dependency is unarchived or completed, or its link removed. Completed descendants
 stay completed; new dependents wait for reopened prerequisite to complete again. Reopened tasks return to default

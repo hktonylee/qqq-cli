@@ -75,6 +75,7 @@ pub struct EditOptions<'a> {
     pub expected_revision: Option<i64>,
     pub dependencies: crate::dependencies::Changes<'a>,
     pub tags: Option<&'a [String]>,
+    pub archived: Option<(bool, &'a str)>,
 }
 
 #[derive(Debug)]
@@ -924,6 +925,7 @@ impl Db {
                 expected_revision,
                 dependencies: Default::default(),
                 tags: None,
+                archived: None,
             },
         )
     }
@@ -1043,6 +1045,7 @@ impl Db {
                 expected_revision: None,
                 dependencies: Default::default(),
                 tags: None,
+                archived: None,
             },
         )
     }
@@ -1070,7 +1073,15 @@ impl Db {
             expected_revision,
             dependencies,
             tags,
+            archived,
         } = changes;
+        let has_edits = description.is_some()
+            || !images.is_empty()
+            || parent.is_some()
+            || priority.is_some()
+            || tags.is_some()
+            || !dependencies.is_empty()
+            || transition.is_some();
         let tags = tags
             .map(crate::tags::normalize)
             .transpose()?
@@ -1205,7 +1216,33 @@ impl Db {
             }
             None => {}
         }
-        ensure!(tx.execute("UPDATE tasks SET description=COALESCE(?,description),priority=COALESCE(?,priority),tags=COALESCE(?,tags),updated_at=strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE id=?",params![description,priority,tags,id])?==1,crate::errors::Info::missing_task(id));
+        let mut archive_changed = false;
+        if let Some((archived, actor)) = archived {
+            nonempty(actor, "Actor")?;
+            let task = tx
+                .query_row(
+                    &format!("SELECT {TASK_COLUMNS} FROM tasks WHERE id=?"),
+                    [id],
+                    task_row,
+                )
+                .optional()?
+                .with_context(|| crate::errors::Info::missing_task(id))?;
+            if task.archived != archived {
+                crate::archive::validate(&tx, &task, archived, &std::collections::BTreeMap::new())?;
+                tx.execute(
+                    "UPDATE tasks SET archived=? WHERE id=?",
+                    params![archived, id],
+                )?;
+                tx.execute(
+                    "INSERT INTO events(task_id,session,action) VALUES (?,?,?)",
+                    params![id, actor, if archived { "archive" } else { "unarchive" }],
+                )?;
+                archive_changed = true;
+            }
+        }
+        if archived.is_none() || has_edits || archive_changed {
+            ensure!(tx.execute("UPDATE tasks SET description=COALESCE(?,description),priority=COALESCE(?,priority),tags=COALESCE(?,tags),updated_at=strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE id=?",params![description,priority,tags,id])?==1,crate::errors::Info::missing_task(id));
+        }
         let image_ids = Self::save_images(&tx, &self.image_store, &mut pending, id, images)?;
         if !image_spans.is_empty() {
             let source = description.context("Image references require description")?;

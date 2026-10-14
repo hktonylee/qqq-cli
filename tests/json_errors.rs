@@ -82,7 +82,7 @@ fn json_missing_tasks_and_project_have_structured_context() {
     for args in [
         vec!["show", "42"],
         vec!["edit", "42", "-d", "Draft"],
-        vec!["archive", "42"],
+        vec!["edit", "42", "--archive"],
         vec!["delete", "42"],
         vec!["message", "42", "Hello"],
         vec!["complete", "42", "--session", "caller"],
@@ -258,7 +258,7 @@ fn json_content_conflicts_expose_revisions_without_description_or_mutation() {
     );
     assert!(!result.to_string().contains("Private"));
     assert_eq!(ok(root.path(), &["show", "1"]), before);
-    ok(root.path(), &["archive", "1"]);
+    ok(root.path(), &["edit", "1", "--archive"]);
     ok(root.path(), &["delete", "1", "--yes"]);
     let removed = error(
         run(
@@ -428,7 +428,7 @@ fn json_removed_external_editor_task_has_conflict_and_recovery_paths() {
     fs::write(
         root.path().join("editor.sh"),
         r#"
-"$QQQ_JSON_TEST_BINARY" --json archive 1 >/dev/null
+"$QQQ_JSON_TEST_BINARY" --json edit 1 --archive >/dev/null
 "$QQQ_JSON_TEST_BINARY" --json delete 1 --yes >/dev/null
 printf 'Local retained text' > "$1"
 "#,

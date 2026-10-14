@@ -58,6 +58,88 @@ fn project() -> TempDir {
     dir
 }
 
+#[test]
+fn edit_archive_flags_apply_atomically_and_reject_conflicts() {
+    let dir = project();
+    let path = dir.path();
+    ok(path, &["add", "Original"]);
+    let archived = ok(
+        path,
+        &[
+            "edit",
+            "-1",
+            "--archive",
+            "--description",
+            "Updated",
+            "--priority",
+            "7",
+        ],
+    );
+    assert_eq!(archived["archived"], true);
+    assert_eq!(archived["description"], "Updated");
+    assert_eq!(archived["priority"], 7);
+    assert_eq!(ok(path, &["show", "1"])["events"][0]["action"], "archive");
+    ok(path, &["edit", "1", "--unarchive"]);
+    let before = ok(path, &["show", "1"]);
+    for args in [
+        vec!["edit", "1", "--archive", "--unarchive"],
+        vec!["edit", "1", "--archive", "--edit"],
+        vec!["archive", "1"],
+        vec!["unarchive", "1"],
+    ] {
+        assert_eq!(run(path, &args).status.code(), Some(2), "{args:?}");
+    }
+    assert_eq!(ok(path, &["show", "1"]), before);
+    ok(path, &["next", "--local", "--session", "owner"]);
+    let before = ok(path, &["show", "1"]);
+    fail(
+        path,
+        &["edit", "1", "--archive", "--description", "Rejected"],
+        "in progress",
+    );
+    assert_eq!(ok(path, &["show", "1"]), before);
+}
+
+#[test]
+fn edit_archive_revision_failure_and_metadata_failure_leave_no_partial_changes() {
+    let dir = project();
+    let path = dir.path();
+    ok(path, &["add", "Original"]);
+    let before = ok(path, &["show", "1"]);
+    fail(
+        path,
+        &["edit", "1", "--archive", "--expected-revision", "2"],
+        "revision",
+    );
+    assert_eq!(ok(path, &["show", "1"]), before);
+    fail(
+        path,
+        &["edit", "1", "--archive", "--description", ""],
+        "Description",
+    );
+    assert_eq!(ok(path, &["show", "1"]), before);
+    let archived = ok(
+        path,
+        &[
+            "edit",
+            "1",
+            "--archive",
+            "--expected-revision",
+            "1",
+            "--session",
+            "reviewer",
+        ],
+    );
+    assert_eq!(
+        archived["content_revision"],
+        before["task"]["content_revision"]
+    );
+    let after = ok(path, &["show", "1"]);
+    assert_eq!(after["events"][0]["session"], "reviewer");
+    ok(path, &["edit", "1", "--archive"]);
+    assert_eq!(ok(path, &["show", "1"]), after);
+}
+
 fn human(path: &Path, args: &[&str]) -> String {
     let output = Command::new(env!("CARGO_BIN_EXE_qqq"))
         .arg("--human")
@@ -174,7 +256,7 @@ fn archive_round_trip_preserves_task_and_history_without_duplicate_events() {
     );
     ok(path, &["message", "1", "Keep note"]);
     let before = ok(path, &["show", "1"]);
-    let archived = ok(path, &["archive", "1"]);
+    let archived = ok(path, &["edit", "1", "--archive"]);
     assert_eq!(archived["status"], created["status"]);
     assert_eq!(archived["description"], created["description"]);
     assert_eq!(archived["priority"], 7);
@@ -189,13 +271,13 @@ fn archive_round_trip_preserves_task_and_history_without_duplicate_events() {
     assert_eq!(after["events"].as_array().unwrap().len(), 1);
     assert_eq!(after["events"][0]["action"], "archive");
     assert_eq!(after["events"][0]["session"], "cli");
-    let repeated = ok(path, &["archive", "1"]);
+    let repeated = ok(path, &["edit", "1", "--archive"]);
     assert_eq!(repeated["updated_at"], archived["updated_at"]);
     assert_eq!(ok(path, &["show", "1"])["events"], after["events"]);
-    let restored = ok(path, &["unarchive", "1"]);
+    let restored = ok(path, &["edit", "1", "--unarchive"]);
     assert_eq!(restored["archived"], false);
     assert_eq!(ok(path, &["show", "1"])["events"][1]["action"], "unarchive");
-    let repeated = ok(path, &["unarchive", "1"]);
+    let repeated = ok(path, &["edit", "1", "--unarchive"]);
     assert_eq!(repeated["updated_at"], restored["updated_at"]);
     assert_eq!(
         ok(path, &["show", "1"])["events"].as_array().unwrap().len(),
@@ -205,7 +287,7 @@ fn archive_round_trip_preserves_task_and_history_without_duplicate_events() {
     ok(path, &["next", "--session", "worker"]);
     ok(path, &["complete", "1", "--session", "worker"]);
     let completed_before = ok(path, &["show", "1"]);
-    let completed = ok(path, &["archive", "1"]);
+    let completed = ok(path, &["edit", "1", "--archive"]);
     assert_eq!(completed["status"], "completed");
     let completed_after = ok(path, &["show", "1"]);
     assert_eq!(completed_after["events"][2], completed_before["events"][2]);
@@ -219,7 +301,7 @@ fn active_tasks_cannot_be_archived() {
     let path = dir.path();
     ok(path, &["add", "Active"]);
     ok(path, &["next", "--session", "worker"]);
-    fail(path, &["archive", "1"], "in progress");
+    fail(path, &["edit", "1", "--archive"], "in progress");
     assert_eq!(ok(path, &["show", "1"])["task"]["archived"], false);
     assert_eq!(ok(path, &["next", "--session", "worker"])["id"], 1);
 }
@@ -244,7 +326,7 @@ fn errored_task_keeps_status_and_history_across_archive() {
         ],
     );
     let before = ok(path, &["show", "1"]);
-    let archived = ok(path, &["archive", "1", "--session", "reviewer"]);
+    let archived = ok(path, &["edit", "1", "--archive", "--session", "reviewer"]);
     assert_eq!(archived["status"], "error");
     assert_eq!(archived["archived"], true);
     let after = ok(path, &["show", "1"]);
@@ -253,7 +335,7 @@ fn errored_task_keeps_status_and_history_across_archive() {
     assert_eq!(after["events"][1], before["events"][1]);
     assert_eq!(after["events"][2]["session"], "reviewer");
     assert_eq!(after["events"][2]["action"], "archive");
-    assert_eq!(ok(path, &["unarchive", "1"])["status"], "error");
+    assert_eq!(ok(path, &["edit", "1", "--unarchive"])["status"], "error");
 }
 
 #[test]
@@ -263,18 +345,22 @@ fn archive_rejects_blocked_children_and_completed_parent_still_releases_child() 
     ok(path, &["add", "Parent"]);
     ok(path, &["add", "Child", "--parent", "1"]);
     ok(path, &["add", "Grandchild", "--parent", "2"]);
-    fail(path, &["archive", "1"], "unfinished child");
-    fail(path, &["archive", "2"], "unfinished child");
-    ok(path, &["archive", "3"]);
-    ok(path, &["archive", "2"]);
-    ok(path, &["archive", "1"]);
-    fail(path, &["unarchive", "2"], "archived unfinished parent");
-    ok(path, &["unarchive", "1"]);
-    ok(path, &["unarchive", "2"]);
-    ok(path, &["unarchive", "3"]);
+    fail(path, &["edit", "1", "--archive"], "unfinished child");
+    fail(path, &["edit", "2", "--archive"], "unfinished child");
+    ok(path, &["edit", "3", "--archive"]);
+    ok(path, &["edit", "2", "--archive"]);
+    ok(path, &["edit", "1", "--archive"]);
+    fail(
+        path,
+        &["edit", "2", "--unarchive"],
+        "archived unfinished parent",
+    );
+    ok(path, &["edit", "1", "--unarchive"]);
+    ok(path, &["edit", "2", "--unarchive"]);
+    ok(path, &["edit", "3", "--unarchive"]);
     ok(path, &["next", "--session", "parent-worker"]);
     ok(path, &["complete", "1", "--session", "parent-worker"]);
-    ok(path, &["archive", "1"]);
+    ok(path, &["edit", "1", "--archive"]);
     assert_eq!(ok(path, &["next", "--session", "child-worker"])["id"], 2);
 }
 
@@ -285,8 +371,8 @@ fn archived_unfinished_parent_rejects_new_and_reparented_unfinished_children() {
     ok(path, &["add", "Parent"]);
     ok(path, &["add", "Existing"]);
     ok(path, &["add", "Archived child"]);
-    ok(path, &["archive", "3"]);
-    ok(path, &["archive", "1"]);
+    ok(path, &["edit", "3", "--archive"]);
+    ok(path, &["edit", "1", "--archive"]);
     fail(
         path,
         &["add", "Blocked", "--parent", "1"],
@@ -311,7 +397,7 @@ fn default_list_hides_archived_and_explicit_list_restores_visibility() {
     let path = dir.path();
     ok(path, &["add", "Visible"]);
     ok(path, &["add", "Hidden"]);
-    ok(path, &["archive", "2"]);
+    ok(path, &["edit", "2", "--archive"]);
     let visible = ok(path, &["list"]);
     assert_eq!(visible.as_array().unwrap().len(), 1);
     assert_eq!(visible[0]["description"], "Visible");
@@ -330,7 +416,7 @@ fn hidden_completed_task_does_not_consume_visible_completion_limit() {
         ok(path, &["next", "--session", "worker"]);
         ok(path, &["complete", &id.to_string(), "--session", "worker"]);
     }
-    ok(path, &["archive", "3"]);
+    ok(path, &["edit", "3", "--archive"]);
     let visible = ok(path, &["list", "--max-completed", "1"]);
     assert_eq!(visible.as_array().unwrap().len(), 1);
     assert_eq!(visible[0]["id"], 2);
@@ -350,7 +436,7 @@ fn archived_ready_task_is_skipped_by_concurrent_claims() {
     ok(path, &["add", "High", "--priority", "100"]);
     ok(path, &["add", "First", "--priority", "5"]);
     ok(path, &["add", "Second", "--priority", "5"]);
-    ok(path, &["archive", "1"]);
+    ok(path, &["edit", "1", "--archive"]);
     let first = command(path)
         .args(["next", "--session", "one"])
         .spawn()
@@ -371,7 +457,7 @@ fn archived_ready_task_is_skipped_by_concurrent_claims() {
     ids.sort();
     assert_eq!(ids, [2, 3]);
     assert!(ok(path, &["next", "--session", "three"]).is_null());
-    ok(path, &["unarchive", "1"]);
+    ok(path, &["edit", "1", "--unarchive"]);
     assert_eq!(ok(path, &["next", "--session", "three"])["id"], 1);
 }
 
@@ -380,7 +466,7 @@ fn human_and_json_views_identify_archived_tasks_without_changing_description() {
     let dir = project();
     let path = dir.path();
     ok(path, &["add", "Keep title"]);
-    let archive = human(path, &["archive", "-1"]);
+    let archive = human(path, &["edit", "-1", "--archive"]);
     assert!(archive.contains("Archived: yes"), "{archive}");
     let show = human(path, &["show", "1"]);
     assert!(show.contains("Archived:") && show.contains("yes"), "{show}");
@@ -389,7 +475,7 @@ fn human_and_json_views_identify_archived_tasks_without_changing_description() {
     let json = ok(path, &["list", "--include-archived"]);
     assert_eq!(json[0]["description"], "Keep title");
     assert_eq!(json[0]["archived"], true);
-    let restored = human(path, &["unarchive", "-1"]);
+    let restored = human(path, &["edit", "-1", "--unarchive"]);
     assert!(restored.contains("Archived: no"), "{restored}");
     assert!(!human(path, &["list"]).contains("[archived]"));
 }

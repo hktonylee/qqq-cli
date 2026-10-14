@@ -37,7 +37,7 @@ with tempfile.TemporaryDirectory(prefix="qqq-bulk-pty-") as folder:
     for description in ("First", initial_second, "Third"):
         cli("add", description)
     if scenario == "range_selection":
-        cli("archive", "1")
+        cli("edit", "1", "--archive")
     if scenario == "archive_active":
         cli("next", "--local", "--session", "foreign", "--filter", "id == 3")
     master, slave = pty.openpty()

@@ -67,7 +67,7 @@ with tempfile.TemporaryDirectory() as directory:
              and (visible.x, visible.y) == (len("Full original details local"), 3))
         caret = (visible.x, visible.y)
         if scenario == "removed":
-            cli("archive", "1")
+            cli("edit", "1", "--archive")
             cli("delete", "1", "--yes")
         else:
             newer = cli("edit", "1", "-d", "Newer DB text\nComplete DB details")
@@ -76,7 +76,7 @@ with tempfile.TemporaryDirectory() as directory:
         if scenario == "reload_removed":
             send(b"r")
             wait(lambda: "Reload current DB text?" in visible.text())
-            cli("archive", "1")
+            cli("edit", "1", "--archive")
             cli("delete", "1", "--yes")
             send(b"y")
             wait(lambda: "Current DB: task removed" in visible.text() and "Content conflict #1" in visible.text()

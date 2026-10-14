@@ -132,7 +132,7 @@ fn blocked_selection_uses_parent_and_prerequisites_excludes_archives() {
     ok(p, &["add", "Prerequisite"]);
     ok(p, &["add", "Blocked", "--depends-on", "1"]);
     ok(p, &["add", "Archived", "--depends-on", "1"]);
-    ok(p, &["archive", "3"]);
+    ok(p, &["edit", "3", "--archive"]);
     assert_eq!(
         ids(&ok(
             p,
@@ -244,7 +244,7 @@ fn saved_and_explicit_selectors_use_and_with_visibility_overrides() {
             "5",
         ],
     );
-    ok(p, &["archive", "4"]);
+    ok(p, &["edit", "4", "--archive"]);
     ok(
         p,
         &[

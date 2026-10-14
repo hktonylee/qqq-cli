@@ -721,8 +721,8 @@ fn preflight_failed_owner_can_be_explicitly_reopened() {
     let f = Fixture::new();
     f.gone();
     assert_eq!(f.ok(&["show", "1"])["task"]["status"], "error");
-    f.ok(&["archive", "1"]);
-    f.ok(&["unarchive", "1"]);
+    f.ok(&["edit", "1", "--archive"]);
+    f.ok(&["edit", "1", "--unarchive"]);
     assert_eq!(
         f.ok(&["reopen", "1", "--session", "reviewer"])["status"],
         "new"

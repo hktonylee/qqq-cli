@@ -255,7 +255,7 @@ fn import_existing_parents_follow_ordinary_add_rules_and_preview_resolution() {
     let preview = import_ok(p, &value, true);
     assert_eq!(preview["tasks"][0]["parent_id"], 1);
     assert!(preview["tasks"][0]["id"].is_null());
-    ok(p, &["archive", "1"]);
+    ok(p, &["edit", "1", "--archive"]);
     for dry_run in [false, true] {
         assert!(!file_import(p, &value, dry_run).status.success());
     }
@@ -270,10 +270,10 @@ fn import_existing_parents_follow_ordinary_add_rules_and_preview_resolution() {
             .len(),
         1
     );
-    ok(p, &["unarchive", "1"]);
+    ok(p, &["edit", "1", "--unarchive"]);
     ok(p, &["next", "--local", "--session", "done"]);
     ok(p, &["complete", "1", "--session", "done"]);
-    ok(p, &["archive", "1"]);
+    ok(p, &["edit", "1", "--archive"]);
     assert_eq!(import_ok(p, &value, false)["mapping"]["follow"], 2);
     assert_eq!(ok(p, &["next", "--dry-run"])["id"], 2);
 }
@@ -477,7 +477,7 @@ fn import_parent_archival_and_import_are_serialized_without_unfinished_archived_
             .spawn()
             .unwrap();
         let archive = command(p)
-            .args(["archive", "1"])
+            .args(["edit", "1", "--archive"])
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
             .spawn()

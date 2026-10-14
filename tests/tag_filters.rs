@@ -119,7 +119,7 @@ fn tag_lists_compose_with_filters_and_retain_visible_context() {
         p,
         &["add", "Layout archived", "--tag", "UI", "--priority", "9"],
     );
-    ok(p, &["archive", "4"]);
+    ok(p, &["edit", "4", "--archive"]);
     let tasks = ok(
         p,
         &[
@@ -192,7 +192,7 @@ fn tag_claims_preserve_readiness_order_and_owned_reuse() {
         p,
         &["add", "Archived", "--tag", "frontend", "--priority", "99"],
     );
-    ok(p, &["archive", "5"]);
+    ok(p, &["edit", "5", "--archive"]);
     ok(p, &["add", "First", "--tag", "frontend", "--priority", "5"]);
     ok(
         p,

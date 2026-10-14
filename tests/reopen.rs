@@ -311,11 +311,11 @@ fn archived_completed_task_requires_unarchive_before_reopen() {
     ok(path, &["add", "Done"]);
     ok(path, &["next", "--session", "worker"]);
     ok(path, &["complete", "1", "--session", "worker"]);
-    ok(path, &["archive", "1"]);
+    ok(path, &["edit", "1", "--archive"]);
     let before = ok(path, &["show", "1"]);
     fail(path, &["reopen", "1"], "unarchive first");
     assert_eq!(ok(path, &["show", "1"]), before);
-    ok(path, &["unarchive", "1"]);
+    ok(path, &["edit", "1", "--unarchive"]);
     assert_eq!(ok(path, &["reopen", "1"])["status"], "new");
 }
 
@@ -330,11 +330,11 @@ fn reopen_rejects_completed_child_under_archived_unfinished_parent() {
     ok(path, &["next", "--session", "worker"]);
     ok(path, &["complete", "2", "--session", "worker"]);
     ok(path, &["reopen", "1"]);
-    ok(path, &["archive", "1"]);
+    ok(path, &["edit", "1", "--archive"]);
     let before = ok(path, &["show", "2"]);
     fail(path, &["reopen", "2"], "archived unfinished parent");
     assert_eq!(ok(path, &["show", "2"]), before);
-    ok(path, &["unarchive", "1"]);
+    ok(path, &["edit", "1", "--unarchive"]);
     assert_eq!(ok(path, &["reopen", "2"])["status"], "new");
     assert!(ok(path, &["next", "--session", "worker"])["id"] == 1);
 }

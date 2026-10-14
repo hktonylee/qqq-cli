@@ -233,10 +233,10 @@ fn watch_respects_archive_visibility_on_every_snapshot() {
     let included = Watcher::start(path, &["list", "--watch", "--json", "--include-archived"]);
     assert_eq!(default.snapshot()[0]["description"], "Keep");
     assert_eq!(included.snapshot()[0]["description"], "Keep");
-    ok(path, &["archive", "1"]);
+    ok(path, &["edit", "1", "--archive"]);
     assert_eq!(default.snapshot(), serde_json::json!([]));
     assert_eq!(included.snapshot()[0]["archived"], true);
-    ok(path, &["unarchive", "1"]);
+    ok(path, &["edit", "1", "--unarchive"]);
     assert_eq!(default.snapshot()[0]["archived"], false);
     assert_eq!(included.snapshot()[0]["archived"], false);
 }

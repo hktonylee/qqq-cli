@@ -72,7 +72,7 @@ fn delete_previews_then_removes_task_data_and_never_reuses_id() {
     fs::write(path.join("a.png"), b"\x89PNG\r\n\x1a\nfixture").unwrap();
     ok(path, &["add", "Keep", "--image", "a.png"]);
     ok(path, &["message", "1", "note"]);
-    ok(path, &["archive", "1"]);
+    ok(path, &["edit", "1", "--archive"]);
     let conn = db(path);
     conn.execute(
         "INSERT INTO herdr_links(task_id,link_json) VALUES (1,'{}')",
@@ -149,8 +149,8 @@ fn delete_requires_archived_leaf_and_explains_unblocking_steps() {
     )
     .unwrap();
     ok(path, &["add", "Child", "--parent", "1"]);
-    ok(path, &["archive", "2"]);
-    ok(path, &["archive", "1"]);
+    ok(path, &["edit", "2", "--archive"]);
+    ok(path, &["edit", "1", "--archive"]);
     fail(path, &["delete", "1"], "child");
     assert_eq!(ok(path, &["show", "1"])["task"]["archived"], true);
     assert_eq!(ok(path, &["show", "2"])["task"]["parent_id"], 1);
@@ -163,7 +163,7 @@ fn delete_restores_staged_images_when_database_delete_fails() {
     fs::write(path.join("a.png"), b"\x89PNG\r\n\x1a\nfixture").unwrap();
     ok(path, &["add", "Keep", "--image", "a.png"]);
     ok(path, &["message", "1", "note"]);
-    ok(path, &["archive", "1"]);
+    ok(path, &["edit", "1", "--archive"]);
     let conn = db(path);
     conn.execute(
         "INSERT INTO herdr_links(task_id,link_json) VALUES (1,'{}')",
@@ -195,7 +195,7 @@ fn delete_rejects_missing_image_without_changing_database() {
     let path = dir.path();
     fs::write(path.join("a.png"), b"\x89PNG\r\n\x1a\nfixture").unwrap();
     ok(path, &["add", "Keep", "--image", "a.png"]);
-    ok(path, &["archive", "1"]);
+    ok(path, &["edit", "1", "--archive"]);
     fs::remove_file(path.join(".qqq/images/1/1.png")).unwrap();
     let db_path = path.join(".qqq/qqq.db");
     let before = fs::read(&db_path).unwrap();
@@ -218,7 +218,7 @@ fn next_open_restores_interrupted_precommit_stage() {
     let path = dir.path();
     fs::write(path.join("a.png"), b"\x89PNG\r\n\x1a\nfixture").unwrap();
     ok(path, &["add", "Keep", "--image", "a.png"]);
-    ok(path, &["archive", "1"]);
+    ok(path, &["edit", "1", "--archive"]);
     let wrapper = stage_task_image(path);
     let doctor = command(path, true, &["doctor"]);
     assert_eq!(doctor.status.code(), Some(1));
@@ -241,7 +241,7 @@ fn preview_never_recovers_interrupted_stage() {
     let path = dir.path();
     fs::write(path.join("a.png"), b"\x89PNG\r\n\x1a\nfixture").unwrap();
     ok(path, &["add", "Keep", "--image", "a.png"]);
-    ok(path, &["archive", "1"]);
+    ok(path, &["edit", "1", "--archive"]);
     let wrapper = stage_task_image(path);
     fail(path, &["delete", "1"], "recovery");
     assert!(wrapper.join("images/1.png").is_file());
@@ -253,7 +253,7 @@ fn preview_never_migrates_legacy_database() {
     let dir = project();
     let path = dir.path();
     ok(path, &["add", "Keep"]);
-    ok(path, &["archive", "1"]);
+    ok(path, &["edit", "1", "--archive"]);
     let conn = db(path);
     conn.pragma_update(None, "user_version", 8).unwrap();
     let db_path = path.join(".qqq/qqq.db");
@@ -273,7 +273,7 @@ fn next_open_cleans_interrupted_postcommit_stage() {
     let path = dir.path();
     fs::write(path.join("a.png"), b"\x89PNG\r\n\x1a\nfixture").unwrap();
     ok(path, &["add", "Keep", "--image", "a.png"]);
-    ok(path, &["archive", "1"]);
+    ok(path, &["edit", "1", "--archive"]);
     let wrapper = stage_task_image(path);
     let conn = db(path);
     conn.execute_batch(
@@ -308,7 +308,7 @@ fn confirmed_human_output_distinguishes_completed_deletion() {
     let dir = project();
     let path = dir.path();
     ok(path, &["add", "Gone"]);
-    ok(path, &["archive", "1"]);
+    ok(path, &["edit", "1", "--archive"]);
     let output = command(path, false, &["delete", "1", "--yes"]);
     assert!(output.status.success());
     let text = String::from_utf8(output.stdout).unwrap();
@@ -321,7 +321,7 @@ fn permanent_delete_requires_explicit_positive_id() {
     let dir = project();
     let path = dir.path();
     ok(path, &["add", "Keep"]);
-    ok(path, &["archive", "1"]);
+    ok(path, &["edit", "1", "--archive"]);
     let output = command(path, true, &["delete", "-1", "--yes"]);
     assert_eq!(output.status.code(), Some(2));
     assert!(output.stdout.is_empty());
@@ -333,7 +333,7 @@ fn delete_rechecks_archive_guard_after_competing_writer_commits() {
     let dir = project();
     let path = dir.path();
     ok(path, &["add", "Keep"]);
-    ok(path, &["archive", "1"]);
+    ok(path, &["edit", "1", "--archive"]);
     let conn = db(path);
     conn.execute_batch("BEGIN IMMEDIATE; UPDATE tasks SET archived=0 WHERE id=1")
         .unwrap();
@@ -364,7 +364,7 @@ fn delete_rejects_symlinked_attachment_without_touching_target() {
     let path = dir.path();
     fs::write(path.join("a.png"), b"\x89PNG\r\n\x1a\nfixture").unwrap();
     ok(path, &["add", "Keep", "--image", "a.png"]);
-    ok(path, &["archive", "1"]);
+    ok(path, &["edit", "1", "--archive"]);
     let stored = path.join(".qqq/images/1/1.png");
     fs::remove_file(&stored).unwrap();
     symlink(path.join("a.png"), &stored).unwrap();

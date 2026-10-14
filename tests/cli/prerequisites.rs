@@ -158,7 +158,7 @@ fn prerequisite_archive_error_reopen_and_active_claim_rules_match_parent_safety(
     let p = d.path();
     ok(p, &["add", "API"]);
     ok(p, &["add", "Join", "--depends-on", "1"]);
-    fail(p, &["archive", "1"], "unfinished");
+    fail(p, &["edit", "1", "--archive"], "unfinished");
     ok(p, &["next", "--session", "a"]);
     ok(
         p,
@@ -176,9 +176,9 @@ fn prerequisite_archive_error_reopen_and_active_claim_rules_match_parent_safety(
     assert!(ok(p, &["next", "--dry-run"]).is_null());
     ok(p, &["edit", "1", "--set-status", "new"]);
     finish(p, "1", "a");
-    ok(p, &["archive", "1"]);
+    ok(p, &["edit", "1", "--archive"]);
     assert_eq!(ok(p, &["next", "--session", "join"])["id"], 2);
-    ok(p, &["unarchive", "1"]);
+    ok(p, &["edit", "1", "--unarchive"]);
     ok(p, &["reopen", "1"]);
     assert_eq!(ok(p, &["next", "--session", "join"])["id"], 2);
     ok(
@@ -186,9 +186,9 @@ fn prerequisite_archive_error_reopen_and_active_claim_rules_match_parent_safety(
         &["edit", "2", "--set-status", "new", "--session", "join"],
     );
     assert!(ok(p, &["next", "--dry-run", "--filter", "id == 2"]).is_null());
-    ok(p, &["archive", "2"]);
-    ok(p, &["archive", "1"]);
-    fail(p, &["unarchive", "2"], "archived unfinished");
+    ok(p, &["edit", "2", "--archive"]);
+    ok(p, &["edit", "1", "--archive"]);
+    fail(p, &["edit", "2", "--unarchive"], "archived unfinished");
     fail(
         p,
         &["add", "Later", "--depends-on", "1"],
@@ -196,7 +196,7 @@ fn prerequisite_archive_error_reopen_and_active_claim_rules_match_parent_safety(
     );
     fail(p, &["delete", "1"], "prerequisite");
     ok(p, &["edit", "2", "--clear-depends-on"]);
-    ok(p, &["unarchive", "2"]);
+    ok(p, &["edit", "2", "--unarchive"]);
 }
 
 #[test]
@@ -487,7 +487,7 @@ fn completed_dependents_keep_status_and_reopen_validates_archived_prerequisites(
         ok(p, &["next", "--dry-run", "--filter", "id == 3"])["id"],
         3
     );
-    ok(p, &["archive", "1"]);
+    ok(p, &["edit", "1", "--archive"]);
     fail(p, &["reopen", "2"], "archived unfinished prerequisite");
     ok(p, &["edit", "2", "--clear-depends-on", "--depends-on", "1"]);
     assert_eq!(ok(p, &["show", "2"])["task"]["status"], "completed");
@@ -605,7 +605,7 @@ fn prerequisite_errors_preserve_structured_json_codes_and_details() {
             vec!["edit", "2", "--remove-depends-on", "999"],
             "INVALID_ARGUMENT",
         ),
-        (vec!["archive", "1"], "INVALID_TRANSITION"),
+        (vec!["edit", "1", "--archive"], "INVALID_TRANSITION"),
     ] {
         let output = run(p, &args);
         assert!(!output.status.success());

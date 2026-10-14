@@ -503,10 +503,10 @@ fn selected_content_owner_dependencies_and_missing_rows_invalidate_preview() {
                 f.ok(&["edit", "2", "--depends-on", "3"]);
             }
             "archive" => {
-                f.ok(&["archive", "2"]);
+                f.ok(&["edit", "2", "--archive"]);
             }
             "delete" => {
-                f.ok(&["archive", "2"]);
+                f.ok(&["edit", "2", "--archive"]);
                 f.ok(&["delete", "2", "--yes"]);
             }
             "image" => {
@@ -704,7 +704,7 @@ fn direct_status_selection_includes_all_completed_rows_and_explicit_archived_ids
         "--session",
         "worker",
     ]);
-    f.ok(&["archive", "5"]);
+    f.ok(&["edit", "5", "--archive"]);
     assert_eq!(
         f.ok(&["bulk", "--status", "completed", "--priority", "5"])["selected_ids"],
         json!([1, 2])

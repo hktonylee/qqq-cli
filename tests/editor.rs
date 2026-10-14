@@ -338,7 +338,7 @@ fn external_editor_removal_keeps_local_draft_without_recreating_task() {
         p,
         r#"
 printf '%s' "$2" > edited-path
-"$QQQ_EDITOR_BINARY" --json archive 1 > /dev/null
+"$QQQ_EDITOR_BINARY" --json edit 1 --archive > /dev/null
 "$QQQ_EDITOR_BINARY" --json delete 1 --yes > /dev/null
 printf 'Local text survives removal\n' > "$2"
 "#,

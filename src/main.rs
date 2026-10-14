@@ -245,21 +245,15 @@ enum Commands {
         /// Claim order: -100 through 100, higher first.
         #[arg(long, allow_hyphen_values = true, value_parser = clap::value_parser!(i64).range(-100..=100))]
         priority: Option<i64>,
+        /// Hide task from default lists and claims; skips editor.
+        #[arg(long, conflicts_with_all = ["unarchive", "edit"])]
+        archive: bool,
+        /// Restore archived task to default lists and claims; skips editor.
+        #[arg(long, conflicts_with = "edit")]
+        unarchive: bool,
         /// Append image file bytes without opening editor. Repeat for multiple images.
         #[arg(long = "image", value_name = "PATH")]
         images: Vec<PathBuf>,
-    },
-    /// Hide a task from default lists and claims while preserving its data.
-    Archive {
-        /// Task ID, or negative creation index: -1 is newest.
-        #[arg(allow_negative_numbers = true)]
-        id: i64,
-    },
-    /// Restore an archived task to default lists and claims.
-    Unarchive {
-        /// Task ID, or negative creation index: -1 is newest.
-        #[arg(allow_negative_numbers = true)]
-        id: i64,
     },
     /// Preview or permanently delete an archived task without dependent children.
     Delete {
@@ -843,6 +837,8 @@ fn execute(
             remove_depends_on,
             clear_depends_on,
             set_tags,
+            archive,
+            unarchive,
         } => {
             let tags = set_tags.as_deref().map(tags::parse).transpose()?;
             ensure!(
@@ -872,6 +868,8 @@ fn execute(
                     && depends_on.is_empty()
                     && remove_depends_on.is_empty()
                     && !clear_depends_on
+                    && !archive
+                    && !unarchive
                     && images.is_empty())
             {
                 let snapshot = db.content_snapshot(id)?;
@@ -978,6 +976,13 @@ fn execute(
                         priority,
                         expected_revision,
                         tags: tags.as_deref(),
+                        archived: if archive {
+                            Some((true, session_input.unwrap_or("cli")))
+                        } else if unarchive {
+                            Some((false, session_input.unwrap_or("cli")))
+                        } else {
+                            None
+                        },
                         dependencies: dependencies::Changes {
                             add: &depends_on,
                             remove: &remove_depends_on,
@@ -986,14 +991,6 @@ fn execute(
                     }
                 )?)
             }
-        }
-        Commands::Archive { id } => {
-            let id = db.resolve_task_id(id)?;
-            json!(db.set_archived(id, true, session_input.unwrap_or("cli"))?)
-        }
-        Commands::Unarchive { id } => {
-            let id = db.resolve_task_id(id)?;
-            json!(db.set_archived(id, false, session_input.unwrap_or("cli"))?)
         }
         Commands::Delete { id, yes: true } => {
             json!(delete::run(&mut db, &path, id)?)

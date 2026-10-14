@@ -130,7 +130,7 @@ fn archive_and_completed_limits_still_bound_context() {
     ok(p, &["complete", "1", "--session", "parent"]);
     ok(p, &["add", "Child", "--parent", "1"]);
     ok(p, &["add", "Archived", "--priority", "9"]);
-    ok(p, &["archive", "3"]);
+    ok(p, &["edit", "3", "--archive"]);
     let tasks = ok(p, &["list", "--filter", "id == 2", "--max-completed", "0"]);
     assert_eq!(ids(&tasks), [2]);
     assert!(tasks[0].get("context_only").is_none());
@@ -213,7 +213,7 @@ fn next_filters_only_new_ready_candidates_keeps_owned_task() {
         &["add", "Auth blocked", "--parent", "1", "--priority", "90"],
     );
     ok(p, &["add", "Auth archived", "--priority", "99"]);
-    ok(p, &["archive", "5"]);
+    ok(p, &["edit", "5", "--archive"]);
     let filter = "like(description, 'Auth%')";
     assert_eq!(
         ok(

@@ -77,7 +77,7 @@ fn next_dry_run_previews_priority_filter_and_readiness_without_claim() {
     ok(p, &["add", "Parent"]);
     ok(p, &["add", "Blocked", "--parent", "1", "--priority", "100"]);
     ok(p, &["add", "Archived", "--priority", "100"]);
-    ok(p, &["archive", "3"]);
+    ok(p, &["edit", "3", "--archive"]);
     ok(p, &["add", "Match first", "--priority", "5"]);
     ok(p, &["add", "Match second", "--priority", "5"]);
     ok(p, &["add", "Done", "--priority", "100"]);
