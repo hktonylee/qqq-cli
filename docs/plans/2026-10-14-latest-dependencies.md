@@ -137,13 +137,20 @@ without a cursor query, even when the dimensions stay the same.
 
 ### 4. Integrate and deliver
 
-- [ ] Use finishing-a-development-branch: rebase onto current local master,
+- [x] Use finishing-a-development-branch: rebase onto current local master,
   fast-forward the clean base, verify identical committed tree and run relevant
   integrated checks. Install the verified release binary and compare its hash.
-- [ ] Smoke-test the installed command in an isolated temporary project:
+  Integrated tree matches the tested tree. Rust 1.89 all-target compilation and
+  50 identity/config/snapshot/SQL tests passed on master. The installed release
+  matches the tested binary byte for byte.
+- [x] Smoke-test the installed command in an isolated temporary project:
   `init`, `add`, `next --local`, `show`, `doctor` and `edit --complete`.
-- [ ] Read current task #231 requirements, complete it with its recorded owner,
+  All six commands passed with live Herdr pane `wC:p4`; `doctor` reported healthy
+  data and the smoke task completed.
+- [x] Read current task #231 requirements, complete it with its recorded owner,
   and verify completion.
+  Description and content revision 1 remained unchanged. Completion and its
+  recorded-owner event were read back successfully.
 
 After delivery, remove only this worktree/merged branch and resume exactly one
 blocking `qqq next --wait --local --json` process. Block on its output without
