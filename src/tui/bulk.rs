@@ -5,6 +5,7 @@ use super::{
 };
 use crate::bulk::{Actions, Report};
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
+use std::collections::BTreeSet;
 use unicode_segmentation::UnicodeSegmentation;
 use unicode_width::UnicodeWidthStr;
 
@@ -21,7 +22,6 @@ const ITEMS: [(char, &str); 7] = [
 #[derive(Clone, Copy)]
 enum InputKind {
     Add,
-    Remove,
     Replace,
     Priority,
 }
@@ -33,6 +33,12 @@ enum Stage {
         kind: InputKind,
         value: String,
         cursor: tag_input::Cursor,
+        error: String,
+    },
+    RemoveTags {
+        tags: Vec<String>,
+        selected: usize,
+        marked: BTreeSet<usize>,
         error: String,
     },
     RangeSelect {
@@ -56,6 +62,7 @@ pub(super) enum Intent {
     CancelSelection,
     Clear,
     Select(Vec<i64>),
+    RemoveTags,
     Preview(Actions),
     Apply(Report),
 }
@@ -84,6 +91,17 @@ impl View {
     }
     pub fn show_preview(&mut self, report: Report) {
         self.stage = Stage::Preview(report);
+        self.top = 0;
+    }
+    pub fn show_remove_tags(&mut self, mut tags: Vec<String>) {
+        tags.sort();
+        tags.dedup();
+        self.stage = Stage::RemoveTags {
+            tags,
+            selected: 0,
+            marked: BTreeSet::new(),
+            error: String::new(),
+        };
         self.top = 0;
     }
     pub fn show_error(&mut self, text: String) {
@@ -184,7 +202,7 @@ impl View {
                         });
                     }
                     KeyCode::Char('t') => InputKind::Add,
-                    KeyCode::Char('r') => InputKind::Remove,
+                    KeyCode::Char('r') => return Intent::RemoveTags,
                     KeyCode::Char('s') => InputKind::Replace,
                     KeyCode::Char('p') => InputKind::Priority,
                     _ => return Intent::None,
@@ -216,25 +234,19 @@ impl View {
                                 ..Default::default()
                             })
                             .map_err(|_| "Priority must be -100..100".to_owned()),
-                        InputKind::Add | InputKind::Remove | InputKind::Replace => {
-                            crate::tags::parse_lines(value)
-                                .map(|tags| match kind {
-                                    InputKind::Add => Actions {
-                                        add_tags: tags,
-                                        ..Default::default()
-                                    },
-                                    InputKind::Remove => Actions {
-                                        remove_tags: tags,
-                                        ..Default::default()
-                                    },
-                                    InputKind::Replace => Actions {
-                                        set_tags: Some(tags),
-                                        ..Default::default()
-                                    },
-                                    InputKind::Priority => unreachable!(),
-                                })
-                                .map_err(|failure| failure.to_string())
-                        }
+                        InputKind::Add | InputKind::Replace => crate::tags::parse_lines(value)
+                            .map(|tags| match kind {
+                                InputKind::Add => Actions {
+                                    add_tags: tags,
+                                    ..Default::default()
+                                },
+                                InputKind::Replace => Actions {
+                                    set_tags: Some(tags),
+                                    ..Default::default()
+                                },
+                                InputKind::Priority => unreachable!(),
+                            })
+                            .map_err(|failure| failure.to_string()),
                     }
                     .and_then(|actions| actions.normalize().map_err(|failure| failure.to_string()));
                     match actions {
@@ -243,6 +255,49 @@ impl View {
                     }
                 } else {
                     cursor.edit(value, error, key);
+                }
+            }
+            Stage::RemoveTags {
+                tags,
+                selected,
+                marked,
+                error,
+            } => {
+                if (control && key.code == KeyCode::Char('s'))
+                    || (!control && key.code == KeyCode::Enter)
+                {
+                    if marked.is_empty() {
+                        *error = "Select at least one tag".to_owned();
+                    } else {
+                        return Intent::Preview(Actions {
+                            remove_tags: tags
+                                .iter()
+                                .enumerate()
+                                .filter(|(index, _)| marked.contains(index))
+                                .map(|(_, tag)| tag.clone())
+                                .collect(),
+                            ..Default::default()
+                        });
+                    }
+                } else if !control {
+                    let last = tags.len().saturating_sub(1);
+                    match key.code {
+                        KeyCode::Up => *selected = selected.saturating_sub(1),
+                        KeyCode::Down => *selected = selected.saturating_add(1).min(last),
+                        KeyCode::PageUp => *selected = selected.saturating_sub(self.page),
+                        KeyCode::PageDown => {
+                            *selected = selected.saturating_add(self.page).min(last)
+                        }
+                        KeyCode::Home => *selected = 0,
+                        KeyCode::End => *selected = last,
+                        KeyCode::Char(' ') if !tags.is_empty() => {
+                            if !marked.insert(*selected) {
+                                marked.remove(selected);
+                            }
+                        }
+                        _ => return Intent::None,
+                    }
+                    error.clear();
                 }
             }
             Stage::RangeSelect {
@@ -354,7 +409,6 @@ impl View {
             let title = match kind {
                 InputKind::Priority => "Bulk priority",
                 InputKind::Add => "Bulk add tags",
-                InputKind::Remove => "Bulk remove tags",
                 InputKind::Replace => "Bulk replace tags",
             };
             let mut rows = tag_input::rows(None, value, cursor, error, width, height);
@@ -418,6 +472,46 @@ impl View {
                     "Up/Down Enter  Esc cancel",
                 )
             }
+            Stage::RemoveTags {
+                tags,
+                selected,
+                marked,
+                ..
+            } => {
+                let mut rows: Vec<_> = tags
+                    .iter()
+                    .enumerate()
+                    .map(|(index, tag)| {
+                        PopupRow::new(
+                            format!(
+                                "[{}] {tag}",
+                                if marked.contains(&index) { "x" } else { " " }
+                            ),
+                            if index == *selected {
+                                PopupKind::SelectedChoice
+                            } else {
+                                PopupKind::Choice
+                            },
+                        )
+                    })
+                    .collect();
+                if tags.is_empty() {
+                    rows.push(PopupRow::new("No tags on selected tasks", PopupKind::Body));
+                }
+                let hint = [
+                    "Up/Down pick  Space toggle  Enter/Ctrl-S preview  Esc cancel",
+                    "↑↓ pick Space toggle Enter/^S preview Esc",
+                    "↑↓ Space toggle ↵ preview Esc",
+                    "↑↓ Space ↵ Esc",
+                    "↑↓ Spc ↵ Esc",
+                    "␣ ↵ Esc",
+                    "Esc",
+                ]
+                .into_iter()
+                .find(|hint| hint.width() <= width)
+                .unwrap_or("");
+                (format!("Bulk remove tags ({})", self.ids.len()), rows, hint)
+            }
             Stage::Preview(report) => {
                 let mut lines = vec![
                     format!("IDs: {}", ids(&report.selected_ids)),
@@ -480,14 +574,24 @@ impl View {
             Stage::RangeSelect { .. } => unreachable!(),
             Stage::Input { .. } => unreachable!(),
         };
-        let visible = height.saturating_sub(2);
+        let error = match &self.stage {
+            Stage::RemoveTags { error, .. } if !error.is_empty() && height >= 3 => {
+                Some(PopupRow::new(error, PopupKind::Error))
+            }
+            _ => None,
+        };
+        let visible = height.saturating_sub(2 + usize::from(error.is_some()));
         self.page = visible.max(1);
         let mut top = self.top.min(body.len().saturating_sub(visible));
-        if visible > 0 && matches!(self.stage, Stage::Menu { .. }) {
-            let row = body
-                .iter()
-                .position(|row| row.kind == PopupKind::SelectedAction)
-                .expect("menu has selected action");
+        if visible > 0
+            && matches!(self.stage, Stage::Menu { .. } | Stage::RemoveTags { .. })
+            && let Some(row) = body.iter().position(|row| {
+                matches!(
+                    row.kind,
+                    PopupKind::SelectedAction | PopupKind::SelectedChoice
+                )
+            })
+        {
             if row < top {
                 top = row;
             } else if row >= top + visible {
@@ -498,6 +602,7 @@ impl View {
         let mut rows = Vec::new();
         if height >= 2 {
             rows.push(PopupRow::new(heading, PopupKind::Heading));
+            rows.extend(error);
             rows.extend(body.into_iter().skip(top).take(visible));
         }
         if height > 0 {
@@ -563,6 +668,110 @@ fn wrap(text: &str, width: usize) -> Vec<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn remove_tags_offer_unique_labels_and_preview_only_checked_choices() {
+        let mut ui = View::menu(vec![1, 2]);
+        assert!(matches!(
+            ui.key(KeyEvent::new(KeyCode::Char('r'), KeyModifiers::NONE)),
+            Intent::RemoveTags
+        ));
+        ui.show_remove_tags(vec![
+            "界面".into(),
+            "bug".into(),
+            "Bug".into(),
+            "bug".into(),
+        ]);
+        let rows = ui.rows(60, 12);
+        let choices: Vec<_> = rows
+            .iter()
+            .filter(|row| matches!(row.kind, PopupKind::Choice | PopupKind::SelectedChoice))
+            .map(|row| row.text.as_str())
+            .collect();
+        assert_eq!(choices, ["[ ] Bug", "[ ] bug", "[ ] 界面"]);
+        ui.paste("not an existing tag");
+        ui.key(KeyEvent::new(KeyCode::Char(' '), KeyModifiers::NONE));
+        ui.key(KeyEvent::new(KeyCode::End, KeyModifiers::NONE));
+        ui.key(KeyEvent::new(KeyCode::Char(' '), KeyModifiers::NONE));
+        let Intent::Preview(actions) =
+            ui.key(KeyEvent::new(KeyCode::Char('s'), KeyModifiers::CONTROL))
+        else {
+            panic!("checked tags should generate a preview");
+        };
+        assert_eq!(actions.remove_tags, ["Bug", "界面"]);
+        assert!(actions.add_tags.is_empty());
+        assert!(actions.set_tags.is_none());
+        assert!(matches!(
+            ui.key(KeyEvent::new(KeyCode::Char('q'), KeyModifiers::NONE)),
+            Intent::Close
+        ));
+    }
+
+    #[test]
+    fn remove_tag_list_keeps_focus_and_validation_visible_after_scrolling() {
+        for width in [8, 12, 18, 28, 46] {
+            for height in 0..=18 {
+                let mut ui = View::menu(vec![1, 2]);
+                ui.show_remove_tags((0..40).map(|index| format!("tag {index:02} 界")).collect());
+                ui.key(KeyEvent::new(KeyCode::End, KeyModifiers::NONE));
+                let rows = ui.rows(width, height);
+                assert!(rows.len() <= height);
+                if height >= 3 {
+                    assert!(rows.iter().any(|row| {
+                        row.kind == PopupKind::SelectedChoice && row.text == "[ ] tag 39 界"
+                    }));
+                }
+                if height > 0 {
+                    assert!(rows.last().unwrap().text.width() <= width);
+                }
+                assert!(matches!(
+                    ui.key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE)),
+                    Intent::None
+                ));
+                let rows = ui.rows(width, height);
+                assert!(rows.len() <= height);
+                if height >= 3 {
+                    assert!(rows.iter().any(|row| {
+                        row.kind == PopupKind::Error && row.text == "Select at least one tag"
+                    }));
+                }
+                ui.key(KeyEvent::new(KeyCode::PageUp, KeyModifiers::NONE));
+                ui.key(KeyEvent::new(KeyCode::Char(' '), KeyModifiers::NONE));
+                let Intent::Preview(actions) =
+                    ui.key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE))
+                else {
+                    panic!("a checked tag should preview after paging");
+                };
+                assert_eq!(actions.remove_tags.len(), 1);
+                assert_ne!(actions.remove_tags[0], "tag 39 界");
+            }
+        }
+    }
+
+    #[test]
+    fn remove_tags_empty_union_cannot_preview() {
+        let mut ui = View::menu(vec![1, 2]);
+        ui.show_remove_tags(Vec::new());
+        assert!(
+            ui.rows(60, 8)
+                .iter()
+                .any(|row| row.text == "No tags on selected tasks")
+        );
+        for key in [KeyCode::Char(' '), KeyCode::Enter, KeyCode::End] {
+            assert!(matches!(
+                ui.key(KeyEvent::new(key, KeyModifiers::NONE)),
+                Intent::None
+            ));
+        }
+        assert!(matches!(
+            ui.key(KeyEvent::new(KeyCode::Char('s'), KeyModifiers::CONTROL)),
+            Intent::None
+        ));
+        assert!(matches!(
+            ui.key(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE)),
+            Intent::Close
+        ));
+    }
 
     #[test]
     fn preview_hides_unchanged_tasks_and_fields() {

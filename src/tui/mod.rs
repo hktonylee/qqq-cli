@@ -1665,6 +1665,21 @@ fn compose_inner(
                             message = format!("Bulk selected: {}", bulk_selected.len());
                             message_is_error = false;
                         }
+                        bulk::Intent::RemoveTags => {
+                            let db = mode.db().expect("bulk has dashboard DB");
+                            let tags = ui
+                                .ids()
+                                .iter()
+                                .map(|id| db.task(*id).map(|task| task.tags))
+                                .collect::<Result<Vec<_>>>();
+                            match tags {
+                                Ok(tags) => {
+                                    ui.show_remove_tags(tags.into_iter().flatten().collect())
+                                }
+                                Err(error) => ui.show_error(format!("{error:#}")),
+                            }
+                            bulk_ui = Some(ui);
+                        }
                         bulk::Intent::Preview(actions) => {
                             match crate::bulk::preview(
                                 mode.db().expect("bulk has dashboard DB"),

@@ -798,8 +798,12 @@ Marks survive filtering and refresh, including hidden tasks. Ctrl+G opens bulk
 menu while any task is marked; menu and preview show count and exact IDs.
 `x Clear selection` removes marks. With no marks, Ctrl+G opens individual actions.
 
-Bulk menu offers add/remove/replace tags, priority and archive/unarchive. Tag
-input uses one label per line: Enter/Shift+Enter adds newline, Ctrl+U deletes
+Bulk menu offers add/remove/replace tags, priority and archive/unarchive. Remove
+tags lists the sorted union of saved tags on all marked tasks, including hidden
+tasks. Up/Down selects a row; Space toggles labels to remove. Enter or Ctrl+S
+generates preview; Esc cancels. Each label appears once. No tags are selected by
+default; an empty union shows "No tags on selected tasks".
+Add/replace tag input uses one label per line: Enter/Shift+Enter adds newline, Ctrl+U deletes
 current line, Ctrl+S generates preview. Empty replacement clears tags. Priority
 input previews on Enter. Invalid input retains text for correction.
 Preview shows full before/after metadata; Up/Down, PgUp/PgDn and Home/End scroll.

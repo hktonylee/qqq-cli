@@ -165,6 +165,14 @@ fn tui_bulk_priority_preview_cancel_apply_preserves_dirty_caret() {
 #[test]
 fn tui_bulk_tags_keep_multiline_cursor_and_draft() {
     bulk_scenario("tags");
+    bulk_scenario("tags_no_color");
+    bulk_scenario("tags_compact");
+    bulk_scenario("tags_filtered");
+}
+
+#[test]
+fn tui_bulk_remove_tags_handles_empty_union_without_changing_tasks() {
+    bulk_scenario("remove_empty");
 }
 
 #[test]

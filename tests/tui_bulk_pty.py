@@ -42,7 +42,7 @@ with tempfile.TemporaryDirectory(prefix="qqq-bulk-pty-") as folder:
         cli("next", "--local", "--session", "foreign", "--filter", "id == 3")
     master, slave = pty.openpty()
     os.set_blocking(master, False)
-    width, height = (42, 16) if scenario == "basic_compact" else (90, 24)
+    width, height = (42, 16) if scenario in ("basic_compact", "tags_compact") else (90, 24)
     fcntl.ioctl(slave, termios.TIOCSWINSZ, struct.pack("HHHH", height, width, 0, 0))
     before_terminal = termios.tcgetattr(slave)
     os.setsid()
@@ -239,7 +239,7 @@ with tempfile.TemporaryDirectory(prefix="qqq-bulk-pty-") as folder:
             apply()
             assert priorities() == [0, 5, 5]
             final_priority = 5
-        elif scenario == "tags":
+        elif scenario.startswith("tags"):
             open_action(b"t", "Bulk add tags")
             send(b"\x1b[200~" + "review\nobsolete\n界面".encode() + b"\x1b[201~")
             contains("obsolete")
@@ -250,21 +250,74 @@ with tempfile.TemporaryDirectory(prefix="qqq-bulk-pty-") as folder:
             assert task(2)["tags"] == []
             apply()
             assert task(2)["tags"] == task(3)["tags"] == ["review", "界面"]
+            cli("edit", "1", "--set-tags", "unselected-only")
+            cli("edit", "2", "--set-tags", "review,second-only,界面")
+            cli("edit", "3", "--set-tags", "review,third-only,keep-third")
             remark()
+            removal_caret = caret
+            if scenario == "tags_filtered":
+                send(b"\x1fthird")
+                wait(lambda: screen.text().splitlines()[0].startswith("Filter: third")
+                     and screen.y == 0)
+                removal_caret = (screen.x, screen.y)
             open_action(b"r", "Bulk remove tags")
-            send(b"review\r")
-            contains("Enter newline")
+            contains("[ ] review")
+            labels = ["keep-third", "review", "second-only", "third-only", "界面"]
+            for label in labels:
+                assert screen.text().count(f"[ ] {label}") == 1, screen.text()
+            assert "[ ] unselected-only" not in screen.text(), screen.text()
+            before_remove = [task(task_id) for task_id in (1, 2, 3)]
+            send(b"\x13")
+            contains("Select at least one tag")
             assert "Bulk preview (2)" not in screen.text()
+            send(b"\x1b[B ")
+            contains("[x] review")
+            send(b" ")
+            contains("[ ] review")
+            send(b" \x1b[B\x1b[B ")
+            contains("[x] third-only")
             send(b"\x13")
             contains("Bulk preview (2)")
+            assert [task(task_id) for task_id in (1, 2, 3)] == before_remove
+            send(b"n")
+            wait(lambda: "Bulk preview (2)" not in screen.text()
+                 and (screen.x, screen.y) == removal_caret)
+            assert [task(task_id) for task_id in (1, 2, 3)] == before_remove
+            open_action(b"r", "Bulk remove tags")
+            contains("[ ] review")
+            assert "[x]" not in screen.text(), screen.text()
+            send(b"\x1b[B \x1b[B\x1b[B \r")
+            contains("Bulk preview (2)")
             apply()
-            assert task(2)["tags"] == task(3)["tags"] == ["界面"]
+            assert task(1)["tags"] == ["unselected-only"]
+            assert task(2)["tags"] == ["second-only", "界面"]
+            assert task(3)["tags"] == ["keep-third"]
+            if scenario == "tags_filtered":
+                assert screen.text().splitlines()[0].startswith("Filter: third")
+                send(b"\x1b")
+                wait(lambda: not screen.text().splitlines()[0].startswith("Filter:")
+                     and (screen.x, screen.y) == caret)
             remark()
             open_action(b"s", "Bulk replace tags")
             send(b"\x13")
             contains("Bulk preview (2)")
             apply()
             assert task(2)["tags"] == task(3)["tags"] == []
+        elif scenario == "remove_empty":
+            before_remove = [task(task_id) for task_id in (1, 2, 3)]
+            open_action(b"r", "Bulk remove tags")
+            contains("No tags on selected tasks")
+            send(b" \r\x13")
+            contains("Select at least one tag")
+            assert "Bulk preview (2)" not in screen.text()
+            send(b"\x1b")
+            wait(lambda: "Bulk remove tags" not in screen.text() and (screen.x, screen.y) == caret)
+            assert [task(task_id) for task_id in (1, 2, 3)] == before_remove
+            assert sum(row.startswith("+") for row in screen.text().splitlines()) == 2
+            send(b"\x07")
+            contains("Bulk actions (2)")
+            send(b"x")
+            contains("Bulk selection cleared")
         elif scenario == "conflict":
             open_action(b"p", "Bulk priority")
             send(b"5\r")
