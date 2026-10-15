@@ -228,7 +228,7 @@ fn task_tags_keep_color_across_status_selection_dirty_and_compact_rows() {
                         assert_eq!(description.symbol(), "[");
                         let normal = if !color {
                             Color::Reset
-                        } else if selected.is_some() {
+                        } else if selected.is_some() && status != "completed" {
                             Color::Indexed(252)
                         } else {
                             match status {
@@ -2244,7 +2244,7 @@ fn status_selection_and_editor_images_use_distinct_colors() {
             }
             assert_eq!(
                 buffer[(2, y)].fg,
-                if is_selected {
+                if is_selected && id != 3 {
                     Color::Indexed(252)
                 } else {
                     foreground

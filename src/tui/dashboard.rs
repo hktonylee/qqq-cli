@@ -440,7 +440,13 @@ fn row_style(status: Option<&str>, selected: bool, color: bool) -> Style {
         return Style::default();
     }
     if selected {
-        return Style::default().fg(BODY_FG).bg(SELECTION_BG);
+        return Style::default()
+            .fg(if status == Some("completed") {
+                Color::DarkGray
+            } else {
+                BODY_FG
+            })
+            .bg(SELECTION_BG);
     }
     match status {
         Some("in_progress") => Style::default().fg(ACCENT),
