@@ -261,10 +261,14 @@ fn pane(value: &Value) -> String {
 }
 
 fn identity(value: &Value) -> String {
+    let label = if value["kind"].as_str() == Some("terminal") {
+        "Terminal".to_owned()
+    } else {
+        format!("Session ({})", field(value, "kind"))
+    };
     format!(
-        "Agent: {}\nSession ({}): {}",
+        "Agent: {}\n{label}: {}",
         field(value, "agent"),
-        field(value, "kind"),
         field(value, "value")
     )
 }
