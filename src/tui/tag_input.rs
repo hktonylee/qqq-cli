@@ -3,10 +3,17 @@ use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use unicode_segmentation::UnicodeSegmentation;
 use unicode_width::UnicodeWidthStr;
 
-#[derive(Clone, Copy)]
+#[derive(Clone)]
 pub(super) struct Cursor {
     byte: usize,
     column: Option<usize>,
+    completion: Option<Completion>,
+}
+
+#[derive(Clone)]
+struct Completion {
+    tags: Vec<String>,
+    selected: usize,
 }
 
 impl Cursor {
@@ -14,7 +21,56 @@ impl Cursor {
         Self {
             byte: value.len(),
             column: None,
+            completion: None,
         }
+    }
+
+    pub(super) fn with_tags(mut self, mut tags: Vec<String>) -> Self {
+        tags.sort();
+        tags.dedup();
+        self.completion = Some(Completion { tags, selected: 0 });
+        self
+    }
+
+    fn label_range(&self, value: &str) -> std::ops::Range<usize> {
+        let start = value[..self.byte]
+            .rfind(['\n', ','])
+            .map_or(0, |byte| byte + 1);
+        let end = self.byte
+            + value[self.byte..]
+                .find(['\n', ','])
+                .unwrap_or(value.len() - self.byte);
+        start..end
+    }
+
+    fn matches(&self, value: &str) -> Vec<&str> {
+        let Some(completion) = &self.completion else {
+            return Vec::new();
+        };
+        let range = self.label_range(value);
+        let prefix = value[range.start..self.byte].trim_start().to_lowercase();
+        if prefix.is_empty() {
+            return Vec::new();
+        }
+        let used: std::collections::HashSet<_> = value[..range.start]
+            .split(['\n', ','])
+            .chain(value[range.end..].split(['\n', ',']))
+            .map(str::trim)
+            .collect();
+        completion
+            .tags
+            .iter()
+            .filter(|tag| {
+                tag.to_lowercase().starts_with(&prefix)
+                    && tag.as_str() != value[range.clone()].trim()
+                    && !used.contains(tag.as_str())
+            })
+            .map(String::as_str)
+            .collect()
+    }
+
+    pub(super) fn has_matches(&self, value: &str) -> bool {
+        !self.matches(value).is_empty()
     }
 
     fn snap(&mut self, value: &str) {
@@ -25,6 +81,9 @@ impl Cursor {
             .find(|byte| *byte >= self.byte)
             .unwrap_or(value.len());
         self.column = None;
+        if let Some(completion) = &mut self.completion {
+            completion.selected = 0;
+        }
     }
 
     pub(super) fn insert(&mut self, value: &mut String, text: &str) {
@@ -140,6 +199,31 @@ impl Cursor {
         }
         let control = key.modifiers.contains(KeyModifiers::CONTROL);
         let alt = key.modifiers.contains(KeyModifiers::ALT);
+        if self.completion.is_some() && !control && !alt {
+            let matches = self.matches(value);
+            let count = matches.len();
+            if key.code == KeyCode::Tab {
+                if count > 0 {
+                    let selected = self.completion.as_ref().unwrap().selected.min(count - 1);
+                    let label = matches[selected].to_owned();
+                    let range = self.label_range(value);
+                    self.byte = range.start + label.len();
+                    value.replace_range(range, &label);
+                    self.snap(value);
+                    error.clear();
+                }
+                return true;
+            }
+            if count > 0 && matches!(key.code, KeyCode::Up | KeyCode::Down) {
+                let completion = self.completion.as_mut().unwrap();
+                completion.selected = if key.code == KeyCode::Up {
+                    completion.selected.saturating_sub(1)
+                } else {
+                    (completion.selected + 1).min(count - 1)
+                };
+                return true;
+            }
+        }
         let changed = match (key.code, control, alt) {
             (KeyCode::Char('u'), true, false) => {
                 self.delete_line(value);
@@ -212,6 +296,9 @@ impl Cursor {
         if changed {
             error.clear();
         }
+        if let Some(completion) = &mut self.completion {
+            completion.selected = 0;
+        }
         true
     }
 
@@ -282,16 +369,27 @@ pub(super) fn rows(
     width: usize,
     height: usize,
 ) -> Vec<PopupRow> {
+    let matches = cursor.matches(value);
     let heading = usize::from(height >= 3);
-    let guidance = usize::from(height >= if error.is_empty() { 4 } else { 5 });
+    let guidance = usize::from(
+        height >= if error.is_empty() { 4 } else { 5 } + usize::from(!matches.is_empty()),
+    );
     let footer = usize::from(height >= 2);
     let body_height = height.saturating_sub(heading + guidance + footer);
     let errors: Vec<_> = super::wrap_modal(error, width)
         .into_iter()
         .filter(|_| !error.is_empty())
-        .take(body_height.saturating_sub(1).min(3))
+        .take(
+            body_height
+                .saturating_sub(1 + usize::from(!matches.is_empty()))
+                .min(3),
+        )
         .collect();
-    let input_height = body_height.saturating_sub(errors.len());
+    let choices = matches
+        .len()
+        .min(3)
+        .min(body_height.saturating_sub(errors.len() + 1));
+    let input_height = body_height.saturating_sub(errors.len() + choices);
     let inputs: Vec<_> = value.split('\n').collect();
     let active = value[..cursor.byte]
         .bytes()
@@ -313,7 +411,13 @@ pub(super) fn rows(
     }
     if guidance > 0 {
         rows.push(PopupRow::new(
-            "One tag per line; blank clears",
+            if choices == 0 {
+                "One tag per line; blank clears"
+            } else if width >= "Tab complete  ↑↓ pick".width() {
+                "Tab complete  ↑↓ pick"
+            } else {
+                "Tab ↑↓"
+            },
             PopupKind::Hint,
         ));
     }
@@ -331,6 +435,32 @@ pub(super) fn rows(
                 }
             }),
     );
+    if choices > 0 {
+        let selected = cursor
+            .completion
+            .as_ref()
+            .unwrap()
+            .selected
+            .min(matches.len() - 1);
+        let start = selected.saturating_sub(choices - 1);
+        rows.extend(
+            matches
+                .iter()
+                .enumerate()
+                .skip(start)
+                .take(choices)
+                .map(|(index, label)| {
+                    PopupRow::new(
+                        *label,
+                        if index == selected {
+                            PopupKind::SelectedChoice
+                        } else {
+                            PopupKind::Choice
+                        },
+                    )
+                }),
+        );
+    }
     rows.extend(
         errors
             .into_iter()
@@ -354,6 +484,116 @@ pub(super) fn rows(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn completion_matches_project_tags_without_repeating_other_labels() {
+        let value = "frontend\nfr";
+        let cursor = Cursor::at_end(value).with_tags(vec![
+            "frontier".into(),
+            "frontend".into(),
+            "framework".into(),
+            "framework".into(),
+            "backend".into(),
+        ]);
+        assert_eq!(cursor.matches(value), ["framework", "frontier"]);
+        let empty = Cursor::at_end("frontend\n").with_tags(vec!["frontend".into()]);
+        assert!(empty.matches("frontend\n").is_empty());
+        let cursor = Cursor::at_end("FR").with_tags(vec!["frontend".into()]);
+        assert_eq!(cursor.matches("FR"), ["frontend"]);
+    }
+
+    #[test]
+    fn completion_keeps_longer_prefix_matches_and_alternatives_inside_existing_labels() {
+        let cursor = Cursor::at_end("bug").with_tags(vec!["bug".into(), "bugfix".into()]);
+        assert_eq!(cursor.matches("bug"), ["bugfix"]);
+        let mut cursor =
+            Cursor::at_end("frontend").with_tags(vec!["frontend".into(), "framework".into()]);
+        cursor.byte = 2;
+        assert_eq!(cursor.matches("frontend"), ["framework"]);
+    }
+
+    #[test]
+    fn completion_accepts_selected_label_at_caret_and_preserves_other_text() {
+        let mut value = "keep, frsuffix\n界面".to_owned();
+        let mut cursor =
+            Cursor::at_end(&value).with_tags(vec!["framework".into(), "frontend".into()]);
+        cursor.byte = "keep, fr".len();
+        let mut error = "invalid".to_owned();
+        cursor.edit(
+            &mut value,
+            &mut error,
+            KeyEvent::new(KeyCode::Down, KeyModifiers::NONE),
+        );
+        assert_eq!(value, "keep, frsuffix\n界面");
+        cursor.edit(
+            &mut value,
+            &mut error,
+            KeyEvent::new(KeyCode::Tab, KeyModifiers::NONE),
+        );
+        assert_eq!(value, "keep,frontend\n界面");
+        assert_eq!(cursor.byte, "keep,frontend".len());
+        assert!(error.is_empty());
+        cursor.edit(
+            &mut value,
+            &mut error,
+            KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE),
+        );
+        assert_eq!(value, "keep,frontend\n\n界面");
+    }
+
+    #[test]
+    fn completion_leaves_custom_tags_and_multiline_navigation_available() {
+        let mut value = "frontend\ncustom".to_owned();
+        let mut cursor = Cursor::at_end(&value).with_tags(vec!["frontend".into()]);
+        let mut error = String::new();
+        cursor.edit(
+            &mut value,
+            &mut error,
+            KeyEvent::new(KeyCode::Tab, KeyModifiers::NONE),
+        );
+        assert_eq!(value, "frontend\ncustom");
+        cursor.edit(
+            &mut value,
+            &mut error,
+            KeyEvent::new(KeyCode::Up, KeyModifiers::NONE),
+        );
+        assert_eq!(cursor.byte, 6);
+        cursor.end(&value);
+        assert!(cursor.matches(&value).is_empty());
+        cursor.insert(&mut value, ", new");
+        assert_eq!(value, "frontend, new\ncustom");
+        assert!(!cursor.edit(
+            &mut value,
+            &mut error,
+            KeyEvent::new(KeyCode::Char('s'), KeyModifiers::CONTROL)
+        ));
+    }
+
+    #[test]
+    fn completion_keeps_unicode_caret_errors_and_choices_visible_when_resized() {
+        let value = "keep\n界";
+        let cursor = Cursor::at_end(value).with_tags(vec!["界面".into(), "界限".into()]);
+        for width in [12, 28, 46] {
+            for height in 1..=18 {
+                let rows = rows(Some(1), value, &cursor, "Invalid label", width, height);
+                assert!(rows.len() <= height);
+                assert!(rows.iter().any(|row| row.cursor.is_some()));
+                if height >= 5 {
+                    assert!(rows.iter().any(|row| row.kind == PopupKind::SelectedChoice));
+                    assert!(rows.iter().any(|row| row.kind == PopupKind::Error));
+                }
+            }
+        }
+        let mut value = value.to_owned();
+        let mut cursor = cursor;
+        cursor.edit(
+            &mut value,
+            &mut String::new(),
+            KeyEvent::new(KeyCode::Tab, KeyModifiers::NONE),
+        );
+        assert_eq!(value, "keep\n界限");
+        assert_eq!(cursor.byte, value.len());
+    }
 
     #[test]
     fn ctrl_u_removes_only_current_row_at_every_line_boundary() {

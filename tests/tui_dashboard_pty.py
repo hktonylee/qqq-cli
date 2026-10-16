@@ -1408,6 +1408,74 @@ print(json.dumps({"result": result}))
             wait_visible(lambda: "#1 · new · blocks claim" in details_text())
             if scenario == "prerequisites_no_color":
                 assert b"\x1b[38;" not in screen
+        elif scenario.startswith("tags_completion"):
+            def wait_popup(predicate):
+                wait_visible(lambda: predicate() and not visible.pending
+                             and not visible.decoder.getstate()[0]
+                             and screen.endswith(
+                                 f"\x1b[{visible.y + 1};{visible.x + 1}H".encode()
+                                 if visible.cursor_visible else b"\x1b[?25l"))
+
+            cli("edit", "1", "--set-tags", "framework,frontend,界面", "--archive")
+            send(b"\x0b2\r")
+            wait_frame(lambda: "Task #2 (New)" in editor_title())
+            if scenario.endswith("compact"):
+                fcntl.ioctl(slave, termios.TIOCSWINSZ, struct.pack("HHHH", 12, 42, 0, 0))
+                visible.resize(42, 12)
+                wait_frame(lambda: "Task #2 (New)" in editor_title())
+            send(b" retained\x0c\x15fr")
+            wait_popup(lambda: "> framework" in visible.text() and "frontend" in visible.text()
+                       and "> fr " in visible.text())
+            input_row = next(y for y, row in enumerate(visible.text().splitlines())
+                             if "> fr " in row)
+            assert visible.y == input_row, visible.text()
+            send(b"\x1b[B\t\r" + "界".encode() + b"\t\rhandmade\x13")
+            wait_frame(lambda: "Tags task #2" not in visible.text())
+            assert cli("show", "2")["task"]["tags"] == ["frontend", "界面", "handmade"]
+            assert cli("show", "2")["task"]["description"] == "Second"
+            assert editor_line().startswith("Second retained")
+
+            send(b"\x0c\x15\rfr")
+            wait_popup(lambda: "> framework" in visible.text() and "> fr " in visible.text())
+            assert "  frontend " not in visible.text()
+            send(b"\x1b")
+            wait_frame(lambda: "Tags task #2" not in visible.text())
+            assert cli("show", "2")["task"]["tags"] == ["frontend", "界面", "handmade"]
+            send(b"\x13")
+            wait_frame(lambda: "Saved #2" in visible.text())
+            send(b"\x1b")
+            wait_frame(lambda: "New Task" in editor_title())
+            send(b"Auto tag draft\x0cfr")
+            wait_popup(lambda: "Tags new task" in visible.text() and "> framework" in visible.text()
+                       and "> fr " in visible.text())
+            send(b"\x1b[B\t\x13")
+            wait_frame(lambda: "Tags new task" not in visible.text())
+            assert len(cli("list", "--all", "--include-archived")) == 2
+            send(b"\x13")
+            wait_frame(lambda: "Saved #3" in visible.text())
+            assert cli("show", "3")["task"]["tags"] == ["frontend"]
+
+            send(b"\x0b2\r\x04\x07")
+            wait_popup(lambda: "Bulk actions (1)" in visible.text())
+            send(b"tfr")
+            wait_popup(lambda: "> framework" in visible.text() and "> fr " in visible.text())
+            send(b"\t\x13")
+            wait_popup(lambda: "Bulk preview (1)" in visible.text())
+            send(b"y")
+            wait_frame(lambda: "Bulk applied: 1 tasks" in visible.text())
+            assert "framework" in cli("show", "2")["task"]["tags"]
+            send(b"\x04\x07")
+            wait_popup(lambda: "Bulk actions (1)" in visible.text())
+            send(b"s" + "界".encode())
+            wait_popup(lambda: "> 界面" in visible.text())
+            send(b"\t\x13")
+            wait_popup(lambda: "Bulk preview (1)" in visible.text())
+            send(b"y")
+            wait_frame(lambda: "Bulk applied: 1 tasks" in visible.text())
+            assert cli("show", "2")["task"]["tags"] == ["界面"]
+            assert cli("show", "2")["task"]["description"] == "Second retained"
+            if scenario.endswith("no_color"):
+                assert b"\x1b[38;" not in screen and b"\x1b[48;" not in screen
         elif scenario.startswith("tags"):
             tag_tasks_before = cli("list")
             def frame_ready():

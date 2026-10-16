@@ -158,6 +158,17 @@ fn bulk_scenario(name: &str) {
 }
 
 #[test]
+fn tui_tag_completion_preserves_drafts_and_supports_task_draft_and_bulk_tags() {
+    for name in [
+        "tags_completion",
+        "tags_completion_compact",
+        "tags_completion_no_color",
+    ] {
+        dashboard_scenario(name);
+    }
+}
+
+#[test]
 fn tui_bulk_priority_preview_cancel_apply_preserves_dirty_caret() {
     bulk_scenario("basic");
 }

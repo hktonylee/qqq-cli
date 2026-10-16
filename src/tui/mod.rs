@@ -550,6 +550,14 @@ fn parse_action_input(
     }
 }
 
+fn project_tags(db: &crate::db::Db) -> Result<Vec<String>> {
+    Ok(db
+        .list_with_archived(None, true)?
+        .into_iter()
+        .flat_map(|task| task.tags)
+        .collect())
+}
+
 fn task_target(db: &crate::db::Db, id: i64) -> Result<Target> {
     task_target_with_archived(db, id).map(|(target, _)| target)
 }
@@ -2405,13 +2413,14 @@ fn compose_inner(
                         .modifiers
                         .intersects(KeyModifiers::ALT | KeyModifiers::SUPER)
                 {
+                    let tags = project_tags(mode.db().expect("dashboard has database"))?;
                     match target_id.map(|id| mode.db().expect("dashboard has database").task(id)) {
                         Some(Ok(task)) => {
                             let value = task.tags.join("\n");
                             action_ui = Some(ActionUi::Input {
                                 id: Some(task.id),
                                 kind: ActionInputKind::Tags,
-                                cursor: tag_input::Cursor::at_end(&value),
+                                cursor: tag_input::Cursor::at_end(&value).with_tags(tags),
                                 value,
                                 error: String::new(),
                             });
@@ -2427,7 +2436,7 @@ fn compose_inner(
                             action_ui = Some(ActionUi::Input {
                                 id: None,
                                 kind: ActionInputKind::Tags,
-                                cursor: tag_input::Cursor::at_end(&value),
+                                cursor: tag_input::Cursor::at_end(&value).with_tags(tags),
                                 value,
                                 error: String::new(),
                             });
@@ -2513,7 +2522,11 @@ fn compose_inner(
                 }
                 if dashboard && control && key.code == KeyCode::Char('g') {
                     if !bulk_selected.is_empty() {
-                        bulk_ui = Some(bulk::View::menu(bulk_selected.iter().copied().collect()));
+                        bulk_ui = Some(
+                            bulk::View::menu(bulk_selected.iter().copied().collect()).with_tags(
+                                project_tags(mode.db().expect("dashboard has database"))?,
+                            ),
+                        );
                         continue;
                     }
                     match target_id {

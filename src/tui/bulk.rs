@@ -52,6 +52,7 @@ enum Stage {
 }
 pub(super) struct View {
     ids: Vec<i64>,
+    tags: Vec<String>,
     stage: Stage,
     top: usize,
     page: usize,
@@ -71,6 +72,7 @@ impl View {
     pub fn menu(ids: Vec<i64>) -> Self {
         Self {
             ids,
+            tags: Vec::new(),
             stage: Stage::Menu { selected: 0 },
             top: 0,
             page: 1,
@@ -79,6 +81,7 @@ impl View {
     pub fn select_range(visible_ids: Vec<i64>) -> Self {
         Self {
             ids: Vec::new(),
+            tags: Vec::new(),
             stage: Stage::RangeSelect {
                 visible_ids,
                 value: String::new(),
@@ -92,6 +95,10 @@ impl View {
     pub fn show_preview(&mut self, report: Report) {
         self.stage = Stage::Preview(report);
         self.top = 0;
+    }
+    pub fn with_tags(mut self, tags: Vec<String>) -> Self {
+        self.tags = tags;
+        self
     }
     pub fn show_remove_tags(&mut self, mut tags: Vec<String>) {
         tags.sort();
@@ -210,7 +217,11 @@ impl View {
                 self.stage = Stage::Input {
                     kind,
                     value: String::new(),
-                    cursor: tag_input::Cursor::at_end(""),
+                    cursor: if matches!(kind, InputKind::Priority) {
+                        tag_input::Cursor::at_end("")
+                    } else {
+                        tag_input::Cursor::at_end("").with_tags(self.tags.clone())
+                    },
                     error: String::new(),
                 };
             }
@@ -424,6 +435,8 @@ impl View {
                     row.text = if index != last {
                         if matches!(kind, InputKind::Priority) {
                             "Priority -100..100"
+                        } else if cursor.has_matches(value) {
+                            continue;
                         } else {
                             "One tag per line"
                         }
