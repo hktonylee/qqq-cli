@@ -60,3 +60,8 @@ and its bundled response schema; no real worker was launched during tests.
 Independent review findings for attachment recovery and wrapped Unicode cursor
 navigation were reproduced, fixed, and verified. An existing undo PTY scenario
 now waits until each popup has closed before continuing to the next action.
+
+After rebasing onto the concurrent tag-completion changes, the full suite passed
+903 tests across 47 binaries; strict Clippy and all 16 release creation scenarios
+also passed. The later terminal-identity label fix was preserved and checked
+with the unit, identity, show, and CLI suites.
