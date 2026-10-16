@@ -565,9 +565,7 @@ impl View {
                         .flat_map(|text| wrap(&text, width))
                         .map(|text| PopupRow::new(text, PopupKind::Body))
                         .collect(),
-                    if width >= 40 {
-                        "y apply  n/Esc cancel  Up/Down PgUp/PgDn"
-                    } else if width >= 21 {
+                    if width >= 21 {
                         "y apply n/Esc cancel"
                     } else if width >= 16 {
                         "y apply n cancel"
