@@ -29,6 +29,12 @@ CTRL_SLASH = b"\x1f"
 SHIFT_ENTER = b"\x1b[13;2u"
 CTRL_P = b"\x10"
 with tempfile.TemporaryDirectory(prefix="qqq-dashboard-test-") as folder:
+    if scenario == "create_agent_symlink":
+        project = Path(folder) / "project"
+        project.mkdir()
+        alias = Path(folder) / "alias"
+        alias.symlink_to(project, target_is_directory=True)
+        folder = str(alias)
     env = dict(os.environ, HOME=folder, TERM="xterm-256color")
     env.pop("NO_COLOR", None)
     if scenario == "child_reference_no_color":
@@ -397,7 +403,7 @@ print(json.dumps({"result": result}))
         fake.write_text(f"#!{sys.executable}\n" + r'''
 import json, os, sys, termios
 from pathlib import Path
-root = Path(os.environ["CREATE_ROOT"])
+root = Path(os.environ["CREATE_ROOT"]).resolve()
 scenario = os.environ["CREATE_SCENARIO"]
 args = sys.argv[1:]
 with (root / "herdr-calls").open("a") as log:

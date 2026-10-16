@@ -354,6 +354,7 @@ fn tui_dashboard_ctrl_h_initial_prompt_uses_configuration() {
 fn tui_dashboard_ctrl_h_creates_queue_agents() {
     for name in [
         "create_agent_reuse",
+        "create_agent_symlink",
         "create_agent_workspace",
         "create_agent_nested",
         "create_agent_cancel",
