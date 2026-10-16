@@ -338,6 +338,27 @@ fn tui_dashboard_actions_popup_keeps_background_and_restores_editor() {
 }
 
 #[test]
+fn tui_dashboard_ctrl_h_creates_queue_agents() {
+    for name in [
+        "create_agent_reuse",
+        "create_agent_workspace",
+        "create_agent_nested",
+        "create_agent_draft",
+        "create_agent_cancel",
+        "create_agent_edit",
+        "create_agent_empty",
+        "create_agent_compact",
+        "create_agent_no_color",
+        "create_agent_server",
+        "create_agent_auto",
+        "create_agent_start_error",
+        "create_agent_prompt_error",
+    ] {
+        dashboard_scenario(name);
+    }
+}
+
+#[test]
 fn tui_dashboard_ctrl_h_opens_selected_herdr_agent_and_preserves_editor() {
     dashboard_scenario("handoff_success");
     dashboard_scenario("handoff_terminal");
@@ -355,7 +376,6 @@ fn tui_dashboard_ctrl_h_hint_follows_selected_link_and_external_refresh() {
 #[test]
 fn tui_dashboard_ctrl_h_errors_preserve_editor() {
     for scenario in [
-        "handoff_no_selection",
         "handoff_missing",
         "handoff_stale",
         "handoff_ambiguous",

@@ -1,3 +1,4 @@
+mod agent_create;
 mod buffers;
 mod bulk;
 mod clipboard;
@@ -1027,6 +1028,7 @@ fn compose_inner(
     let mut confirmation: Option<Confirmation> = None;
     let mut action_ui: Option<ActionUi> = None;
     let mut jump_ui: Option<jump::View> = None;
+    let mut agent_ui: Option<agent_create::View> = None;
     let mut conflict_ui: Option<conflict::View> = None;
     let mut view_ui: Option<view_picker::Picker> = None;
     let mut bulk_ui: Option<bulk::View> = None;
@@ -1112,6 +1114,9 @@ fn compose_inner(
             } else {
                 (None, None, None, Vec::new(), false)
             };
+        let can_create_agent =
+            dashboard && (target_id.is_none() || target_status.as_deref() == Some("new"));
+        let has_herdr_action = has_herdr_link || can_create_agent;
         let buffer_footer = match &confirmation {
             Some(Confirmation::ExitBuffers { keys, index }) => {
                 let key = keys[*index];
@@ -1187,13 +1192,13 @@ fn compose_inner(
                         .and_then(crate::output::status_color_code),
                 )
             },
-            keys: if filter_focused && has_herdr_link {
+            keys: if filter_focused && has_herdr_action {
                 render::FILTER_HERDR_KEYS
             } else if filter_focused {
                 render::FILTER_KEYS
             } else if dashboard && target_id.is_none() && draft_parent_id.is_some() {
                 render::DASHBOARD_CHILD_KEYS
-            } else if dashboard && has_herdr_link {
+            } else if dashboard && has_herdr_action && target_id.is_some() {
                 render::DASHBOARD_HERDR_KEYS
             } else if dashboard && target_id.is_none() && bulk_selected.is_empty() {
                 render::DASHBOARD_NEW_KEYS
@@ -1295,13 +1300,21 @@ fn compose_inner(
                 usize::MAX,
             )
             .content;
-            let modal_lines = view_ui
-                .as_mut()
+            let modal_lines = agent_ui
+                .as_ref()
                 .map(|ui| {
                     ui.rows(
                         usize::from(popup_content.width),
                         usize::from(popup_content.height),
                     )
+                })
+                .or_else(|| {
+                    view_ui.as_mut().map(|ui| {
+                        ui.rows(
+                            usize::from(popup_content.width),
+                            usize::from(popup_content.height),
+                        )
+                    })
                 })
                 .or_else(|| {
                     conflict_ui.as_ref().map(|ui| {
@@ -1433,6 +1446,7 @@ fn compose_inner(
                     && confirmation.is_none()
                     && action_ui.is_none()
                     && jump_ui.is_none()
+                    && agent_ui.is_none()
                     && conflict_ui.is_none()
                     && view_ui.is_none()
                     && bulk_ui.is_none()
@@ -1467,7 +1481,9 @@ fn compose_inner(
         };
         match input {
             Event::Paste(text) if confirmation.is_none() && conflict_ui.is_none() => {
-                if let Some(ui) = view_ui.as_mut() {
+                if let Some(ui) = agent_ui.as_mut() {
+                    ui.paste(&text);
+                } else if let Some(ui) = view_ui.as_mut() {
                     ui.paste(&text);
                 } else if let Some(ui) = bulk_ui.as_mut() {
                     ui.paste(&text);
@@ -1607,6 +1623,30 @@ fn compose_inner(
                 }
             }
             Event::Key(mut key) if key.kind != KeyEventKind::Release => {
+                if let Some(mut ui) = agent_ui.take() {
+                    match ui.key(key) {
+                        Some(agent_create::Action::Create(prompt)) => {
+                            drop(terminal);
+                            let result = handoff::create(
+                                mode.db().expect("dashboard has database"),
+                                &prompt,
+                            )
+                            .and_then(|()| handoff::attach(None));
+                            terminal = TerminalGuard::enter(dashboard)?;
+                            let dashboard_terminal =
+                                dashboard_terminal.as_mut().expect("dashboard has terminal");
+                            dashboard_terminal.resize(dashboard_terminal.size()?.into())?;
+                            message_is_error = result.is_err();
+                            message = result.err().map_or_else(
+                                || "Returned from Herdr".to_owned(),
+                                |error| format!("{error:#}"),
+                            );
+                        }
+                        Some(agent_create::Action::Cancel) => (),
+                        None => agent_ui = Some(ui),
+                    }
+                    continue;
+                }
                 if let Some(mut ui) = view_ui.take() {
                     match ui.key(key) {
                         Some(view_picker::Action::Apply(view)) => {
@@ -2090,6 +2130,16 @@ fn compose_inner(
                     continue;
                 }
                 if dashboard && control && key.code == KeyCode::Char('h') {
+                    if can_create_agent && action_ui.is_none() {
+                        match handoff::project_root(mode.db().expect("dashboard has database")) {
+                            Ok(root) => agent_ui = Some(agent_create::View::new(root)),
+                            Err(error) => {
+                                message = format!("{error:#}");
+                                message_is_error = true;
+                            }
+                        }
+                        continue;
+                    }
                     let focus = target_id
                         .ok_or_else(|| anyhow::anyhow!("Select task to open its Herdr agent"))
                         .and_then(|id| {

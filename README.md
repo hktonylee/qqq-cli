@@ -131,7 +131,7 @@ task to load it, scroll each pane, or use the keyboard:
 | Ctrl+P | Create child of selected task; in child draft, insert parent `#ID` |
 | Ctrl+/ | Filter tasks |
 | Ctrl+G | Open bulk actions when tasks marked, otherwise task actions |
-| Ctrl+H | Open linked Herdr agent; shown only for tasks with a Herdr link |
+| Ctrl+H | Create a Herdr queue worker for a New task or draft; otherwise open its linked agent |
 | Esc | Close the filter, clear the editor, then exit; changed drafts ask before discard |
 | Ctrl+C | Clear nonempty New Task; press again to exit when empty |
 

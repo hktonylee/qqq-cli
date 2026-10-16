@@ -300,6 +300,10 @@ print(json.dumps({"result": {"pane": pane}}))
         cli("edit", "2", "--description", "\n".join(f"Line{index:02}" for index in range(1, 21)))
 
     if scenario.startswith("handoff_"):
+        with sqlite3.connect(Path(folder) / ".qqq/qqq.db") as connection:
+            connection.execute("UPDATE tasks SET status='error' WHERE id=2")
+            if scenario.startswith("handoff_hint"):
+                connection.execute("UPDATE tasks SET status='error' WHERE id=1")
         if scenario == "handoff_scroll":
             cli("edit", "2", "--description", "Second\n" + "\n".join(f"Line {index:02}" for index in range(1, 21)))
             cli("message", "2", "\n".join(f"Message {index:02}" for index in range(1, 31)))
@@ -367,6 +371,72 @@ print(json.dumps({"result": result}))
         env["HERDR_PANE_ID"] = "force-error-pane"
         env["QQQ_TEST_HERDR_CALLS"] = str(force_error_calls)
 
+    if scenario.startswith("create_agent_"):
+        env["CREATE_SCENARIO"] = scenario
+        env["CREATE_ROOT"] = folder
+        env["PATH"] = os.pathsep.join((folder, os.defpath))
+        if scenario.endswith("no_color"):
+            env["NO_COLOR"] = "1"
+        fake = Path(folder) / "herdr"
+        fake.write_text(f"#!{sys.executable}\n" + r'''
+import json, os, sys, termios
+from pathlib import Path
+root = Path(os.environ["CREATE_ROOT"])
+scenario = os.environ["CREATE_SCENARIO"]
+args = sys.argv[1:]
+with (root / "herdr-calls").open("a") as log:
+    log.write(json.dumps(args) + "\n")
+pane = {"pane_id": "worker:p1", "tab_id": "worker:t1", "workspace_id": "match", "cwd": str(root)}
+if args == ["status", "server", "--json"]:
+    running = scenario != "create_agent_server" or (root / "server-started").exists()
+    print(json.dumps({"status": "running" if running else "not_running"}))
+    sys.exit(0)
+elif args == ["server"]:
+    (root / "server-started").touch()
+    sys.exit(0)
+elif args == ["pane", "list"]:
+    panes = [] if scenario in ("create_agent_workspace", "create_agent_server") else [
+        dict(pane, workspace_id="wrong", cwd=str(root / "child"), foreground_cwd=str(root)), pane]
+    result = {"panes": panes}
+elif args[:2] in (["tab", "create"], ["workspace", "create"]):
+    assert args[args.index("--cwd") + 1] == str(root), args
+    assert "--no-focus" in args, args
+    if args[0] == "tab":
+        assert args[args.index("--workspace") + 1] == "match", args
+    result = {"root_pane": pane}
+elif args[:2] == ["agent", "start"]:
+    assert args[args.index("--pane") + 1] == "worker:p1", args
+    assert args[args.index("--kind") + 1] == "codex", args
+    if scenario in ("create_agent_auto", "create_agent_start_error"):
+        print("pane not at shell", file=sys.stderr)
+        sys.exit(1)
+    result = {}
+elif args[:2] == ["agent", "get"]:
+    result = {"agent": dict(pane, agent="codex" if scenario == "create_agent_auto" else None)}
+elif args[:2] == ["agent", "wait"]:
+    assert "idle" in args, args
+    result = {}
+elif args[:2] == ["agent", "prompt"]:
+    assert args[2] == "worker:p1", args
+    if scenario == "create_agent_prompt_error":
+        print("prompt uncertain", file=sys.stderr)
+        sys.exit(1)
+    (root / "delivered-prompt").write_text(args[3])
+    result = {}
+elif args == ["agent", "focus", "worker:p1"]:
+    result = {}
+elif not args:
+    flags = termios.tcgetattr(0)[3]
+    assert flags & termios.ICANON and flags & termios.ECHO, "client inherits raw mode"
+    (root / "herdr-client-opened").touch()
+    print("\x1b[2JHERDR_CLIENT", flush=True)
+    sys.exit(0)
+else:
+    raise AssertionError(args)
+print(json.dumps({"result": result}))
+''')
+        fake.chmod(0o755)
+
     master, slave = pty.openpty()
     os.set_blocking(master, False)
     fcntl.ioctl(slave, termios.TIOCSWINSZ, struct.pack("HHHH", 24, 72, 0, 0))
@@ -387,7 +457,11 @@ print(json.dumps({"result": result}))
         args.extend(["--view", "Backend", "--tag", "backend", "--query", "First", "--status", "new"])
     if scenario == "views_visibility":
         args.extend(["--view", "Backend"])
-    child = subprocess.Popen(args, cwd=folder, env=env, stdin=slave,
+    launch_dir = folder
+    if scenario == "create_agent_nested":
+        launch_dir = str(Path(folder) / "child")
+        Path(launch_dir).mkdir()
+    child = subprocess.Popen(args, cwd=launch_dir, env=env, stdin=slave,
                              stderr=slave, stdout=subprocess.PIPE)
     screen = bytearray()
     visible = TerminalScreen(72, 24)
@@ -593,7 +667,62 @@ print(json.dumps({"result": result}))
             read_until(b"Second")
             assert "First" in visible.text() and "Second" in visible.text(), visible.text()
         assert not select.select([child.stdout], [], [], 0)[0], "TUI wrote stdout while open"
-        if scenario.startswith("removed_ctrl_o"):
+        if scenario.startswith("create_agent_"):
+            initial = cli("list", "--all")
+            if scenario != "create_agent_draft":
+                send(b"\x1b[1;2A")
+                wait_visible(lambda: "Task #2 (New)" in editor_title())
+            send(b"\x01Unsaved ")
+            wait_visible(lambda: editor_line().startswith("Unsaved ")
+                         and (visible.x, visible.y) == (8, editor_row() + 1))
+            title, content = editor_title(), editor_line()
+            cursor = (visible.x, visible.y)
+            if scenario == "create_agent_compact":
+                fcntl.ioctl(slave, termios.TIOCSWINSZ, struct.pack("HHHH", 12, 40, 0, 0))
+                visible.resize(40, 12)
+            send(b"\x08")
+            wait_visible(lambda: "Create Herdr agent" in visible.text())
+            assert not (Path(folder) / "herdr-calls").exists()
+            default_prompt = "/goal Use the `qqq cli --wait`, to look for next task, and work on that. Repeat this forever. Please don't wake up repeatedly to poll the status when running waiter."
+            prompt = default_prompt
+            if scenario in ("create_agent_edit", "create_agent_empty"):
+                send(b"\x15")
+                if scenario == "create_agent_edit":
+                    prompt = "Run `literal $(text)` 'quote'\nSecond line qQ"
+                    send(b"\x1b[200~" + prompt.encode() + b"\x1b[201~")
+                else:
+                    send(b"\x13")
+                    wait_visible(lambda: "Enter a prompt" in visible.text())
+                    assert not (Path(folder) / "herdr-calls").exists()
+            if scenario in ("create_agent_cancel", "create_agent_empty"):
+                send(b"\x1b")
+                wait_visible(lambda: "Create Herdr agent" not in visible.text())
+                assert not (Path(folder) / "herdr-calls").exists()
+            else:
+                send(b"\x13")
+                if scenario.endswith("error"):
+                    read_until(b"Created Herdr pane worker:p1")
+                else:
+                    read_until(b"HERDR_CLIENT")
+                    wait_visible(lambda: "Returned from Herdr" in visible.text())
+                    assert (Path(folder) / "delivered-prompt").read_text() == prompt
+                    assert (Path(folder) / "herdr-client-opened").exists()
+                calls = [json.loads(line) for line in (Path(folder) / "herdr-calls").read_text().splitlines()]
+                create = [call for call in calls if call[:2] in (["tab", "create"], ["workspace", "create"])]
+                assert len(create) == 1, calls
+                assert create[0][0] == ("workspace" if scenario in ("create_agent_workspace", "create_agent_server") else "tab"), calls
+                if scenario.endswith("error"):
+                    assert not (Path(folder) / "herdr-client-opened").exists()
+                    assert sum(call[:2] == ["agent", "prompt"] for call in calls) == (scenario == "create_agent_prompt_error")
+                if scenario == "create_agent_auto":
+                    assert any(call[:2] == ["agent", "wait"] for call in calls), calls
+            if scenario != "create_agent_compact":
+                wait_visible(lambda: editor_title() == title and editor_line() == content
+                             and (visible.x, visible.y) == cursor)
+            assert cli("list", "--all") == initial
+            if scenario.endswith("no_color"):
+                assert b"38;" not in screen and b"48;" not in screen
+        elif scenario.startswith("removed_ctrl_o"):
             initial = cli("list", "--all")
             send(b"\x0fUnsaved")
             wait_frame(lambda: editor_line().rstrip() == "Unsaved")
@@ -2481,7 +2610,7 @@ print(json.dumps({"result": result}))
                 return ("Ctrl-H Herdr" in visible.text().splitlines()[-1]) == expected
 
             settle()
-            assert hint_visible(False), visible.text()
+            assert hint_visible(True), visible.text()
             send(b"\x1b[1;2A")
             wait_visible(lambda: "Task #2 (" in editor_title()
                          and editor_line().startswith("Second") and hint_visible(True))
@@ -2498,7 +2627,7 @@ print(json.dumps({"result": result}))
             wait_visible(lambda: hint_visible(True) and visible.y == editor_row() + 1)
             send(b"\x1b")
             wait_visible(lambda: "New Task" in editor_title()
-                         and not editor_line().strip() and hint_visible(False))
+                         and not editor_line().strip() and hint_visible(True))
             send(b"\x1b[1;2A")
             wait_visible(lambda: "Task #2 (" in editor_title() and hint_visible(True))
             send(b"\x01Changed ")
@@ -2518,7 +2647,7 @@ print(json.dumps({"result": result}))
             visible.resize(49, 24)
             wait_visible(lambda: "Task #2 (" in editor_title()
                          and editor_line().startswith("Changed Second") and hint_visible(True)
-                         and editor_row() == 16 and details_text().startswith("#2 · New"))
+                         and editor_row() == 16 and details_text().startswith("#2 · Error"))
             with sqlite3.connect(Path(folder) / ".qqq/qqq.db") as connection:
                 connection.execute("DELETE FROM herdr_links WHERE task_id=2")
             wait_visible(lambda: hint_visible(False) and editor_line().startswith("Changed Second"))
