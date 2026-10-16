@@ -381,7 +381,7 @@ fn late_session_reporting_preserves_active_terminal_claim_then_uses_reported_ses
 }
 
 #[test]
-fn configured_dispatch_returns_existing_terminal_claim_after_hook_arrives() {
+fn legacy_dispatch_setting_preserves_current_terminal_claim_after_hook_arrives() {
     let dir = project();
     let p = dir.path();
     ok(command(p).args(["add", "Second"]));
@@ -394,9 +394,18 @@ fn configured_dispatch_returns_existing_terminal_claim_after_hook_arrives() {
     .unwrap();
     let mut reported_pane = pane(p);
     reported_pane["agent_session"] = json!({"agent":"codex","kind":"id","value":"late-hook"});
-    let next = ok(herdr(p, json!({"result":{"pane":reported_pane}}), true).arg("next"));
+    let response = json!({"result":{"pane":reported_pane}});
+    let next = ok(herdr(p, response.clone(), true).arg("next"));
     assert_eq!(next, first);
     assert_eq!(ok(command(p).args(["show", "2"]))["task"]["status"], "new");
+    ok(herdr(p, response.clone(), true).args(["edit", "1", "--complete"]));
+    let second = ok(herdr(p, response, true).arg("next"));
+    assert_eq!(second["id"], 2);
+    assert_eq!(second["harness_session"], "late-hook");
+    let calls = fs::read_to_string(p.join("calls")).unwrap();
+    assert!(!calls.contains("tab create"), "{calls}");
+    assert!(!calls.contains("agent start"), "{calls}");
+    assert!(!calls.contains("agent prompt"), "{calls}");
 }
 
 #[test]
@@ -765,7 +774,7 @@ fn invalid_exact_herdr_context_never_falls_back_to_native_session() {
 }
 
 #[test]
-fn configured_dispatch_returns_existing_native_claim_without_herdr() {
+fn legacy_dispatch_setting_claims_for_each_native_caller_without_herdr() {
     let dir = project();
     let p = dir.path();
     let first = ok(native(p, "native").args(["next", "--local"]));
@@ -778,10 +787,10 @@ fn configured_dispatch_returns_existing_native_claim_without_herdr() {
     .unwrap();
     assert_eq!(ok(native(p, "native").args(["next", "--wait"])), first);
     assert!(!p.join("native-calls").exists());
-    let output = native(p, "different").arg("next").output().unwrap();
-    assert_eq!(output.status.code(), Some(1));
-    assert!(String::from_utf8_lossy(&output.stderr).contains("next --local"));
-    assert_eq!(ok(command(p).args(["show", "2"]))["task"]["status"], "new");
+    let second = ok(native(p, "different").arg("next"));
+    assert_eq!(second["id"], 2);
+    assert_eq!(second["harness_session"], "different");
+    assert!(!p.join("native-calls").exists());
 }
 
 #[test]
@@ -802,7 +811,7 @@ fn manual_herdr_link_discovers_herdr_even_with_native_codex_environment() {
 }
 
 #[test]
-fn dispatch_does_not_turn_released_native_claim_into_new_local_claim() {
+fn legacy_dispatch_setting_allows_reclaim_after_native_claim_is_released() {
     use std::process::Stdio;
     let dir = project();
     let p = dir.path();
@@ -825,16 +834,14 @@ fn dispatch_does_not_turn_released_native_claim_into_new_local_claim() {
     assert!(child.try_wait().unwrap().is_none());
     db.execute_batch("UPDATE tasks SET status='new',claim_key=NULL,harness_name=NULL,harness_session=NULL,orchestrator_name=NULL,orchestrator_session=NULL WHERE id=1; COMMIT").unwrap();
     let output = child.wait_with_output().unwrap();
+    assert!(output.status.success(), "{output:?}");
     assert_eq!(
-        output.status.code(),
-        Some(1),
-        "Released task was claimed locally: {}",
-        String::from_utf8_lossy(&output.stdout)
+        serde_json::from_slice::<Value>(&output.stdout).unwrap()["id"],
+        1
     );
-    assert!(String::from_utf8_lossy(&output.stderr).contains("next --local"));
     let task = ok(command(p).args(["show", "1"]));
-    assert_eq!(task["task"]["status"], "new");
-    assert!(task["task"]["harness_session"].is_null());
+    assert_eq!(task["task"]["status"], "in_progress");
+    assert_eq!(task["task"]["harness_session"], "native");
     assert!(!p.join("native-calls").exists());
 }
 

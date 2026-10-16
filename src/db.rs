@@ -58,7 +58,6 @@ pub enum EditTransition<'a> {
         session: &'a str,
         harness_name: Option<&'a str>,
     },
-    NewExact(&'a str),
     ForceNew(&'a str),
     RetryError(&'a str),
     Error {
@@ -1021,16 +1020,6 @@ impl Db {
             .conn
             .pragma_query_value(None, "data_version", |row| row.get(0))?)
     }
-    pub fn edit(
-        &mut self,
-        id: i64,
-        description: Option<&str>,
-        transition: Option<EditTransition<'_>>,
-        images: &[ImageInput],
-        parent: Option<ParentChange>,
-    ) -> Result<Task> {
-        self.edit_with_priority(id, description, transition, images, parent, None)
-    }
     pub fn edit_with_priority(
         &mut self,
         id: i64,
@@ -1178,9 +1167,6 @@ impl Db {
             }) => {
                 let session = Self::owner_key(&tx, session, harness_name)?;
                 Self::release_claim(&tx, id, &session)?;
-            }
-            Some(EditTransition::NewExact(session)) => {
-                Self::release_claim(&tx, id, session)?;
             }
             Some(EditTransition::ForceNew(session)) => {
                 nonempty(session, "Session")?;
@@ -1446,15 +1432,6 @@ impl Db {
             )
             .optional()?)
     }
-    pub fn has_ready(&self) -> Result<bool> {
-        Ok(Self::ready_task_id(&self.conn, None)?.is_some())
-    }
-    pub fn has_ready_filtered(&self, filter: Option<&CompiledFilter>) -> Result<bool> {
-        match filter {
-            None => self.has_ready(),
-            Some(filter) => Ok(Self::ready_task_id(&self.conn, Some(filter))?.is_some()),
-        }
-    }
     pub(crate) fn ready_task_id(
         conn: &Connection,
         filter: Option<&CompiledFilter>,
@@ -1501,13 +1478,6 @@ impl Db {
         tx.commit()?;
         Ok(task)
     }
-    pub fn next(
-        &mut self,
-        session: &str,
-        link: Option<&crate::herdr::Link>,
-    ) -> Result<Option<Task>> {
-        self.next_with_identity(session, link, None, &crate::identity::Identity::default())
-    }
     pub fn next_with_identity(
         &mut self,
         session: &str,
@@ -1515,24 +1485,7 @@ impl Db {
         metadata: Option<&crate::identity::Identity>,
         overrides: &crate::identity::Identity,
     ) -> Result<Option<Task>> {
-        self.claim(session, link, metadata, overrides, true, None)
-    }
-    pub fn next_filtered(
-        &mut self,
-        session: &str,
-        link: Option<&crate::herdr::Link>,
-        filter: Option<&CompiledFilter>,
-    ) -> Result<Option<Task>> {
-        match filter {
-            None => self.next(session, link),
-            Some(filter) => self.next_with_identity_filtered(
-                session,
-                link,
-                None,
-                &crate::identity::Identity::default(),
-                Some(filter),
-            ),
-        }
+        self.claim(session, link, metadata, overrides, None)
     }
     pub fn next_with_identity_filtered(
         &mut self,
@@ -1544,16 +1497,8 @@ impl Db {
     ) -> Result<Option<Task>> {
         match filter {
             None => self.next_with_identity(session, link, metadata, overrides),
-            Some(filter) => self.claim(session, link, metadata, overrides, true, Some(filter)),
+            Some(filter) => self.claim(session, link, metadata, overrides, Some(filter)),
         }
-    }
-    /// Retrieve an existing assignment without claiming queued work if it vanished.
-    pub fn owned_with_identity(
-        &mut self,
-        session: &str,
-        overrides: &crate::identity::Identity,
-    ) -> Result<Option<Task>> {
-        self.claim(session, None, None, overrides, false, None)
     }
     fn claim(
         &mut self,
@@ -1561,7 +1506,6 @@ impl Db {
         link: Option<&crate::herdr::Link>,
         metadata: Option<&crate::identity::Identity>,
         overrides: &crate::identity::Identity,
-        allow_new: bool,
         filter: Option<&CompiledFilter>,
     ) -> Result<Option<Task>> {
         nonempty(session, "Session")?;
@@ -1582,8 +1526,7 @@ impl Db {
             .optional()?;
         let id = match owned {
             Some(id) => Some(id),
-            None if allow_new => Self::ready_task_id(&tx, filter)?,
-            None => None,
+            None => Self::ready_task_id(&tx, filter)?,
         };
         if let Some(id) = id {
             if owned.is_none() {
@@ -1945,7 +1888,6 @@ impl Db {
         id: i64,
         link: &crate::herdr::Link,
         overrides: &crate::identity::Identity,
-        expected_claim: Option<&str>,
     ) -> Result<()> {
         overrides.validate()?;
         let tx = self
@@ -1957,19 +1899,6 @@ impl Db {
             })
             .optional()?
             .with_context(|| crate::errors::Info::missing_task(id))?;
-        if let Some(expected) = expected_claim {
-            ensure!(
-                key.as_deref() == Some(expected),
-                crate::errors::Info::new(
-                    crate::errors::Code::OwnershipMismatch,
-                    format!("Task {id} is no longer claimed by expected dispatch owner")
-                )
-                .detail("task_id", id)
-                .human(format!(
-                    "Task {id} is no longer claimed by dispatch session {expected}"
-                ))
-            );
-        }
         Self::save_link(&tx, id, link)?;
         if let Some(key) = key {
             let mut identity = crate::identity::Identity::for_claim(&key, Some(link));

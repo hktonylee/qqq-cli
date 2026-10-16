@@ -231,15 +231,6 @@ fn current_pane() -> Result<Pane> {
     Ok(current.pane)
 }
 
-pub fn dispatch_caller(db: &Db) -> Result<String> {
-    let pane = current_pane()?;
-    let identity = retained_identity(&pane, db)?;
-    Ok(serde_json::to_string(&(
-        identity.agent,
-        identity.kind,
-        identity.value,
-    ))?)
-}
 pub fn explicit(agent: String, value: String, server: Option<String>) -> Result<Link> {
     nonempty(&agent, "Agent")?;
     nonempty(&value, "Agent session")?;

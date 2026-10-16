@@ -7,7 +7,6 @@ mod config_cli;
 mod db;
 mod delete;
 mod dependencies;
-mod dispatch;
 mod doctor;
 mod editor;
 mod errors;
@@ -289,7 +288,7 @@ enum Commands {
         /// Preview queued candidate without claiming or returning an owned task.
         #[arg(long)]
         dry_run: bool,
-        /// Explain selection without claiming, dispatching or discovering a session.
+        /// Explain selection without claiming or discovering a session.
         #[arg(long, conflicts_with_all = ["wait", "dry_run"])]
         explain: bool,
         /// Include archived diagnostic rows; archived tasks remain ineligible.
@@ -298,8 +297,8 @@ enum Commands {
         /// Hide archived diagnostic rows, overriding saved visibility.
         #[arg(long, requires = "explain", conflicts_with = "include_archived")]
         hide_archived: bool,
-        /// Claim locally even when Herdr new-agent dispatch is configured.
-        #[arg(long)]
+        /// Compatibility flag; next always claims for the calling worker.
+        #[arg(long, hide = true)]
         local: bool,
     },
     /// Save, browse, inspect or remove project-local named views.
@@ -556,18 +555,10 @@ fn execute(
         .context("Database path has no project directory")?;
     let next_owner = match &cli.command {
         Commands::Next {
-            local,
             dry_run: false,
             explain: false,
             ..
-        } if *local
-            || !config::load()
-                .map_err(cli_error::config_error)?
-                .herdr
-                .next_to_new_agent =>
-        {
-            Some(local_owner(&cli, project_dir, &db)?)
-        }
+        } => Some(local_owner(&cli, project_dir, &db)?),
         _ => None,
     };
     Ok(match cli.command {
@@ -1021,25 +1012,16 @@ fn execute(
                 let task = if dry_run {
                     db.peek_next_filtered(filter)?
                 } else {
-                    match &next_owner {
-                        Some(owner) => db.next_with_identity_filtered(
-                            &owner.key,
-                            owner.link.as_ref(),
-                            owner.metadata.as_ref(),
-                            &overrides,
-                            filter,
-                        )?,
-                        None => dispatch::next(&mut db, session_input, &overrides, filter)
-                            .map_err(|error| {
-                                cli_error::annotate(
-                                    error,
-                                    errors::Info::new(
-                                        errors::Code::DispatchError,
-                                        "Agent dispatch failed; inspect assignment before retrying",
-                                    ),
-                                )
-                            })?,
-                    }
+                    let owner = next_owner
+                        .as_ref()
+                        .expect("next owner resolved before claim");
+                    db.next_with_identity_filtered(
+                        &owner.key,
+                        owner.link.as_ref(),
+                        owner.metadata.as_ref(),
+                        &overrides,
+                        filter,
+                    )?
                 };
                 if task.is_some() || !wait {
                     break json!(task);
@@ -1066,7 +1048,7 @@ fn execute(
                         .1
                         .context("Missing automatically discovered Herdr link")?,
                 };
-                db.set_link_with_identity(task_id, &link, &overrides, None)?;
+                db.set_link_with_identity(task_id, &link, &overrides)?;
                 json!(link)
             }
             HerdrCommand::Find { task_id } => {

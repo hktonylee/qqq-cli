@@ -87,10 +87,3 @@ pub fn owner(explicit: Option<&str>, project_dir: &Path, db: &Db) -> Result<Owne
         metadata,
     })
 }
-
-pub fn dispatch_caller(db: &Db) -> Result<String> {
-    match native()? {
-        Some(owner) => Ok(owner.key),
-        None => herdr::dispatch_caller(db),
-    }
-}

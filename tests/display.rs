@@ -196,6 +196,6 @@ fn explicit_limit_overrides_config_in_both_output_formats() {
 fn display_section_is_independent_of_alias_and_herdr_value_types() {
     let p = Project::new();
     p.fixture();
-    p.config("[alias]\nx = 42\n[herdr]\nnext-to-new-agent = 'bad'\n[display]\nmax-completed = 0\n");
+    p.config("[alias]\nx = 42\n[herdr]\ninitial-prompt = 42\n[display]\nmax-completed = 0\n");
     assert_eq!(p.ids(&["list"]), vec![4, 5, 6, 7]);
 }

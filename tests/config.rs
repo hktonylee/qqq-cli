@@ -97,13 +97,10 @@ fn config_list_get_set_unset_work_without_project_database() {
     );
     assert_eq!(p.ok(&["config", "--get", "alias.ls"]), "list --watch");
     assert_eq!(p.ok(&["config", "alias.ls"]), "list --watch");
-    assert_eq!(
-        p.ok(&["config", "herdr.next-to-new-agent", "true"])["value"],
-        true
-    );
+    assert_eq!(p.ok(&["config", "other.enabled", "true"])["value"], true);
     assert_eq!(
         p.ok(&["config", "--list"]),
-        json!({"alias.ls":"list --watch","herdr.next-to-new-agent":true})
+        json!({"alias.ls":"list --watch","other.enabled":true})
     );
     assert_eq!(
         p.ok(&["config", "--unset", "alias.ls"]),
@@ -153,10 +150,10 @@ fn invalid_edits_leave_config_unchanged_and_reads_do_not_create_files() {
         assert!(!p.run(&args).status.success());
         assert!(!p.path().exists());
     }
-    p.write("[herdr]\nnext-to-new-agent = false\n[other]\nleaf = 'value'\n");
+    p.write("[tui]\nafter_save_new = 'open_saved'\n[other]\nleaf = 'value'\n");
     let before = fs::read(p.path()).unwrap();
     for args in [
-        vec!["config", "herdr.next-to-new-agent", "yes"],
+        vec!["config", "tui.after_save_new", "invalid"],
         vec!["config", "other.leaf.child", "invalid"],
         vec!["config", "alias..broken", "list"],
     ] {
@@ -215,14 +212,15 @@ fn human_output_and_argument_conflicts_are_clear() {
 }
 
 #[test]
-fn configured_alias_works_and_unsetting_herdr_restores_default() {
+fn configured_alias_and_legacy_herdr_setting_do_not_enable_dispatch() {
     let p = UserConfig::new();
     p.ok(&["config", "alias.ls", "list"]);
     p.ok(&["init"]);
     p.ok(&["add", "Task"]);
     assert_eq!(p.ok(&["ls"])[0]["description"], "Task");
-    p.ok(&["config", "herdr.next-to-new-agent", "true"]);
-    p.ok(&["config", "--unset", "herdr.next-to-new-agent"]);
+    p.write("[alias]\nls = 'list'\n[herdr]\nnext-to-new-agent = 'wrong'\n");
+    p.ok(&["config", "alias.ls", "list"]);
+    assert_eq!(p.ok(&["ls"])[0]["description"], "Task");
     assert_eq!(
         p.ok(&["next", "--session", "worker"])["harness_session"],
         "worker"
@@ -258,11 +256,9 @@ fn concurrent_writers_keep_each_independent_setting() {
 }
 
 #[test]
-fn config_edits_inline_tables_and_repairs_invalid_known_values() {
+fn config_edits_inline_tables_and_preserves_unknown_values() {
     let p = UserConfig::new();
-    p.write("other = { kept = 7 } # retain\n[herdr]\nnext-to-new-agent = 'wrong'\n");
-    assert_eq!(p.ok(&["config", "herdr.next-to-new-agent"]), "wrong");
-    p.ok(&["config", "herdr.next-to-new-agent", "false"]);
+    p.write("other = { kept = 7 } # retain\n");
     p.ok(&["config", "other.nested.leaf", "42"]);
     assert_eq!(
         p.ok(&["config", "other"]),

@@ -54,11 +54,11 @@ ID     STATUS        PRI TASK
 Claim the API task. Once your work is done, record an update and complete it:
 
 ```sh
-qqq next --local --session agent-1
+qqq next --session agent-1
 # Do the work, then:
 qqq message 1 "API ready" --session agent-1
 qqq edit 1 --complete --session agent-1
-qqq next --local --session agent-1
+qqq next --session agent-1
 ```
 
 The last command claims **Build client**. Completing its parent made it ready.
@@ -168,13 +168,13 @@ not expire. [Return or retry work](docs/reference.md#return-or-retry-work) when 
 worker gets stuck.
 
 Native Codex session discovery can supply identity automatically. Optional
-[Herdr integration](docs/reference.md#herdr) links live agents or opens new agent
-tabs. Explicit sessions and `--local` work independently.
+[Herdr integration](docs/reference.md#herdr) links live agents and lets Ctrl+H
+create a queue worker from a saved New task. `next` always claims for its caller.
 
 Route specialist workers by stored tags:
 
 ```sh
-qqq next --local --wait --tag frontend --tag bug
+qqq next --wait --tag frontend --tag bug
 qqq list --tag "UI review" --filter 'has_tag("frontend") and priority >= 5'
 ```
 
@@ -187,7 +187,7 @@ Save shared CLI/TUI selectors as project views:
 ```sh
 qqq view save "Ready frontend" --tag frontend --readiness ready --max-completed 0
 qqq list --view "Ready frontend"
-qqq next --view "Ready frontend" --local --wait --json
+qqq next --view "Ready frontend" --wait --json
 qqq tui --view "Ready frontend"
 ```
 

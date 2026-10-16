@@ -613,7 +613,7 @@ rows remain gray when selected; `NO_COLOR` preserves text markers and controls.
 
 A task has at most one tree parent and any number of extra prerequisites. It is
 ready only when new, unarchived and every dependency is completed. Extra edges
-do not change tree placement. Workers, dispatch, previews and diagnostics use
+do not change tree placement. Workers, previews and diagnostics use
 this same rule.
 
 ```sh
@@ -665,7 +665,7 @@ qqq next --explain --session worker-1
 ```
 
 `status` reports counts, owners, dependency blockers and latest activity.
-`next --explain` adds selection diagnostics without claiming or dispatching.
+`next --explain` adds selection diagnostics without claiming.
 It needs no session and skips automatic identity discovery; explicit `--session`,
 `QQQ_SESSION` or `--harness-session` can inspect owned-task reuse. Add
 `--harness-name` for ambiguous public sessions. Owned tasks precede filters.
@@ -719,10 +719,10 @@ Use one stable, unique session per worker:
 
 ```sh
 export QQQ_SESSION='worker-1'
-qqq next --local
+qqq next
 qqq message 12 "Running tests"
 qqq edit 12 --complete
-qqq next --wait --local
+qqq next --wait
 ```
 
 Each owner gets one active task; repeated `next` returns it before considering
@@ -732,8 +732,8 @@ descending, then ID ascending. Error/blocked tasks are not claimable.
 with human `No task available for pickup.` or JSON `null`.
 
 `next --dry-run` previews queued work without reusing claims, discovering an owner,
-dispatching, reserving IDs or changing queued tasks. It accepts selectors,
-`--wait`, `--local` and `--json`. Another worker may claim the previewed task.
+reserving IDs or changing queued tasks. It accepts selectors,
+`--wait` and `--json`. Another worker may claim the previewed task.
 The preview does not migrate or recover deletion staging; older schemas return
 `DATABASE_ERROR` / `migration_required` until a normal open upgrades them.
 
@@ -750,8 +750,9 @@ Resolution order:
 3. Native Codex `CODEX_THREAD_ID`, then `CODEX_SESSION_ID`.
 4. Unique Herdr agent at the project root (`foreground_cwd` before `cwd`).
 
-`next --local` skips dispatch but still resolves ownership. Explicit/native
-identity works without Herdr when dispatch is disabled or local. Other harnesses
+`next` always claims for the calling worker and never creates an agent.
+`--local` remains accepted as a compatibility flag with no effect. Explicit/native
+identity works without Herdr. Other harnesses
 use Herdr identity or explicit flags; qqq does not guess unrelated environment
 variables. Missing agent-session hooks fall back to terminal ID plus agent kind.
 
@@ -831,7 +832,6 @@ qqq config --unset alias.ls
 | --- | --- |
 | `display.max-completed` | Nonnegative integer; absent means unlimited; applies to human lists |
 | `tui.after_save_new` | `open_saved` (default) or `open_new`; read at TUI startup |
-| `herdr.next-to-new-agent` | Boolean; default `false` |
 | `herdr.initial-prompt` | Literal string prefilled when Ctrl+H opens agent creation; absent uses the built-in queue-worker prompt |
 | `alias.NAME` | Command string |
 
@@ -877,20 +877,9 @@ CLI/server. Discovery uses the exact caller pane or unique project-root agent;
 ambiguity fails before claim. Terminal-plus-agent identity survives missing hooks.
 Local explicit-session claims do not auto-link.
 
-```sh
-qqq config herdr.next-to-new-agent true
-qqq next
-```
-
-Dispatch requires `HERDR_ENV=1` and `HERDR_WORKSPACE_ID`. It reuses the caller's
-owned task or reserves ready work, opens a sibling agent tab and submits its
-prompt. Empty/blocked queues open no tab; `next --local` bypasses dispatch.
-
-The child inherits `QQQ_SESSION` for its reserved claim. Keep it set so message,
-complete and error commands use the right owner. Its public assignment identifies
-the spawned worker separately from that token. Startup failure releases the
-reservation but leaves created tabs open. Prompt failure retains claim/link
-because delivery may have occurred; inspect the agent before retrying or forcing return.
+Ctrl+H on a saved New task opens the editable agent-creation prompt. The dialog
+uses `herdr.initial-prompt` when configured. `qqq next` claims work for its caller;
+the removed `herdr.next-to-new-agent` setting has no effect.
 
 ## JSON error contract
 
@@ -923,7 +912,7 @@ Omitted fields mean unavailable; explicit null means an absent optional value.
 | `CONFIG_ERROR` | Config operation failed; `path` |
 | `IO_ERROR` | Filesystem/I/O failure; `io_kind`, `os_code`, sometimes path/task/reason |
 | `EDITOR_ERROR` | Missing/failed external editor; sometimes `exit_code` |
-| `DISPATCH_ERROR` | Herdr lookup/dispatch failure; `reason`, sometimes `exit_code`, `task_id`, `actual_status`, `delivery_possible` |
+| `DISPATCH_ERROR` | Herdr command or lookup failure; `reason`, sometimes `exit_code` |
 | `DATABASE_ERROR` | Other SQLite/schema failure; SQLite codes or `schema_version`, `expected_schema_version`, `reason` |
 | `COMMAND_ERROR` | No narrower classification |
 

@@ -1,5 +1,5 @@
 use crate::config;
-use anyhow::{Context, Result, ensure};
+use anyhow::{Context, Result};
 use serde_json::{Map, Value, json};
 use std::{
     fs,
@@ -76,12 +76,6 @@ fn parse_value(keys: &[Key], value: &str) -> Result<toml_edit::Value> {
             || (keys[0].get() == "herdr" && keys[1].get() == "initial-prompt"))
     {
         return Ok(toml_edit::Value::from(value));
-    }
-    if keys.len() == 2 && keys[0].get() == "herdr" && keys[1].get() == "next-to-new-agent" {
-        ensure!(
-            matches!(value, "true" | "false"),
-            "herdr.next-to-new-agent requires true or false"
-        );
     }
     Ok(value
         .parse()

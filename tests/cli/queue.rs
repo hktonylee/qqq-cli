@@ -489,7 +489,7 @@ fn queue_owner_context_resolves_exact_harness_ambiguity_and_archived_reuse() {
 
 #[cfg(unix)]
 #[test]
-fn queue_diagnostics_skip_session_discovery_config_dispatch_and_recovery() {
+fn queue_diagnostics_skip_session_discovery_config_and_recovery() {
     use std::os::unix::fs::PermissionsExt;
     let dir = project();
     let p = dir.path();
@@ -498,7 +498,7 @@ fn queue_diagnostics_skip_session_discovery_config_dispatch_and_recovery() {
     std::fs::write(&stub, "#!/bin/sh\necho called >> herdr-calls\nexit 42\n").unwrap();
     std::fs::set_permissions(&stub, std::fs::Permissions::from_mode(0o755)).unwrap();
     std::fs::create_dir_all(p.join(".config/qqq")).unwrap();
-    // Valid dispatch config and invalid config both must be irrelevant to diagnostics.
+    // Legacy settings and invalid config both must be irrelevant to diagnostics.
     for config in ["[herdr]\nnext-to-new-agent = true\n", "invalid = ["] {
         std::fs::write(p.join(".config/qqq/config.toml"), config).unwrap();
         for args in [

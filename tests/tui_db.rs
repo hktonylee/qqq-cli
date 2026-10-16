@@ -99,10 +99,12 @@ fn force_completion_preserves_content_and_history_for_unfinished_tasks() {
     for state in ["new", "in_progress", "error"] {
         let (mut db, dir) = database();
         let parent = db.add("Parent", None, &[]).unwrap();
-        db.next("parent", None).unwrap();
+        db.next_with_identity("parent", None, None, &identity::Identity::default())
+            .unwrap();
         db.complete(parent.id, "parent", None).unwrap();
         let prerequisite = db.add("Prerequisite", None, &[]).unwrap();
-        db.next("prerequisite", None).unwrap();
+        db.next_with_identity("prerequisite", None, None, &identity::Identity::default())
+            .unwrap();
         db.complete(prerequisite.id, "prerequisite", None).unwrap();
         let task = db
             .add_with_dependencies(
@@ -115,7 +117,8 @@ fn force_completion_preserves_content_and_history_for_unfinished_tasks() {
             .unwrap();
         db.message(task.id, "Keep note", Some("foreign")).unwrap();
         if state != "new" {
-            db.next("foreign", None).unwrap();
+            db.next_with_identity("foreign", None, None, &identity::Identity::default())
+                .unwrap();
         }
         let link = herdr::Link {
             server: Some("test".into()),
@@ -135,7 +138,7 @@ fn force_completion_preserves_content_and_history_for_unfinished_tasks() {
                 agent: None,
             },
         };
-        db.set_link_with_identity(task.id, &link, &identity::Identity::default(), None)
+        db.set_link_with_identity(task.id, &link, &identity::Identity::default())
             .unwrap();
         if state == "error" {
             db.edit_with_priority(
@@ -231,7 +234,8 @@ fn force_completion_rejects_missing_completed_and_blank_actor_without_writes() {
 fn force_completion_rolls_back_status_and_ownership_if_audit_insert_fails() {
     let (mut db, _dir) = database();
     let task = db.add("Original", None, &[]).unwrap();
-    db.next("foreign", None).unwrap();
+    db.next_with_identity("foreign", None, None, &identity::Identity::default())
+        .unwrap();
     let before = db.show(task.id).unwrap();
     db.conn.execute_batch("CREATE TRIGGER reject_force_complete BEFORE INSERT ON events WHEN NEW.action='complete' BEGIN SELECT RAISE(ABORT,'audit rejected'); END;").unwrap();
     assert!(db.force_complete(task.id, "operator").is_err());
@@ -259,7 +263,8 @@ fn force_reopen_preserves_content_and_history_and_clears_assignment() {
                 &[prerequisite.id],
             )
             .unwrap();
-        db.next("foreign", None).unwrap();
+        db.next_with_identity("foreign", None, None, &identity::Identity::default())
+            .unwrap();
         db.message(task.id, "Keep note", Some("foreign")).unwrap();
         db.conn
             .execute(
@@ -381,7 +386,8 @@ fn force_reopen_keeps_status_archive_and_dependency_guards() {
 fn force_reopen_rolls_back_assignment_when_audit_fails() {
     let (mut db, _dir) = database();
     let task = db.add("Original", None, &[]).unwrap();
-    db.next("foreign", None).unwrap();
+    db.next_with_identity("foreign", None, None, &identity::Identity::default())
+        .unwrap();
     let before = db.show(task.id).unwrap();
     db.conn
         .execute_batch(
@@ -421,7 +427,8 @@ fn force_error_preserves_content_links_and_records_reason_with_actor() {
             )
             .unwrap();
         if state != "new" {
-            db.next("foreign", None).unwrap();
+            db.next_with_identity("foreign", None, None, &identity::Identity::default())
+                .unwrap();
         }
         if state == "completed" {
             db.complete(task.id, "foreign", None).unwrap();
@@ -432,7 +439,7 @@ fn force_error_preserves_content_links_and_records_reason_with_actor() {
             "pane": {"pane_id": "w1:p1", "workspace_id": "w1", "tab_id": "w1:t1"}
         }))
         .unwrap();
-        db.set_link_with_identity(task.id, &link, &identity::Identity::default(), None)
+        db.set_link_with_identity(task.id, &link, &identity::Identity::default())
             .unwrap();
         db.conn
             .execute(
@@ -526,7 +533,8 @@ fn force_error_rolls_back_status_assignment_and_audit_when_insert_fails() {
     for table in ["events", "messages"] {
         let (mut db, _dir) = database();
         let task = db.add("Original", None, &[]).unwrap();
-        db.next("foreign", None).unwrap();
+        db.next_with_identity("foreign", None, None, &identity::Identity::default())
+            .unwrap();
         let before = db.show(task.id).unwrap();
         db.conn
             .execute_batch(&format!(
@@ -610,7 +618,7 @@ fn attachment_changes_invalidate_snapshots_even_when_text_is_unchanged() {
     let task = db.add("Same text", None, &[]).unwrap();
     let original = db.content_snapshot(task.id).unwrap();
     let attached = db
-        .edit(task.id, None, None, &composition().images, None)
+        .edit_with_priority(task.id, None, None, &composition().images, None, None)
         .unwrap();
     assert!(attached.content_revision > original.task.content_revision);
     let snapshot = db.content_snapshot(task.id).unwrap();
@@ -976,12 +984,14 @@ fn failed_image_insert_rolls_back_new_and_edited_drafts() {
 fn draft_edit_preserves_ownership_dependencies_and_existing_attachments() {
     let (mut db, _dir) = database();
     let parent = db.add("Parent", None, &[]).unwrap();
-    db.next("parent", None).unwrap();
+    db.next_with_identity("parent", None, None, &identity::Identity::default())
+        .unwrap();
     db.complete(parent.id, "parent", None).unwrap();
     let task = db
         .save_composition(None, Some(parent.id), &composition())
         .unwrap();
-    db.next("worker", None).unwrap();
+    db.next_with_identity("worker", None, None, &identity::Identity::default())
+        .unwrap();
     db.message(task.id, "Note", Some("worker")).unwrap();
     let updated = db
         .save_composition(Some(task.id), None, &composition())

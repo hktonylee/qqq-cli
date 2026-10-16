@@ -6,14 +6,12 @@ use std::{collections::HashMap, fs, io::ErrorKind, path::PathBuf};
 pub struct Config {
     #[serde(default)]
     pub alias: HashMap<String, String>,
-    #[serde(default)]
-    pub herdr: Herdr,
+    #[serde(default, rename = "herdr")]
+    _herdr: Herdr,
 }
 
 #[derive(Default, Deserialize)]
 pub struct Herdr {
-    #[serde(default, rename = "next-to-new-agent")]
-    pub next_to_new_agent: bool,
     #[serde(default, rename = "initial-prompt")]
     pub initial_prompt: Option<String>,
 }
