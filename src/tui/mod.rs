@@ -2138,8 +2138,14 @@ fn compose_inner(
                 }
                 if dashboard && control && key.code == KeyCode::Char('h') {
                     if can_create_agent && action_ui.is_none() {
-                        match handoff::project_root(mode.db().expect("dashboard has database")) {
-                            Ok(root) => agent_ui = Some(agent_create::View::new(root)),
+                        let view =
+                            handoff::project_root(mode.db().expect("dashboard has database"))
+                                .and_then(|root| {
+                                    let settings = crate::config::load_herdr()?;
+                                    Ok(agent_create::View::new(root, settings.herdr.initial_prompt))
+                                });
+                        match view {
+                            Ok(view) => agent_ui = Some(view),
                             Err(error) => {
                                 message = format!("{error:#}");
                                 message_is_error = true;

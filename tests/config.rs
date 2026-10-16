@@ -48,6 +48,45 @@ impl UserConfig {
 }
 
 #[test]
+fn herdr_initial_prompt_preserves_literal_strings_and_unsets() {
+    let p = UserConfig::new();
+    for prompt in [
+        "true",
+        "123",
+        "['task']",
+        "\"quoted\"",
+        "/goal Work\nNext line 界",
+        "",
+    ] {
+        assert_eq!(
+            p.ok(&["config", "herdr.initial-prompt", prompt]),
+            json!({"key":"herdr.initial-prompt","value":prompt})
+        );
+        assert_eq!(p.ok(&["config", "--get", "herdr.initial-prompt"]), prompt);
+        assert_eq!(p.ok(&["config", "--list"])["herdr.initial-prompt"], prompt);
+    }
+    p.ok(&["config", "--unset", "herdr.initial-prompt"]);
+    assert!(
+        !p.run(&["config", "--get", "herdr.initial-prompt"])
+            .status
+            .success()
+    );
+    assert!(!p.home.path().join(".qqq/qqq.db").exists());
+}
+
+#[test]
+fn invalid_stored_herdr_prompt_rejects_edits_until_repaired() {
+    let p = UserConfig::new();
+    p.write("[herdr]\ninitial-prompt = 123\n");
+    let before = fs::read(p.path()).unwrap();
+    assert!(!p.run(&["config", "alias.ls", "list"]).status.success());
+    assert_eq!(fs::read(p.path()).unwrap(), before);
+    assert_eq!(p.ok(&["config", "--get", "herdr.initial-prompt"]), 123);
+    p.ok(&["config", "herdr.initial-prompt", "true"]);
+    assert_eq!(p.ok(&["config", "--get", "herdr.initial-prompt"]), "true");
+}
+
+#[test]
 fn config_list_get_set_unset_work_without_project_database() {
     let p = UserConfig::new();
     assert_eq!(p.ok(&["config", "--list"]), json!({}));

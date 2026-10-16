@@ -21,11 +21,13 @@ pub(super) struct View {
 }
 
 impl View {
-    pub fn new(root: PathBuf) -> Self {
+    pub fn new(root: PathBuf, prompt: Option<String>) -> Self {
+        let value = prompt.unwrap_or_else(|| DEFAULT_PROMPT.into());
+        let cursor = tag_input::Cursor::at_end(&value);
         Self {
             root,
-            value: DEFAULT_PROMPT.into(),
-            cursor: tag_input::Cursor::at_end(DEFAULT_PROMPT),
+            value,
+            cursor,
             error: String::new(),
         }
     }
@@ -134,7 +136,7 @@ mod tests {
 
     #[test]
     fn down_reaches_wrapped_row_starting_with_wide_grapheme() {
-        let mut view = View::new(PathBuf::from("/project"));
+        let mut view = View::new(PathBuf::from("/project"), None);
         view.value = format!("{}界bbb", "a".repeat(43));
         view.cursor = tag_input::Cursor::at_end(&view.value);
         view.key(KeyEvent::new(KeyCode::Home, KeyModifiers::NONE), 46);
@@ -147,7 +149,7 @@ mod tests {
 
     #[test]
     fn arrows_move_within_wrapped_prompt_before_editing() {
-        let mut view = View::new(PathBuf::from("/project"));
+        let mut view = View::new(PathBuf::from("/project"), None);
         let end = view.cursor.byte();
         view.key(KeyEvent::new(KeyCode::Up, KeyModifiers::NONE), 36);
         assert!(view.cursor.byte() < end);
@@ -164,7 +166,7 @@ mod tests {
 
     #[test]
     fn default_prompt_is_readable_without_horizontal_scrolling() {
-        let view = View::new(PathBuf::from("/project"));
+        let view = View::new(PathBuf::from("/project"), None);
         for (width, height) in [(64, 10), (36, 12)] {
             let rows = view.rows(width, height);
             let text: String = rows

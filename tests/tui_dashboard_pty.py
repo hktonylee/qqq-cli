@@ -375,6 +375,17 @@ print(json.dumps({"result": result}))
         env["CREATE_SCENARIO"] = scenario
         env["CREATE_ROOT"] = folder
         env["PATH"] = os.pathsep.join((folder, os.defpath))
+        configured_prompt = "/goal Custom worker 'quotes' $(literal)\nSecond line qQ"
+        prompt_config = Path(folder) / ".config/qqq/config.toml"
+        if scenario.startswith("create_agent_config"):
+            if scenario == "create_agent_config_invalid":
+                prompt_config.parent.mkdir(parents=True, exist_ok=True)
+                prompt_config.write_text("[herdr]\ninitial-prompt = 123\n")
+            else:
+                cli("config", "herdr.initial-prompt", "" if scenario == "create_agent_config_empty" else configured_prompt)
+                if scenario == "create_agent_config_alias":
+                    with prompt_config.open("a") as config:
+                        config.write("\n[alias]\ninvalid = 123\n")
         if scenario == "create_agent_linked":
             pane = {"pane_id": "previous:p1", "workspace_id": "previous", "tab_id": "previous:t1"}
             with sqlite3.connect(Path(folder) / ".qqq/qqq.db") as connection:
@@ -688,8 +699,22 @@ print(json.dumps({"result": result}))
                 fcntl.ioctl(slave, termios.TIOCSWINSZ, struct.pack("HHHH", 12, 40, 0, 0))
                 visible.resize(40, 12)
             send(b"\x08")
+            if scenario == "create_agent_config_invalid":
+                wait_visible(lambda: "Invalid config" in visible.text().splitlines()[-1])
+                assert "Create Herdr agent" not in visible.text()
+                assert not (Path(folder) / "herdr-calls").exists()
+                prompt_config.write_text("[herdr]\ninitial-prompt = " + json.dumps(configured_prompt) + "\n")
+                send(b"\x08")
             wait_visible(lambda: "Create Herdr agent" in visible.text())
             assert not (Path(folder) / "herdr-calls").exists()
+            if scenario.startswith("create_agent_config") and scenario != "create_agent_config_empty":
+                wait_visible(lambda: "Custom worker" in visible.text())
+            if scenario == "create_agent_config_unset":
+                send(b"\x1b")
+                wait_caret(lambda: "Create Herdr agent" not in visible.text(), cursor)
+                cli("config", "--unset", "herdr.initial-prompt")
+                send(b"\x08")
+                wait_visible(lambda: "Create Herdr agent" in visible.text())
             if scenario == "create_agent_edit":
                 settle()
                 prompt_cursor = (visible.x, visible.y)
@@ -699,6 +724,13 @@ print(json.dumps({"result": result}))
                 wait_visible(lambda: (visible.x, visible.y) == prompt_cursor)
             default_prompt = "/goal Use the `qqq cli --wait`, to look for next task, and work on that. Repeat this forever. Please don't wake up repeatedly to poll the status when running waiter."
             prompt = default_prompt
+            if scenario.startswith("create_agent_config") and scenario != "create_agent_config_unset":
+                prompt = configured_prompt
+                if scenario == "create_agent_config_empty":
+                    send(b"\x13")
+                    wait_visible(lambda: "Enter a prompt" in visible.text())
+                    assert not (Path(folder) / "herdr-calls").exists()
+                    send(b"\x1b[200~" + prompt.encode() + b"\x1b[201~")
             if scenario in ("create_agent_edit", "create_agent_empty"):
                 send(b"\x15")
                 if scenario == "create_agent_edit":

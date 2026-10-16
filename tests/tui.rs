@@ -338,6 +338,19 @@ fn tui_dashboard_actions_popup_keeps_background_and_restores_editor() {
 }
 
 #[test]
+fn tui_dashboard_ctrl_h_initial_prompt_uses_configuration() {
+    for name in [
+        "create_agent_config",
+        "create_agent_config_empty",
+        "create_agent_config_invalid",
+        "create_agent_config_alias",
+        "create_agent_config_unset",
+    ] {
+        dashboard_scenario(name);
+    }
+}
+
+#[test]
 fn tui_dashboard_ctrl_h_creates_queue_agents() {
     for name in [
         "create_agent_reuse",

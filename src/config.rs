@@ -14,6 +14,14 @@ pub struct Config {
 pub struct Herdr {
     #[serde(default, rename = "next-to-new-agent")]
     pub next_to_new_agent: bool,
+    #[serde(default, rename = "initial-prompt")]
+    pub initial_prompt: Option<String>,
+}
+
+#[derive(Default, Deserialize)]
+pub struct HerdrConfig {
+    #[serde(default)]
+    pub herdr: Herdr,
 }
 
 #[derive(Default, Deserialize)]
@@ -55,6 +63,9 @@ pub fn path() -> Option<PathBuf> {
 }
 
 pub fn load() -> Result<Config> {
+    load_section()
+}
+pub fn load_herdr() -> Result<HerdrConfig> {
     load_section()
 }
 pub fn load_display() -> Result<DisplayConfig> {
