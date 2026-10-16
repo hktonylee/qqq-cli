@@ -1,27 +1,22 @@
 # qqq reference
 
-[← README](../README.md)
+[← README](../README.md) · [Quick start](../README.md#try-it)
 
-Detailed behavior and flags for qqq. For a first run, start with the
-[quick start](../README.md#try-it).
+Command behavior for the current source checkout. Published releases may lag;
+run `qqq COMMAND --help` for the flags in your installed version.
 
-- [Install from source](#install-from-source)
-- [List and search](#list-and-show) · [Add and edit](#add-and-edit)
-- [Named project views](views.md)
-- [Archive](#archive-and-unarchive) · [Complete](#complete-work) · [Reopen](#reopen-work)
-- [Bulk metadata actions](#bulk-task-actions)
-- [Editor](#built-in-editor) · [TUI](#task-tui)
-- [Dependencies and images](#dependencies-and-images)
-- [Ownership and recovery](#agents-and-recovery)
-- [Config and aliases](#config-and-aliases) · [Herdr](#herdr)
-- [JSON error contract](#json-error-contract)
-- [Backup, restore, deletion, health](#data)
-- [Development](#development) · [Publishing](#publish-to-cratesio)
+- [Install](#install-from-source) · [List and show](#list-and-show)
+- [Add and edit](#add-and-edit) · [Import](#atomic-batch-import) · [Recipes](#task-recipes)
+- [Complete](#complete-work) · [Reopen](#reopen-work) · [Return or retry](#return-or-retry-work)
+- [Archive](#archive-and-unarchive) · [Bulk actions](#bulk-task-actions)
+- [Editor](#built-in-editor) · [TUI](#task-tui) · [Dependencies and images](#dependencies-and-images)
+- [Workers and ownership](#agents-and-recovery) · [Diagnostics](#queue-diagnostics)
+- [Config](#config-and-aliases) · [Herdr](#herdr) · [JSON errors](#json-error-contract)
+- [Backups and recovery](#data) · [Development](#development) · [Publishing](#publish-to-cratesio)
 
 ## Install from source
 
-Requires Rust 1.89+ and a C compiler. This guide follows the development branch;
-published releases may lag features described here.
+Requires Rust 1.89+ and a C compiler.
 
 ```sh
 git clone https://github.com/hktonylee/qqq-cli.git
@@ -29,228 +24,129 @@ cd qqq-cli
 cargo install --path . --locked --force
 ```
 
-Task commands use the nearest `.qqq` directory in the current directory or its
-parents. A missing `qqq.db` there causes an error. `qqq config` needs no project DB.
+Run `qqq init` in a project before adding tasks. Commands find the nearest
+`.qqq/` in the current directory or its parents and use its `qqq.db`.
+A missing database there is an error. `qqq config` needs no project database.
 
 ## List and show
 
 ```sh
 qqq list
-qqq list --oneline
-qqq show 1
-qqq show -1                         # newest task; -2 is second newest
-qqq list --max-completed 10
-qqq list --all                      # bypass configured completion limit
-qqq list --query "parser error"     # search full descriptions, ignoring case
-qqq list --status new --status error
-qqq list --query "parser" --status in_progress --all
+qqq list --query "parser error" --all
+qqq list --tag frontend --status new --readiness ready
 qqq list --filter 'like(task_name, "%auth%") and priority > 0'
-qqq list --tag frontend --tag "UI review"
-qqq list --readiness blocked
 qqq list --view "Ready frontend"
 qqq list --watch
-qqq list --watch --json
-qqq list --include-archived
+qqq show 12
+qqq show -1                         # newest task; -2 is second newest
 ```
 
-`list` shows status, priority, and dependency tree; roots and siblings follow
-creation ID order. In a terminal with known width, it shows full descriptions
-with wrapped, aligned continuation lines; piped output keeps first-line previews.
-`show` adds messages, images, ownership history and Herdr link. Negative indexes
-work with `show` and `edit`; `-1` selects newest task.
+`list` shows tasks in dependency-tree order, with roots and siblings ordered by
+creation ID. Terminal output wraps descriptions; piped output uses first-line
+previews. `show` includes full text, messages, images, history and the Herdr link.
+Negative creation indexes work with `show` and `edit`.
 
-`--oneline` limits terminal and watch views to each description's first line.
-JSON and search still use full descriptions.
+| List option | Effect |
+| --- | --- |
+| `--oneline` | Show only each description's first line; JSON and search retain full text |
+| `--max-completed N` | Keep the N most recent completions plus unfinished tasks; `0` hides completions |
+| `--all` | Bypass the completed-task limit; conflicts with `--max-completed` |
+| `--include-archived` | Include archived rows; `--all` alone does not include them |
+| `--hide-archived` | Hide archived rows, overriding a saved view |
+| `--watch` | Refresh after database commits; Ctrl-C stops |
 
-`--max-completed N` keeps N most recent completions plus unfinished tasks;
-`0` hides completed tasks. Hidden parents display children as roots. `--all`
-bypasses configured limit; it conflicts with `--max-completed`.
+Archived tasks are hidden by default. Hidden parents leave visible children as
+roots. Hidden archived completions do not consume the completed-task limit.
 
-`--query TEXT` matches any part of a full description, including later lines,
-using Unicode lowercase comparison. Repeat `--status` to match any listed
-status: `new`, `in_progress`, `completed`, or `error`. Query and statuses combine
-with AND. Search runs after completed-display limit; use `--all` to search all
-completed tasks. Visible ancestors of matches appear as `[context]` rows even
-when they do not match filters. JSON stays flat and marks those ancestors with
-`context_only: true`; direct matches keep existing task fields. Empty filtered
-results return `[]` in JSON or `No matching tasks.` in human output.
+### Selectors and saved views
 
-`list --filter EXPR` and `next --filter EXPR` compile a typed Luau expression
-to SQLite with bound values. List filters combine with query/status and retain
-visible ancestor context. See [filter guide](filter.md),
-[default variables](filter-variables.md),
-[SQLite functions](filter-functions.md).
+`list`, `next` and `tui` share these selectors:
 
-`list --tag LABEL` and `next --tag LABEL` match whole stored labels with exact
-case/Unicode. Repeat to require every label; tags combine with other filters
-using AND. Boundary whitespace is trimmed. Invalid labels fail before project
-preflight or DB access. `has_tag("LABEL")` offers the same membership test in
-Luau expressions; exactly one valid string literal is required. See
-[tag selectors and named views](filter.md#list-behavior).
+| Selector | Match |
+| --- | --- |
+| `--query TEXT` | Substring anywhere in the full description, using Unicode lowercase comparison |
+| `--status STATUS` | `new`, `in_progress`, `completed` or `error`; repeat for OR |
+| `--tag LABEL` | Whole stored label, with exact case and Unicode; repeat to require every tag |
+| `--filter EXPR` | Typed Luau expression compiled to SQLite with bound values |
+| `--readiness ready\|blocked` | Shared dependency eligibility; blocked means new, unarchived and not ready |
+| `--view NAME` | Saved project selectors and visibility |
 
-`list`, `next`, and `tui` share tags, Luau filter, Unicode query, status groups and
-`--readiness ready|blocked`. Ready uses existing parent/prerequisite eligibility;
-blocked includes only new unarchived tasks failing that predicate. Save these
-selectors with `qqq view save NAME`, inspect using `view list`/`view show NAME`,
-remove using `view remove NAME`. `--view NAME` applies the same project definition
-across CLI/TUI. Extra selectors combine using AND; explicit archive/completed
-flags override saved visibility. See [versioned file, precedence and picker](views.md).
+Different selectors combine with AND. List filtering follows the completed-task
+limit; use `--all` to search all completions. Matching tasks retain visible
+ancestors as `[context]` rows (`context_only: true` in JSON).
 
-`--watch` prints initial list, then refreshes after DB commits. Terminal output
-redraws; pipes, `TERM=dumb` and JSON append snapshots. Ctrl-C stops watching.
+Save and inspect selectors with `qqq view save NAME`, `view list`, `view show NAME`
+and `view remove NAME`. Extra flags narrow a saved view; explicit archive and
+completed-limit flags override its visibility. See [named views](views.md),
+[filter syntax](filter.md), [variables](filter-variables.md) and
+[functions](filter-functions.md). `has_tag("LABEL")` tests one exact valid label.
 
-Default list, watch, TUI, and claim queue hide archived tasks. Use
-`list --include-archived`, `list --watch --include-archived`, or
-`tui --include-archived` to browse them. Human lists label archived rows
-`[archived]`; JSON includes `archived: true` without changing description.
-`--all` changes completed-task limit only; hidden archived completions do not
-consume that limit.
+Tag selectors trim boundary whitespace and reject invalid labels before project
+preflight. Changing a worker's selectors never releases its existing claim.
 
-Global `--json` and `--human` work before or after commands; they conflict.
-Without either flag, recognized agent callers receive JSON: a nonblank UTF-8
-`CODEX_THREAD_ID` or `CODEX_SESSION_ID`, or an exact current Herdr pane reporting
-an agent name/session. Detection does not discover other agents at project cwd
-or infer agents from pipes, `QQQ_SESSION`, or harness overrides. Missing Herdr,
-failed lookup, and panes without agent metadata keep readable output. Explicit
-output flags supplied directly skip optional caller lookup. Use `--human` to override automatic
-JSON. Help/version remain text; TUI/editor rendering remains interactive.
+### Output
 
-JSON lists stay flat, preserve
-full descriptions and `parent_id`; watch prints one array per line. Empty lists
-return `[]`; no ready task returns `null`. Errors use stderr (exit 1 for runtime,
-2 for arguments). JSON failures follow [error contract](#json-error-contract).
-`NO_COLOR=1` or `TERM=dumb` disables color.
+Global `--json` and `--human` work before or after a command and conflict with
+each other. Without either flag, qqq uses JSON for recognized agent callers:
+nonblank UTF-8 `CODEX_THREAD_ID`/`CODEX_SESSION_ID`, or an exact current Herdr pane
+with agent metadata. Pipes, `QQQ_SESSION` and harness overrides alone do not
+select JSON. Failed optional caller discovery keeps human output; explicit flags
+skip that lookup.
 
-## JSON error contract
-
-Failed commands in JSON mode (global `--json` or recognized agent default)
-write one JSON object plus newline to
-stderr. Error prose and terminal UI never appear on stdout. Runtime failures
-exit 1; argument-parser failures exit 2. Existing success payloads stay unchanged.
-
-```sh
-qqq --json show 999 >result.json 2>error.json
-```
-
-```json
-{"code":"TASK_NOT_FOUND","message":"Task 999 not found","details":{"task_id":999,"command":"show"}}
-```
-
-`code` is stable machine classification; branch on code and details.
-`message` is readable diagnostic text; wording can change.
-`details` is always an object; fields depend on failure and can grow over time.
-Runtime errors include `command` when known. Omitted fields mean unavailable;
-explicit `null` indicates absent current content or optional recovery file.
-Parser and alias failures can occur before command resolution.
-
-| Code | Meaning | Relevant details |
-| --- | --- | --- |
-| `TASK_NOT_FOUND` | Task ID or creation-order reference unavailable | `task_id` or `task_reference` |
-| `OWNERSHIP_MISMATCH` | Active task belongs to different owner | `task_id`, `actual_status`, `expected_statuses` |
-| `INVALID_TRANSITION` | State or dependency blocks operation | `task_id`, `actual_status`, `expected_statuses`; archive guards add `actual_archived`, `expected_archived`; dependency guards add `reason`, `blocking_child_id` |
-| `INVALID_ARGUMENT` | Flag/value, alias or owner-resolution input invalid | `argument`, `reason`; alias errors add `alias` |
-| `INVALID_FILTER` | Luau filter invalid or failed during evaluation | `argument: "--filter"`; runtime failure adds `reason: "evaluation_failed"` |
-| `DB_BUSY` | SQLite busy/locked; retry after competing transaction finishes | `sqlite_code` (5 or 6), `sqlite_extended_code` |
-| `CONTENT_CONFLICT` | Loaded content changed or task removed during edit | `task_id`, `expected_revision`, `current_revision`, `reason` (`revision_changed` or `task_removed`) |
-| `BULK_CONFLICT` | Frozen bulk selection changed or DB rejected a batch write; whole batch rolls back | `conflict_ids`, `reason`; stale previews include `selected_ids` and `reason: "stale_bulk_preview"` |
-| `PROJECT_NOT_FOUND` | Project DB unavailable | `command` when resolved |
-| `CONFIG_ERROR` | Config cannot load or requested config operation failed | `path` |
-| `IO_ERROR` | Filesystem or input/output operation failed | `io_kind`, `os_code` when available; explicit guards may add `path`, `task_id`, `reason` |
-| `EDITOR_ERROR` | EDITOR missing, failed to start or exited unsuccessfully | `exit_code` when available |
-| `DISPATCH_ERROR` | Herdr lookup, transport or dispatch failed | `reason`, `exit_code` when available; dispatch failures add `task_id`, `actual_status`, `delivery_possible` |
-| `DATABASE_ERROR` | Other SQLite or schema failure | `sqlite_code`, `sqlite_extended_code`, or `schema_version`, `expected_schema_version`, `reason` |
-| `COMMAND_ERROR` | Failure without narrower public classification | `command`; explicit guards may add `reason` |
-
-Ownership details omit claim keys and owner identity values. Error envelopes
-omit full task text, raw Herdr/editor output and arbitrary SQLite trigger text.
-Human mode keeps underlying diagnostic context. Existing successful task and
-diagnostic payloads keep their own identity/content fields.
-
-Stale-save example:
-
-```json
-{"code":"CONTENT_CONFLICT","message":"Content conflict for task 1: expected revision 1, current revision 2; save rejected","details":{"command":"edit","task_id":1,"expected_revision":1,"current_revision":2,"reason":"revision_changed"}}
-```
-
-Reload current task, review changes, then explicitly retry with reviewed revision
-via `edit --expected-revision N`. `task_removed` has `current_revision: null`;
-do not recreate task automatically. Missing task before editor opens remains
-`TASK_NOT_FOUND`. `DB_BUSY` permits retry; other codes need caller-specific recovery.
-
-External editor save failures can add `details.recovery` with `local_draft`,
-`current_text` and `attachments_manifest` paths. Draft and pending image bytes
-remain available for recovery. Nonterminal JSON editor calls suppress editor
-terminal output and recovery prose so whole stderr stays parseable.
-
-Help/version still print plain help/version to stdout with exit 0, including
-with `--json`. Empty `next` returns successful `null`. Unhealthy `doctor --json`
-keeps diagnostic report on stdout with exit 1 and no error envelope.
-JSON watch can emit successful snapshots before later failure.
-
-Explicit interactive terminal sessions keep UI/prompts on stderr, followed by
-one final JSON error line after terminal restoration if command fails. For
-whole-stderr JSON parsing, supply inline fields or nonterminal stdin.
-Literal `--json` after `--` or consumed as option value does not enable JSON;
-fully expanded aliases determine output mode.
+JSON lists are flat and preserve full descriptions, `parent_id` and tags.
+Empty lists return `[]`; an empty `next` returns `null`. Watch emits one array
+per line. Human terminal watch redraws; pipes and `TERM=dumb` append snapshots.
+`NO_COLOR=1` or `TERM=dumb` disables color. Help/version remain text, and editors
+remain interactive. Failures follow the [JSON error contract](#json-error-contract).
 
 ## Add and edit
 
 ```sh
-qqq add "Fix login"
-qqq add "Fix urgent login" --priority 8
-qqq add "Fix layout" --tag frontend --tag bug
-qqq add --description "Fix login"   # same input, alternative flag
-qqq edit 1 --description "Updated details"
-qqq edit 1 --priority -5             # lower future claim order
-qqq edit 1 --set-tags "frontend, bug" # replace tags; skips editor
-qqq edit 1 --set-tags ""              # clear tags
-qqq edit -1                         # edit newest task interactively
-```
-
-Tags are ordered metadata, displayed before task names as `[frontend] [bug]`.
-Repeated `--tag` flags accept one label each; `--set-tags` accepts a comma-separated
-replacement list and conflicts with `--edit`. Surrounding spaces are trimmed;
-exact duplicates are removed while case/order remain. Labels support Unicode
-and internal spaces; empty labels, control characters, commas and square
-brackets are rejected. Blank replacement input clears tags. JSON always includes
-`tags: []` or a string array and keeps raw description unchanged. Metadata edits
-preserve content revision, attachments, status and ownership, including on
-completed/archived tasks. Combined edits commit atomically. List `--query` and
-TUI filtering continue matching descriptions.
-
-Descriptions preserve whitespace and newlines; blank-only text fails.
-Priority defaults to `0` and accepts integers from `-100` through `100`.
-Higher priority claims first among ready new tasks; equal priority uses oldest
-ID. `list` stays in ID/dependency order. Editing priority on active, completed,
-or error tasks keeps status and ownership metadata; an already-owned task still
-returns to its owner before new claims.
-
-Task JSON exposes positive `content_revision`. Description or image changes
-advance it; messages, status, ownership, priority and dependency changes do not.
-Use loaded revision to reject stale direct edits:
-
-```sh
-qqq show 1 --json                    # task.content_revision
-qqq edit 1 --description "Updated details" --expected-revision 3
-```
-
-A stale revision rejects the whole edit, including supplied metadata and images.
-Direct edits without `--expected-revision` retain unconditional-save behavior.
-An identical description save leaves content revision unchanged.
-
-Read a full description from stdin without opening an editor:
-
-```sh
+qqq add "Fix login" --priority 8 --tag backend
+qqq add --description "Fix layout" --tag frontend --tag bug
 qqq add --stdin < description.txt
-printf '%s\n' 'Fix login' 'Check Unicode: λ' | qqq add --stdin --priority 8
-qqq add --stdin --parent 12 --image screenshot.png < description.txt
+qqq edit 12 --description "Updated details" --priority -5
+qqq edit 12 --set-tags "frontend, bug"
+qqq edit 12 --set-tags ""             # clear tags
+qqq edit -1                          # edit newest task interactively
 ```
 
-`--stdin` reads UTF-8 to EOF and preserves whitespace, line endings and literal
-shell-looking text. Invalid UTF-8 and blank-only descriptions fail. It conflicts
-with positional text, `--description` and `--edit`; parent, prerequisite, priority and image
-options keep their usual direct-add behavior. Existing add/editor modes stay
-available without `--stdin`.
+Descriptions preserve whitespace and newlines; blank-only text fails. `--stdin`
+reads UTF-8 to EOF without opening an editor and conflicts with positional text,
+`--description` and `--edit`. Parent, prerequisite, priority, tag and image flags
+can accompany it.
+
+Priority is an integer from `-100` to `100`, default `0`. Ready workers claim
+higher priority first, then oldest ID. Editing priority does not reorder lists
+or replace existing ownership.
+
+Tags are ordered labels displayed as `[frontend] [bug]` before the description.
+`--tag` adds one label per flag; `--set-tags` replaces the comma-separated list
+and conflicts with `--edit`. Boundary spaces are trimmed and exact duplicates
+removed; case, Unicode, internal spaces and order are preserved. Empty labels,
+controls, commas and square brackets are invalid. JSON keeps raw description
+separate from `tags`, which is always an array.
+
+Direct update flags skip the editor unless explicitly supported with `--edit`;
+omitted fields stay unchanged. Combined content, metadata, dependency and
+lifecycle edits commit atomically. Metadata edits also work on completed or
+archived tasks, subject to the operation's own guards.
+
+### Concurrent edits
+
+Task JSON has a positive `content_revision`. Only description or attachment
+changes advance it; an identical save does not. Messages, metadata, lifecycle
+and dependency changes leave it unchanged.
+
+```sh
+qqq show 12 --json                   # task.content_revision
+qqq edit 12 --description "Reviewed text" --expected-revision 3
+```
+
+A stale `--expected-revision` rejects the whole operation, including accompanying
+metadata and images. Without the flag, direct edits save unconditionally.
+Interactive editors guard the revision they loaded automatically; see
+[editor conflicts](#content-conflicts).
 
 ## Atomic batch import
 
@@ -260,96 +156,60 @@ qqq import plan.json
 cat plan.json | qqq import - --json
 ```
 
-Version-1 batch schema:
+Version-1 input:
 
 ```json
 {
   "version": 1,
   "tasks": [
-    {
-      "key": "tests",
-      "description": "Run regression checks\nInclude Unicode: λ",
-      "priority": 5,
-      "parent": {"key": "feature"}
-    },
-    {
-      "key": "feature",
-      "description": "Build feature",
-      "priority": 10
-    }
+    {"key": "tests", "description": "Run regression checks", "parent": {"key": "feature"}},
+    {"key": "feature", "description": "Build feature", "priority": 10, "tags": ["backend"]}
   ]
 }
 ```
 
-Each task requires a nonblank unique `key` and nonblank `description`. Keys and
-descriptions retain exact whitespace; references match exact keys. Priority
-defaults to 0 and accepts integer -100 through 100. Omitted/null parent means
-no tree parent. Omitted `tags` defaults to `[]`; supplied tag labels use the same normalization
-and validation as add. Import preview/results include normalized tags.
-Omitted `depends_on` defaults to `[]`. Each prerequisite uses
-the same reference shape as parent; for example `"depends_on": [{"key":"api"},
-{"id":12}]`. `{"key":"feature"}` references a task in the same batch,
-including one listed later. `{"id":12}` references an existing positive DB task
-ID. Reference objects require exactly one reference type. Existing archived
-unfinished parents/prerequisites are rejected; archived completed references are allowed, as
-with ordinary add.
-
-Missing refs, cycles across parent and prerequisite links, duplicate prerequisites,
-parent/prerequisite overlap, duplicate/blank keys, invalid priorities/descriptions,
-unknown or duplicate fields, malformed JSON and unsupported versions fail.
-An empty `tasks` array is valid and imports nothing. Version 1 has no image
-attachment fields; use single-task add's image options for attachments.
-
-Import validates the whole batch before insertion, then commits all tasks in
-one transaction. Failed validation or writes leave no partial imported tasks,
-messages, events, attachments or consumed IDs. Existing project schema migration
-and pending deletion recovery still follow normal command behavior before the
-import transaction. Imported tasks start new and unarchived, with ordinary
-timestamps/content revisions and no assignment metadata.
-
-Parents and batch-local prerequisites are inserted before their dependents. At each step, the lowest original
-input index among available tasks is chosen. This keeps order deterministic for
-forward refs and independent tasks. Other writers cannot interleave ID allocation
-inside a batch or change an existing dependency's state before its commit.
-
-`--dry-run` validates schema, local links and existing dependencies through a read-only
-DB snapshot. It does not create a project, migrate schema, run deletion recovery,
-write tasks or allocate/reserve IDs. Older supported DB schemas need a normal
-command such as `qqq list` first. Parent state can change after preview; real
-import validates it again within its write transaction.
-
-Human output summarizes imported/validated count and keys with IDs or preview
-details. JSON returns:
-
-| Field | Meaning |
+| Task field | Rule |
 | --- | --- |
-| `version` | Result schema version, currently 1 |
-| `dry_run` | Whether this is a validation preview |
-| `count` | Number of tasks in the batch |
-| `mapping` | Key to committed task ID, in lexicographic key order; empty object for dry-run |
-| `creation_order` | Keys in deterministic insertion order |
-| `tasks` | Normalized entries in original input order |
+| `key` | Required, unique, nonblank string; references match its exact whitespace |
+| `description` | Required nonblank string; preserves whitespace and newlines |
+| `priority` | Integer -100..100; defaults to `0` |
+| `tags` | Valid normalized labels; defaults to `[]` |
+| `parent` | `{"key":"feature"}`, `{"id":12}`, or null/omitted |
+| `depends_on` | Array of the same reference objects; defaults to `[]` |
 
-Each result entry has `key`, `description`, defaulted `priority`, original
-`parent` reference (or null), `depends_on` references (default `[]`), `id`,
-resolved `parent_id` and `prerequisite_ids` in source reference order. Dry-run task IDs
-are null; existing dependency IDs are known, batch-local dependency IDs remain null. After
-commit, allocated task IDs and every resolved dependency ID are returned. For the
-example above in an empty project, mapping is `{"feature":1,"tests":2}` and
-creation order is `["feature","tests"]`.
+Key references may point forward within the batch. ID references must name
+existing positive task IDs. Each reference has exactly one type. Archived
+unfinished dependencies are rejected; archived completed dependencies are valid.
+Version 1 has no image fields. An empty task array is valid.
+
+The whole batch validates and commits in one transaction. Missing references,
+cycles across both dependency types, duplicate prerequisites, parent/prerequisite
+overlap, invalid values, unknown/duplicate fields and unsupported versions fail
+without partial tasks or consumed IDs. Normal project migration and deletion
+recovery may run before the import transaction.
+
+Dependencies are inserted first; ties use the lowest original input index.
+For the example, an empty project creates `feature` as ID 1 and `tests` as ID 2.
+New tasks start `new`, unarchived and unassigned.
+
+`--dry-run` validates through a read-only snapshot without migration, deletion
+recovery, writes or reserved IDs. Upgrade older supported databases with
+`qqq list` first. Real import rechecks existing references in its write transaction.
+
+JSON returns `version`, `dry_run`, `count`, `mapping`, `creation_order` and
+normalized `tasks`. Mapping keys are sorted; tasks retain input order and include
+original references, `id`, `parent_id` and `prerequisite_ids`. Preview mapping is
+`{}` and new IDs are null; existing dependency IDs remain known.
 
 ## Task recipes
 
-Store reusable workflows in `<project-root>/.qqq-recipes/NAME.json`. Recipe files
-are ordinary project files suitable for Git, separate from ignored `.qqq/`
-runtime state. Discovery uses nearest `.qqq` project, including from subdirs;
-it never searches global folders, uses cwd shadow files or falls back to an outer
-project's recipes. Project must already be initialized. Names contain ASCII
-letters/digits/underscores/hyphens; pass name without `.json` or path separators.
+Store reusable version-1 batches in `<project-root>/.qqq-recipes/NAME.json`.
+The project must be initialized. Discovery uses the nearest project, including
+from subdirectories; names allow ASCII letters, digits, underscores and hyphens.
+Pass the name without a path or `.json`. Recipe files can be committed to Git.
 
-Copy bundled [bug](../examples/recipes/bug.json) and
-[release](../examples/recipes/release.json) examples from qqq source checkout into
-your project's `.qqq-recipes/`, or create files using format below.
+Copy the bundled [bug](../examples/recipes/bug.json) and
+[release](../examples/recipes/release.json) recipes into that directory:
 
 <!-- recipe-cli-examples -->
 ```sh
@@ -360,108 +220,69 @@ qqq add --template release --var version=0.5.1 --json
 ```
 <!-- /recipe-cli-examples -->
 
-Each application creates new tasks. Bug example creates one tagged task with
-whole description and acceptance criteria. Release example creates `prepare`,
-`tests`, `publish`: tests has prepare as parent; publish has prepare as parent
-and tests as extra prerequisite. Recipes create queue records; applying release
-recipe does not execute tests or publish software.
-
-Version-1 recipe format:
+Each application creates new queue records. The release recipe creates
+`prepare`, `tests` and `publish` with dependency links; it does not run commands.
 
 ```json
 {
   "version": 1,
-  "parameters": [
-    {"name": "component"},
-    {"name": "severity", "default": "normal"}
-  ],
-  "tasks": [
-    {
-      "key": "bug",
-      "description": "Fix ${component} bug\n\nAcceptance criteria\n- Add regression test\nSeverity: ${severity}",
-      "tags": ["bug", "${component}"],
-      "priority": 5
-    }
-  ]
+  "parameters": [{"name": "component"}, {"name": "severity", "default": "normal"}],
+  "tasks": [{
+    "key": "bug",
+    "description": "Fix ${component} bug\nSeverity: ${severity}",
+    "tags": ["bug", "${component}"],
+    "priority": 5
+  }]
 }
 ```
 
-`version` and `tasks` are required. `parameters` defaults to `[]`. Parameter
-names follow ASCII identifier syntax: letter/underscore first, then
-letters/digits/underscores. Omitted `default` makes parameter required; supplied
-default must be string. Names are case-sensitive. Every required declaration
-must receive value, including declarations unused by task text.
+`version` and `tasks` are required; `parameters` defaults to `[]`. Parameter names
+are case-sensitive ASCII identifiers. A string `default` makes a parameter
+optional; every other declaration requires a value, even if unused in task text.
+Task fields and graph validation follow [import](#atomic-batch-import).
 
-Task fields, defaults, parent/prerequisite reference forms, tag validation and
-ordering use [atomic import schema](#atomic-batch-import). Acceptance criteria
-belong in whole description. Local refs such as `{"key":"prepare"}` resolve to
-new IDs from same application; explicitly declared existing refs such as
-`"depends_on":[{"id":12}]` retain ID12 and must exist in target project. No image
-attachment fields in version1. Empty task arrays are valid no-ops.
+Repeat `--var NAME=VALUE`. Split occurs at the first `=`; quote shell-sensitive
+values, such as `--var 'component=auth = account login'`. Empty values count as
+provided but expanded descriptions and tags still must validate.
 
-Repeat `--var NAME=VALUE`; split occurs at first equals sign. Quote assignments
-when values contain spaces or shell metacharacters, for example
-`--var 'component=auth = account login'`. Values preserve whitespace, additional
-equals signs, quotes, Unicode and newlines. Empty value counts as provided;
-expanded descriptions/tags still must pass ordinary task validation.
+`${name}` substitutes only description and tag strings, once. `$$` emits `$`;
+`$${name}` emits literal `${name}`. Other dollar forms remain literal. No shell,
+environment lookup or code evaluation occurs. Use normal JSON string escaping.
+Unknown/malformed placeholders, missing/duplicate/unknown assignments, duplicate
+parameters, invalid fields and invalid graphs fail before task creation.
 
-`${name}` substitutes only descriptions and individual tags. Keys, integer
-priorities and reference objects remain literal. Values/defaults are inserted
-once without further expansion: value containing `${other}` stays literal text.
-`$$` emits `$`; `$${name}` emits literal `${name}`. Other dollar forms such as
-`$HOME` or `$(...)` stay literal. Loading recipes never reads environment values,
-executes shell commands or evaluates code. Unknown/malformed/unclosed placeholders
-fail. JSON itself must use normal JSON string escaping (`\n`, `\"`, `\\`).
+`--template` owns task data and conflicts with inline descriptions, `--stdin`,
+`--edit`, `--parent`, `--depends-on`, explicit `--priority`, `--image` and `--tag`.
+`--var` and add's `--dry-run` require `--template`.
 
-Required/duplicate/unknown assignments, duplicate declarations/JSON fields/task
-keys, invalid fields/versions, missing refs and graph cycles fail before any task
-creation. Expansion happens on parsed strings before shared import validation;
-it cannot inject JSON fields. Recipe fields own task data, so `--template`
-conflicts with positional text, `--description`, `--stdin`, `--edit`, `--parent`,
-`--depends-on`, explicit `--priority`, `--image` and `--tag`. Add's `--var` and
-`--dry-run` require `--template`; ordinary add/import behavior stays unchanged.
-
-`--dry-run` validates expanded descriptions, normalized tags and graph against
-current read-only DB snapshot. No new tasks, claims, IDs, migration or deletion
-recovery. Command-start owner preflight remains independent and may fail a
-confirmed dead owner, as with other inspection commands. Real application
-rechecks existing references and inserts whole graph in one import transaction;
-validation/insertion failures leave batch absent and consume no IDs. Concurrent
-applications retain separate complete mappings.
-
-JSON uses import report fields `version`, `dry_run`, `count`, `mapping`,
-`creation_order`, `tasks`. Committed mapping is recipe key -> new task ID.
-Preview mapping is `{}`; new IDs remain null while original reference objects
-and creation_order show graph without reserving IDs. Expanded descriptions/tags
-are exact JSON data. Human preview adds full descriptions/tags to graph summary;
-terminal controls are escaped. Native agent callers retain automatic JSON,
-ordinary shells human output, with existing `--json`/`--human` overrides.
+Preview validates expanded values and dependencies without reserving IDs or
+migrating. Command-start owner preflight still applies. Real application inserts
+the whole graph atomically. Human preview shows expanded text/tags; JSON uses
+the import report, mapping recipe keys to new IDs after commit.
 
 ## Archive and unarchive
 
 ```sh
 qqq edit 12 --archive
 qqq list --include-archived
-qqq show 12
 qqq edit 12 --unarchive
 ```
 
-Archive keeps task status, description, priority, messages, images, ownership
-history, and dependencies. `show`, `edit`, messages, and image export still work
-by ID. Archive/unarchive add history events; repeated commands change nothing.
-The flags skip the editor, conflict with each other and `--edit`, and can combine
-with other direct edits in one transaction. `--expected-revision` also guards
-archive changes. Events record supplied `--session` or `cli` when absent. In-progress tasks
-cannot be archived. An unfinished parent or prerequisite cannot be archived
-while a visible unfinished task depends on it. Adding links or unarchiving
-unfinished dependents under archived unfinished dependencies also fails.
-Archived completed dependencies still release tasks.
+Archive changes visibility, preserving status, content, history, attachments and
+dependencies. Access by ID still works. Actual changes record archive/unarchive
+events; repeating a flag is a no-op. The actor is `--session`, or `cli` if absent.
+
+The two flags conflict with each other and `--edit`, skip the editor, and can
+combine with direct edits and `--expected-revision` in one transaction.
+In-progress tasks cannot be archived. An unfinished dependency cannot be archived
+while a visible unfinished task depends on it. Adding links or unarchiving an
+unfinished dependent under an archived unfinished dependency also fails.
+Archived completed dependencies still satisfy readiness.
 
 ## Bulk task actions
 
-`qqq bulk` previews metadata changes. Review exact IDs and before/after values,
-save JSON, then explicitly confirm with `--apply PATH`. Commands below run from
-project root or subdirectories:
+Preview metadata changes, review the exact IDs and values, then apply the saved
+JSON. Generating or discarding a preview changes no selected task.
 
 <!-- bulk-cli-examples -->
 ```sh
@@ -474,65 +295,46 @@ qqq bulk --apply preview.json --json
 ```
 <!-- /bulk-cli-examples -->
 
-Use IDs returned by `add`; example IDs `1` and `2` must exist. Human output shows
-every selected ID and its values. `qqq bulk --apply preview.json --human` prints
-readable results. `qqq bulk --apply - --json` reads a saved preview from stdin.
-Generating a preview alone changes no selected task; discarding preview cancels.
+Use real task IDs in the examples. `--apply -` reads a saved preview from stdin;
+`--human` prints readable results.
 
-Selection uses either repeated positive absolute `--id ID`, or selectors:
-
-| Selector | Behavior |
+| Selection | Rule |
 | --- | --- |
-| `--query TEXT` | Case-insensitive substring in full saved description |
-| `--status STATUS` | Repeat for OR; `new`, `in_progress`, `completed`, `error` |
-| `--filter EXPR` | Existing typed Luau filter |
-| `--tag LABEL` | Repeat to require every exact normalized label |
-| `--all` | Explicitly select all visible tasks without completion display limit |
-| `--include-archived` | Include archived tasks with selectors |
+| Repeated `--id ID` | Positive absolute IDs, sorted/deduplicated; includes archived tasks |
+| `--query`, `--status`, `--tag`, `--filter` | Same matching rules as list; only direct matches enter the batch |
+| `--all` | Explicitly select all visible tasks |
+| `--include-archived` | Expand selector visibility; not a selection on its own |
 
-Query, status, tag and Luau selectors combine with AND. Only directly matching
-rows enter batch; ancestor context rows stay out. Completed display limits never
-apply. Explicit IDs include archived tasks, deduplicate and sort ascending; they
-conflict with selectors. Archive visibility alone is not a selection. Empty
-selection produces zero counts, empty IDs and empty task rows.
+IDs conflict with selectors. Different selectors combine with AND; completed
+display limits never apply. Empty selections are valid.
 
-| Action | Behavior |
+| Action | Effect |
 | --- | --- |
-| `--add-tag LABEL` | Add label; repeat |
-| `--remove-tag LABEL` | Remove label; repeat |
-| `--set-tags LABELS` | Replace with comma-separated labels; `""` clears |
-| `--priority N` | Set integer priority from -100 through 100 |
-| `--archive` / `--unarchive` | Set archive visibility |
+| `--add-tag LABEL` / `--remove-tag LABEL` | Add/remove labels; repeat flags |
+| `--set-tags LABELS` | Replace comma-separated tags; `""` clears |
+| `--priority N` | Set priority from -100 through 100 |
+| `--archive` / `--unarchive` | Set visibility using final-batch dependency guards |
 
-At least one action is required. Tags use single-task validation. Replacing tags
-conflicts with adding/removing; same normalized label cannot be added and removed.
-Archive/unarchive conflict. Priority, tags and archive visibility can combine.
-Deletion, status changes and ownership use individual task commands.
+At least one action is required. Set-tags conflicts with add/remove; the same
+label cannot be added and removed. Archive/unarchive conflict. Tags, priority
+and visibility may combine. Use individual commands for status and ownership.
 
-Preview JSON has `version: 1`, `applied: false`, canonical `database` path,
+Preview JSON contains `version: 1`, `applied: false`, canonical `database` path,
 normalized `actions`, `selected_ids`, `selected_count`, `changed_count`,
-`action_count` and `tasks`. Each task row has `id`, `before`, `after` and opaque
-SHA256 `fingerprint`; metadata contains `tags`, `priority`, `archived`.
-`changed_count` counts tasks with changed values; `action_count` counts changed
-metadata fields across tasks. Adding several tags to one task counts as one
-field change. No-op rows contribute zero; empty/no-op application writes no task
-rows or history. Apply returns same report with `applied: true`.
+`action_count` and `tasks`. Rows contain `id`, `before`, `after` and opaque
+SHA-256 `fingerprint`; metadata is `tags`, `priority`, `archived`.
+`changed_count` counts changed tasks; `action_count` counts changed fields.
+No-op rows write no task data or events. Apply returns `applied: true`.
 
-Apply uses only frozen IDs, never reruns selectors. Newly matching tasks stay
-unchanged. Saved preview belongs to its canonical project DB path. Relevant
-selected-task changes, removal, assignment changes or content/attachment revisions
-cause `BULK_CONFLICT`; no task in batch changes. Messages alone do not invalidate
-preview. Regenerate and review after conflict. Malformed/inconsistent previews
-fail with `INVALID_ARGUMENT`; applied reports cannot be applied again.
+Apply uses frozen IDs, not a fresh selector query. The preview must belong to
+the same canonical database path. Selected-task content, attachments, assignment
+or relevant metadata changes invalidate it with `BULK_CONFLICT`; messages alone
+do not. Regenerate and review after a conflict. Invalid/inconsistent previews
+use `INVALID_ARGUMENT`; an applied report cannot be reused.
 
-All rows validate before one transaction commits. DB failures roll back every
-change and archive event. Archive guards use final batch state: active tasks
-cannot be archived; unfinished dependencies cannot be archived while visible
-unfinished tasks depend on them. Archiving/unarchiving parent and dependent
-together works when final graph satisfies guards. Other task fields, claims,
-descriptions, images, dependencies and existing history stay intact. Actual
-archive changes add normal archive/unarchive events. Standard synchronous owner
-liveness preflight still runs before command, as described below.
+All writes and archive events commit together or roll back together. Active
+tasks cannot be archived; parent/dependent visibility is checked against the
+final batch state. Other content and claims stay intact.
 
 ## Complete work
 
@@ -541,726 +343,501 @@ qqq edit 12 --complete --session worker
 qqq edit 12 --complete --session worker --description "Finished" --archive
 ```
 
-`--complete` requires an in-progress task owned by the supplied or discovered
-session. It clears the active claim, preserves public assignment and saved links,
-and records a `complete` event. `--complete` and `--reopen` skip the editor,
-conflict with each other, `--edit`, `--set-status`, and `--set-pending`, and combine
-with other direct edits in one transaction. `--expected-revision` guards the
-whole operation; failed validation or writes leave task content and lifecycle
-unchanged. The former standalone `complete` and `reopen` commands are removed.
+Completion requires an in-progress task owned by the supplied/discovered session.
+It ends the claim, records a `complete` event and retains public assignment
+metadata and the Herdr link for log lookup.
+
+`--complete` and `--reopen` skip the editor and combine atomically with direct
+edits. They conflict with each other, `--edit`, `--set-status` and `--set-pending`.
+`--expected-revision` guards the whole operation. The standalone `complete` and
+`reopen` commands have been removed.
 
 ## Reopen work
 
 ```sh
 qqq edit 12 --reopen
-qqq edit -1 --reopen --session reviewer
+qqq edit 12 --unarchive --reopen
 ```
 
-`edit --reopen` returns a completed task to `new` and records a reopen event. An
-in-progress task can also reopen when its owning Herdr agent is absent from a
-successful lookup on its saved server. Exact session identity or same terminal
-with same agent kind counts as live, including moved panes and changed session
-reports. Missing links or saved servers, mismatched claim associations, failed commands and
-invalid responses cannot establish absence; task stays unchanged. Legacy links
-remain usable because fresh claims replace saved links. New links privately
-record current claim association. CLI and lowercase `y` in TUI Reopen use same checks.
+Reopen returns completed tasks and preflight-generated errors to `new`, clears
+assignment metadata and records a reopen event. Ordinary manual errors use
+[retry](#return-or-retry-work). Content, dependencies, attachments and prior
+history remain; the saved Herdr link stays until the next claim replaces it.
 
-TUI Reopen confirmation offers `y` to reopen normally or uppercase `Y` to force
-reopen a completed or in-progress task. Error tasks, including preflight-generated
-errors, use Ctrl-G → Retry error. Force reopen skips owner-liveness checks and
-clears recorded assignment even when an owner remains live. Archive and dependency availability checks still
-apply, and a new task cannot reopen. `n`, Enter or Esc cancels. Confirmation hides
-the cursor and ignores editing/navigation input; Ctrl-C leaves it open.
-Cancellation preserves the active filter, dirty draft and caret. Successful
-reopening records the actor in a reopen event.
+An active task can reopen only when a successful lookup on its saved Herdr
+server establishes that its owner is absent. Exact session identity or the same
+terminal and agent kind counts as live, including moved panes. Missing links,
+failed/malformed lookups and mismatched claim associations cannot prove absence.
 
-Reopening keeps
-description, priority, parent, prerequisites, messages, images, creation time, and prior
-history. Reopening clears recorded assignment metadata; saved Herdr link stays
-until next claim replaces it. Preflight-generated errors also reopen; ordinary
-manual errors use retry. New tasks fail without changes; repeating
-`edit --reopen` also fails. Archived tasks require `edit --unarchive` first
-or `edit --unarchive --reopen` together. A
-task with an archived unfinished parent or prerequisite cannot reopen until
-dependency is unarchived or completed, or its link removed. Completed descendants
-stay completed; new dependents wait for reopened prerequisite to complete again. Reopened tasks return to default
-lists, including `--max-completed 0`, and become claimable when dependencies
-permit.
+New tasks cannot reopen. Archived tasks require unarchive first or in the same
+edit. Archived unfinished dependencies must be completed, unarchived or unlinked.
+Completed descendants stay completed; new dependents wait for the reopened task.
+
+The TUI also offers explicit force reopen; see [action confirmations](#action-confirmations).
 
 ## Built-in editor
 
-On a terminal, `add` without text or `edit` without update flags opens built-in
-editor. Ctrl-S saves, Esc exits blank draft or confirms discard of nonempty
-draft, Ctrl-C exits, Ctrl-W deletes previous word on same line, Ctrl-V pastes
-clipboard text or image. Option+Left/Right moves cursor by word. Clipboard paste
-needs desktop clipboard support.
+On a terminal, `add` without text and `edit` without update flags open the built-in
+editor. UI goes to stderr; stdout receives the result after exit.
 
-Ctrl-Z undoes description edits; Ctrl-Y redoes them. Each text input, deletion,
-Ctrl-W word deletion or paste is one step, including image/pasteboard items.
-Undo restores content and caret; cursor movement and failed edits keep redo.
-Editing after undo clears redo. History holds up to 256 changes and 64 MiB of
-removed payloads, retaining one oversized change when necessary. Undo/redo
-changes only local description; Ctrl-S commits it. Filter and popup inputs have
-no description undo/redo.
+| Key | Action |
+| --- | --- |
+| Ctrl-S | Save |
+| Enter / Shift-Enter | Insert newline |
+| Ctrl-V | Paste clipboard text or image; requires desktop clipboard support |
+| Ctrl-W | Delete previous word within the current line |
+| Alt/Option-Left/Right | Move by word |
+| Ctrl-Z / Ctrl-Y | Undo / redo description edits |
+| Shift-Up/Down | Browse tasks in interactive add |
+| Esc | Exit blank draft or confirm discard |
+| Ctrl-C | Exit; saved tasks remain committed |
 
-Built-in editors collapse pastes over 1,000 characters into one gold
-`[Pasted Content N chars]` item. Saving stores full payload in Markdown:
+Interactive `add` keeps accepting tasks after each save. Shift-Up loads newest
+then older unarchived tasks; Shift-Down returns toward a blank draft. Switching
+a changed draft asks before discard. New-task parent, prerequisite and priority
+flags apply to every creation; `--image` files attach only to the first successful
+save, including an existing-task update. Inline add, external edit and `edit`
+save once. JSON interactive add returns an array of saved tasks; no save is an error.
 
-````markdown
-```pasteboard
-pasted text
-```
-````
+Undo treats each input, deletion, word deletion or paste as one step, including
+image/pasteboard items. It restores content and caret. Movement/failed edits keep
+redo; editing after undo clears it. History keeps up to 256 changes and 64 MiB of
+removed payloads, retaining one oversized change if necessary. It changes only
+the local description; filters and popup inputs have no description undo.
 
-Shift-Up/Down and `qqq edit` restore complete fences as one editable item;
-Backspace or Delete removes entire item. Payload containing backticks gets a
-longer fence. `NO_COLOR=1` and `TERM=dumb` keep label plain. Existing task text
-outside complete `pasteboard` fences stays visible and editable character by
-character, regardless of length. Other code fences remain ordinary text. Loading
-or saving unchanged text preserves original bytes.
+Pastes over 1,000 characters collapse into a gold `[Pasted Content N chars]` item.
+Saving stores the full payload in a fenced `pasteboard` block; backtick-containing
+payloads use longer fences. Reload restores complete blocks as atomic editable
+items. Backspace/Delete removes the whole item. Other text/fences remain ordinary
+text; unchanged content preserves its original bytes.
 
-In built-in `qqq add`, Ctrl-S creates or updates task, clears editor, then waits
-for next task. Saves commit immediately; exit keeps prior saves. Shift+Up loads
-newest task, then older tasks; Shift+Down moves toward newer tasks, then blank
-draft. Loaded task places cursor at description end. Header shows selected ID
-and status. JSON output returns saved tasks as array on exit. Exit without any
-save returns error.
-
-Switching from changed draft asks before discard; N, Enter, or Esc keeps it.
-Navigation includes all unarchived tasks, regardless of status; deleted IDs are
-skipped. `--parent`, `--depends-on` and `--priority` apply to each new task. `--image` files attach
-only to first successful save, including when updating existing task. Inline add,
-external editor and `qqq edit` save once.
-
-Use `--edit` (`-e`) to force `$EDITOR`. Without terminal input and stderr,
-interactive add/edit uses `$EDITOR` automatically. Editor command must wait
-until editing finishes.
+### External editor
 
 ```sh
-export EDITOR='vim'
+export EDITOR='vim'                  # must wait until editing finishes
 qqq add --edit
-qqq edit 1 --edit --description "Prefilled draft"
+qqq edit 12 --edit --description "Prefilled draft"
 ```
 
-Built-in add/edit editor uses stderr; stdout holds result on exit. Cancelling
-draft keeps earlier saves. Direct edits preserve omitted fields, ownership and
-attachments.
+`--edit` (`-e`) forces `$EDITOR`. Without terminal input and stderr, interactive
+add/edit uses it automatically. Direct edits preserve omitted fields and images.
 
-External edits automatically guard the revision loaded before `$EDITOR` opens.
-On conflict, qqq shows paths to complete local text and current DB text, plus
-current revision. Pending image bytes are copied beside local draft; an
-`attachments.json` file lists their names and recovery paths. Newer DB content
-and stored images stay intact.
+### Content conflicts
 
-With terminal input, `r` reloads DB text after discard confirmation, `o` saves
-local text after overwrite confirmation, and `k` keeps recovery files and exits
-with failure. Reload discards pending local images. Overwrite checks the displayed
-revision again; another concurrent edit causes another conflict. Without terminal
-input, qqq exits with failure and keeps recovery files. Review local/current
-files, then retry with `--description` and `--expected-revision` for the current
-revision; use `--image` with recovered attachment paths if needed. A removed
-task keeps local draft and is never recreated by save.
+Interactive saves check the loaded revision. A concurrent content change opens
+a conflict view instead of overwriting it. Message/status changes do not conflict.
 
-Built-in edits and TUI saves guard loaded content revision automatically. A
-conflict view opens instead of saving. `Tab` switches between complete current
-DB text and local draft; arrows, Page-Up/Down and Home/End scroll text. Line breaks
-and whitespace remain visible. `Esc` or Ctrl-C closes view while keeping draft,
-cursor, collapsed paste blocks and pending image bytes.
+| Conflict view | Action |
+| --- | --- |
+| Tab | Switch complete current DB text / local draft |
+| Arrows, PgUp/PgDn, Home/End | Scroll |
+| `r`, then `y` | Reload latest DB text, discarding local text and pending images |
+| `o`, then `y` | Overwrite against the displayed revision; another edit rejects it again |
+| Esc / Ctrl-C | Keep draft, caret, paste blocks and pending images |
+| `n`, Enter, Esc in confirmation | Cancel the proposed reload/overwrite |
 
-`r` offers reload, then `y` confirms discarding local draft; `o` offers overwrite,
-then `y` confirms saving local draft against displayed DB revision. `n`, Enter
-or Esc cancels confirmation. Further content changes reject overwrite again.
-Reload reads latest complete content. A removed task offers local text and keep
-only. Retained dirty buffers keep their original loaded revision when switching
-tasks; saving or reloading one leaves other drafts intact. Message/status updates
-do not cause content conflicts.
+A removed task is never recreated by saving. Retained TUI drafts keep their
+original loaded revisions; resolving one does not change the others.
+
+External editor conflicts preserve complete local/current text and pending image
+files beside an `attachments.json` recovery manifest. With terminal input, `r`
+reloads after confirmation, `o` overwrites after confirmation, and `k` keeps files
+and exits with failure. Without terminal input, qqq keeps files and fails.
+Review them before retrying with `--expected-revision` and any recovered `--image`
+paths. JSON failures may include these paths in `details.recovery`.
 
 ## Task TUI
 
 ```sh
 qqq tui
+qqq tui --view "Ready frontend" --include-archived
 ```
 
-Below 60 columns, compact layout hides task list status labels. Task list,
-details/messages and editor stack in that order, each using one third of terminal
-height, rounded to rows. Pane heights differ by at most one row.
-From 60 through 149 columns, task list, details/messages and editor stay visible at 35%,
-20% and 45% of terminal height, rounded to rows. At 150 columns or wider, list
-and details share upper rows: list uses 60% of width, details 40%. Editor spans
-full width below them, retaining its height and position between stacked and wide layouts.
-Task list shows unarchived tasks by default.
-Visible details pane shows `Select task to view details.` for blank drafts; selecting or
-saving task keeps pane positions fixed. Small terminals retain usable list and
-editor rows.
-Details use a double-line box with two spaces inside each side; short panes
-retain padding without borders. Text wraps to the inner width.
-Details share `show` header and layout: `#ID · Status`, Description, Messages,
-Details, Assignment, Images, History and Herdr sections. Fields align their
-values; Created/Updated occupy separate rows. Assignment lists `Harness:` and
-`Orchestrator:`; session values include stored pane IDs such as `wC:p4 (herdr)`.
-Messages follow creation order,
-with indented headers and bodies; empty collections show `None`. IDs are bold,
-statuses colored, labels/timestamps dim. Styles survive wrapping and scroll.
-Each task preview shows at most three wrapped lines; clipped previews end with
-`...`. Editor loads full description, including hidden lines.
-Selection fills whole row with muted blue background, including wrapped lines;
-light text stays readable. Task rows have one leading space. Editor header shows
-selected task ID in color and plain modes.
-Shift-Up/Down selects tasks in displayed tree order, then new-task draft.
-Switching retains unsaved drafts in memory for this TUI session. Returning restores
-text, image/paste items, caret and manual editor scroll. Dirty tasks show gold
-`[*]` only before the first description preview line (text marker in plain mode).
-ID/status columns, wrapping and continuation rows stay fixed when marker toggles;
-first-line preview clips at pane edge. Dirty new/child drafts show `[*]` in title.
-Reverting edits clears marker. Task list/filter still use saved DB descriptions.
-Ctrl-S saves only selected draft; failed save keeps draft and marker. By default, saved task stays open for
-further edits or task actions. Freshly loaded and saved tasks place cursor at description
-end; editor scrolls to keep cursor visible. Set `tui.after_save_new` to `open_new`
-to clear editor after creating task; existing-task edits stay open. Shift-Down past last
-displayed task restores general new draft, or opens blank draft when none exists. Esc closes focused filter and clears query,
-returning focus to editor while preserving draft. From editor, Esc clears editor
-before exiting on next press. Selected tasks and dirty new drafts ask before
-discarding unsaved content; `y` clears editor, `n` keeps draft for editing or Ctrl-S save.
-Ctrl-C returns selected task to blank draft, asking before discarding edits.
-Ctrl-C immediately clears a nonempty new or child draft, including text, tags,
-images, paste items and undo history; child parent stays selected. Next Ctrl-C
-exits only once active new draft is empty. Ctrl-C or Esc exit prompts for every retained dirty draft, including hidden,
-archived or deleted tasks and child drafts. Prompts identify draft and preview it;
-`y` advances, `n`, Enter or Esc cancels whole exit and preserves all drafts,
-including earlier approvals. App exits after every draft is approved. Blank draft
-exits immediately only when no retained dirty drafts remain.
-Cancelling a deleted task's discard prompt reopens its retained local draft;
-Ctrl-S explains removal and keeps draft without recreating task.
-Repeated Ctrl-C keeps confirmation open. Ctrl-V or terminal paste inserts text; pasting
-image file path attaches image. Saves commit immediately. TUI needs terminal
-and writes no stdout, including with `--json`.
+The TUI needs a terminal and writes no stdout, including with `--json`. The task
+list and details refresh after external commits without replacing local draft
+text or manual scroll. Lists and filters use saved descriptions.
 
-Undo/redo history survives Ctrl-S while same task stays open, including saved
-image references without another upload. Retained unsaved drafts carry their own
-history across navigation. Failed saves and cancelled conflicts keep history;
-accepted reload, discard, fresh task load or clearing to new draft starts fresh.
-Navigating away from a clean saved draft uses existing fresh-load behavior.
+### Navigation and drafts
 
-Ctrl+P opens or restores child draft under selected task; header shows parent ID.
-Current edits stay retained. Each parent has separate child draft; return to parent
-and press Ctrl+P to continue it. Ctrl-S creates child with dependency;
-Enter or Shift+Enter inserts newline. Navigating away retains child parent context.
-Inside child draft editor, Ctrl+P inserts its parent's plain `#ID` at caret,
-without added spaces. One Ctrl+Z undoes insertion; cursor movement and deletion
-use normal text characters. Save stores exact text; references add no dependency
-or special display behavior. Filter input and popups leave draft unchanged.
+| Key / gesture | Action |
+| --- | --- |
+| Shift-Up/Down or Ctrl-Up/Down | Select tasks in visible tree order, then the general new draft |
+| Click task / editor text | Load the task / place the caret |
+| Mouse wheel | Scroll the pane under the pointer |
+| PgUp/PgDn | Scroll selected-task details from the editor |
+| Ctrl-S | Save only the active draft |
+| Ctrl-P | Open/restore a child draft; inside it, insert the parent's plain `#ID` |
+| Ctrl-K | Jump to a positive task ID |
+| Ctrl-B | Open saved views; `n` creates one |
+| Ctrl-L | Edit task or draft tags |
+| Ctrl-D | Toggle a saved task's bulk-selection mark |
+| Ctrl-G | Open task actions, or bulk actions while tasks are marked |
+| Ctrl-H | Open the linked live Herdr agent; detach to return |
+| Ctrl+/ | Focus the description filter |
 
-Ctrl+B opens saved project views from editor or filter. Arrows select, Enter
-applies, Esc/Ctrl+C cancels; PgUp/PgDn scrolls criteria. Press `n` in picker to
-create view; Tab/Shift-Tab changes field, Ctrl-S saves, Esc/Ctrl-C returns to
-picker. Duplicate names and invalid values keep form for correction.
-`tui --view NAME` opens same definition as CLI lists/workers. Switching retains opened task,
-dirty/parked drafts, staged tags, caret/scroll and live query/focus, including when
-the task disappears from the view. Picker reloads `.qqq-views.json` when opened;
-active definition stays fixed until another selection. See [named views](views.md).
+Task previews show up to three wrapped lines; the editor loads the full text.
+Selection follows the full preview when it fits. Manual scrolling can leave it
+partly visible; editing reveals the caret again. Selecting another task resets
+its details scroll. A blank draft keeps the details pane in place.
 
-Ctrl+L opens tags for the selected task or new draft from editor or filter. Current
-labels are prefilled, one per line. Enter or Shift+Enter adds a line; Ctrl-S applies.
-Up/Down move caret between tag rows, preserving preferred display column across
-short rows. Left/Right move between characters; Home/End jump within current row.
-Ctrl-A/Ctrl-E move to line start/end; Alt-Left/Alt-Right move by word. Ctrl-W deletes
-the previous word without crossing a line. Typing, terminal paste, Ctrl-V text
-paste, Backspace/Delete and Enter edit at caret. Active row and
-caret stay visible when tags exceed popup height or width.
-Blank lines are ignored; blank input clears tags. Newline/CRLF paste and legacy
-comma-separated input are accepted. Ctrl-U deletes the current line while keeping
-other labels; delete each line to clear all tags. Esc/Ctrl-C cancels.
-Shortcuts share the popup footer; narrow popups use `^S` for Ctrl-S, `^U` for
-Ctrl-U and `↵` for Enter. Active input row stays visible in short terminals.
-List tags use yellow when color is enabled. Invalid labels stay in the popup. Tag saves
-retain unsaved description drafts, caret, scroll, parked buffers and filter
-focus. On a new general or child draft, applying tags only changes the draft;
-no task enters the DB or queue until Ctrl-S creates it with description, parent,
-images and tags in one transaction. Draft tags survive navigation independently
-for each buffer. A draft containing only tags is unsaved work and requires discard
-confirmation; Ctrl-S still requires a nonempty description. Fresh drafts start
-without tags after a save.
+Switching tasks retains unsaved general, task and per-parent child drafts,
+including staged tags, image/paste items, undo history, caret and editor scroll.
+Dirty drafts show `[*]`. Saved tasks stay open by default; set
+`tui.after_save_new = "open_new"` to return to a blank draft after creation.
+Existing-task edits stay open. Ctrl-P parent references are ordinary text and
+add no dependency; child creation itself retains its parent link.
 
-Ctrl+K opens a task ID popup from editor or filter. Enter a positive ID, press
-Enter to go; invalid or missing IDs keep popup open with an error. Backspace edits
-input; Ctrl+U clears it. Esc or Ctrl+C closes popup and preserves selection,
-draft, filter and focus. Successful jump clears filter and retains unsaved
-task/new/child drafts, including caret and editor scroll. Jumping to archived
-task enables archived rows for remaining dashboard session. Jumping to completed
-task reveals completed rows when hidden by the completion toggle or zero limit;
-other jumps and cancellation preserve that setting. Saved selectors and positive
-completed limits remain in effect: jump opens a task even if its list row stays
-hidden. Navigation saves no content and changes no task status or ownership.
+Undo history survives saving while the same task stays open. Accepted reload,
+discard, fresh task load or clearing to a new draft starts a fresh history.
 
-Ctrl+D toggles current saved task in bulk selection. Selected tasks show `+` in
-existing one-cell row prefix; dirty `[*]` and focused row remain independent.
-Marks survive filtering and refresh, including hidden tasks. Ctrl+G opens bulk
-menu while any task is marked; menu and preview show count and exact IDs.
-`x Clear selection` removes marks. With no marks, Ctrl+G opens individual actions.
+Ctrl-K retains drafts and clears the live query on a successful jump. Archived
+jumps enable archived visibility; completed jumps reveal hidden completions.
+Saved selectors and positive completion limits still apply, so an opened task
+may have no visible list row. Invalid/missing IDs keep the popup open.
 
-Bulk menu offers add/remove/replace tags, priority and archive/unarchive. Remove
-tags lists the sorted union of saved tags on all marked tasks, including hidden
-tasks. Up/Down selects a row; Space toggles labels to remove. Enter or Ctrl+S
-generates preview; Esc cancels. Each label appears once. No tags are selected by
-default; an empty union shows "No tags on selected tasks".
-Add/replace tag input uses one label per line: Enter/Shift+Enter adds newline, Ctrl+U deletes
-current line, Ctrl+S generates preview. Empty replacement clears tags. Priority
-input previews on Enter. Invalid input retains text for correction.
-Preview shows full before/after metadata; Up/Down, PgUp/PgDn and Home/End scroll.
-Heading and `y apply` / `n/Esc cancel` stay visible across resize. Enter or Ctrl+C
-also cancels. Only `y` applies frozen preview. Success clears marks; conflicts
-retain marks for fresh preview. Cancelling or applying preserves unsaved drafts,
-paste/image items, caret, manual pane scroll, filter and focus. Bulk actions
-operate on saved tasks; Ctrl+S in editor saves description separately.
+Ctrl-B applies a saved view with Enter; Esc/Ctrl-C cancels and PgUp/PgDn scrolls
+criteria. In the new-view form, Tab/Shift-Tab switches fields, Ctrl-F opens
+filter templates and Ctrl-S saves. View changes preserve the opened task, drafts,
+query and focus. The picker reloads the catalog when opened; the active view
+stays fixed until another selection. See [views](views.md).
 
-Ctrl-H focuses selected task's live Herdr agent and opens Herdr client using
-task's linked server. `Ctrl-H Herdr` appears in the shortcut bar only when the
-selected task has a saved Herdr link, including while filtering. Detach from client
-to return to TUI with draft, selection, filter, cursor and scroll positions preserved. No task is saved or changed.
-Missing links, unavailable agents and client errors appear in status bar.
-Link task with `qqq herdr link` first if needed. Backspace still edits text.
+### Tag input
 
-Task list opens scrolled to bottom. List and details refresh after external DB
-commits without keyboard input. Refresh keeps current editor draft, filter query,
-and manual scroll positions. Selected task status updates in editor title; task
-text stays in editor until reloaded or saved.
+Ctrl-L prefills one tag per line. Enter adds a line; Ctrl-S applies; Ctrl-U
+deletes the current line; Esc/Ctrl-C cancels. Blank lines are ignored and blank
+input clears tags. CRLF/newline paste and comma-separated input are accepted.
+Invalid labels stay in the popup for correction.
 
-Mouse wheel scrolls list, details or editor under pointer. Panes keep separate
-scroll positions; scrolling never edits or saves text. PgUp/PgDn scroll selected
-task details while editor has focus. Selection changes reset details scroll.
-Details clicks leave editor caret and draft unchanged. Shift-Up/Down
-returns list to selected task, revealing its full preview when it fits. Automatic
-selection follow also keeps all preview rows visible; smaller viewports keep
-preview's first row visible. Mouse scrolling retains manual row offsets and can
-leave previews partially visible. Editor keys reveal caret after manual scroll.
-Left-click task row to load it in editor, including indented or wrapped rows.
-Left-click editor text to place caret. Task-row clicks retain unsaved drafts,
-using same restoration behavior as Shift-Up/Down.
+Type a prefix to suggest existing project tags, including tags outside the
+current view. Up/Down selects a suggestion; Tab completes the label at the caret.
+Already-entered tags are excluded. Custom labels remain available. Without
+suggestions, Up/Down moves between input lines. Left/Right, Home/End, Ctrl-A/E,
+Alt-Left/Right and Ctrl-W retain normal caret/word editing. Long inputs scroll
+to keep the active row visible. Compact hints use `^S`, `^U` and `↵`.
 
-Ctrl+/ focuses filter and shows `Filter:` with editable caret, even when empty.
-Filter bar stays visible while focused, query is nonempty, completed tasks are
-hidden, or archived tasks are included. Empty unfocused query reserves no row
-when completed tasks are shown and archived tasks are hidden.
-Right-edge `[✓ Completed] [× Archived]` buttons control visibility independently.
-Click Completed or press Ctrl-T while filter is focused to hide/show completed
-tasks. Archived defaults off; click Archived or press Ctrl-A while filter is
-focused to include/hide archived tasks. `--include-archived` and saved views can
-start with Archived enabled. Narrow list panes show `[✓C] [×A]` with the same
-click targets. Visibility resets to startup settings when TUI opens again.
-Toggle preserves query, opened task, unsaved drafts and DB; navigation
-uses visible tasks. Unfinished children remain visible when completed parents are
-hidden. Type to match any part of full description, ignoring case.
-Matching tasks retain visible parent chain;
-no matches shows `No matching tasks.`. Backspace edits query. Tab or Enter returns to
-editor. `/` or Alt+/ inserts literal `/` into editor. Shift-Up/Down navigates visible
-tasks while filter is active. Query changes do not change selected task, unsaved
-draft, or DB.
-With focused filter or nonempty query, Esc clears query and closes filter focus. Ctrl-C clears
-nonempty query, preserving current focus. Selected task and editor draft stay intact, including while
-popup or confirmation is open. With empty focused filter, next Ctrl-C closes filter
-and returns focus to editor without changing opened task or draft. Next Esc follows
-editor clearing flow; later Ctrl-C follows editor cancel flow. Esc asks before
-discarding dirty drafts; Ctrl-C asks for saved-task edits, clears a nonempty new
-draft immediately, and exits from an empty new draft after retained-draft approvals.
+Applying saved-task tags leaves unsaved description drafts, scroll and filters
+intact. On general/child drafts it stages tags locally; no task is created until
+Ctrl-S saves a nonempty description. Tags survive navigation and count as dirty
+work for discard prompts. Bulk add/replace tag inputs use the same completion.
 
-Ctrl-G opens centered actions popup for selected task; dashboard stays visible
-around it. Prompts, confirmations and errors share popup; small terminals use
-compact view, scrolling menu to keep selected action visible.
-Actions form three groups separated by empty rows: status (`Complete`,
-`Mark error`, `Retry error` for error tasks or `Reopen` for other tasks), settings
-(`Priority`, `Set parent`), and visibility (`Archive`/`Unarchive`). Empty rows are never
-selectable. Cyan titles/shortcuts, muted help, gold prompts/warnings and soft-red
-errors distinguish popup states. Up/Down selects action, wrapping at ends;
-Enter activates selected row. Dark accent tint and `>` mark selection; plain
-mode keeps marker. Letter shortcuts activate actions directly. Press `c` to complete owned task,
-`r` to retry error task, `o` on non-error tasks to open Reopen confirmation
-(`y` normal, `Y` force), `a` to archive or unarchive, `p` to set priority
-(-100..100), or `d` to set parent by positive
-task ID or `none`. Error tasks show Retry error and ignore `o`; non-error tasks show
-Reopen and ignore `r`. Error tasks hide Mark error and ignore `e`.
-Completed tasks hide Complete and Mark error; their menus ignore `c` and `e`.
-Press `e` for Mark error and enter a nonempty reason. Lowercase `y` keeps current
-owner checks: only an in-progress task owned by the current session can fail.
-Uppercase `Y` forces a New or In progress task to Error without owner
-or Herdr lookup; already-Error tasks reject either action. Archive state, saved
-content, dependency edges and Herdr links stay intact. Reason is recorded as a task message
-with an error event; claim and assignment clear while saved content stays intact.
-Error tasks stay out of worker queue until explicitly retried. Reason prompt and
-confirmation cancel without changing task. Confirmation previews reason and asks
-before discarding an active dirty draft, including at minimum terminal size.
-Reason input keeps its caret; confirmation hides it and ignores editing,
-navigation and Ctrl-C. `n`, Enter or Esc cancels, preserving filter and dirty caret.
-Arrows skip hidden actions; Enter activates displayed selection.
-Open menu refreshes action availability after external status changes, keeping
-selected action when available.
-Complete checks current session ownership when activated. Without a matching
-claim, popup asks `Force complete task #ID?` and warns
-`Complete without matching task owner.` In every completion popup, `y` confirms
-normal completion with current ownership checks; uppercase `Y` explicitly confirms
-force completion of a New, In progress or Error task regardless of owner. Popup
-has no checkbox or caret; Space, arrows and mouse clicks do not select a mode.
-`n`, Enter or Esc cancel. Matching owners can also force explicitly with `Y`.
-This clears active claim, retains recorded harness/orchestrator metadata and Herdr
-link for log lookup, preserves task content and history, and records a standard `complete`
-event attributed to explicit session or `manual`. Already-completed tasks fail.
-Cancellation preserves draft and DB. If Herdr fails or ownership changes during
-normal confirmation, popup keeps exact error plus both confirmation keys.
-Retry normally with `y`, or force explicitly with `Y`. Force path bypasses
-Herdr/owner lookup; it never happens automatically after failure. DB corruption,
-invalid input and other unrelated failures keep ordinary error handling.
-Reopen and Mark error confirmations preserve filters on Esc. Other menus/prompts
-close with Esc after the active filter clears. State changes
-require confirmation before running; priority and parent changes ask when draft has unsaved edits. Successful
-action refreshes task and list; rejected action keeps draft and shows DB error.
-Action error popup hides caret. Up/Down and `j`/`k` scroll long messages;
-Enter closes popup and restores prior editor or filter focus. Esc clears an active
-filter first; another Esc closes popup and restores editor caret.
+### Bulk selection
+
+Ctrl-D marks tasks with `+`; marks survive filtering and refresh. Ctrl-G opens
+add/remove/replace tags, priority and archive/unarchive actions for the exact
+marked IDs. `x` clears marks.
+
+Remove-tags offers the sorted union of saved labels on all marked tasks,
+including hidden ones. Up/Down picks; Space toggles; Enter/Ctrl-S previews.
+Add/replace inputs retain multiline editing and Ctrl-S preview.
+
+Preview shows changed values. Only `y` applies; `n`, Enter or Esc cancels.
+Success clears marks; conflicts retain them for a new preview. These operations
+use saved tasks and preserve local drafts, caret, scroll and filter focus.
+
+### Filtering and visibility
+
+Ctrl+/ opens `Filter:`. Type a case-insensitive description query; Backspace edits,
+Tab/Enter returns to the editor, and Shift-Up/Down navigates matching tasks.
+`/` and Alt+/ remain literal text. Matching tasks retain visible ancestors.
+
+| While filtering | Action |
+| --- | --- |
+| Ctrl-T / click Completed | Toggle completed tasks |
+| Ctrl-A / click Archived | Toggle archived tasks |
+| Esc | Clear query and close filter focus |
+| Ctrl-C with a query | Clear query, keeping focus |
+| Ctrl-C with an empty focused filter | Return to editor |
+
+Visibility toggles preserve drafts and reset to startup settings next session.
+The filter bar remains visible while focused, nonempty, hiding completions or
+including archives. Narrow panes abbreviate the visibility buttons.
+
+### Action confirmations
+
+Ctrl-G's task menu supports arrows/Enter or letter shortcuts:
+
+| Key | Action |
+| --- | --- |
+| `c` | Complete; hidden on completed tasks |
+| `e` | Mark error with a nonblank reason; hidden on error/completed tasks |
+| `r` | Retry an error task |
+| `o` | Reopen a non-error task |
+| `p` | Set priority (-100..100) |
+| `d` | Set parent to a positive ID or `none` |
+| `a` | Archive/unarchive |
+
+Menus skip unavailable actions and refresh availability after status changes.
+Status changes require confirmation; priority/parent changes ask when the draft
+is dirty. Rejected actions keep the draft and display the error.
+
+| Confirmation | Lowercase `y` | Uppercase `Y` |
+| --- | --- | --- |
+| Complete | Require the current owner of an in-progress task | Force a new, active or error task to completed |
+| Reopen | Apply normal completed/orphaned-owner checks | Force a completed or active task to new |
+| Mark error | Require the current owner of an in-progress task | Force a new or active task to error |
+
+Force is always explicit and skips owner/Herdr lookup. Completion retains
+assignment metadata and the saved link; reopen/error clear assignment. Error
+marking records the reason message and error event. Content and dependency
+edges stay intact; archive/dependency guards still apply where required.
+
+`n`, Enter or Esc cancels confirmation. Reopen/Mark-error confirmations hide the
+caret, ignore editing/navigation and Ctrl-C, and preserve filters on Esc.
+Completion errors retain normal/force choices after lookup or ownership failures;
+unrelated database/input errors keep ordinary error handling. Force never happens
+automatically. Action-error text scrolls with Up/Down or `j`/`k`; Enter closes it.
+In other menus/errors, Esc clears an active filter before closing the popup.
+
+### Clearing and exit
+
+From the editor, Esc clears the active editor before a later press exits; dirty
+drafts ask first. Ctrl-C returns a selected task to a blank draft, asking before
+discarding saved-task edits. In a nonempty new/child draft, Ctrl-C immediately
+clears text, tags, images, paste items and undo history; a child retains its parent.
+From an empty new draft it starts exit.
+
+Exit asks about every retained dirty draft, including hidden/deleted tasks.
+`y` advances; `n`, Enter or Esc cancels the whole exit and preserves every draft,
+including earlier approvals. Repeated Ctrl-C keeps the prompt open. Deleted-task
+drafts cannot recreate their task by saving.
+
+### Layout
+
+Below 60 columns, list/details/editor stack in roughly equal heights. From
+60–149 columns their heights are 35%/20%/45%. At 150+ columns, list and details
+share the upper area at 60%/40% width; the editor stays full-width below.
+Details show the same content as `show`, with independent scrolling. Completed
+rows remain gray when selected; `NO_COLOR` preserves text markers and controls.
 
 ## Dependencies and images
 
-Each task has at most one tree parent and any number of extra prerequisites.
-A new, unarchived task becomes ready only when its parent (if set) and every
-extra prerequisite are completed. `next`, filtered/waiting next, dry-run,
-Herdr dispatch and queue diagnostics use the same readiness rule. Extra edges
-do not change tree placement or duplicate task rows.
+A task has at most one tree parent and any number of extra prerequisites. It is
+ready only when new, unarchived and every dependency is completed. Extra edges
+do not change tree placement. Workers, dispatch, previews and diagnostics use
+this same rule.
 
 ```sh
 qqq add "Integrate" --parent 1 --depends-on 2 --depends-on 3
-qqq edit 4 --depends-on 5                 # add prerequisite
-qqq edit 4 --remove-depends-on 2          # remove one; repeat flag to remove more
-qqq edit 4 --clear-depends-on             # clear extras, retain tree parent
-qqq edit 4 --clear-depends-on --depends-on 6  # replace extras atomically
-qqq edit 4 --set-parent none              # clear tree parent, retain extras
+qqq edit 4 --depends-on 5
+qqq edit 4 --remove-depends-on 2
+qqq edit 4 --clear-depends-on --depends-on 6
+qqq edit 4 --set-parent none
 ```
 
-IDs must exist. Self links, duplicate additions (including an existing edge),
-missing removals, parent/prerequisite overlap, and cycles across both link types
-fail atomically. Add/remove of the same ID and clear/remove together fail.
-Clear is idempotent. Edits validate the final graph: remove an extra while
-making it the parent, or clear the parent while making it an extra, in one
-command. Dependency edit flags skip the editor and conflict with `--edit`.
-Direct description/status/priority/parent/image changes can share the operation.
+Extra-prerequisite flags skip the editor and conflict with `--edit`.
+`--set-parent` also skips it unless `--edit` is supplied. Dependency changes
+can combine with direct edits. Clear removes extras only and is idempotent. IDs must
+exist. Self-links, cycles across either edge type, duplicate additions, missing
+removals and parent/prerequisite overlap fail atomically. Add/remove of the same
+ID and clear/remove together also fail. The final graph is validated, allowing
+an edge to move between parent and prerequisite in one edit.
 
-Dependency edits and reopening prerequisites affect future claims; active owners
-remain assigned, completed descendants keep their status/history, and content
-revisions remain unchanged. Completed archived prerequisites satisfy readiness.
-Archived unfinished prerequisites follow parent safety: unfinished tasks cannot
-link to them, unarchive/reopen validates them, and an unfinished prerequisite
-cannot be archived with visible unfinished dependents. Remove such edges before
-unarchiving/reopening, or unarchive and finish the prerequisite first.
+Dependency changes affect future claims, preserving active owners, completed
+descendants and content revisions. Archived completed dependencies satisfy
+readiness; archived unfinished ones follow the archive guards.
 
-`show`, Task JSON and TUI details include ordered `prerequisites` entries:
-`{"id":2,"status":"new","archived":false}`. Corrupt missing references have
-null status/archive values. Human/TUI details mark unfinished entries with
-`blocks claim`. Queue explanations include their IDs, status and archived state.
-TUI details refresh when prerequisite status changes, retaining unsaved text.
-
-Attach files through `add` or `edit`; repeat `--image` for multiple files:
+Task JSON exposes ordered `prerequisites` entries with `id`, `status`, `archived`;
+missing references have null status/archive. Human/TUI details mark unfinished
+entries as `blocks claim` and refresh after external changes.
 
 ```sh
-qqq edit 2 --image ./before.png --image ./after.jpg
-qqq show 2
-qqq show 2 --export-image 1 --output ./exported.png
+qqq edit 12 --image ./before.png --image ./after.jpg
+qqq show 12
+qqq show 12 --export-image 1 --output ./exported.png
 ```
 
-Image IDs come from `show`. Export needs selected task's image ID and new output
-path. PNG, JPEG, GIF and WebP signatures supported, up to 20 MiB each; signature
-check does not fully validate file. Bytes copy into
-`.qqq/images/<task_id>/<image_id>.<ext>`. Built-in editor also accepts pasted
-image paths or clipboard images. Pasted images become Markdown links in the
-description, such as `![before.png](.qqq/images/2/4.png)`. Reloading a task
-shows each linked image as one editable item; deleting that item removes its
-description link while keeping the attachment available through `show`.
+Repeat `--image` to attach files. PNG, JPEG, GIF and WebP signatures are accepted,
+up to 20 MiB each; this is a signature check, not full validation. Bytes are copied
+to `.qqq/images/<task-id>/<image-id>.<ext>`. Export uses the selected task's image
+ID from `show` and requires a new output path.
 
-Description, status, parent, prerequisites, priority and image updates save atomically.
+Pasted image paths or clipboard images become Markdown links. Reloading shows
+linked images as atomic editor items. Removing a link leaves its attachment
+available through `show`. Content and attachment changes save atomically.
 
 ## Queue diagnostics
 
 ```sh
-qqq status
-qqq status --include-archived --json
-qqq next --explain
-qqq next --explain --filter 'priority >= 5' --json
-qqq next --explain --tag frontend --tag bug
+qqq status --json
+qqq status --include-archived
+qqq next --explain --tag frontend --json
 qqq next --explain --session worker-1
 ```
 
-`status` summarizes ready, blocked, in-progress, error and completed counts,
-then shows unfinished tasks with active owners, immediate parent/prerequisite blockers and
-latest activity. JSON includes every task in scope, including completed tasks.
-Archived tasks are excluded by default; `--include-archived` includes their rows
-and counts. Archived tasks never become ready.
+`status` reports counts, owners, dependency blockers and latest activity.
+`next --explain` adds selection diagnostics without claiming or dispatching.
+It needs no session and skips automatic identity discovery; explicit `--session`,
+`QQQ_SESSION` or `--harness-session` can inspect owned-task reuse. Add
+`--harness-name` for ambiguous public sessions. Owned tasks precede filters.
+Explanation conflicts with `--wait`/`--dry-run`; next's `--include-archived`
+requires `--explain`.
 
-`next --explain` reports selection and every scoped task's eligibility without
-claiming, dispatching an agent or changing assignment metadata. It distinguishes
-an empty queue, blocked/error/owned queues, mixed unavailable work and ready tasks
-excluded by filters. Candidates use priority descending, then ID ascending on
-ties. Readiness uses exactly the same rules as real next: new, unarchived, with
-a completed parent if set and all extra prerequisites completed.
-
-Global explanation needs no session. Native Codex/Herdr identity discovery and
-dispatch config are ignored. Supply `--session`, `QQQ_SESSION` or
-`--harness-session` to inspect owned-task reuse; add `--harness-name` when a
-public harness session is ambiguous. Exact claim keys take precedence over public
-session matching. Existing owned tasks return before queue/filter selection, as
-with ordinary next. This differs from `--dry-run`, which always previews queued
-candidates. Explanation accepts `--local`, conflicts with `--wait` and
-`--dry-run`; next's `--include-archived` requires `--explain`.
-
-Diagnostics open the existing DB read-only, without creating a project, migrating
-schema or recovering pending deletion files. Older supported schemas require a
-normal command such as `qqq list` before diagnostics. Counts, task rows, blockers,
-activity, owner lookup and selection share one SQLite transaction snapshot.
-Filter results are evaluated once per task row and reused for counts and selection,
-including date functions whose clock values can change between statements.
-Reports do not reserve work; subsequent claims may see newer state. Activity age
-never expires or reassigns ownership. Owners still explicitly complete or release
-their claims.
+Diagnostics use one read-only SQLite snapshot and do not create/migrate projects
+or recover pending deletion files. Older schemas need `qqq list` first.
+Command-start owner preflight still runs. Reports reserve no work and activity
+age never expires claims.
 
 ### Diagnostic JSON
 
-Both commands return an object with these fields:
-
 | Field | Meaning |
 | --- | --- |
-| `include_archived` | Requested archive scope |
-| `counts.total` | Number of scoped tasks |
-| `counts.new` | Scoped tasks with `new` status |
-| `counts.ready` | Unfiltered ready tasks |
-| `counts.blocked` | New tasks that are not ready; includes archived new tasks when included |
-| `counts.matching_ready` | Ready tasks matching supplied filter; same as ready without a filter |
-| `counts.in_progress`, `.error`, `.completed` | Scoped task counts for each status |
-| `counts.archived` | Archived subset of total; not an additional status category |
-| `state` | `empty`, `ready`, `no_matching_ready`, `blocked`, `error`, `in_progress`, or `no_ready` |
-| `tasks` | Scoped diagnostic rows in ascending creation ID order |
-| `explanation` | Selection diagnostics for `--explain`; null for status |
+| `include_archived` | Requested scope |
+| `counts` | `total`, `new`, `ready`, `blocked`, `matching_ready`, `in_progress`, `error`, `completed`, `archived` |
+| `state` | `empty`, `ready`, `no_matching_ready`, `blocked`, `error`, `in_progress`, `no_ready` |
+| `tasks` | Diagnostic rows in ascending task ID order |
+| `explanation` | Selection detail for explain; null for status |
 
-`ready + blocked = new`. `blocked`, `error` and `in_progress` states describe
-queues containing only that unfinished class; completed history does not hide
-those states. Mixed unavailable or completed-only queues use `no_ready`.
+`ready + blocked = new`; archived new tasks count as blocked when included.
+`matching_ready` applies selectors to ready tasks. Archived is a subset, not a
+status. Mixed unavailable queues and completed-only queues use `no_ready`.
 
-Each row contains the normal `task` object plus:
+Each row contains `task`, `ready`, `matches_filter`, `queue_rank` (one-based among
+all ready tasks, otherwise null), `reasons`, `owner` (active claim key or null),
+`blockers` and `latest_activity`. Blockers include unfinished/missing parent and
+extra prerequisites, regardless of archive scope.
 
-| Field | Meaning |
-| --- | --- |
-| `ready` | Shared readiness predicate, independent of filter |
-| `matches_filter` | Combined Luau/tag selector result, independent of readiness; true without selectors |
-| `queue_rank` | One-based rank among all ready tasks by priority/ID; null otherwise |
-| `reasons` | Zero or more eligibility/exclusion codes |
-| `owner` | Recorded claim key for an active task; null otherwise |
-| `blockers` | Unfinished/missing parent and extra prerequisites: ID, status and archived flag; missing refs have null status/flag |
-| `latest_activity` | Latest task update, message or event: `at`, `source`, `id`, `session`, `action` |
+Reason codes are `archived`, `parent_not_completed`, `prerequisite_not_completed`,
+`in_progress`, `error`, `completed`, `filter_excluded`, `tag_excluded`. A ready
+matching task has no reasons. Tag exclusion can coexist with dependency blockers;
+failed predicates inside Luau use `filter_excluded`.
 
-Reason codes: `archived`, `parent_not_completed`, `prerequisite_not_completed`, `in_progress`, `error`,
-`completed`, `filter_excluded`, `tag_excluded`. Explicit tag exclusion may appear
-alongside dependency blockers. When tags match but Luau fails, reason remains
-`filter_excluded`; predicates inside arbitrary Luau expressions use that reason
-too. A ready matching task has no reasons.
-Latest activity compares task `updated_at` with message/event `created_at`.
-Timestamp ties prefer message, then event, then task; higher IDs break ties
-within one source. Task activity has null ID/session/action; messages have null
-action; events include their action. Updates cover creation and edits as well as
-other task changes. Blocker resolution includes archived dependencies regardless of
-output scope.
+Latest activity has `at`, `source`, `id`, `session`, `action`. It compares task
+updates with messages/events; timestamp ties prefer message, then event, then
+task, with higher IDs breaking same-source ties. Task activity has null
+ID/session/action; messages have null action.
 
-Explanation contains `owner_input`, `resolved_owner` (both null without explicit
-context), `ordering: ["priority_desc", "id_asc"]`, `eligible_ids` (matching ready
-IDs in selection order), `outcome` and `selection`. Outcome is
-`owned_task_reuse`, `ready_candidate`, `empty_queue`,
-`no_matching_ready_candidate`, `blocked_queue`, `error_queue`,
-`in_progress_queue` or `no_ready_tasks`. Selection is null or
-`{"kind":"owned"|"queued","task":...}`. An archived active owned task can appear
-in selection while absent from default scoped rows, matching ordinary next.
-Task objects retain the existing task JSON format; raw claim keys are exposed
-only in diagnostic row `owner`.
+Explanation has `owner_input`, `resolved_owner`,
+`ordering: ["priority_desc","id_asc"]`, matching `eligible_ids`, `outcome` and
+`selection` (null or `{"kind":"owned"|"queued","task":...}`). Outcomes are
+`owned_task_reuse`, `ready_candidate`, `empty_queue`, `no_matching_ready_candidate`,
+`blocked_queue`, `error_queue`, `in_progress_queue`, `no_ready_tasks`.
+An archived owned task can be selected even when absent from scoped rows.
 
 ## Agents and recovery
 
-Use stable, unique session ID per worker:
+Use one stable, unique session per worker:
 
 ```sh
 export QQQ_SESSION='worker-1'
-qqq next
-qqq message 1 "Running tests"
-qqq edit 1 --complete
-qqq next --wait
+qqq next --local
+qqq message 12 "Running tests"
+qqq edit 12 --complete
+qqq next --wait --local
 ```
 
-`--session` overrides `QQQ_SESSION`. Each owner gets one active task; repeated
-`next` returns it. Claims never expire. `--wait` blocks until work is ready;
-without it, empty queue prints `No task available for pickup.` and exits successfully. Error
-tasks and blocked children stay out of queue.
+Each owner gets one active task; repeated `next` returns it before considering
+new work or filters. Claims never expire. Ready tasks are ordered by priority
+descending, then ID ascending. Error/blocked tasks are not claimable.
+`--wait` blocks until eligible work appears; without it an empty queue succeeds
+with human `No task available for pickup.` or JSON `null`.
 
-`next --dry-run` previews queued candidate without claiming or dispatching an
-agent. Existing claims are skipped; no session or Herdr identity required.
-Preview retains stored `new` status and metadata. Combine with `--filter`,
-`--wait`, `--local`, and `--json`. Preview does not reserve task; another worker
-can claim it afterward.
+`next --dry-run` previews queued work without reusing claims, discovering an owner,
+dispatching, reserving IDs or changing queued tasks. It accepts selectors,
+`--wait`, `--local` and `--json`. Another worker may claim the previewed task.
+The preview does not migrate or recover deletion staging; older schemas return
+`DATABASE_ERROR` / `migration_required` until a normal open upgrades them.
 
-Preview opens DB read-only, leaves deletion staging untouched. Older schemas
-return `DATABASE_ERROR` with reason `migration_required`; run `qqq list` to
-upgrade before previewing. `--wait` keeps preview waiting for queued candidate
-without reserving it or creating upgrade snapshots. Strict read-only commands
-refuse WAL mode or existing WAL sidecars with reason `unsafe_read_only`,
-because SQLite read-only opens can create WAL/shm files. Stop project writers,
-use `sqlite3 .qqq/qqq.db 'PRAGMA journal_mode=DELETE;'`, then retry. Waiting
-preview also rechecks journaling state before each read transaction.
+Strict read-only operations refuse WAL mode or sidecars (`unsafe_read_only`)
+because SQLite could create WAL/shm files. Stop writers and run
+`sqlite3 .qqq/qqq.db 'PRAGMA journal_mode=DELETE;'` before retrying.
 
-Without a queued candidate, human preview prints `No task available for pickup.`
-Use `qqq status` to inspect blocked, active, and error tasks.
-JSON preview returns `null` when no candidate is available.
+### Owner identity
 
-```sh
-qqq next --dry-run --json
-```
+Resolution order:
 
-`next --filter 'priority >= 5'` selects matching new candidates using same
-priority/readiness rules. Without `--dry-run`, existing owned task still returns
-regardless of filter.
-`--tag LABEL` uses the same selection rules; repeated labels require all tags.
-Changed selectors never release or transfer existing ownership.
-Combine with `--wait` or Herdr dispatch; no matching ready candidate yields no claim.
+1. `--session` / `QQQ_SESSION`, then explicit `--harness-session`.
+2. Exact Herdr pane (`HERDR_PANE_ID`, or `HERDR_ENV=1` with a pane ID).
+3. Native Codex `CODEX_THREAD_ID`, then `CODEX_SESSION_ID`.
+4. Unique Herdr agent at the project root (`foreground_cwd` before `cwd`).
 
-Without `--session` or `QQQ_SESSION`, owner discovery uses:
+`next --local` skips dispatch but still resolves ownership. Explicit/native
+identity works without Herdr when dispatch is disabled or local. Other harnesses
+use Herdr identity or explicit flags; qqq does not guess unrelated environment
+variables. Missing agent-session hooks fall back to terminal ID plus agent kind.
 
-1. Exact Herdr pane from `HERDR_PANE_ID` or `HERDR_ENV=1` (requires pane ID).
-2. Native Codex `CODEX_THREAD_ID`, then `CODEX_SESSION_ID` fallback.
-3. Unique Herdr agent at project root (`foreground_cwd` before `cwd`).
+Automatic claims save detected identity and a Herdr link when available.
+Assignment JSON has `harness_name`, `harness_session`, `orchestrator_name`,
+`orchestrator_session`; human `next` omits these fields, while JSON/show retains them.
+For Codex, displayed session prefers `CODEX_SESSION_ID`; an explicit
+`--harness-session` overrides it. Herdr orchestrator session is the worker's pane
+ID, not the separately saved server name. Dispatch records the child pane.
+Repeated claims retain metadata unless assignment flags override it.
 
-Explicit session IDs and native Codex ownership work without Herdr when dispatch is
-disabled or `next --local` is used. Exact Herdr context takes precedence.
-`next --local` skips dispatch, still resolves owner.
-
-Automatic claims save detected harness/orchestrator fields and Herdr link when
-available. Session flags are optional in these contexts:
-
-| Context | Automatic identity | Saved metadata |
-| --- | --- | --- |
-| Herdr pane, any reported harness | Pane agent-session identity, or terminal ID plus agent kind | Reported harness name/session, Herdr pane ID, saved pane link |
-| Standalone Codex | `CODEX_THREAD_ID`, then `CODEX_SESSION_ID` | `codex`, displayed Codex session; no orchestrator or Herdr link |
-| Unique Herdr agent at project root | Matching pane identity | Reported harness name/session, Herdr pane ID, saved pane link |
-| Dispatched child | Inherited `QQQ_SESSION` resolves reserved claim | Child harness, pane ID and Herdr link saved before prompt |
-
-Outside Herdr, built-in native environment discovery currently covers Codex.
-Other harnesses use reported Herdr pane identity. qqq does not guess sessions
-from unrelated environment variables. Explicit session flags remain overrides.
-
-For automatic Codex claims, displayed `harness_session` uses `CODEX_SESSION_ID`
-when set, including inside Herdr. Without it, resolved owner ID supplies display.
-Claim keys and Herdr links keep resolved identity; `--harness-session` overrides
-display. Herdr `orchestrator_session` records task runner's `pane_id`
-(`HERDR_PANE_ID` for the current caller).
-Dispatched assignments use child pane. Saved Herdr link keeps server name
-separately for lookup routing; server name is not Orchestrator Session.
-Repeated claims retain saved metadata unless explicit assignment flags override
-it. Existing assignments keep previously recorded values; fresh claims and
-active link updates use pane ID.
-
-Completion, release and error marking require owner. Use original session token
-or uniquely matching displayed `harness_session`; add `--harness-name` when
-public sessions overlap. JSON assignment fields: `harness_name`,
-`harness_session`, `orchestrator_name`, `orchestrator_session`.
-
-Normal and force completion retain these four recorded fields and saved Herdr
-link. Completion response, JSON lists, `show` and TUI details keep worker/session
-information available for log inspection; `qqq herdr find ID` still uses saved
-link to locate agent. Active claim ends, so same worker can claim next task even
-when completed tasks keep same public session. Release, error marking and reopen
-clear current assignment metadata; fresh claim records new worker identity.
-
-Human `next` output omits these four assignment fields. JSON and `show` retain
-them for ownership inspection.
+Completion/release/error marking accepts the original owner key or a uniquely
+matching public harness session; add `--harness-name` when ambiguous.
+Completion keeps assignment for log lookup; release/error/reopen clears it.
+Saved links remain until replaced. Session IDs coordinate local agents and do
+not authenticate users; local callers may edit content or add messages.
 
 ### Owner liveness before commands
 
-qqq checks current project’s active owners synchronously before command execution
-or TUI/watch startup. No background process or periodic scan. Confirmed dead
-harness/orchestrator changes task to `error`, clears assignment, preserves task
-contents/history/link, records reason message and `qqq-preflight` error event.
-Inspection commands (`status`, `doctor`, `next --explain`, `--dry-run`) also run
-cleanup first; preview itself does not claim or edit queued work. When no dead
-owner is confirmed, preflight makes no DB writes. It never creates or migrates a
-project; writable opens scan after migration.
+qqq checks active project owners synchronously before commands and TUI/watch
+startup. Confirmed dead owners become `error`: assignment clears, a reason
+message and `qqq-preflight` event are recorded, and content/history/link remain.
+This also precedes inspection/preview commands; their read-only phase does not
+itself clean up owners. Preflight never creates/migrates projects; writable opens
+scan after migration. Idle TUI/watch/wait runs no periodic liveness scan.
 
-Native Codex claims bind actual harness ancestor PID, start time, executable and
-machine identity privately to current claim. Missing/reused PID or zombie proves
-death on same machine; another machine or unavailable process data stays unknown.
-On Linux, machine identity includes the PID namespace and its PID 1 boot/start
-fingerprint, so recycled namespace inodes cannot prove owner death. Older
-inode-only process records stay unknown until a new claim captures fresh identity.
-Manual session tokens alone do not identify process. Saved Herdr server and agent
-identity/terminal establish liveness; a successful, valid agent list without owner
-proves death. Failed/malformed/timeout probes stay unknown, even if Herdr’s local
-session registry reports saved server stopped or absent. Registry state alone
-does not establish owner liveness. Probes time out after two seconds. Claim, link
-and process guards prevent stale checks from failing reassigned work.
+Native Codex claims privately record the actual ancestor process and machine
+identity. A missing/reused PID or zombie on the same machine proves death;
+foreign or unavailable evidence stays unknown. Linux identity includes the PID
+namespace and PID 1 boot/start fingerprint, avoiding recycled namespace matches;
+older inode-only records remain unknown. Manual tokens alone identify no process.
 
-Use `qqq edit ID --set-status new` to retry errors. `qqq edit ID --reopen` also recovers
-auto-failed owners; archive/unarchive preserves that CLI option. TUI Error tasks
-use Ctrl-G → Retry error. Idle TUI/watch/wait does not rescan until another qqq
-command runs.
+Herdr absence requires a successful valid agent lookup on the saved server.
+Missing registry entries, stopped-server reports and failed/malformed/timed-out
+probes remain unknown. Probes time out after two seconds; claim/link/process
+guards prevent a stale check from failing reassigned work.
 
 ### Return or retry work
 
-Return active task owned by `worker-1`:
-
 ```sh
-qqq edit 1 --set-pending --session worker-1
+qqq edit 12 --set-pending --session worker-1
+qqq edit 12 --set-status error --reason "Missing credentials" --session worker-1
+qqq edit 12 --set-status new          # retry an error; no owner needed
 ```
 
-Alternatively, mark active task failed, then retry:
+`--set-pending` equals `--set-status new`. Returning an active task or marking
+it error requires its owner. Error marking requires a nonblank reason, records
+it as a message, and clears assignment. These flags skip the editor.
+Preflight-generated errors can also use `--reopen`.
+
+Inspect abandoned work before forcing it back to the queue:
 
 ```sh
-qqq edit 1 --set-status error --reason "Missing credentials" --session worker-1
-qqq edit 1 --set-status new          # retry error task; no session required
+qqq show 12
+qqq edit 12 --set-status new --force
 ```
 
-`--set-pending` equals `--set-status new`. Active tasks require owner; error
-tasks can be retried without one. Error marking requires nonblank reason,
-clears assignment, records reason as message. Status updates skip editor.
-
-For abandoned active work, inspect task before forcing return:
-
-```sh
-qqq show 1
-qqq edit 1 --set-status new --force
-```
-
-`--force` skips ownership matching and Herdr discovery. It requires literal
-`--set-status new`; cannot combine with `--set-pending` or `--edit`. Return/retry
-preserves content, dependencies, messages, images and Herdr link.
-
-Session IDs coordinate local agents; they do not authenticate users. Any local
-caller can edit task content or append messages regardless of ownership.
+`--force` skips ownership/Herdr discovery and requires literal `--set-status new`;
+it conflicts with `--set-pending` and `--edit`. Return/retry preserves content,
+dependencies, messages, images and the saved link.
 
 ## Config and aliases
 
-Config: `~/.config/qqq/config.toml` (under `HOME`).
+Config lives at `~/.config/qqq/config.toml` under `HOME`.
 
 ```sh
 qqq config --list
 qqq config alias.ls 'list --watch'
-qqq config --get alias.ls
-qqq config alias.ls                 # same as --get
+qqq config --get alias.ls             # or: qqq config alias.ls
 qqq config display.max-completed 10
 qqq config tui.after_save_new open_new
 qqq config --unset alias.ls
 ```
 
-Keys use TOML dotted syntax; quote literal dots: `'alias."with.dot"'`.
-Alias values are strings; `herdr.next-to-new-agent` is boolean;
-`display.max-completed` is non-negative integer. `tui.after_save_new` accepts
-`open_saved` (default) or `open_new`, loaded when `qqq tui` starts. Other values
-accept TOML literals, falling back to strings.
+| Setting | Values / default |
+| --- | --- |
+| `display.max-completed` | Nonnegative integer; absent means unlimited; applies to human lists |
+| `tui.after_save_new` | `open_saved` (default) or `open_new`; read at TUI startup |
+| `herdr.next-to-new-agent` | Boolean; default `false` |
+| `alias.NAME` | Command string |
 
-Reads do not create files. `--list` shows stored values; `--get` can inspect
-invalid settings. Writes validate known settings, preserve comments and unknown
-keys. `--json` returns typed values; unset restores default.
-
-Completion limit config affects human lists only; explicit `--max-completed`
-affects text and JSON. Missing limit means unlimited.
-
-Example config:
+Keys use TOML dotted syntax; quote literal dots, such as `'alias."with.dot"'`.
+Reads create no files; `--get` can inspect invalid settings. Writes validate known
+settings and preserve comments/unknown keys. Other values parse as TOML literals,
+falling back to strings. JSON returns typed values; unset restores defaults.
+Explicit `--max-completed` affects both human and JSON output.
 
 ```toml
 [display]
@@ -1277,54 +854,94 @@ bug = "add"
 ```
 
 `qqq bug "Fix login"` expands to `qqq add "Fix login"`. Aliases support quoting
-and chains; built-in commands take precedence. No shell expansion. Cycles,
-invalid quoting and `!` aliases fail.
+and chains, with no shell expansion. Built-ins take precedence. Cycles, invalid
+quoting and `!` aliases fail.
 
 ## Herdr
 
-Optional Herdr integration links tasks to live agent panes:
-
 ```sh
-qqq herdr link 1
-qqq herdr find 1
-qqq herdr link 1 --agent codex --agent-session session-123 --server work
+qqq herdr link 12
+qqq herdr find 12
+qqq herdr link 12 --agent codex --agent-session session-123 --server work
 ```
 
-Discovery selects exact caller pane or unique agent at project root. Ambiguous
-identity fails before claim. Without agent-session hooks, terminal ID plus agent
-kind supplies identity. Active claims retain identity as hooks change.
-
-`link` stores association without changing owner; `find` searches live panes for
-saved link identity. Both require Herdr CLI and server. Local explicit `--session`
-claims do not auto-link; new-agent dispatch links spawned agent even when caller
-uses explicit session.
-
-To dispatch ready work into new Codex agent tab:
+Herdr is optional. `link` stores a live-pane association without changing the
+owner; `find` locates the saved identity on its saved server. Both require Herdr
+CLI/server. Discovery uses the exact caller pane or unique project-root agent;
+ambiguity fails before claim. Terminal-plus-agent identity survives missing hooks.
+Local explicit-session claims do not auto-link.
 
 ```sh
 qqq config herdr.next-to-new-agent true
 qqq next
 ```
 
-Dispatch needs `HERDR_ENV=1` and `HERDR_WORKSPACE_ID`. It reuses caller's active
-task; otherwise reserves ready task, opens sibling tab, starts agent and submits
-prompt. Empty or blocked queues create no tab. `next --local` skips dispatch.
-Default: disabled.
+Dispatch requires `HERDR_ENV=1` and `HERDR_WORKSPACE_ID`. It reuses the caller's
+owned task or reserves ready work, opens a sibling agent tab and submits its
+prompt. Empty/blocked queues open no tab; `next --local` bypasses dispatch.
 
-Dispatched child inherits `QQQ_SESSION` for reserved claim. Worker commands
-`qqq message ID ...`, `qqq edit ID --complete` and `qqq edit ID --set-status error
---reason ...` use that env automatically; generated prompt requires no session
-parameter. Keep inherited variable set. Child's saved harness/orchestrator fields
-identify spawned agent, separate from dispatch ownership token.
+The child inherits `QQQ_SESSION` for its reserved claim. Keep it set so message,
+complete and error commands use the right owner. Its public assignment identifies
+the spawned worker separately from that token. Startup failure releases the
+reservation but leaves created tabs open. Prompt failure retains claim/link
+because delivery may have occurred; inspect the agent before retrying or forcing return.
 
-Startup failure releases dispatch reservation; created tabs stay open. Prompt
-errors keep claim and link because delivery may have happened. Inspect agent
-before retry or forced release.
+## JSON error contract
+
+JSON failures write one object plus newline to stderr. Stdout stays available
+for success data. Runtime failures exit 1; argument-parser failures exit 2.
+
+```sh
+qqq --json show 999 >result.json 2>error.json
+```
+
+```json
+{"code":"TASK_NOT_FOUND","message":"Task 999 not found","details":{"task_id":999,"command":"show"}}
+```
+
+Branch on stable `code` and relevant `details`; message wording can change.
+`details` is always an object, may gain fields, and includes `command` when known.
+Omitted fields mean unavailable; explicit null means an absent optional value.
+
+| Code | Meaning / useful details |
+| --- | --- |
+| `TASK_NOT_FOUND` | Missing task; `task_id` or `task_reference` |
+| `OWNERSHIP_MISMATCH` | Wrong active owner; `task_id`, `actual_status`, `expected_statuses` |
+| `INVALID_TRANSITION` | Status/dependency/archive guard; `actual_status`, `expected_statuses`, `reason`, `blocking_child_id`, `actual_archived`, `expected_archived` |
+| `INVALID_ARGUMENT` | Invalid flag/value, alias or owner input; `argument`, `reason`, sometimes `alias` |
+| `INVALID_FILTER` | Bad Luau filter; `argument: "--filter"`, runtime `reason: "evaluation_failed"` |
+| `DB_BUSY` | SQLite lock; `sqlite_code` (5/6), `sqlite_extended_code`; retry after competing transaction |
+| `CONTENT_CONFLICT` | Stale/removed edited task; `task_id`, `expected_revision`, `current_revision`, `reason` |
+| `BULK_CONFLICT` | Stale preview or batch write failure; `conflict_ids`, `reason`, sometimes `selected_ids`; stale previews use `stale_bulk_preview` |
+| `PROJECT_NOT_FOUND` | No project database |
+| `CONFIG_ERROR` | Config operation failed; `path` |
+| `IO_ERROR` | Filesystem/I/O failure; `io_kind`, `os_code`, sometimes path/task/reason |
+| `EDITOR_ERROR` | Missing/failed external editor; sometimes `exit_code` |
+| `DISPATCH_ERROR` | Herdr lookup/dispatch failure; `reason`, sometimes `exit_code`, `task_id`, `actual_status`, `delivery_possible` |
+| `DATABASE_ERROR` | Other SQLite/schema failure; SQLite codes or `schema_version`, `expected_schema_version`, `reason` |
+| `COMMAND_ERROR` | No narrower classification |
+
+Error envelopes omit private ownership values, full task text, raw editor/Herdr
+output and arbitrary SQLite trigger text. Human mode retains diagnostic context.
+Success/diagnostic payloads keep their own identity/content fields.
+
+For content conflicts, inspect current text before retrying with its reviewed
+revision. `reason` is `revision_changed` or `task_removed`; removal has
+`current_revision: null` and must not trigger automatic task recreation.
+A task missing before the editor opens remains `TASK_NOT_FOUND`.
+
+Help/version exit 0 with text, even under `--json`. An unhealthy `doctor --json`
+prints its diagnostic report on stdout and exits 1 without an error envelope.
+Watch may emit successful snapshots before a later error. Interactive sessions
+use stderr for UI, then emit a final error after terminal restoration; use direct
+fields or nonterminal stdin when parsing all stderr as JSON. Nonterminal JSON
+external-editor calls suppress editor output/recovery prose. Expanded aliases
+determine output mode; a literal `--json` consumed as data or after `--` does not.
 
 ## Data
 
-Compatibility facts below describe current source checkout. Fixture matrix and
-runtime output enforce this table; package version and DB schema are separate.
+Keep `.qqq/` and `.qqq-upgrades/` out of Git. Package and database schema versions
+are separate. The fixture matrix and runtime checks enforce this support table:
 
 <!-- compatibility-support:start -->
 | Contract | Supported value |
@@ -1340,14 +957,15 @@ runtime output enforce this table; package version and DB schema are separate.
 | Manual-conversion layouts | `title`, `pending` |
 <!-- compatibility-support:end -->
 
-Supported versions require compatible `description`/`new` layout and valid data.
-Legacy `title` columns or `pending` status layouts need manual conversion even
-when their `user_version` falls inside listed range. Schema 0 initializes an
-empty DB; existing schema-0 projects do not qualify for automatic upgrade.
+Supported versions also need a valid `description`/`new` layout. Legacy `title`
+columns or `pending` statuses need manual conversion regardless of user_version.
+Schema 0 initializes an empty database; existing schema-0 projects do not upgrade.
 Unknown newer schemas and archive formats are rejected.
 
-Keep `.qqq/` and `.qqq-upgrades/` out of Git. Create portable snapshot while other local qqq
-writers run:
+### Portable backup
+
+A backup captures consistent SQLite data and every stored image while other
+local qqq writers run. Destinations must not already exist.
 
 <!-- compatibility-portable-example:start -->
 ```sh
@@ -1360,34 +978,26 @@ qqq doctor
 ```
 <!-- compatibility-portable-example:end -->
 
-Backup contains consistent SQLite data plus every stored image. Tar archive
-starts with `manifest.json`, then `qqq.db`, then `images/<task-id>/<image-id>.<ext>`.
-Manifest records SHA-256 hashes and sizes; restore checks those, image rows,
-SQLite integrity, and foreign keys before installing `.qqq`. Backup refuses to
-overwrite destination. Restore works only from new project directory or one
-with empty `.qqq`; existing data and nested projects are rejected. Invalid
-archives leave project unchanged. Relative snapshot paths resolve from current
-directory.
+Archives contain `manifest.json`, `qqq.db` and images. The manifest records SHA-256
+hashes and sizes. Restore validates data, images, integrity and foreign keys
+before installing `.qqq`; it requires a new project directory or empty `.qqq`.
+Existing/nested projects and invalid archives are rejected without replacement.
+Relative archive paths resolve from the current directory.
 
-Before automatically upgrading an existing supported DB, qqq saves original
-schema and required attachments in sibling `.qqq-upgrades/` directory. Human
-stderr prints `Saved pre-upgrade snapshot: <path>` before migration. JSON
-result/error shapes stay unchanged; discover archives in that directory.
-Names follow `schema-<source>-to-<target>-.upgrade-<unique>.tar`; retries never
-overwrite previous records. Manifest records source/target schemas, original
-absolute project path, creation time and SHA-256 hashes/byte counts. SQLite
-write lock coordinates DB copy and required attachments before migration;
-waiting openers recheck schema after acquiring lock. One successful concurrent
-upgrade produces one archive. Snapshot is verified, synced and atomically
-published before migration changes DB/images. Snapshot failure aborts upgrade
-with source intact. Successful
-and failed migrations both retain verified snapshots. Current-schema opens,
-fresh initialization, diagnostics and dry runs create none.
+### Automatic upgrades and recovery
 
-Upgrade recovery uses distinct manifest format listed in support table. Stop qqq workers, choose
-original archive from printed absolute path or `.qqq-upgrades/` inventory.
-Example starts in original project, prompts for that path, creates fresh target.
-SQLite inspection requires `sqlite3` CLI:
+Before upgrading a supported old schema, qqq saves a verified original-schema
+archive in sibling `.qqq-upgrades/`. Human stderr reports its path; JSON shapes
+stay unchanged. Names are `schema-<source>-to-<target>-.upgrade-<unique>.tar`.
+The manifest records source/target schema, original project path, time, hashes
+and sizes. Snapshot failure aborts with the source intact. Successful and failed
+migrations retain the archive; retries never overwrite it. Concurrent upgrades
+coordinate under a write lock and produce one archive per successful upgrade.
+Fresh/current-schema opens, diagnostics and dry runs create none.
+
+Stop workers before recovery. Use the printed absolute path or archive inventory.
+This example starts in the original project and creates a fresh target; it needs
+`sqlite3` for inspection before another automatic upgrade:
 
 <!-- compatibility-recovery-example:start -->
 ```sh
@@ -1405,169 +1015,136 @@ qqq doctor
 ```
 <!-- compatibility-recovery-example:end -->
 
-Recovery validates manifest schema/project metadata, SHA256 hashes, SQLite
-integrity/foreign keys, task status/claims and attachments before installation.
-It accepts original source schemas listed in support table, including
-embedded-image schemas 1–5, without
-migrating during restore. Pending deletion attachments are captured without
-altering live staging, then restored at canonical image paths. Populated target
-is rejected. Ordinary `restore` accepts portable format/schema range listed above;
-`--recovery` is required for automatic upgrade archives. Retain archives until
-recovered data and subsequent upgrade are verified; no automatic cleanup runs.
-Use SQLite inspection before `qqq list`, `qqq show`, backup, TUI or another
-normal DB-backed command: those commands automatically upgrade restored old DB.
-Recovery does not overwrite original project; inspect and verify fresh target
-before replacing any live project files.
+`restore --recovery` accepts upgrade archives and preserves their original schema,
+including embedded-image schemas 1–5. It verifies manifest/project metadata,
+hashes, integrity, foreign keys, claims and attachments before installation.
+Pending deletion images restore to canonical paths. Ordinary restore accepts
+only portable formats/schemas from the support table.
 
-Preview permanent deletion before confirming it:
+Inspect with SQLite before `list`, `show`, backup or TUI: normal database opens
+upgrade old schemas. Recovery never overwrites the original project. Retain the
+original and archive until recovered data and a subsequent upgrade are verified;
+archives have no automatic cleanup.
+
+Upgrades preserve IDs/reserved sequences, text, timestamps, graph, history,
+images and active claim keys. Older records gain these defaults:
+
+| Schema | Addition / older-data default |
+| --- | --- |
+| 2 | Parent: null |
+| 3, 5 | Identity: retain owner key; derive active harness/orchestrator metadata from saved claim/link |
+| 4 | Error status support; existing statuses/history unchanged |
+| 6 | Move embedded image bytes to `.qqq/images/` |
+| 7 | Priority: `0` |
+| 8 | Archived: `false` |
+| 9 | Reopen events; existing history unchanged |
+| 10 | Content revision: `1` |
+| 11 | Extra prerequisites: empty |
+| 12 | Tags: `[]` |
+| 13 | Private claim process identity: empty; legacy Herdr links remain usable |
+
+If migration's compaction warns, stop writers and run
+`sqlite3 .qqq/qqq.db 'VACUUM;'` later. Portable restore also preserves stored
+schema; the next normal open upgrades it.
+
+For shared projects, stop old workers/waiters, upgrade all binaries, run
+`qqq list` then `qqq doctor`, and restart workers. Older binaries reject newer
+schemas. Migration never expires/transfers/releases a claim; the owner must
+complete or return it explicitly.
+
+### Permanent deletion
 
 ```sh
 qqq backup ../before-delete.tar
-qqq delete 42
-qqq delete 42 --yes
+qqq delete 42                       # preview
+qqq delete 42 --yes                  # permanently apply
 ```
 
-Only archived tasks without children can be deleted. Use positive task ID;
-relative creation indexes can change before confirmation. Preview lists messages,
-events, Herdr link, stored images, and paths without changing project data;
-`--json` returns same counts with `deleted:false`. `--yes` removes task and
-dependent data permanently, including stored image files, then returns
-`deleted:true`. Release or complete an active task before archiving it; delete
-or reparent every child and remove all prerequisite references before deleting
-a task. IDs remain reserved after deletion. Preview refuses legacy DB versions and pending recovery without
-changing files; run `qqq list` to migrate or recover before previewing again.
-If deletion stops while images are staged, next DB-backed qqq command recovers
-them according to committed DB state. Keep backup until recovered project
-passes `qqq doctor`.
+Only archived tasks without children or incoming prerequisite references can be
+deleted. Use a positive absolute ID. Release/complete active work before archive;
+reparent/delete children and remove references first.
 
-Check project health without changing DB or attachments:
+Preview reports affected messages, events, links, images and paths without
+changing them (`deleted: false` in JSON). `--yes` removes them permanently and
+returns `deleted: true`; IDs stay reserved. Legacy schemas/pending recovery
+block preview until a normal command migrates/recovers the project. Interrupted
+image staging recovers according to committed database state on the next normal
+open. Keep a backup until `doctor` passes.
+
+### Health checks
 
 ```sh
 qqq doctor
 qqq --json doctor
 ```
 
-Doctor checks SQLite integrity, foreign keys, schema version, combined dependency
-graph cycles/duplicate edges/missing refs, image paths, byte counts,
-signatures, and orphan files/directories. Healthy project exits 0. Issues print recovery
-actions and exit 1; JSON includes `ok`, counts, and `issues` with code, path,
-message, and action. Doctor never migrates DB. If SQLite journal/WAL sidecars
-exist, stop writers and recover or checkpoint SQLite before rerunning doctor.
-Persisted WAL mode without sidecars also defers check (`DB_READ_ONLY_UNSAFE`),
-leaving source files untouched. Stop writers, switch to journal_mode=DELETE
-through SQLite before retrying.
-For damaged DB or images, restore verified snapshot into new directory first;
-inspect recovered data before replacing damaged project files. Keep damaged
-copy until recovery is verified. For `DELETE_RECOVERY_PENDING`, follow returned
-action: fix unsafe staging paths or access errors first. Valid interrupted
-deletions recover through normal DB-backed command, such as `qqq list`;
-rerun doctor afterward.
+Doctor checks SQLite integrity/foreign keys/schema, dependency cycles/duplicate
+edges/missing references, image paths/sizes/signatures and orphan files. Healthy
+projects exit 0; issues include recovery actions and exit 1. JSON has `ok`, counts
+and `issues` containing code, path, message and action. Doctor does not migrate.
 
-To move old root-level `qqq.db`, stop DB writers. Before `qqq init`, check that
-`.qqq/qqq.db` does not exist. From project root:
+WAL/sidecars defer inspection (`DB_READ_ONLY_UNSAFE`), including persisted WAL
+mode without sidecars. Stop writers, recover/checkpoint SQLite and switch to
+`journal_mode=DELETE` before retrying. For `DELETE_RECOVERY_PENDING`, fix reported
+paths/access problems, run a normal command such as `list` to recover, then
+rerun doctor. Restore damaged data into a new directory and verify it before
+replacing the live project; keep the damaged copy until recovery succeeds.
+
+### Legacy root-level database
+
+The CLI no longer discovers root-level `qqq.db`. Stop writers and verify
+`.qqq/qqq.db` is absent before copying; `qqq init` would create a separate empty DB.
 
 ```sh
 mkdir -p .qqq
 sqlite3 qqq.db ".backup '.qqq/qqq.db'"
-qqq list # run updated CLI
+qqq list
 ```
 
-Check task data before removing old DB. New CLI does not discover root-level
-`qqq.db`; `qqq init` without migration creates separate empty DB.
-
-Compatible source schemas listed above migrate to current DB schema after saving
-verified original-schema recovery archive outside live store. Upgrade preserves
-task/message/event/image IDs, reserved SQLite ID sequences, descriptions,
-timestamps, parent/dependency edges, history, stored images and active claim
-keys. Existing queue readiness remains consistent with existing dependencies;
-new fields use defaults when source schema predates them:
-
-| Added in schema | Field/behavior | Value for older data |
-| --- | --- | --- |
-| 2 | Parent | `parent_id=NULL` |
-| 3, 5 | Ownership/identity | Owner key preserved through renames; active harness identity derives from saved Herdr link or prior claim key; orchestrator identity derives from saved link |
-| 4 | Error status | Existing status/history unchanged; no error tasks invented |
-| 7 | Priority | `0` |
-| 8 | Archived | `false` |
-| 9 | Reopen event | Existing events unchanged |
-| 10 | Content revision | `1` |
-| 11 | Extra prerequisites | Empty; existing parent edges retained |
-| 12 | Tags | Empty array `[]` |
-| 13 | Private claim process identity | Empty; legacy Herdr links still support liveness checks |
-
-Version 6 moves existing image blobs to `.qqq/images/` before SQLite drops its
-`data` column, preserving IDs, metadata and bytes. Portable restore preserves
-stored schema; next normal DB open upgrades older versions.
-Migration tries `VACUUM` to reclaim old blob pages. If compaction warns, stop
-writers and run `sqlite3 .qqq/qqq.db 'VACUUM;'` later.
-
-Coordinate workers sharing project: stop older workers and waiters, upgrade all
-binaries, run one normal command such as `qqq list`, verify `qqq doctor`, then
-restart workers. Older binaries reject schemas newer than their own supported
-version; do not run mixed versions after migration. Claims remain explicit:
-migration does not expire, transfer, release or replace active ownership. Original
-owner still completes/releases work explicitly; elapsed time does not free claim.
-Back up before manual conversion of unsupported legacy layouts.
+Check the migrated data before removing the old database.
 
 ## Development
 
-Tests require Python 3 for real-terminal coverage, POSIX shell and `sqlite3` CLI
-for executable recovery documentation on macOS and Linux.
-[Historical compatibility fixtures](../tests/fixtures/compatibility/README.md)
-cover every normal-open DB schema and accepted portable snapshot schema. Tests
-copy checked-in artifacts; regeneration uses frozen historical sources.
-Snapshot validation rejects legacy title/pending layouts and invalid status/claim
-relationships before installing DB/images. Human and JSON failures preserve
-original projects. Diagnostics and all dry runs never migrate; next dry-run
-requires current schema, previews queued candidate without claiming.
-Recovery matrix checks original-schema equality, embedded/external images, WAL
-and concurrent writer consistency, one archive per concurrent upgrade, retained
-records after SQL/image/commit failures, snapshot verification failure and
-metadata/claim/checksum rejection before installing restored projects.
+Tests need Rust, Python 3 for PTY coverage, a POSIX shell and `sqlite3`.
 
 ```sh
-./scripts/check-compatibility-docs.sh
-./scripts/check-compatibility.sh
-cargo test --locked
 cargo fmt --check
 cargo clippy --locked --all-targets -- -D warnings
+cargo test --locked
+./scripts/check-compatibility-docs.sh
+./scripts/check-compatibility.sh
 cargo build --locked --release
 ```
 
-[CI](../.github/workflows/ci.yml) checks Ubuntu 24.04 and macOS 14, builds release
-binary, uploads `qqq-<OS>-<ARCH>` archives (14-day retention). Both CI OSes and
-publication require `scripts/check-compatibility.sh`: immutable historical DB
-upgrade/restore matrix plus identity, image-storage, dependency/tag CLI and
-snapshot regressions. Matrix verifies repeated/concurrent opens, rollback/retry,
-field defaults, ownership/readiness and reserved ID sequences. Missing fixture
-coverage for a new schema or snapshot format fails gate. Focused
-`scripts/check-compatibility-docs.sh` checks marked support table against fixture
-metadata, initialized schema and runtime archive metadata (`SCHEMA_VERSION`
-sets upgrade target). It executes documented portable/recovery examples in
-temporary historical projects. New schemas require matrix fixtures and published
-facts to change together; unrelated prose is outside contract check.
+[CI](../.github/workflows/ci.yml) checks Ubuntu 24.04/macOS 14, builds release
+binaries and retains `qqq-<OS>-<ARCH>` archives for 14 days.
+
+[Historical fixtures](../tests/fixtures/compatibility/README.md) cover every
+supported database/snapshot schema. Compatibility checks verify upgrades,
+restores, rollback/retry, images, identities, dependencies, defaults and reserved
+IDs. Documentation checks compare the marked support table with fixtures/runtime
+and execute recovery examples in temporary historical projects. New schemas or
+snapshot formats require matching fixtures and published facts; tests use
+checked-in artifacts, not regenerated current databases.
 
 ### Publish to crates.io
 
-[Release checklist](release-checklist.md) covers compatibility fixtures, recovery,
-user-visible schema notes, package/binary versions and existing publication gates.
+Follow the [release checklist](release-checklist.md). The
+[publish workflow](../.github/workflows/publish.yml) verifies a `v<version>` tag
+against `Cargo.toml`, runs checks/package dry-run and publishes `qqq-cli`.
 
-[Publish workflow](../.github/workflows/publish.yml) checks `v<version>` tag against
-`Cargo.toml`, runs checks and package dry run, then publishes `qqq-cli`. Setup:
-
-1. Sign in to crates.io, verify email, create token allowed to publish `qqq-cli`.
-2. Add GitHub Actions repo secret `CARGO_REGISTRY_TOKEN`.
-3. Choose unused version, update `Cargo.toml` and `Cargo.lock`, commit changes.
-4. Push commit and matching tag. Example for version `0.3.0`:
+1. Verify the crates.io account email and create a token allowed to publish `qqq-cli`.
+2. Store it as the repository's `CARGO_REGISTRY_TOKEN` Actions secret.
+3. Choose an unused version, update `Cargo.toml`/`Cargo.lock`, and commit.
+4. Push the commit and matching tag, for example:
 
 ```sh
 git push origin master
-git tag v0.3.0
-git push origin v0.3.0
+git tag v0.9.0
+git push origin v0.9.0
 ```
 
-For manual validation, run **Publish to crates.io** with existing `tag` and
-default `dry_run=true`. Set `dry_run=false` to publish new version. Published
-versions cannot be overwritten.
+The manual workflow accepts an existing `tag`; `dry_run=true` validates and
+`dry_run=false` publishes. Published versions cannot be overwritten.
 
 License: [MIT](../LICENSE).
