@@ -1135,8 +1135,8 @@ against `Cargo.toml`, runs checks/package dry-run and publishes `qqq-cli`.
 
 ```sh
 git push origin master
-git tag v0.9.0
-git push origin v0.9.0
+git tag v0.10.0
+git push origin v0.10.0
 ```
 
 The manual workflow accepts an existing `tag`; `dry_run=true` validates and
