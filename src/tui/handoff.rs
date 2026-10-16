@@ -68,7 +68,7 @@ fn ensure_server() -> Result<()> {
     }
 }
 
-pub(super) fn create(db: &crate::db::Db, prompt: &str) -> Result<()> {
+pub(super) fn create(db: &crate::db::Db, prompt: &str) -> Result<String> {
     #[derive(Deserialize)]
     struct Panes {
         panes: Vec<crate::herdr::Pane>,
@@ -180,7 +180,8 @@ pub(super) fn create(db: &crate::db::Db, prompt: &str) -> Result<()> {
             "Created Herdr pane {}; inspect it before retrying",
             pane.pane_id
         )
-    })
+    })?;
+    Ok(pane.pane_id)
 }
 
 pub(super) fn focus(db: &crate::db::Db, id: i64) -> Result<Option<String>> {

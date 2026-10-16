@@ -211,6 +211,8 @@ with tempfile.TemporaryDirectory(prefix="qqq-undo-test-") as directory:
                 send(shortcut)
                 wait(lambda: title.lower() in visible.text().lower())
                 send(b"\x1a\x19\x1b")
+                wait(lambda: "┌" not in visible.text()
+                     and not visible.text().splitlines()[0].startswith("Filter:"))
                 wait_editor("Seed changed", 12)
             send(b"\x1b")
             wait(lambda: "discard" in visible.text().lower())

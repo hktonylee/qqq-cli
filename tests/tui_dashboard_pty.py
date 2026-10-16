@@ -375,6 +375,11 @@ print(json.dumps({"result": result}))
         env["CREATE_SCENARIO"] = scenario
         env["CREATE_ROOT"] = folder
         env["PATH"] = os.pathsep.join((folder, os.defpath))
+        if scenario == "create_agent_linked":
+            pane = {"pane_id": "previous:p1", "workspace_id": "previous", "tab_id": "previous:t1"}
+            with sqlite3.connect(Path(folder) / ".qqq/qqq.db") as connection:
+                connection.execute("INSERT INTO herdr_links(task_id,link_json) VALUES(2,?)", (
+                    json.dumps({"server": "named", "identity": {"agent": "codex", "kind": "id", "value": "previous"}, "pane": pane}),))
         if scenario.endswith("no_color"):
             env["NO_COLOR"] = "1"
         fake = Path(folder) / "herdr"
@@ -430,7 +435,7 @@ elif not args:
     assert flags & termios.ICANON and flags & termios.ECHO, "client inherits raw mode"
     (root / "herdr-client-opened").touch()
     print("\x1b[2JHERDR_CLIENT", flush=True)
-    sys.exit(0)
+    sys.exit(1 if scenario == "create_agent_attach_error" else 0)
 else:
     raise AssertionError(args)
 print(json.dumps({"result": result}))
@@ -669,12 +674,14 @@ print(json.dumps({"result": result}))
         assert not select.select([child.stdout], [], [], 0)[0], "TUI wrote stdout while open"
         if scenario.startswith("create_agent_"):
             initial = cli("list", "--all")
-            if scenario != "create_agent_draft":
-                send(b"\x1b[1;2A")
-                wait_visible(lambda: "Task #2 (New)" in editor_title())
+            send(b"\x1b[1;2A")
+            wait_visible(lambda: "Task #2 (New)" in editor_title())
             send(b"\x01Unsaved ")
-            wait_visible(lambda: editor_line().startswith("Unsaved ")
-                         and (visible.x, visible.y) == (8, editor_row() + 1))
+            wait_caret(lambda: editor_line().rstrip() == "Unsaved Second", (8, editor_row() + 1))
+            if scenario == "create_agent_filter":
+                send(CTRL_SLASH + b"first")
+                wait_visible(lambda: filter_text() == "Filter: first"
+                             and (visible.x, visible.y) == (13, 0))
             title, content = editor_title(), editor_line()
             cursor = (visible.x, visible.y)
             if scenario == "create_agent_compact":
@@ -683,6 +690,13 @@ print(json.dumps({"result": result}))
             send(b"\x08")
             wait_visible(lambda: "Create Herdr agent" in visible.text())
             assert not (Path(folder) / "herdr-calls").exists()
+            if scenario == "create_agent_edit":
+                settle()
+                prompt_cursor = (visible.x, visible.y)
+                send(b"\x1b[A")
+                wait_visible(lambda: visible.y < prompt_cursor[1])
+                send(b"\x1b[B")
+                wait_visible(lambda: (visible.x, visible.y) == prompt_cursor)
             default_prompt = "/goal Use the `qqq cli --wait`, to look for next task, and work on that. Repeat this forever. Please don't wake up repeatedly to poll the status when running waiter."
             prompt = default_prompt
             if scenario in ("create_agent_edit", "create_agent_empty"):
@@ -694,8 +708,8 @@ print(json.dumps({"result": result}))
                     send(b"\x13")
                     wait_visible(lambda: "Enter a prompt" in visible.text())
                     assert not (Path(folder) / "herdr-calls").exists()
-            if scenario in ("create_agent_cancel", "create_agent_empty"):
-                send(b"\x1b")
+            if scenario in ("create_agent_cancel", "create_agent_empty", "create_agent_ctrl_c"):
+                send(b"\x03" if scenario == "create_agent_ctrl_c" else b"\x1b")
                 wait_visible(lambda: "Create Herdr agent" not in visible.text())
                 assert not (Path(folder) / "herdr-calls").exists()
             else:
@@ -712,14 +726,16 @@ print(json.dumps({"result": result}))
                 assert len(create) == 1, calls
                 assert create[0][0] == ("workspace" if scenario in ("create_agent_workspace", "create_agent_server") else "tab"), calls
                 if scenario.endswith("error"):
-                    assert not (Path(folder) / "herdr-client-opened").exists()
-                    assert sum(call[:2] == ["agent", "prompt"] for call in calls) == (scenario == "create_agent_prompt_error")
+                    assert (Path(folder) / "herdr-client-opened").exists() == (scenario == "create_agent_attach_error")
+                    assert sum(call[:2] == ["agent", "prompt"] for call in calls) == (scenario != "create_agent_start_error")
                 if scenario == "create_agent_auto":
                     assert any(call[:2] == ["agent", "wait"] for call in calls), calls
             if scenario != "create_agent_compact":
                 wait_visible(lambda: editor_title() == title and editor_line() == content
                              and (visible.x, visible.y) == cursor)
             assert cli("list", "--all") == initial
+            if scenario == "create_agent_filter":
+                assert filter_text() == "Filter: first"
             if scenario.endswith("no_color"):
                 assert b"38;" not in screen and b"48;" not in screen
         elif scenario.startswith("removed_ctrl_o"):
@@ -1365,7 +1381,7 @@ print(json.dumps({"result": result}))
                              and (width < 150 or not visible.text().splitlines()[12][:split].strip())
                              and (not selected or editor_line().startswith("Changed Second"))
                              and visible.text().splitlines()[-1].rstrip() ==
-                             ("Ctrl-S Save  Ctrl-D Select  Ctrl-G Menu  Ctrl-L Tags  Ctrl-K Go to Task  Ctrl-P Create Child  Ctrl-B Views  Shift-Up/Dn Switch Tasks  Ctrl+/ Filter"
+                             ("Ctrl-S Save  Ctrl-H Herdr  Ctrl-D Select  Ctrl-G Menu  Ctrl-L Tags  Ctrl-K Go to Task  Ctrl-P Create Child  Ctrl-B Views  Shift-Up/Dn Switch Tasks  Ctrl+/ Filter"
                               if selected else "Ctrl-S Save  Ctrl-L Tags  Ctrl-K Go to Task  Ctrl-P Create Child  Ctrl-B Views  Ctrl-G Menu  Shift-Up/Dn Switch Tasks  Ctrl+/ Filter")[:width].rstrip()
                              and (visible.x, visible.y) == (8 if selected else 0, 14)
                              and not visible.pending and screen.endswith(final_cursor))
@@ -2607,10 +2623,10 @@ print(json.dumps({"result": result}))
             initial_tasks = cli("list")
 
             def hint_visible(expected):
-                return ("Ctrl-H Herdr" in visible.text().splitlines()[-1]) == expected
+                return ("Ctrl-H" in visible.text().splitlines()[-1]) == expected
 
             settle()
-            assert hint_visible(True), visible.text()
+            assert hint_visible(False), visible.text()
             send(b"\x1b[1;2A")
             wait_visible(lambda: "Task #2 (" in editor_title()
                          and editor_line().startswith("Second") and hint_visible(True))
@@ -2627,7 +2643,7 @@ print(json.dumps({"result": result}))
             wait_visible(lambda: hint_visible(True) and visible.y == editor_row() + 1)
             send(b"\x1b")
             wait_visible(lambda: "New Task" in editor_title()
-                         and not editor_line().strip() and hint_visible(True))
+                         and not editor_line().strip() and hint_visible(False))
             send(b"\x1b[1;2A")
             wait_visible(lambda: "Task #2 (" in editor_title() and hint_visible(True))
             send(b"\x01Changed ")
@@ -3389,7 +3405,7 @@ print(json.dumps({"result": result}))
             send(b"\x1b[1;2A")
             wait_frame(lambda: "Task #2 (New)" in editor_title()
                        and editor_line().startswith("Second")
-                       and visible.text().splitlines()[-1].startswith("Ctrl-S Save  Ctrl-D Select"))
+                       and visible.text().splitlines()[-1].startswith("Ctrl-S Save  Ctrl-H Herdr"))
             before_popup = visible.text().splitlines()
             send(b"\x07")
             wait_caret(lambda: visible.text().splitlines()[6][12] == "┌"

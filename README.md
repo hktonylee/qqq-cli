@@ -131,9 +131,13 @@ task to load it, scroll each pane, or use the keyboard:
 | Ctrl+P | Create child of selected task; in child draft, insert parent `#ID` |
 | Ctrl+/ | Filter tasks |
 | Ctrl+G | Open bulk actions when tasks marked, otherwise task actions |
-| Ctrl+H | Create a Herdr queue worker for a New task or draft; otherwise open its linked agent |
+| Ctrl+H | Create a Herdr queue worker for a saved New task; otherwise open its linked agent |
 | Esc | Close the filter, clear the editor, then exit; changed drafts ask before discard |
 | Ctrl+C | Clear nonempty New Task; press again to exit when empty |
+
+The Ctrl+H creation dialog starts with an editable queue-worker prompt. Enter
+adds a line, Ctrl+S creates the agent, and Escape cancels. Its workspace uses the
+directory containing `.qqq`, even when the TUI runs from a subdirectory.
 
 Ctrl+G menu includes `e Mark error`. Enter reason, confirm with `y`; marking
 error requires ownership of an in-progress task.

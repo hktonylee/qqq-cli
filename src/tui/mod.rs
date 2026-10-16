@@ -17,7 +17,7 @@ mod view_picker;
 mod view_templates;
 
 use crate::config::AfterSaveNew;
-use anyhow::{Result, bail, ensure};
+use anyhow::{Context, Result, bail, ensure};
 use buffers::{DraftBuffers, DraftKey, ParkedDraft};
 #[cfg(unix)]
 use crossterm::event::{
@@ -1115,7 +1115,7 @@ fn compose_inner(
                 (None, None, None, Vec::new(), false)
             };
         let can_create_agent =
-            dashboard && (target_id.is_none() || target_status.as_deref() == Some("new"));
+            dashboard && target_id.is_some() && target_status.as_deref() == Some("new");
         let has_herdr_action = has_herdr_link || can_create_agent;
         let buffer_footer = match &confirmation {
             Some(Confirmation::ExitBuffers { keys, index }) => {
@@ -1624,14 +1624,21 @@ fn compose_inner(
             }
             Event::Key(mut key) if key.kind != KeyEventKind::Release => {
                 if let Some(mut ui) = agent_ui.take() {
-                    match ui.key(key) {
+                    let area = dashboard::popup_layout(
+                        ratatui::layout::Rect::new(0, 0, size.0, size.1),
+                        usize::MAX,
+                    )
+                    .content;
+                    match ui.key(key, usize::from(area.width)) {
                         Some(agent_create::Action::Create(prompt)) => {
                             drop(terminal);
                             let result = handoff::create(
                                 mode.db().expect("dashboard has database"),
                                 &prompt,
                             )
-                            .and_then(|()| handoff::attach(None));
+                            .and_then(|pane| handoff::attach(None).with_context(|| {
+                                format!("Created Herdr pane {pane}; worker started; open it in Herdr")
+                            }));
                             terminal = TerminalGuard::enter(dashboard)?;
                             let dashboard_terminal =
                                 dashboard_terminal.as_mut().expect("dashboard has terminal");

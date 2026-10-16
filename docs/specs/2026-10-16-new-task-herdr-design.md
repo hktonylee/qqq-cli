@@ -1,7 +1,7 @@
 # New Task Herdr Agent
 
-Task #235 adds a Ctrl-H creation dialog for saved tasks with status `new` and
-the unsaved New Task editor. Other task statuses keep their existing linked
+Task #235 adds a Ctrl-H creation dialog only for saved tasks with status `new`.
+The unsaved editor keeps its existing no-selection error. Other statuses keep their linked
 agent handoff. The creation dialog shows the queue project directory and an
 editable prompt initialized to the exact requested `/goal` text. Enter inserts
 a line, Ctrl-S creates, and Escape/Ctrl-C cancels. Opening, editing, cancelling,

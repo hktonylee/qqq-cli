@@ -343,7 +343,6 @@ fn tui_dashboard_ctrl_h_creates_queue_agents() {
         "create_agent_reuse",
         "create_agent_workspace",
         "create_agent_nested",
-        "create_agent_draft",
         "create_agent_cancel",
         "create_agent_edit",
         "create_agent_empty",
@@ -353,6 +352,10 @@ fn tui_dashboard_ctrl_h_creates_queue_agents() {
         "create_agent_auto",
         "create_agent_start_error",
         "create_agent_prompt_error",
+        "create_agent_attach_error",
+        "create_agent_filter",
+        "create_agent_linked",
+        "create_agent_ctrl_c",
     ] {
         dashboard_scenario(name);
     }
@@ -376,6 +379,7 @@ fn tui_dashboard_ctrl_h_hint_follows_selected_link_and_external_refresh() {
 #[test]
 fn tui_dashboard_ctrl_h_errors_preserve_editor() {
     for scenario in [
+        "handoff_no_selection",
         "handoff_missing",
         "handoff_stale",
         "handoff_ambiguous",

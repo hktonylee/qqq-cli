@@ -17,6 +17,10 @@ struct Completion {
 }
 
 impl Cursor {
+    pub(super) fn byte(&self) -> usize {
+        self.byte
+    }
+
     pub(super) fn at_end(value: &str) -> Self {
         Self {
             byte: value.len(),
@@ -300,6 +304,38 @@ impl Cursor {
             completion.selected = 0;
         }
         true
+    }
+
+    pub(super) fn visual_vertical(
+        &mut self,
+        value: &str,
+        layout: &super::render::Layout,
+        up: bool,
+    ) {
+        let caret = value[..self.byte].graphemes(true).count();
+        let (row, column) = layout.positions[caret];
+        let preferred = self.column.unwrap_or(column);
+        let target = if up { row.saturating_sub(1) } else { row + 1 };
+        if let Some((index, _)) = layout
+            .positions
+            .iter()
+            .enumerate()
+            .rev()
+            .find(|(_, (row, column))| *row == target && *column <= preferred)
+            .or_else(|| {
+                layout
+                    .positions
+                    .iter()
+                    .enumerate()
+                    .find(|(_, (row, _))| *row == target)
+            })
+        {
+            self.byte = value
+                .grapheme_indices(true)
+                .nth(index)
+                .map_or(value.len(), |(byte, _)| byte);
+            self.column = Some(preferred);
+        }
     }
 
     pub(super) fn vertical(&mut self, value: &str, up: bool) {
