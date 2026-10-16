@@ -51,17 +51,14 @@ ID     STATUS        PRI TASK
 2      New             0 └── Build client
 ```
 
-Claim the API task. Once your work is done, record an update and complete it:
+Open any agentic coding tool in this directory and send this prompt, which matches
+the built-in queue-worker prompt:
 
-```sh
-qqq next --session agent-1
-# Do the work, then:
-qqq message 1 "API ready" --session agent-1
-qqq edit 1 --complete --session agent-1
-qqq next --session agent-1
+```text
+/goal Use the `qqq cli --wait`, to look for next task, and work on that. Repeat this forever. Please don't wake up repeatedly to poll the status when running waiter.
 ```
 
-The last command claims **Build client**. Completing its parent made it ready.
+The agent completes **Build API** before **Build client** becomes ready.
 Repeated `next` calls return your active task until you complete or release it.
 If no task is available, `next` exits with status 1 and prints the pickup message
 (or `null` with JSON output). This also applies to `--dry-run`; `--wait` keeps
@@ -153,14 +150,8 @@ Task details and `qqq show` display assignment in two aligned rows:
 
 ## Give your agent the queue
 
-Give each worker a unique, stable session ID, replacing `agent-1` for each worker.
-To keep working as new tasks arrive, start with this `/goal` prompt:
-
-```text
-/goal Use `qqq next --wait` to pick up the next task and work on it. Complete
-each task after its checks pass, then get the next one. Loop indefinitely.
-Keep the blocking wait running; don't wake up repeatedly to poll status.
-```
+Use the [prompt above](#try-it) in each agentic coding tool you want to work
+through the queue. Each worker needs a unique, stable identity.
 
 `--wait` blocks until work is ready. `--json` returns full task data for the agent.
 A restarted worker using the same session gets its current task back; claims do
