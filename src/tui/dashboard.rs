@@ -500,6 +500,11 @@ fn hotkey_line(keys: &str, color: bool) -> Line<'static> {
                     | "⇥"
                     | "Tab/Enter"
                     | "Enter"
+                    | "Enter/Ctrl-S"
+                    | "Enter/^S"
+                    | "Space"
+                    | "Spc"
+                    | "␣"
                     | "Up/Down"
                     | "Up/Dn"
                     | "↑↓"
@@ -511,8 +516,12 @@ fn hotkey_line(keys: &str, color: bool) -> Line<'static> {
                     | "S-↵"
                     | "↵"
                     | "y"
+                    | "Y"
+                    | "y/Y"
                     | "n"
                     | "n/Esc"
+                    | "r"
+                    | "o"
             );
         spans.push(Span::styled(
             key.to_owned(),
