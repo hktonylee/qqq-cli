@@ -2389,7 +2389,7 @@ fn hotkey_footer_colors_shortcuts_and_clears_styles_for_messages() {
                             "Ctrl-P",
                             "Ctrl-G",
                             "Shift-Up/Dn",
-                            "Ctrl+/",
+                            "Ctrl-F",
                             "Backspace",
                             "Esc",
                             "Esc/Ctrl-C",
