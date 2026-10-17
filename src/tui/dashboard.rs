@@ -439,20 +439,16 @@ fn row_style(status: Option<&str>, selected: bool, color: bool) -> Style {
     if !color {
         return Style::default();
     }
-    if selected {
-        return Style::default()
-            .fg(if status == Some("completed") {
-                Color::DarkGray
-            } else {
-                BODY_FG
-            })
-            .bg(SELECTION_BG);
-    }
-    match status {
+    let style = match status {
         Some("in_progress") => Style::default().fg(ACCENT),
         Some("completed") => Style::default().fg(Color::DarkGray),
         Some("error") => Style::default().fg(Color::Red),
         _ => Style::default(),
+    };
+    if selected {
+        style.bg(SELECTION_BG)
+    } else {
+        style
     }
 }
 

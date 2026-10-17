@@ -116,7 +116,7 @@ fn view_form_shortcuts_keep_styling_at_every_footer_width() {
 }
 
 #[test]
-fn task_tags_keep_color_across_status_selection_dirty_and_compact_rows() {
+fn task_text_and_tags_keep_colors_across_status_selection_dirty_and_compact_rows() {
     let labels = ["界 面".into(), "bug".into()];
     let layout = render::Layout::new(&["Draft".into()], &[], 72);
     let chrome = render::Chrome {
@@ -228,8 +228,6 @@ fn task_tags_keep_color_across_status_selection_dirty_and_compact_rows() {
                         assert_eq!(description.symbol(), "[");
                         let normal = if !color {
                             Color::Reset
-                        } else if selected.is_some() && status != "completed" {
-                            Color::Indexed(252)
                         } else {
                             match status {
                                 "in_progress" => Color::Indexed(81),
@@ -2242,14 +2240,7 @@ fn status_selection_and_editor_images_use_distinct_colors() {
                 );
                 assert_eq!(buffer[(x, y)].modifier, Modifier::empty());
             }
-            assert_eq!(
-                buffer[(2, y)].fg,
-                if is_selected && id != 3 {
-                    Color::Indexed(252)
-                } else {
-                    foreground
-                }
-            );
+            assert_eq!(buffer[(2, y)].fg, foreground);
         }
         for y in [6, 9] {
             assert_eq!(buffer[(71, y)].bg, Color::Reset);
