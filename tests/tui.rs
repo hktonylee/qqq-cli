@@ -917,7 +917,7 @@ fn tui_dashboard_plain_and_alt_slash_insert_literal_slash() {
 }
 
 #[test]
-fn tui_dashboard_ctrl_slash_accepts_legacy_and_extended_keys() {
+fn tui_dashboard_filter_shortcuts_accept_ctrl_f_and_ctrl_slash() {
     dashboard_scenario("filter_shortcuts");
 }
 

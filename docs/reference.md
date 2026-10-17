@@ -473,7 +473,7 @@ text or manual scroll. Lists and filters use saved descriptions.
 | Ctrl-D | Toggle a saved task's bulk-selection mark |
 | Ctrl-G | Open task actions, or bulk actions while tasks are marked |
 | Ctrl-H | Open the linked live Herdr agent; detach to return |
-| Ctrl+/ | Focus the description filter |
+| Ctrl+F or Ctrl+/ | Focus the description filter |
 
 Task previews show up to three wrapped lines; the editor loads the full text.
 Selection follows the full preview when it fits. Manual scrolling can leave it
@@ -536,8 +536,9 @@ use saved tasks and preserve local drafts, caret, scroll and filter focus.
 
 ### Filtering and visibility
 
-Ctrl+/ opens `Filter:`. Type a case-insensitive description query; Backspace edits,
-Tab/Enter returns to the editor, and Shift-Up/Down navigates matching tasks.
+Ctrl+F or Ctrl+/ opens `Filter:`. Type a case-insensitive description query;
+Backspace edits, Tab/Enter returns to the editor, and Shift-Up/Down navigates
+matching tasks.
 `/` and Alt+/ remain literal text. Matching tasks retain visible ancestors.
 
 | While filtering | Action |

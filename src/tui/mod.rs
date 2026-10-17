@@ -2693,7 +2693,7 @@ fn compose_inner(
                 if dashboard
                     && !filter_focused
                     && control
-                    && matches!(key.code, KeyCode::Char('/' | '_' | '7'))
+                    && matches!(key.code, KeyCode::Char('f' | '/' | '_' | '7'))
                     && !key
                         .modifiers
                         .intersects(KeyModifiers::ALT | KeyModifiers::SUPER)

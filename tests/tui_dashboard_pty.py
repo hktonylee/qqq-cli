@@ -1419,8 +1419,8 @@ print(json.dumps({"result": result}))
                              and (width < 150 or not visible.text().splitlines()[12][:split].strip())
                              and (not selected or editor_line().startswith("Changed Second"))
                              and visible.text().splitlines()[-1].rstrip() ==
-                             ("Ctrl-S Save  Ctrl-H Herdr  Ctrl-D Select  Ctrl-G Menu  Ctrl-L Tags  Ctrl-K Go to Task  Ctrl-P Create Child  Ctrl-B Views  Shift-Up/Dn Switch Tasks  Ctrl+/ Filter"
-                              if selected else "Ctrl-S Save  Ctrl-L Tags  Ctrl-K Go to Task  Ctrl-P Create Child  Ctrl-B Views  Ctrl-G Menu  Shift-Up/Dn Switch Tasks  Ctrl+/ Filter")[:width].rstrip()
+                             ("Ctrl-S Save  Ctrl-H Herdr  Ctrl-D Select  Ctrl-G Menu  Ctrl-L Tags  Ctrl-K Go to Task  Ctrl-P Create Child  Ctrl-B Views  Shift-Up/Dn Switch Tasks  Ctrl-F Filter"
+                              if selected else "Ctrl-S Save  Ctrl-L Tags  Ctrl-K Go to Task  Ctrl-P Create Child  Ctrl-B Views  Ctrl-G Menu  Shift-Up/Dn Switch Tasks  Ctrl-F Filter")[:width].rstrip()
                              and (visible.x, visible.y) == (8 if selected else 0, 14)
                              and not visible.pending and screen.endswith(final_cursor))
                 settle()
@@ -3006,7 +3006,7 @@ print(json.dumps({"result": result}))
             visible.resize(220, 24)
             os.kill(child.pid, signal.SIGWINCH)
             wait_visible(lambda: "Shift-Up/Dn Switch Tasks" in visible.text().splitlines()[-1]
-                         and "Ctrl+/ Filter" in visible.text().splitlines()[-1])
+                         and "Ctrl-F Filter" in visible.text().splitlines()[-1])
             assert "Ctrl+," not in visible.text().splitlines()[-1], visible.text()
             assert "Ctrl+." not in visible.text().splitlines()[-1], visible.text()
             assert "Ctrl-Up" not in visible.text().splitlines()[-1], visible.text()
@@ -4952,6 +4952,8 @@ print(json.dumps({"result": result}))
             send(b"Draft/path")
             wait_visible(lambda: editor_line().startswith("Draft/path"))
             for shortcut in (
+                b"\x06",             # Legacy Ctrl+F.
+                b"\x1b[102;5u",      # CSI-u Ctrl+F.
                 CTRL_SLASH,
                 b"\x1b[47;5u",       # CSI-u Ctrl+/.
                 b"\x1b[95;6u",       # CSI-u Ctrl+Shift+_ (same legacy byte).
