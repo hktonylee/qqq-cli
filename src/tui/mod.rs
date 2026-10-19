@@ -821,6 +821,17 @@ impl Mode<'_, '_> {
             _ => bail!("Bulk actions require dashboard"),
         }
     }
+
+    fn create_agent(&mut self, id: i64, prompt: &str) -> Result<String> {
+        match self {
+            Self::Continuous {
+                db,
+                dashboard: true,
+                ..
+            } => handoff::create(db, id, prompt),
+            _ => bail!("Agent creation requires dashboard"),
+        }
+    }
 }
 fn run_action(
     mode: &mut Mode<'_, '_>,
@@ -1632,8 +1643,8 @@ fn compose_inner(
                     match ui.key(key, usize::from(area.width)) {
                         Some(agent_create::Action::Create(prompt)) => {
                             drop(terminal);
-                            let result = handoff::create(
-                                mode.db().expect("dashboard has database"),
+                            let result = mode.create_agent(
+                                target_id.expect("agent creation has selected task"),
                                 &prompt,
                             )
                             .and_then(|pane| handoff::attach(None).with_context(|| {

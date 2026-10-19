@@ -1883,6 +1883,32 @@ impl Db {
         conn.execute("INSERT INTO herdr_links(task_id,link_json) VALUES (?,?) ON CONFLICT(task_id) DO UPDATE SET link_json=excluded.link_json",params![id,serde_json::to_string(&stored)?])?;
         Ok(())
     }
+    pub fn set_created_agent_link(&mut self, id: i64, link: &crate::herdr::Link) -> Result<()> {
+        let tx = self
+            .conn
+            .transaction_with_behavior(TransactionBehavior::Immediate)?;
+        let unclaimed: bool = tx
+            .query_row(
+                "SELECT status='new' AND claim_key IS NULL FROM tasks WHERE id=?",
+                [id],
+                |row| row.get(0),
+            )
+            .optional()?
+            .with_context(|| crate::errors::Info::missing_task(id))?;
+        ensure!(
+            unclaimed,
+            transition_error(
+                &tx,
+                id,
+                &["new"],
+                None,
+                format!("Task {id} must still be new and unclaimed to link the created agent")
+            )?
+        );
+        Self::save_link(&tx, id, link)?;
+        tx.commit()?;
+        Ok(())
+    }
     pub fn set_link_with_identity(
         &mut self,
         id: i64,

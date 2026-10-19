@@ -68,7 +68,7 @@ fn ensure_server() -> Result<()> {
     }
 }
 
-pub(super) fn create(db: &crate::db::Db, prompt: &str) -> Result<String> {
+pub(super) fn create(db: &mut crate::db::Db, id: i64, prompt: &str) -> Result<String> {
     #[derive(Deserialize)]
     struct Panes {
         panes: Vec<crate::herdr::Pane>,
@@ -82,6 +82,7 @@ pub(super) fn create(db: &crate::db::Db, prompt: &str) -> Result<String> {
         agent: crate::herdr::Pane,
     }
     crate::db::nonempty(prompt, "Prompt")?;
+    db.task(id)?;
     let root = project_root(db)?;
     let cwd = root.to_str().context("Project directory is not UTF-8")?;
     ensure_server()?;
@@ -121,7 +122,7 @@ pub(super) fn create(db: &crate::db::Db, prompt: &str) -> Result<String> {
     };
     let pane = created.root_pane;
     crate::db::nonempty(&pane.pane_id, "Created pane ID")?;
-    let prepare = || -> Result<()> {
+    let mut prepare = || -> Result<()> {
         if let Some(workspace) = workspace {
             ensure!(
                 pane.workspace_id == workspace.workspace_id,
@@ -175,6 +176,17 @@ pub(super) fn create(db: &crate::db::Db, prompt: &str) -> Result<String> {
                 ],
             )?;
         }
+        let current: Agent = crate::herdr::call(None, &["agent", "get", &pane.pane_id])?;
+        ensure!(
+            current.agent.pane_id == pane.pane_id,
+            "Herdr returned a different agent pane"
+        );
+        let link = crate::herdr::Link {
+            server: crate::herdr::server_session(),
+            identity: crate::herdr::pane_identity(&current.agent)?,
+            pane: current.agent,
+        };
+        db.set_created_agent_link(id, &link)?;
         let _: serde_json::Value =
             crate::herdr::call(None, &["agent", "prompt", &pane.pane_id, prompt])
                 .context("Prompt may have been delivered; inspect the agent before trying again")?;

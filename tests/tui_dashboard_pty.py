@@ -380,6 +380,8 @@ print(json.dumps({"result": result}))
     if scenario.startswith("create_agent_"):
         env["CREATE_SCENARIO"] = scenario
         env["CREATE_ROOT"] = folder
+        env["CREATE_QQQ_BIN"] = binary
+        env["HERDR_SOCKET_PATH"] = str(Path(folder) / "herdr.sock")
         env["PATH"] = os.pathsep.join((folder, os.defpath))
         configured_prompt = "/goal Custom worker 'quotes' $(literal)\nSecond line qQ"
         prompt_config = Path(folder) / ".config/qqq/config.toml"
@@ -401,15 +403,25 @@ print(json.dumps({"result": result}))
             env["NO_COLOR"] = "1"
         fake = Path(folder) / "herdr"
         fake.write_text(f"#!{sys.executable}\n" + r'''
-import json, os, re, sys, termios
+import json, os, re, sqlite3, subprocess, sys, termios
 from pathlib import Path
 root = Path(os.environ["CREATE_ROOT"]).resolve()
 scenario = os.environ["CREATE_SCENARIO"]
 args = sys.argv[1:]
 with (root / "herdr-calls").open("a") as log:
     log.write(json.dumps(args) + "\n")
+if args[:2] == ["--session", "created-server"]:
+    args = args[2:]
 pane = {"pane_id": "wW:p1", "tab_id": "wW:t1", "workspace_id": "match", "cwd": str(root)}
-if args == ["status", "server", "--json"]:
+identity = {"agent": "codex", "kind": "id", "value": "created-session"} if scenario == "create_agent_linked" else None
+agent_pane = dict(pane, agent=None if scenario == "create_agent_start_error" else "codex",
+                  terminal_id="created-terminal", agent_session=identity)
+competing_pane = dict(pane, pane_id="other:p1", agent="codex", terminal_id="other-terminal",
+                      agent_session={"agent": "codex", "kind": "id", "value": "other-session"})
+if args == ["session", "list", "--json"]:
+    print(json.dumps({"sessions": [{"name": "created-server", "socket_path": os.environ["HERDR_SOCKET_PATH"]}]}))
+    sys.exit(0)
+elif args == ["status", "server", "--json"]:
     running = scenario != "create_agent_server" or (root / "server-started").exists()
     print(json.dumps({"status": "running" if running else "not_running"}))
     sys.exit(0)
@@ -433,9 +445,22 @@ elif args[:2] == ["agent", "start"]:
     if scenario in ("create_agent_auto", "create_agent_start_error"):
         print("pane not at shell", file=sys.stderr)
         sys.exit(1)
+    if scenario == "create_agent_claim_race_error":
+        binary = os.environ["CREATE_QQQ_BIN"]
+        def qqq(*command):
+            result = subprocess.run([binary, "--json", *command], cwd=root, capture_output=True, check=True)
+            return json.loads(result.stdout)
+        assert qqq("next", "--local", "--session", "other-worker", "--query", "Second")["id"] == 2
+        with sqlite3.connect(root / ".qqq/qqq.db") as connection:
+            connection.execute("INSERT INTO herdr_links(task_id,link_json) VALUES(2,?)", (
+                json.dumps({"server": "created-server", "identity": competing_pane["agent_session"], "pane": competing_pane}),))
+        (root / "competing-task.json").write_text(json.dumps(qqq("show", "2")))
+        (root / "competing-list.json").write_text(json.dumps(qqq("list", "--all")))
     result = {}
 elif args[:2] == ["agent", "get"]:
-    result = {"agent": dict(pane, agent="codex" if scenario == "create_agent_auto" else None)}
+    result = {"agent": agent_pane}
+elif args == ["agent", "list"]:
+    result = {"agents": [agent_pane, competing_pane]}
 elif args[:2] == ["agent", "wait"]:
     assert "idle" in args, args
     result = {}
@@ -692,6 +717,7 @@ print(json.dumps({"result": result}))
         assert not select.select([child.stdout], [], [], 0)[0], "TUI wrote stdout while open"
         if scenario.startswith("create_agent_"):
             initial = cli("list", "--all")
+            initial_link = cli("show", "2")["herdr"]
             send(b"\x1b[1;2A")
             wait_visible(lambda: "Task #2 (New)" in editor_title())
             send(b"\x01Unsaved ")
@@ -755,6 +781,10 @@ print(json.dumps({"result": result}))
                 assert not (Path(folder) / "herdr-calls").exists()
             else:
                 send(b"\x13")
+                if scenario == "create_agent_claim_race_error":
+                    wait_visible(lambda: "Created Herdr pane wW:p1" in visible.text()
+                                 or "Returned from Herdr" in visible.text())
+                    assert not (Path(folder) / "herdr-client-opened").exists()
                 if scenario.endswith("error"):
                     read_until(b"Created Herdr pane wW:p1")
                 else:
@@ -768,13 +798,33 @@ print(json.dumps({"result": result}))
                 assert create[0][0] == ("workspace" if scenario in ("create_agent_workspace", "create_agent_server") else "tab"), calls
                 if scenario.endswith("error"):
                     assert (Path(folder) / "herdr-client-opened").exists() == (scenario == "create_agent_attach_error")
-                    assert sum(call[:2] == ["agent", "prompt"] for call in calls) == (scenario != "create_agent_start_error")
+                    assert sum(call[:2] == ["agent", "prompt"] for call in calls) == (scenario not in ("create_agent_start_error", "create_agent_claim_race_error"))
                 if scenario == "create_agent_auto":
                     assert any(call[:2] == ["agent", "wait"] for call in calls), calls
+            link = cli("show", "2")["herdr"]
+            if scenario == "create_agent_claim_race_error":
+                assert cli("show", "2") == json.loads((Path(folder) / "competing-task.json").read_text())
+                title = title.rstrip().replace("(New)", "(In progress)").ljust(visible.width)
+            elif scenario in ("create_agent_cancel", "create_agent_empty", "create_agent_ctrl_c", "create_agent_start_error"):
+                assert link == initial_link
+            else:
+                assert link is not None, "Created agent must be linked to the selected task"
+                assert link["pane"]["pane_id"] == "wW:p1", link
+                assert link["server"] == "created-server", link
+                assert link["identity"] == {
+                    "agent": "codex",
+                    "kind": "id" if scenario == "create_agent_linked" else "terminal",
+                    "value": "created-session" if scenario == "create_agent_linked" else "created-terminal",
+                }, link
+                assert cli("herdr", "find", "2")["pane_id"] == "wW:p1"
+                assert cli("show", "1")["herdr"] is None
             if scenario != "create_agent_compact":
                 wait_visible(lambda: editor_title() == title and editor_line() == content
                              and (visible.x, visible.y) == cursor)
-            assert cli("list", "--all") == initial
+            if scenario == "create_agent_claim_race_error":
+                assert cli("list", "--all") == json.loads((Path(folder) / "competing-list.json").read_text())
+            else:
+                assert cli("list", "--all") == initial
             if scenario == "create_agent_filter":
                 assert filter_text() == "Filter: first"
             if scenario.endswith("no_color"):
