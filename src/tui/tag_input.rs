@@ -388,7 +388,7 @@ fn focused_row(value: &str, byte: usize, width: usize) -> PopupRow {
     }
     let mut row = PopupRow::new(
         format!(
-            "> {}",
+            "  {}",
             super::render::clipped(&safe[start..], width.saturating_sub(2))
         ),
         PopupKind::Input,
@@ -467,7 +467,7 @@ pub(super) fn rows(
                 if index == active {
                     focused_row(line, cursor.byte - active_start, width)
                 } else {
-                    PopupRow::new(format!("> {line}"), PopupKind::Input)
+                    PopupRow::new(format!("  {line}"), PopupKind::Input)
                 }
             }),
     );
@@ -799,7 +799,7 @@ mod tests {
             cursor.home(&value);
             let head = focused_row(&value, cursor.byte, width);
             assert_eq!(head.cursor, Some(2));
-            assert!(head.text.starts_with("> "));
+            assert!(head.text.starts_with("  "));
             cursor.end(&value);
         }
     }
@@ -827,7 +827,7 @@ mod tests {
                     capacity.height.into(),
                 );
                 let focused = lines.iter().position(|row| row.cursor.is_some()).unwrap();
-                assert_eq!(lines[focused].text, "> tag00");
+                assert_eq!(lines[focused].text, "  tag00");
                 let mut terminal =
                     ratatui::Terminal::new(ratatui::backend::TestBackend::new(width, height))
                         .unwrap();

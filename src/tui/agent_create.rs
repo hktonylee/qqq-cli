@@ -66,7 +66,7 @@ impl View {
 
     fn layout(&self, width: usize) -> render::Layout {
         let fragments: Vec<_> = self.value.graphemes(true).map(str::to_owned).collect();
-        // Match the popup's two-cell marker and one-cell caret reservation.
+        // Match the popup's two-cell padding and one-cell caret reservation.
         render::Layout::new(&fragments, &[], width.saturating_sub(3))
     }
 
@@ -105,7 +105,7 @@ impl View {
                 .skip(start)
                 .take(input_height)
                 .map(|(index, text)| {
-                    let mut row = PopupRow::new(format!("> {text}"), PopupKind::Input);
+                    let mut row = PopupRow::new(format!("  {text}"), PopupKind::Input);
                     if index == active {
                         row.cursor = Some((2 + column).min(width.saturating_sub(1)));
                     }
@@ -173,7 +173,7 @@ mod tests {
             let text: String = rows
                 .iter()
                 .filter(|row| row.kind == PopupKind::Input)
-                .map(|row| row.text.strip_prefix("> ").unwrap())
+                .map(|row| row.text.strip_prefix("  ").unwrap())
                 .collect();
             assert_eq!(text, DEFAULT_PROMPT);
             assert!(rows.iter().any(|row| row.cursor.is_some()));

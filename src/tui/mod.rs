@@ -409,7 +409,7 @@ fn action_lines(ui: &ActionUi, width: usize, height: usize) -> Vec<render::Popup
                     PopupRow::new("Enter error reason", PopupKind::Hint),
                 ],
             };
-            lines.push(PopupRow::new(format!("> {value}"), PopupKind::Input));
+            lines.push(PopupRow::new(format!("  {value}"), PopupKind::Input));
             if !error.is_empty() {
                 lines.extend(
                     wrap_modal(error, width)
@@ -3078,7 +3078,7 @@ mod tests {
                 .filter(|row| row.kind == PopupKind::Input)
                 .map(|row| row.text.as_str())
                 .collect::<Vec<_>>(),
-            ["> frontend", "> 界 面", "> "]
+            ["  frontend", "  界 面", "  "]
         );
         assert_eq!(
             rows.last().unwrap().text,
@@ -3131,7 +3131,7 @@ mod tests {
                             .rfind(|row| row.kind == PopupKind::Input)
                             .unwrap()
                             .text,
-                        "> tag29",
+                        "  tag29",
                         "width={width} height={height}"
                     );
                     if height >= 2 {

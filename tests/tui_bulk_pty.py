@@ -205,7 +205,7 @@ with tempfile.TemporaryDirectory(prefix="qqq-bulk-pty-") as folder:
             for key, heading in [(b"p", "Bulk priority"), (b"t", "Bulk add tags")]:
                 open_action(key, heading)
                 send(b"qQ")
-                contains("> qQ")
+                contains("  qQ")
                 send(b"\x1b")
                 wait(lambda: heading not in screen.text() and draft_label in screen.text()
                      and (screen.x, screen.y) == caret)
@@ -213,7 +213,7 @@ with tempfile.TemporaryDirectory(prefix="qqq-bulk-pty-") as folder:
             send(b"101\r")
             contains("Priority must be between -100 and 100")
             send(b"qQ")
-            contains("> 101qQ")
+            contains("  101qQ")
             send(b"\x1b")
             wait(lambda: "Bulk priority" not in screen.text() and (screen.x, screen.y) == caret)
             open_action(b"p", "Bulk priority")

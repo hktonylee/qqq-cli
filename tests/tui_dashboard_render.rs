@@ -780,7 +780,9 @@ fn action_popup_input_errors_and_warnings_keep_roles_and_plain_styles() {
         vec![
             PopupRow::new("Priority task #1", PopupKind::Heading),
             PopupRow::new("Enter -100..100", PopupKind::Hint),
-            PopupRow::new("> -9", PopupKind::Input),
+            PopupRow::new("  -9", PopupKind::Input),
+            PopupRow::new("  ", PopupKind::Input),
+            PopupRow::new("  > prompt", PopupKind::Input),
             PopupRow::new("Priority must be -100..100", PopupKind::Error),
             PopupRow::new("Enter apply  Esc cancel", PopupKind::Hint),
         ],
@@ -855,11 +857,12 @@ fn action_popup_input_errors_and_warnings_keep_roles_and_plain_styles() {
                     | PopupKind::Action
                     | PopupKind::SelectedAction
                     | PopupKind::Hint => (Color::Indexed(81), true),
-                    PopupKind::Input | PopupKind::Warning => (Color::Indexed(222), false),
+                    PopupKind::Warning => (Color::Indexed(222), false),
                     PopupKind::Error => (Color::Indexed(210), index == 0),
-                    PopupKind::Body | PopupKind::Choice | PopupKind::SelectedChoice => {
-                        (Color::Indexed(252), false)
-                    }
+                    PopupKind::Body
+                    | PopupKind::Choice
+                    | PopupKind::SelectedChoice
+                    | PopupKind::Input => (Color::Indexed(252), false),
                 };
                 assert_eq!(
                     buffer[(content.x, y)].fg,
@@ -874,6 +877,18 @@ fn action_popup_input_errors_and_warnings_keep_roles_and_plain_styles() {
                     }
                 );
                 if row.kind == PopupKind::Input {
+                    assert_eq!(buffer[(content.x, y)].symbol(), " ");
+                    assert_eq!(buffer[(content.x + 1, y)].symbol(), " ");
+                    for x in content.x..content.right() {
+                        assert_eq!(
+                            buffer[(x, y)].bg,
+                            if color {
+                                Color::Indexed(238)
+                            } else {
+                                Color::Reset
+                            }
+                        );
+                    }
                     assert_eq!(
                         buffer[(content.x + 2, y)].fg,
                         if color {

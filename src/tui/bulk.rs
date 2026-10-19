@@ -862,7 +862,7 @@ mod tests {
                     .iter()
                     .rfind(|row| row.kind == PopupKind::Input)
                     .unwrap();
-                assert_eq!(input.text, "> 界面", "height={height}");
+                assert_eq!(input.text, "  界面", "height={height}");
                 assert_eq!(input.cursor, Some(6));
                 if height >= 2 {
                     let hint = &rows.last().unwrap().text;

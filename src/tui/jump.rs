@@ -64,7 +64,7 @@ impl View {
         let mut rows = vec![
             PopupRow::new("Go to task", PopupKind::Heading),
             PopupRow::new("Enter task ID", PopupKind::Hint),
-            PopupRow::new(format!("> {}", self.value), PopupKind::Input),
+            PopupRow::new(format!("  {}", self.value), PopupKind::Input),
         ];
         rows.extend(
             super::wrap_modal(&self.error, width)

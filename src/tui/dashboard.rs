@@ -15,6 +15,7 @@ const ACCENT: Color = Color::Indexed(81);
 const SELECTION_BG: Color = Color::Rgb(15, 51, 62);
 const BODY_FG: Color = Color::Indexed(252);
 const BODY_BG: Color = Color::Indexed(236);
+const INPUT_BG: Color = Color::Indexed(238);
 const POPUP_ERROR_FG: Color = Color::Indexed(210);
 const POPUP_PROMPT_FG: Color = Color::Indexed(222);
 const TAG_FG: Color = Color::Indexed(222);
@@ -113,7 +114,8 @@ fn popup_row_style(kind: render::PopupKind, title: bool, color: bool) -> Style {
                 style
             }
         }
-        PopupKind::Body | PopupKind::Action | PopupKind::Choice | PopupKind::Input => body,
+        PopupKind::Body | PopupKind::Action | PopupKind::Choice => body,
+        PopupKind::Input => body.bg(INPUT_BG),
         PopupKind::SelectedAction | PopupKind::SelectedChoice => body.bg(SELECTION_BG),
     }
 }
@@ -145,16 +147,11 @@ fn popup_row_line(text: String, kind: render::PopupKind, color: bool) -> Line<'s
         }
         PopupKind::Choice | PopupKind::SelectedChoice => Line::from(format!("{marker}{text}")),
         PopupKind::Hint => hotkey_line(&text, true),
-        PopupKind::Input => Line::from(vec![
-            Span::styled(
-                text.chars().take(2).collect::<String>(),
-                Style::default().fg(POPUP_PROMPT_FG),
-            ),
-            Span::raw(text.chars().skip(2).collect::<String>()),
-        ]),
-        PopupKind::Body | PopupKind::Heading | PopupKind::Error | PopupKind::Warning => {
-            Line::from(text)
-        }
+        PopupKind::Input
+        | PopupKind::Body
+        | PopupKind::Heading
+        | PopupKind::Error
+        | PopupKind::Warning => Line::from(text),
     }
 }
 
@@ -191,10 +188,10 @@ pub(super) fn popup(
         let text = if row.cursor.is_some() {
             render::clipped(&row.text, width)
         } else if row.kind == PopupKind::Input {
-            let value = row.text.strip_prefix("> ").unwrap_or(&row.text);
+            let value = row.text.strip_prefix("  ").unwrap_or(&row.text);
             let safe = render::clipped(value, usize::MAX);
             let (tail, _) = text_tail(&safe, width.saturating_sub(3));
-            render::clipped(&format!("> {tail}"), width)
+            render::clipped(&format!("  {tail}"), width)
         } else {
             let marker_width = usize::from(matches!(
                 row.kind,
