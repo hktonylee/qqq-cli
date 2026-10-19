@@ -128,7 +128,13 @@ pub(super) fn create(db: &crate::db::Db, prompt: &str) -> Result<String> {
                 "Created tab is in a different workspace"
             );
         }
-        let name = format!("qqq-worker-{}", pane.pane_id.replace(':', "-"));
+        // Pane IDs are case-sensitive; hex keeps agent names valid and distinct.
+        let suffix: String = pane
+            .pane_id
+            .bytes()
+            .map(|byte| format!("{byte:02x}"))
+            .collect();
+        let name = format!("qqq-worker-{suffix}");
         let started: Result<serde_json::Value> = crate::herdr::call(
             None,
             &[

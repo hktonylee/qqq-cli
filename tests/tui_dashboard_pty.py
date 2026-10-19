@@ -401,14 +401,14 @@ print(json.dumps({"result": result}))
             env["NO_COLOR"] = "1"
         fake = Path(folder) / "herdr"
         fake.write_text(f"#!{sys.executable}\n" + r'''
-import json, os, sys, termios
+import json, os, re, sys, termios
 from pathlib import Path
 root = Path(os.environ["CREATE_ROOT"]).resolve()
 scenario = os.environ["CREATE_SCENARIO"]
 args = sys.argv[1:]
 with (root / "herdr-calls").open("a") as log:
     log.write(json.dumps(args) + "\n")
-pane = {"pane_id": "worker:p1", "tab_id": "worker:t1", "workspace_id": "match", "cwd": str(root)}
+pane = {"pane_id": "wW:p1", "tab_id": "wW:t1", "workspace_id": "match", "cwd": str(root)}
 if args == ["status", "server", "--json"]:
     running = scenario != "create_agent_server" or (root / "server-started").exists()
     print(json.dumps({"status": "running" if running else "not_running"}))
@@ -427,7 +427,8 @@ elif args[:2] in (["tab", "create"], ["workspace", "create"]):
         assert args[args.index("--workspace") + 1] == "match", args
     result = {"root_pane": pane}
 elif args[:2] == ["agent", "start"]:
-    assert args[args.index("--pane") + 1] == "worker:p1", args
+    assert re.fullmatch(r"[a-z][a-z0-9_-]*", args[2]), args
+    assert args[args.index("--pane") + 1] == "wW:p1", args
     assert args[args.index("--kind") + 1] == "codex", args
     if scenario in ("create_agent_auto", "create_agent_start_error"):
         print("pane not at shell", file=sys.stderr)
@@ -439,13 +440,13 @@ elif args[:2] == ["agent", "wait"]:
     assert "idle" in args, args
     result = {}
 elif args[:2] == ["agent", "prompt"]:
-    assert args[2] == "worker:p1", args
+    assert args[2] == "wW:p1", args
     if scenario == "create_agent_prompt_error":
         print("prompt uncertain", file=sys.stderr)
         sys.exit(1)
     (root / "delivered-prompt").write_text(args[3])
     result = {}
-elif args == ["agent", "focus", "worker:p1"]:
+elif args == ["agent", "focus", "wW:p1"]:
     result = {}
 elif not args:
     flags = termios.tcgetattr(0)[3]
@@ -753,7 +754,7 @@ print(json.dumps({"result": result}))
             else:
                 send(b"\x13")
                 if scenario.endswith("error"):
-                    read_until(b"Created Herdr pane worker:p1")
+                    read_until(b"Created Herdr pane wW:p1")
                 else:
                     read_until(b"HERDR_CLIENT")
                     wait_visible(lambda: "Returned from Herdr" in visible.text())
