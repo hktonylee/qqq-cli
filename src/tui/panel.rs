@@ -24,44 +24,48 @@ pub struct ListRow {
     pub task_id: Option<i64>,
     pub dirty: bool,
     pub description_start: Option<usize>,
-    pub tag_range: Option<(usize, usize)>,
+    pub label_range: Option<(usize, usize)>,
     pub preview_end: Option<usize>,
 }
 
-pub struct TagTask<'a> {
+pub struct LabelTask<'a> {
     pub id: i64,
+    pub priority: i64,
     pub tags: &'a [String],
     pub archived: bool,
     pub context_only: bool,
 }
 
-/// Set tag byte ranges after description offsets; match only actual label prefixes.
-pub fn set_tag_ranges(rows: &mut [ListRow], tasks: &[TagTask<'_>]) {
+/// Set label byte ranges after description offsets; match only actual label prefixes.
+pub fn set_label_ranges(rows: &mut [ListRow], tasks: &[LabelTask<'_>]) {
     let prefixes: HashMap<_, _> = tasks
         .iter()
-        .filter(|task| !task.tags.is_empty())
+        .filter(|task| task.priority != 0 || !task.tags.is_empty())
         .map(|task| {
             let mut prefix = if task.archived { "[archived] " } else { "" }.to_owned();
             if task.context_only {
                 prefix.push_str("[context] ");
             }
-            let tag_start = prefix.len();
+            let label_start = prefix.len();
+            if task.priority != 0 {
+                prefix.push_str(&format!("{{{}}}", task.priority));
+            }
             for (index, tag) in task.tags.iter().enumerate() {
-                if index > 0 {
+                if index > 0 || task.priority != 0 {
                     prefix.push(' ');
                 }
                 prefix.push('[');
                 prefix.push_str(tag);
                 prefix.push(']');
             }
-            (task.id, (prefix, tag_start))
+            (task.id, (prefix, label_start))
         })
         .collect();
     let mut previous = None;
     let mut column = 0;
     let mut consumed = 0;
     for row in rows {
-        row.tag_range = None;
+        row.label_range = None;
         if row.task_id != previous {
             column = row
                 .description_start
@@ -71,7 +75,7 @@ pub fn set_tag_ranges(rows: &mut [ListRow], tasks: &[TagTask<'_>]) {
             consumed = 0;
             previous = row.task_id;
         }
-        let Some((prefix, tag_start)) = row.task_id.and_then(|id| prefixes.get(&id)) else {
+        let Some((prefix, label_start)) = row.task_id.and_then(|id| prefixes.get(&id)) else {
             continue;
         };
         let start = row
@@ -87,10 +91,10 @@ pub fn set_tag_ranges(rows: &mut [ListRow], tasks: &[TagTask<'_>]) {
             .take_while(|(actual, expected)| actual == expected)
             .map(|(actual, _)| actual.len_utf8())
             .sum();
-        let highlight_start = consumed.max(*tag_start);
+        let highlight_start = consumed.max(*label_start);
         let highlight_end = consumed + matched;
         if highlight_start < highlight_end {
-            row.tag_range = Some((start + highlight_start - consumed, start + matched));
+            row.label_range = Some((start + highlight_start - consumed, start + matched));
         }
         consumed = if matched < payload.len() {
             prefix.len()
@@ -153,7 +157,7 @@ pub fn rows(tree: &str, width: usize) -> Vec<ListRow> {
             task_id,
             dirty: false,
             description_start: None,
-            tag_range: None,
+            label_range: None,
             preview_end: None,
         });
     }

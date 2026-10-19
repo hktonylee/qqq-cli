@@ -128,9 +128,9 @@ fn task_text_and_tags_keep_colors_across_status_selection_dirty_and_compact_rows
     for width in [50, 72, 150] {
         let compact = width < dashboard::COMPACT_COLUMNS;
         let tree = if compact {
-            "1234567 [literal] Root\n2      └── [界 面] [bug] [literal] Child"
+            "1234567 [literal] Root\n2      └── {7} [界 面] [bug] [literal] Child"
         } else {
-            "1234567 New          [literal] Root\n2      New          └── [界 面] [bug] [literal] Child"
+            "1234567 New          [literal] Root\n2      New          └── {7} [界 面] [bug] [literal] Child"
         };
         for status in ["new", "in_progress", "completed", "error"] {
             for dirty in [false, true] {
@@ -158,16 +158,18 @@ fn task_text_and_tags_keep_colors_across_status_selection_dirty_and_compact_rows
                     },
                     !compact,
                 );
-                panel::set_tag_ranges(
+                panel::set_label_ranges(
                     &mut rows,
-                    &[panel::TagTask {
+                    &[panel::LabelTask {
                         id: 2,
+                        priority: 7,
                         tags: &labels,
                         archived: false,
                         context_only: false,
                     }],
                 );
-                let tag_x = 1 + if compact { 11 } else { 24 } + usize::from(dirty) * 4;
+                let priority_x = 1 + if compact { 11 } else { 24 } + usize::from(dirty) * 4;
+                let tag_x = priority_x + 4;
                 for color in [true, false] {
                     for selected in [None, Some(2)] {
                         let mut terminal = Terminal::new(TestBackend::new(width, 24)).unwrap();
@@ -203,6 +205,15 @@ fn task_text_and_tags_keep_colors_across_status_selection_dirty_and_compact_rows
                             })
                             .unwrap();
                         let buffer = terminal.backend().buffer();
+                        assert_eq!(buffer[(priority_x as u16, 1)].symbol(), "{");
+                        assert_eq!(
+                            buffer[(priority_x as u16, 1)].fg,
+                            if color {
+                                Color::Indexed(222)
+                            } else {
+                                Color::Reset
+                            }
+                        );
                         let tag = &buffer[(tag_x as u16, 1)];
                         assert_eq!(tag.symbol(), "[");
                         assert_eq!(
@@ -242,9 +253,9 @@ fn task_text_and_tags_keep_colors_across_status_selection_dirty_and_compact_rows
                             Color::Indexed(222)
                         );
                         if dirty {
-                            assert_eq!(buffer[((tag_x - 4) as u16, 1)].symbol(), "[");
+                            assert_eq!(buffer[((priority_x - 4) as u16, 1)].symbol(), "[");
                             assert_eq!(
-                                buffer[((tag_x - 4) as u16, 1)].fg,
+                                buffer[((priority_x - 4) as u16, 1)].fg,
                                 if color {
                                     Color::Indexed(222)
                                 } else {

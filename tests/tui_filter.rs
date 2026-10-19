@@ -10,9 +10,9 @@ fn context_ancestor_tags_skip_context_and_archive_metadata() {
     for archived in [false, true] {
         let prefix = if archived { "[archived] " } else { "" };
         for tree in [
-            format!("1      New          {prefix}[context] [界 面] [bug] Literal"),
+            format!("1      New          {prefix}[context] {{-2}} [界 面] [bug] Literal"),
             format!(
-                "1      New          {prefix}\n                    [context] \n                    [界 面] [bug] Literal"
+                "1      New          {prefix}\n                    [context] \n                    {{-2}} [界 面] [bug] Literal"
             ),
         ] {
             let mut rows = panel::rows(&tree, 90);
@@ -27,10 +27,11 @@ fn context_ancestor_tags_skip_context_and_archive_metadata() {
                 &HashSet::from([1]),
                 true,
             );
-            panel::set_tag_ranges(
+            panel::set_label_ranges(
                 &mut rows,
-                &[panel::TagTask {
+                &[panel::LabelTask {
                     id: 1,
+                    priority: -2,
                     tags: &["界 面".into(), "bug".into()],
                     archived,
                     context_only: true,
@@ -38,16 +39,16 @@ fn context_ancestor_tags_skip_context_and_archive_metadata() {
             );
             let colored: String = rows
                 .iter()
-                .filter_map(|row| row.tag_range.map(|(start, end)| &row.text[start..end]))
+                .filter_map(|row| row.label_range.map(|(start, end)| &row.text[start..end]))
                 .collect();
-            assert_eq!(colored, "[界 面] [bug]", "{tree}");
+            assert_eq!(colored, "{-2} [界 面] [bug]", "{tree}");
             assert!(rows.iter().all(|row| row.dirty));
         }
     }
 }
 
 #[test]
-fn tag_ranges_follow_real_unicode_labels_and_skip_bracket_descriptions() {
+fn label_ranges_follow_real_unicode_labels_and_skip_bracket_descriptions() {
     let tasks: Vec<_> = (1..=4)
         .map(|id| FilterTask {
             id,
@@ -61,7 +62,7 @@ fn tag_ranges_follow_real_unicode_labels_and_skip_bracket_descriptions() {
             "1      New          [界 面] \n",
             "                    [bug] [fake]\n",
             "                    Description\n",
-            "2      New          [fake]\n",
+            "2      New          {7} [fake]\n",
             "3      New          [archived] [bug] [fake]\n",
             "4      New          [archived] Literal",
         ),
@@ -71,30 +72,34 @@ fn tag_ranges_follow_real_unicode_labels_and_skip_bracket_descriptions() {
     let labels = ["界 面".into(), "bug".into()];
     let bug = ["bug".into()];
     let archived_label = ["archived".into()];
-    panel::set_tag_ranges(
+    panel::set_label_ranges(
         &mut rows,
         &[
-            panel::TagTask {
+            panel::LabelTask {
                 id: 1,
+                priority: 0,
                 tags: &labels,
                 archived: false,
                 context_only: false,
             },
-            panel::TagTask {
+            panel::LabelTask {
                 id: 2,
+                priority: 0,
                 tags: &[],
                 archived: false,
                 context_only: false,
             },
-            panel::TagTask {
+            panel::LabelTask {
                 id: 3,
+                priority: 0,
                 tags: &bug,
                 archived: true,
 
                 context_only: false,
             },
-            panel::TagTask {
+            panel::LabelTask {
                 id: 4,
+                priority: 0,
                 tags: &archived_label,
                 archived: false,
                 context_only: false,
@@ -103,7 +108,7 @@ fn tag_ranges_follow_real_unicode_labels_and_skip_bracket_descriptions() {
     );
     let actual: Vec<_> = rows
         .iter()
-        .map(|row| row.tag_range.map(|(start, end)| &row.text[start..end]))
+        .map(|row| row.label_range.map(|(start, end)| &row.text[start..end]))
         .collect();
     assert_eq!(
         actual,
@@ -116,12 +121,12 @@ fn tag_ranges_follow_real_unicode_labels_and_skip_bracket_descriptions() {
             Some("[archived]")
         ]
     );
-    panel::set_tag_ranges(&mut rows, &[]);
-    assert!(rows.iter().all(|row| row.tag_range.is_none()));
+    panel::set_label_ranges(&mut rows, &[]);
+    assert!(rows.iter().all(|row| row.label_range.is_none()));
 }
 
 #[test]
-fn tag_ranges_stop_before_preview_ellipsis() {
+fn label_ranges_stop_before_preview_ellipsis() {
     for suffix in ["012", "..."] {
         let tree = format!(
             "1      New          [abcdefghi\n                    jklmnopqrs\n                    tuvwxyz{suffix}\n                    345] Desc"
@@ -138,17 +143,18 @@ fn tag_ranges_stop_before_preview_ellipsis() {
             &HashSet::new(),
             true,
         );
-        panel::set_tag_ranges(
+        panel::set_label_ranges(
             &mut rows,
-            &[panel::TagTask {
+            &[panel::LabelTask {
                 id: 1,
+                priority: 0,
                 tags: &[format!("abcdefghijklmnopqrstuvwxyz{suffix}345")],
                 archived: false,
                 context_only: false,
             }],
         );
         assert_eq!(rows.len(), 3);
-        let (start, end) = rows[2].tag_range.unwrap();
+        let (start, end) = rows[2].label_range.unwrap();
         assert_eq!(&rows[2].text[start..end], "tuvwxyz");
         assert_eq!(&rows[2].text[end..], "...");
     }

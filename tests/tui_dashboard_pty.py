@@ -4434,6 +4434,7 @@ print(json.dumps({"result": result}))
             send(b"n")
             wait_visible(lambda: "XFresh item" in visible.text())
             assert cli("show", "4")["task"]["priority"] == 0
+            assert "{0}" not in visible.text()
             action("c", "Force complete task #4?")
             send(b"n")
             wait_visible(lambda: editor_line().startswith("XFresh item"))
@@ -4445,6 +4446,7 @@ print(json.dumps({"result": result}))
             send(b"7\r")
             read_until(b"Priority #4: 7")
             assert cli("show", "4")["task"]["priority"] == 7
+            wait_visible(lambda: "{7} Fresh item" in visible.text())
             send(b"\x01Y")
             wait_visible(lambda: "YFresh item" in visible.text())
             action("p", "Priority task #4")
@@ -4454,6 +4456,7 @@ print(json.dumps({"result": result}))
             send(b"y")
             read_until(b"Priority #4: -5")
             assert cli("show", "4")["task"]["priority"] == -5
+            wait_visible(lambda: "{-5} Fresh item" in visible.text())
             assert cli("show", "4")["task"]["description"] == "Fresh item"
             wait_visible(lambda: editor_line().startswith("Fresh item"))
             action("d", "Parent task #4")

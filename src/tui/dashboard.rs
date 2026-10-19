@@ -18,7 +18,7 @@ const BODY_BG: Color = Color::Indexed(236);
 const INPUT_BG: Color = Color::Indexed(238);
 const POPUP_ERROR_FG: Color = Color::Indexed(210);
 const POPUP_PROMPT_FG: Color = Color::Indexed(222);
-const TAG_FG: Color = Color::Indexed(222);
+const LABEL_FG: Color = Color::Indexed(222);
 
 pub(super) const COMPACT_COLUMNS: u16 = 60;
 pub(super) const LIST_ROW_PREFIX: &str = " ";
@@ -777,13 +777,13 @@ pub fn draw(
             spans.push(Span::styled("[*]", dirty_style));
             spans.push(Span::raw(" "));
         }
-        if let Some((tag_start, tag_end)) = row.tag_range.filter(|_| color) {
-            spans.push(Span::raw(row.text[start..tag_start].to_owned()));
+        if let Some((label_start, label_end)) = row.label_range.filter(|_| color) {
+            spans.push(Span::raw(row.text[start..label_start].to_owned()));
             spans.push(Span::styled(
-                row.text[tag_start..tag_end].to_owned(),
-                Style::default().fg(TAG_FG),
+                row.text[label_start..label_end].to_owned(),
+                Style::default().fg(LABEL_FG),
             ));
-            spans.push(Span::raw(row.text[tag_end..].to_owned()));
+            spans.push(Span::raw(row.text[label_end..].to_owned()));
         } else {
             spans.push(Span::raw(row.text[start..].to_owned()));
         }

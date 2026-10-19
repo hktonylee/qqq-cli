@@ -1294,16 +1294,17 @@ fn compose_inner(
                 &dirty_ids,
                 size.0 >= dashboard::COMPACT_COLUMNS,
             );
-            let tag_tasks: Vec<_> = displayed
+            let label_tasks: Vec<_> = displayed
                 .iter()
-                .map(|task| panel::TagTask {
+                .map(|task| panel::LabelTask {
                     id: task.id,
+                    priority: task.priority,
                     tags: &task.tags,
                     archived: task.archived,
                     context_only: task.context_only,
                 })
                 .collect();
-            panel::set_tag_ranges(&mut rows, &tag_tasks);
+            panel::set_label_ranges(&mut rows, &label_tasks);
             list_row_count = rows.len();
             visible_ids = Some(panel::visible_ids(&rows));
             let popup_content = dashboard::popup_layout(

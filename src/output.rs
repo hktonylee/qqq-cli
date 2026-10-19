@@ -368,6 +368,11 @@ fn task_tree(
         if !tags.is_empty() {
             description = format!("{tags} {description}");
         }
+        if !show_priority
+            && let Some(priority) = task["priority"].as_i64().filter(|priority| *priority != 0)
+        {
+            description = format!("{{{priority}}} {description}");
+        }
         if task["context_only"].as_bool() == Some(true) {
             description = format!("[context] {description}");
         }
