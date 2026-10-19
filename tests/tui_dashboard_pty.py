@@ -403,7 +403,7 @@ print(json.dumps({"result": result}))
             env["NO_COLOR"] = "1"
         fake = Path(folder) / "herdr"
         fake.write_text(f"#!{sys.executable}\n" + r'''
-import json, os, re, sqlite3, subprocess, sys, termios
+import json, os, sqlite3, subprocess, sys, termios
 from pathlib import Path
 root = Path(os.environ["CREATE_ROOT"]).resolve()
 scenario = os.environ["CREATE_SCENARIO"]
@@ -414,7 +414,7 @@ if args[:2] == ["--session", "created-server"]:
     args = args[2:]
 pane = {"pane_id": "wW:p1", "tab_id": "wW:t1", "workspace_id": "match", "cwd": str(root)}
 identity = {"agent": "codex", "kind": "id", "value": "created-session"} if scenario == "create_agent_linked" else None
-agent_pane = dict(pane, agent=None if scenario == "create_agent_start_error" else "codex",
+agent_pane = dict(pane, agent="codex",
                   terminal_id="created-terminal", agent_session=identity)
 competing_pane = dict(pane, pane_id="other:p1", agent="codex", terminal_id="other-terminal",
                       agent_session={"agent": "codex", "kind": "id", "value": "other-session"})
@@ -438,12 +438,19 @@ elif args[:2] in (["tab", "create"], ["workspace", "create"]):
     if args[0] == "tab":
         assert args[args.index("--workspace") + 1] == "match", args
     result = {"root_pane": pane}
-elif args[:2] == ["agent", "start"]:
-    assert re.fullmatch(r"[a-z][a-z0-9_-]*", args[2]), args
-    assert args[args.index("--pane") + 1] == "wW:p1", args
-    assert args[args.index("--kind") + 1] == "codex", args
-    if scenario in ("create_agent_auto", "create_agent_start_error"):
-        print("pane not at shell", file=sys.stderr)
+elif args[:2] == ["pane", "get"]:
+    attempts = root / "agent-detection-attempts"
+    count = int(attempts.read_text()) + 1 if attempts.exists() else 1
+    attempts.write_text(str(count))
+    result = {"pane": pane if scenario == "create_agent_auto" and count < 3 else agent_pane}
+elif args[:2] == ["agent", "wait"]:
+    assert args[:6] == ["agent", "wait", "wW:p1", "--until", "idle", "--timeout"], args
+    assert 0 < int(args[6]) <= 30000, args
+    if scenario == "create_agent_auto" and (not (root / "agent-detection-attempts").exists() or int((root / "agent-detection-attempts").read_text()) < 3):
+        print("agent_not_found", file=sys.stderr)
+        sys.exit(1)
+    if scenario == "create_agent_ready_error":
+        print("agent did not become ready", file=sys.stderr)
         sys.exit(1)
     if scenario == "create_agent_claim_race_error":
         binary = os.environ["CREATE_QQQ_BIN"]
@@ -461,9 +468,6 @@ elif args[:2] == ["agent", "get"]:
     result = {"agent": agent_pane}
 elif args == ["agent", "list"]:
     result = {"agents": [agent_pane, competing_pane]}
-elif args[:2] == ["agent", "wait"]:
-    assert "idle" in args, args
-    result = {}
 elif args[:2] == ["agent", "prompt"]:
     assert args[2] == "wW:p1", args
     if scenario == "create_agent_prompt_error":
@@ -798,14 +802,15 @@ print(json.dumps({"result": result}))
                 assert create[0][0] == ("workspace" if scenario in ("create_agent_workspace", "create_agent_server") else "tab"), calls
                 if scenario.endswith("error"):
                     assert (Path(folder) / "herdr-client-opened").exists() == (scenario == "create_agent_attach_error")
-                    assert sum(call[:2] == ["agent", "prompt"] for call in calls) == (scenario not in ("create_agent_start_error", "create_agent_claim_race_error"))
+                    assert sum(call[:2] == ["agent", "prompt"] for call in calls) == (scenario not in ("create_agent_ready_error", "create_agent_claim_race_error"))
                 if scenario == "create_agent_auto":
                     assert any(call[:2] == ["agent", "wait"] for call in calls), calls
+                    assert not any(call[:2] == ["agent", "start"] for call in calls), calls
             link = cli("show", "2")["herdr"]
             if scenario == "create_agent_claim_race_error":
                 assert cli("show", "2") == json.loads((Path(folder) / "competing-task.json").read_text())
                 title = title.rstrip().replace("(New)", "(In progress)").ljust(visible.width)
-            elif scenario in ("create_agent_cancel", "create_agent_empty", "create_agent_ctrl_c", "create_agent_start_error"):
+            elif scenario in ("create_agent_cancel", "create_agent_empty", "create_agent_ctrl_c", "create_agent_ready_error"):
                 assert link == initial_link
             else:
                 assert link is not None, "Created agent must be linked to the selected task"

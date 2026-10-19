@@ -135,6 +135,8 @@ task to load it, scroll each pane, or use the keyboard:
 The Ctrl+H creation dialog starts with an editable queue-worker prompt. Enter
 adds a line, Ctrl+S creates the agent, and Escape cancels. Its workspace uses the
 directory containing `.qqq`, even when the TUI runs from a subdirectory.
+The pane's shell profile must start Codex. qqq waits for it to become idle and
+submits the prompt through `herdr agent prompt`.
 
 Ctrl+G menu includes `e Mark error`. Enter reason, confirm with `y`; marking
 error requires ownership of an in-progress task.
