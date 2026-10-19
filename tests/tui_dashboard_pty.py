@@ -714,6 +714,8 @@ print(json.dumps({"result": result}))
                 send(b"\x08")
             wait_visible(lambda: "Create Herdr agent" in visible.text())
             assert not (Path(folder) / "herdr-calls").exists()
+            if scenario != "create_agent_config_empty":
+                wait_visible(lambda: "> /goal " in visible.text())
             if scenario.startswith("create_agent_config") and scenario != "create_agent_config_empty":
                 wait_visible(lambda: "Custom worker" in visible.text())
             if scenario == "create_agent_config_unset":

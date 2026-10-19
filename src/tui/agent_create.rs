@@ -66,7 +66,8 @@ impl View {
 
     fn layout(&self, width: usize) -> render::Layout {
         let fragments: Vec<_> = self.value.graphemes(true).map(str::to_owned).collect();
-        render::Layout::new(&fragments, &[], width.saturating_sub(2))
+        // Match the popup's two-cell marker and one-cell caret reservation.
+        render::Layout::new(&fragments, &[], width.saturating_sub(3))
     }
 
     pub fn rows(&self, width: usize, height: usize) -> Vec<PopupRow> {
