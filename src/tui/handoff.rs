@@ -77,14 +77,6 @@ pub(super) fn create(db: &mut crate::db::Db, id: i64, prompt: &str) -> Result<St
     struct Created {
         root_pane: crate::herdr::Pane,
     }
-    #[derive(Deserialize)]
-    struct Agent {
-        agent: crate::herdr::Pane,
-    }
-    #[derive(Deserialize)]
-    struct Current {
-        pane: crate::herdr::Pane,
-    }
     crate::db::nonempty(prompt, "Prompt")?;
     db.task(id)?;
     let root = project_root(db)?;
@@ -124,7 +116,7 @@ pub(super) fn create(db: &mut crate::db::Db, id: i64, prompt: &str) -> Result<St
             ],
         )?,
     };
-    let pane = created.root_pane;
+    let mut pane = created.root_pane;
     crate::db::nonempty(&pane.pane_id, "Created pane ID")?;
     let mut prepare = || -> Result<()> {
         if let Some(workspace) = workspace {
@@ -133,61 +125,20 @@ pub(super) fn create(db: &mut crate::db::Db, id: i64, prompt: &str) -> Result<St
                 "Created tab is in a different workspace"
             );
         }
-        let deadline = Instant::now() + Duration::from_secs(30);
-        loop {
-            let current: Current = crate::herdr::call(None, &["pane", "get", &pane.pane_id])?;
-            ensure!(
-                current.pane.pane_id == pane.pane_id,
-                "Herdr returned a different pane"
-            );
-            if crate::herdr::pane_identity(&current.pane)
-                .is_ok_and(|identity| identity.agent == "codex")
-            {
-                break;
-            }
-            ensure!(
-                Instant::now() < deadline,
-                "Created pane did not start Codex within 30 seconds"
-            );
-            std::thread::sleep(Duration::from_millis(100));
+        // Link the terminal before the shell profile reports its Codex agent.
+        if pane.agent.is_none() && pane.agent_session.is_none() {
+            pane.agent = Some("codex".into());
         }
-        let timeout = deadline
-            .saturating_duration_since(Instant::now())
-            .as_millis()
-            .max(1)
-            .to_string();
-        let _: serde_json::Value = crate::herdr::call(
-            None,
-            &[
-                "agent",
-                "wait",
-                &pane.pane_id,
-                "--until",
-                "idle",
-                "--timeout",
-                &timeout,
-            ],
-        )?;
-        let current: Agent = crate::herdr::call(None, &["agent", "get", &pane.pane_id])?;
-        ensure!(
-            current.agent.pane_id == pane.pane_id,
-            "Herdr returned a different agent pane"
-        );
-        let identity = crate::herdr::pane_identity(&current.agent)?;
-        ensure!(
-            identity.agent == "codex",
-            "Created pane did not start Codex"
-        );
         let link = crate::herdr::Link {
             server: crate::herdr::server_session(),
-            identity,
-            pane: current.agent,
+            identity: crate::herdr::pane_identity(&pane)?,
+            pane: pane.clone(),
         };
         db.set_created_agent_link(id, &link)?;
         let _: serde_json::Value =
-            crate::herdr::call(None, &["agent", "prompt", &pane.pane_id, prompt])
+            crate::herdr::call(None, &["pane", "run", &pane.pane_id, prompt])
                 .context("Prompt may have been delivered; inspect the agent before trying again")?;
-        let _: serde_json::Value = crate::herdr::call(None, &["agent", "focus", &pane.pane_id])?;
+        let _: serde_json::Value = crate::herdr::call(None, &["tab", "focus", &pane.tab_id])?;
         Ok(())
     };
     prepare().with_context(|| {

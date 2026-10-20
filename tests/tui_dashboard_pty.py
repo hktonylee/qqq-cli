@@ -412,7 +412,8 @@ with (root / "herdr-calls").open("a") as log:
     log.write(json.dumps(args) + "\n")
 if args[:2] == ["--session", "created-server"]:
     args = args[2:]
-pane = {"pane_id": "wW:p1", "tab_id": "wW:t1", "workspace_id": "match", "cwd": str(root)}
+pane = {"pane_id": "wW:p1", "tab_id": "wW:t1", "workspace_id": "match", "cwd": str(root),
+        "terminal_id": None if scenario == "create_agent_identity_error" else "created-terminal"}
 identity = {"agent": "codex", "kind": "id", "value": "created-session"} if scenario == "create_agent_linked" else None
 agent_pane = dict(pane, agent="codex",
                   terminal_id="created-terminal", agent_session=identity)
@@ -437,21 +438,6 @@ elif args[:2] in (["tab", "create"], ["workspace", "create"]):
     assert "--no-focus" in args, args
     if args[0] == "tab":
         assert args[args.index("--workspace") + 1] == "match", args
-    result = {"root_pane": pane}
-elif args[:2] == ["pane", "get"]:
-    attempts = root / "agent-detection-attempts"
-    count = int(attempts.read_text()) + 1 if attempts.exists() else 1
-    attempts.write_text(str(count))
-    result = {"pane": pane if scenario == "create_agent_auto" and count < 3 else agent_pane}
-elif args[:2] == ["agent", "wait"]:
-    assert args[:6] == ["agent", "wait", "wW:p1", "--until", "idle", "--timeout"], args
-    assert 0 < int(args[6]) <= 30000, args
-    if scenario == "create_agent_auto" and (not (root / "agent-detection-attempts").exists() or int((root / "agent-detection-attempts").read_text()) < 3):
-        print("agent_not_found", file=sys.stderr)
-        sys.exit(1)
-    if scenario == "create_agent_ready_error":
-        print("agent did not become ready", file=sys.stderr)
-        sys.exit(1)
     if scenario == "create_agent_claim_race_error":
         binary = os.environ["CREATE_QQQ_BIN"]
         def qqq(*command):
@@ -463,19 +449,19 @@ elif args[:2] == ["agent", "wait"]:
                 json.dumps({"server": "created-server", "identity": competing_pane["agent_session"], "pane": competing_pane}),))
         (root / "competing-task.json").write_text(json.dumps(qqq("show", "2")))
         (root / "competing-list.json").write_text(json.dumps(qqq("list", "--all")))
-    result = {}
-elif args[:2] == ["agent", "get"]:
-    result = {"agent": agent_pane}
+    result = {"root_pane": dict(pane, agent_session=identity)}
+elif args[:2] in (["pane", "get"], ["agent", "get"], ["agent", "wait"], ["agent", "start"]):
+    raise AssertionError("Prompt-only creation must not query, launch, or wait for an agent")
 elif args == ["agent", "list"]:
     result = {"agents": [agent_pane, competing_pane]}
-elif args[:2] == ["agent", "prompt"]:
-    assert args[2] == "wW:p1", args
+elif args[:2] == ["pane", "run"]:
+    assert len(args) == 4 and args[2] == "wW:p1", args
     if scenario == "create_agent_prompt_error":
         print("prompt uncertain", file=sys.stderr)
         sys.exit(1)
     (root / "delivered-prompt").write_text(args[3])
     result = {}
-elif args == ["agent", "focus", "wW:p1"]:
+elif args == ["tab", "focus", "wW:t1"]:
     result = {}
 elif not args:
     flags = termios.tcgetattr(0)[3]
@@ -802,15 +788,13 @@ print(json.dumps({"result": result}))
                 assert create[0][0] == ("workspace" if scenario in ("create_agent_workspace", "create_agent_server") else "tab"), calls
                 if scenario.endswith("error"):
                     assert (Path(folder) / "herdr-client-opened").exists() == (scenario == "create_agent_attach_error")
-                    assert sum(call[:2] == ["agent", "prompt"] for call in calls) == (scenario not in ("create_agent_ready_error", "create_agent_claim_race_error"))
-                if scenario == "create_agent_auto":
-                    assert any(call[:2] == ["agent", "wait"] for call in calls), calls
-                    assert not any(call[:2] == ["agent", "start"] for call in calls), calls
+                    assert sum(call[:2] == ["pane", "run"] for call in calls) == (scenario not in ("create_agent_identity_error", "create_agent_claim_race_error"))
+                assert not any(call[:2] in (["pane", "get"], ["agent", "get"], ["agent", "wait"], ["agent", "start"]) for call in calls), calls
             link = cli("show", "2")["herdr"]
             if scenario == "create_agent_claim_race_error":
                 assert cli("show", "2") == json.loads((Path(folder) / "competing-task.json").read_text())
                 title = title.rstrip().replace("(New)", "(In progress)").ljust(visible.width)
-            elif scenario in ("create_agent_cancel", "create_agent_empty", "create_agent_ctrl_c", "create_agent_ready_error"):
+            elif scenario in ("create_agent_cancel", "create_agent_empty", "create_agent_ctrl_c", "create_agent_identity_error"):
                 assert link == initial_link
             else:
                 assert link is not None, "Created agent must be linked to the selected task"

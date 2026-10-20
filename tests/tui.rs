@@ -364,7 +364,7 @@ fn tui_dashboard_ctrl_h_creates_queue_agents() {
         "create_agent_no_color",
         "create_agent_server",
         "create_agent_auto",
-        "create_agent_ready_error",
+        "create_agent_identity_error",
         "create_agent_claim_race_error",
         "create_agent_prompt_error",
         "create_agent_attach_error",

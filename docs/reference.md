@@ -879,7 +879,9 @@ ambiguity fails before claim. Terminal-plus-agent identity survives missing hook
 Local explicit-session claims do not auto-link.
 
 Ctrl+H on a saved New task opens the editable agent-creation prompt. The dialog
-uses `herdr.initial-prompt` when configured. `qqq next` claims work for its caller;
+uses `herdr.initial-prompt` when configured. The new pane receives only the edited
+prompt through `herdr pane run`; its shell profile must start Codex. qqq does not
+launch an agent or wait for readiness. `qqq next` claims work for its caller;
 the removed `herdr.next-to-new-agent` setting has no effect.
 
 ## JSON error contract
