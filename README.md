@@ -51,11 +51,10 @@ ID     STATUS        PRI TASK
 2      New             0 └── Build client
 ```
 
-Open any agentic coding tool in this directory and send this prompt, which matches
-the built-in queue-worker prompt:
+Open your coding agent in this directory and send this prompt:
 
 ```text
-/goal Use the `qqq cli --wait`, to look for next task, and work on that. Repeat this forever. Please don't wake up repeatedly to poll the status when running waiter.
+Use `qqq next --wait --json` to wait for the next task and work on it. Mark it complete, then repeat. Keep one waiter running; don't repeatedly poll for work.
 ```
 
 The agent completes **Build API** before **Build client** becomes ready.
@@ -107,13 +106,16 @@ Use the [prompt above](#try-it) in each agentic coding tool you want to work
 through the queue. Each worker needs a unique, stable identity.
 
 `--wait` blocks until work is ready. `--json` returns full task data for the agent.
-A restarted worker using the same session gets its current task back; claims do
-not expire. [Return or retry work](docs/reference.md#return-or-retry-work) when a
-worker gets stuck.
+A worker using the same identity gets its active task back. Claims have no time
+limit, but qqq marks tasks `error` when their owner is confirmed dead.
+[Return or retry work](docs/reference.md#return-or-retry-work) when a worker gets
+stuck or its task needs recovery.
 
 Native Codex session discovery can supply identity automatically. Optional
 [Herdr integration](docs/reference.md#herdr) links live agents and lets Ctrl+H
 create a queue worker from a saved New task. `next` always claims for its caller.
+Without automatic identity, set a unique `QQQ_SESSION` (for example,
+`export QQQ_SESSION=worker-1`) or pass `--session worker-1` on worker commands.
 
 Route specialist workers by stored tags:
 
