@@ -75,80 +75,31 @@ Help and version output stay text.
 
 ## See and edit the work
 
-Pipe multiline descriptions with `qqq add --stdin`, or load a complete plan with
-`qqq import plan.json --dry-run` followed by `qqq import plan.json`.
-Independent prerequisites can gate integration work while keeping its tree parent:
-`qqq add "Integrate API and UI" --parent 1 --depends-on 2 --depends-on 3`.
-Manage extras with edit's `--depends-on`, `--remove-depends-on`, and
-`--clear-depends-on`; all prerequisites must complete before a new claim.
-
-Add tags with `qqq add "Fix layout" --tag frontend --tag bug`; lists show
-`[frontend] [bug] Fix layout`. Replace via `qqq edit 1 --set-tags "frontend, bug"`,
-clear via `--set-tags ""`, or edit selected task tags with Ctrl-L in TUI.
-On a new draft, Ctrl-L stages tags before Ctrl-S creates the task. Workers see
-the description and tags together when the task enters the queue.
-In the tag editor, Enter adds a line, Ctrl-S applies tags, Ctrl-U deletes the
-current line, and Esc/Ctrl-C cancels.
-Type a tag prefix to suggest existing project tags; Up/Down selects a suggestion
-and Tab completes the label at the caret. Custom tags remain available.
-
-See [batch schema and piping examples](docs/reference.md#atomic-batch-import).
-
-Preview changes to several saved tasks with
-`qqq bulk --tag backend --add-tag review --priority 5 --json > preview.json`,
-then confirm with `qqq bulk --apply preview.json`. Preview freezes exact IDs;
-stale changes reject whole batch. See [bulk actions](docs/reference.md#bulk-task-actions)
-for selectors, tags, archive and conflict handling.
-
-Reuse workflows with `qqq add --template bug --var component=auth --dry-run`.
-Project-local `.qqq-recipes/*.json` files declare parameters and one or more tasks;
-applying a recipe creates its whole dependency graph atomically. See
-[recipe format and examples](docs/reference.md#task-recipes).
-
-Inspect readiness, owners and blockers with `qqq status`. Preview selection reasons
-with `qqq next --explain`; neither command claims work. Both support `--json`.
-See [queue diagnostics](docs/reference.md#queue-diagnostics) for filters and owner context.
-
 ```sh
 qqq tui
 ```
 
-Browse the tree, read task details, and edit descriptions in one window. Click a
-task to load it, scroll each pane, or use the keyboard:
+Browse tasks, read their details, and edit descriptions in one window. Click a
+task to open it, or use the keyboard:
 
 | Key | Action |
 | --- | --- |
 | Shift+Up / Shift+Down | Move between tasks and a blank draft |
 | Ctrl+S | Save |
-| Ctrl+Z / Ctrl+Y | Undo / redo description edits; keep history after save |
-| Ctrl+D | Toggle task in bulk selection; `+` marks selected rows |
-| Ctrl+L | Edit task or new draft tags; retain unsaved drafts |
-| Ctrl+K | Go to task ID; retain unsaved drafts |
-| Ctrl+B | Pick saved project view; retain editor and parked drafts |
-| Ctrl+P | Create child of selected task; in child draft, insert parent `#ID` |
-| Ctrl+F or Ctrl+/ | Filter tasks |
-| Ctrl+G | Open bulk actions when tasks marked, otherwise task actions |
-| Ctrl+H | Create a Herdr queue worker for a saved New task; otherwise open its linked agent |
-| Esc | Close the filter, clear the editor, then exit; changed drafts ask before discard |
-| Ctrl+C | Clear nonempty New Task; press again to exit when empty |
+| Ctrl+L | Edit tags |
+| Ctrl+F | Filter tasks |
+| Ctrl+G | Open task or bulk actions |
 
-The Ctrl+H creation dialog starts with an editable queue-worker prompt. Enter
-adds a line, Ctrl+S creates the agent, and Escape cancels. Its workspace uses the
-directory containing `.qqq`, even when the TUI runs from a subdirectory.
-The pane's shell profile must start Codex. qqq waits for it to become idle and
-submits the prompt through `herdr agent prompt`.
+See the [full TUI guide](docs/reference.md#task-tui) for navigation, child tasks,
+saved views, bulk selection, and shortcuts.
 
-Ctrl+G menu includes `e Mark error`. Enter reason, confirm with `y`; marking
-error requires ownership of an in-progress task.
-Menu groups status actions, settings (`Priority`, `Set parent`), and
-archive visibility, with an empty line between groups. Arrows skip empty rows;
-short terminals keep selected action visible while scrolling menu.
+With optional [Herdr integration](docs/reference.md#herdr), Ctrl+H creates a worker
+for a saved New task or opens its linked agent. Creation requires the pane's shell
+profile to start Codex.
 
-Task details and `qqq show` display assignment in two aligned rows:
-`Harness: session (name)` and `Orchestrator: session (name)`.
-
-`qqq add` opens the built-in editor too. Prefer Vim or another editor? Set
-`EDITOR` and use `qqq add --edit`.
+For CLI workflows, see [adding and editing](docs/reference.md#add-and-edit),
+[batch imports](docs/reference.md#atomic-batch-import), and
+[bulk actions](docs/reference.md#bulk-task-actions).
 
 ## Give your agent the queue
 
