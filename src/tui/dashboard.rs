@@ -504,6 +504,7 @@ fn hotkey_line(keys: &str, color: bool) -> Line<'static> {
                     | "PgUp/PgDn"
                     | "Pg↑↓"
                     | "^F"
+                    | "^H"
                     | "^S"
                     | "^U"
                     | "S-↵"

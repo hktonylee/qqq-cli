@@ -72,13 +72,16 @@ fn view_picker_footer_styles_every_shortcut_in_both_rows() {
 }
 
 #[test]
-fn view_form_shortcuts_keep_styling_at_every_footer_width() {
+fn popup_shortcuts_keep_styling_at_every_footer_width() {
     use render::{PopupKind, PopupRow};
     use unicode_width::UnicodeWidthStr;
-    for (width, height, text) in [
-        (72, 24, "Tab field Ctrl-F templates Ctrl-S save Esc"),
-        (44, 12, "Tab ^F templates ^S save Esc"),
-        (12, 8, "⇥ ^F ^S Esc"),
+    for (width, height, text, expected_shortcuts) in [
+        (72, 24, "Tab field Ctrl-F templates Ctrl-S save Esc", 4),
+        (44, 12, "Tab ^F templates ^S save Esc", 4),
+        (12, 8, "⇥ ^F ^S Esc", 4),
+        (72, 24, "Enter line Ctrl-H create Esc cancel", 3),
+        (28, 12, "Enter Ctrl-H Esc", 3),
+        (12, 8, "↵ ^H Esc", 3),
     ] {
         let rows = [PopupRow::new(text, PopupKind::Hint)];
         let content =
@@ -94,7 +97,20 @@ fn view_form_shortcuts_keep_styling_at_every_footer_width() {
             let mut shortcuts = 0;
             for word in text.split_inclusive(' ') {
                 let key = word.trim_end();
-                if matches!(key, "Tab" | "⇥" | "Ctrl-F" | "^F" | "Ctrl-S" | "^S" | "Esc") {
+                if matches!(
+                    key,
+                    "Tab"
+                        | "⇥"
+                        | "Ctrl-F"
+                        | "^F"
+                        | "Ctrl-S"
+                        | "^S"
+                        | "Enter"
+                        | "↵"
+                        | "Ctrl-H"
+                        | "^H"
+                        | "Esc"
+                ) {
                     shortcuts += 1;
                     let cell = &buffer[(content.x + text[..byte].width() as u16, content.y)];
                     assert_eq!(
@@ -110,7 +126,7 @@ fn view_form_shortcuts_keep_styling_at_every_footer_width() {
                 }
                 byte += word.len();
             }
-            assert_eq!(shortcuts, 4);
+            assert_eq!(shortcuts, expected_shortcuts);
         }
     }
 }

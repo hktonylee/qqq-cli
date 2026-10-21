@@ -44,7 +44,7 @@ impl View {
         {
             return Some(Action::Cancel);
         }
-        if key.modifiers == KeyModifiers::CONTROL && key.code == KeyCode::Char('s') {
+        if key.modifiers == KeyModifiers::CONTROL && key.code == KeyCode::Char('h') {
             if self.value.trim().is_empty() {
                 self.error = "Enter a prompt".into();
             } else {
@@ -119,11 +119,11 @@ impl View {
         );
         if footer > 0 {
             let hint = if width >= 37 {
-                "Enter line  Ctrl-S create  Esc cancel"
+                "Enter line  Ctrl-H create  Esc cancel"
             } else if width >= 21 {
-                "Enter  Ctrl-S  Esc"
+                "Enter  Ctrl-H  Esc"
             } else {
-                "↵ ^S Esc"
+                "↵ ^H Esc"
             };
             rows.push(PopupRow::new(hint, PopupKind::Hint));
         }
@@ -134,6 +134,29 @@ impl View {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn ctrl_h_confirms_prompt_and_ctrl_s_leaves_it_open() {
+        let prompt = "Run 'literal $(text)'\nSecond line";
+        let mut view = View::new(PathBuf::from("/project"), Some(prompt.into()));
+        assert!(
+            view.key(KeyEvent::new(KeyCode::Char('s'), KeyModifiers::CONTROL), 64)
+                .is_none()
+        );
+        assert_eq!(view.value, prompt);
+        assert!(matches!(
+            view.key(KeyEvent::new(KeyCode::Char('h'), KeyModifiers::CONTROL), 64),
+            Some(Action::Create(value)) if value == prompt
+        ));
+
+        let mut empty = View::new(PathBuf::from("/project"), Some(" \n ".into()));
+        assert!(
+            empty
+                .key(KeyEvent::new(KeyCode::Char('h'), KeyModifiers::CONTROL), 64)
+                .is_none()
+        );
+        assert_eq!(empty.error, "Enter a prompt");
+    }
 
     #[test]
     fn down_reaches_wrapped_row_starting_with_wide_grapheme() {
@@ -178,6 +201,8 @@ mod tests {
             assert_eq!(text, DEFAULT_PROMPT);
             assert!(rows.iter().any(|row| row.cursor.is_some()));
             assert!(rows.len() <= height);
+            assert!(rows.last().unwrap().text.contains("Ctrl-H"));
         }
+        assert_eq!(view.rows(20, 4).last().unwrap().text, "↵ ^H Esc");
     }
 }

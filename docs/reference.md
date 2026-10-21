@@ -878,8 +878,9 @@ CLI/server. Discovery uses the exact caller pane or unique project-root agent;
 ambiguity fails before claim. Terminal-plus-agent identity survives missing hooks.
 Local explicit-session claims do not auto-link.
 
-Ctrl+H on a saved New task opens the editable agent-creation prompt. The dialog
-uses `herdr.initial-prompt` when configured. The new pane receives only the edited
+Ctrl+H on a saved New task opens the editable agent-creation prompt. Press Ctrl+H
+again to create, Enter for a new line, or Esc to cancel. The dialog uses
+`herdr.initial-prompt` when configured. The new pane receives only the edited
 prompt through `herdr pane run`; its shell profile must start Codex. qqq does not
 launch an agent or wait for readiness. `qqq next` claims work for its caller;
 the removed `herdr.next-to-new-agent` setting has no effect.

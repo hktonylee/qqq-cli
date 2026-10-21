@@ -741,7 +741,10 @@ print(json.dumps({"result": result}))
                 send(b"\x08")
                 wait_visible(lambda: "Create Herdr agent" in visible.text())
             if scenario == "create_agent_edit":
+                send(b"\x13")
                 settle()
+                assert "Create Herdr agent" in visible.text()
+                assert not (Path(folder) / "herdr-calls").exists()
                 prompt_cursor = (visible.x, visible.y)
                 send(b"\x1b[A")
                 wait_visible(lambda: visible.y < prompt_cursor[1])
@@ -752,7 +755,7 @@ print(json.dumps({"result": result}))
             if scenario.startswith("create_agent_config") and scenario != "create_agent_config_unset":
                 prompt = configured_prompt
                 if scenario == "create_agent_config_empty":
-                    send(b"\x13")
+                    send(b"\x08")
                     wait_visible(lambda: "Enter a prompt" in visible.text())
                     assert not (Path(folder) / "herdr-calls").exists()
                     send(b"\x1b[200~" + prompt.encode() + b"\x1b[201~")
@@ -762,7 +765,7 @@ print(json.dumps({"result": result}))
                     prompt = "Run `literal $(text)` 'quote'\nSecond line qQ"
                     send(b"\x1b[200~" + prompt.encode() + b"\x1b[201~")
                 else:
-                    send(b"\x13")
+                    send(b"\x08")
                     wait_visible(lambda: "Enter a prompt" in visible.text())
                     assert not (Path(folder) / "herdr-calls").exists()
             if scenario in ("create_agent_cancel", "create_agent_empty", "create_agent_ctrl_c"):
@@ -770,7 +773,7 @@ print(json.dumps({"result": result}))
                 wait_visible(lambda: "Create Herdr agent" not in visible.text())
                 assert not (Path(folder) / "herdr-calls").exists()
             else:
-                send(b"\x13")
+                send(b"\x08")
                 if scenario == "create_agent_claim_race_error":
                     wait_visible(lambda: "Created Herdr pane wW:p1" in visible.text()
                                  or "Returned from Herdr" in visible.text())
