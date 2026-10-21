@@ -221,7 +221,11 @@ with tempfile.TemporaryDirectory(prefix="qqq-undo-test-") as directory:
                                     (b"\x0b", "Go to task"), (b"\x07", "Task actions"),
                                     (b"\x02", "Choose view")):
                 send(shortcut)
-                wait(lambda: title.lower() in visible.text().lower())
+                if title == "Filter":
+                    wait(lambda: visible.text().splitlines()[0].startswith("Filter:"))
+                else:
+                    wait(lambda: any(line.split("│", 1)[1].lstrip().lower().startswith(title.lower())
+                                     for line in visible.text().splitlines() if "│" in line))
                 send(b"\x1a\x19\x1b")
                 wait(lambda: "┌" not in visible.text()
                      and not visible.text().splitlines()[0].startswith("Filter:"))
