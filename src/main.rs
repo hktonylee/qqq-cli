@@ -286,7 +286,7 @@ enum Commands {
         #[arg(long)]
         wait: bool,
         /// Preview queued candidate without claiming or returning an owned task.
-        #[arg(long)]
+        #[arg(short = 'n', long)]
         dry_run: bool,
         /// Explain selection without claiming or discovering a session.
         #[arg(long, conflicts_with_all = ["wait", "dry_run"])]

@@ -733,8 +733,8 @@ descending, then ID ascending. Error/blocked tasks are not claimable.
 `--wait` blocks until eligible work appears; without it an empty queue succeeds
 with human `No task available for pickup.` or JSON `null`.
 
-`next --dry-run` previews queued work without reusing claims, discovering an owner,
-reserving IDs or changing queued tasks. It accepts selectors,
+`next --dry-run` (or `next -n`) previews queued work without reusing claims,
+discovering an owner, reserving IDs or changing queued tasks. It accepts selectors,
 `--wait` and `--json`. Another worker may claim the previewed task.
 The preview does not migrate or recover deletion staging; older schemas return
 `DATABASE_ERROR` / `migration_required` until a normal open upgrades them.
