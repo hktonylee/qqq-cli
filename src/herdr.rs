@@ -5,6 +5,7 @@ use serde::{Deserialize, Serialize, de::DeserializeOwned};
 use std::{
     path::{Path, PathBuf},
     process::Command,
+    time::Instant,
 };
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -71,6 +72,22 @@ pub(crate) fn call<T: DeserializeOwned>(server: Option<&str>, args: &[&str]) -> 
             ))
     );
     let response: Envelope<T> = serde_json::from_slice(&out.stdout).context(
+        Info::new(Code::DispatchError, "Invalid Herdr response")
+            .detail("reason", "invalid_herdr_response"),
+    )?;
+    Ok(response.result)
+}
+
+/// Read startup metadata within a shared wall-clock deadline.
+pub(crate) fn call_until<T: DeserializeOwned>(args: &[&str], deadline: Instant) -> Result<T> {
+    let output = crate::process::probe_until(Command::new("herdr").args(args), deadline).context(
+        Info::new(
+            Code::DispatchError,
+            "Herdr startup query failed or timed out",
+        )
+        .detail("reason", "startup_probe_failed"),
+    )?;
+    let response: Envelope<T> = serde_json::from_slice(&output).context(
         Info::new(Code::DispatchError, "Invalid Herdr response")
             .detail("reason", "invalid_herdr_response"),
     )?;

@@ -10,6 +10,10 @@ use std::{
 
 /// Bounded read-only probe. File stdout avoids pipe backpressure or reader threads.
 pub(crate) fn probe(command: &mut Command) -> Option<Vec<u8>> {
+    probe_until(command, Instant::now() + Duration::from_secs(2))
+}
+
+pub(crate) fn probe_until(command: &mut Command, deadline: Instant) -> Option<Vec<u8>> {
     let mut stdout = tempfile::tempfile().ok()?;
     let mut child = command
         .stdin(Stdio::null())
@@ -17,7 +21,6 @@ pub(crate) fn probe(command: &mut Command) -> Option<Vec<u8>> {
         .stdout(Stdio::from(stdout.try_clone().ok()?))
         .spawn()
         .ok()?;
-    let deadline = Instant::now() + Duration::from_secs(2);
     loop {
         match child.try_wait() {
             Ok(Some(status)) if status.success() => break,

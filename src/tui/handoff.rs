@@ -77,6 +77,16 @@ pub(super) fn create(db: &mut crate::db::Db, id: i64, prompt: &str) -> Result<St
     struct Created {
         root_pane: crate::herdr::Pane,
     }
+    #[derive(Deserialize)]
+    struct Current {
+        pane: StartupPane,
+    }
+    #[derive(Deserialize)]
+    struct StartupPane {
+        #[serde(flatten)]
+        pane: crate::herdr::Pane,
+        agent_status: Option<String>,
+    }
     crate::db::nonempty(prompt, "Prompt")?;
     db.task(id)?;
     let root = project_root(db)?;
@@ -116,7 +126,7 @@ pub(super) fn create(db: &mut crate::db::Db, id: i64, prompt: &str) -> Result<St
             ],
         )?,
     };
-    let mut pane = created.root_pane;
+    let pane = created.root_pane;
     crate::db::nonempty(&pane.pane_id, "Created pane ID")?;
     let mut prepare = || -> Result<()> {
         if let Some(workspace) = workspace {
@@ -125,18 +135,44 @@ pub(super) fn create(db: &mut crate::db::Db, id: i64, prompt: &str) -> Result<St
                 "Created tab is in a different workspace"
             );
         }
-        // Link the terminal before the shell profile reports its Codex agent.
-        if pane.agent.is_none() && pane.agent_session.is_none() {
-            pane.agent = Some("codex".into());
-        }
+        let deadline = Instant::now() + Duration::from_secs(10);
+        let ready = loop {
+            ensure!(
+                Instant::now() < deadline,
+                "Codex did not become ready within 10 seconds"
+            );
+            let current: Current =
+                crate::herdr::call_until(&["pane", "get", &pane.pane_id], deadline)?;
+            let current = current.pane;
+            ensure!(
+                current.pane.pane_id == pane.pane_id,
+                "Herdr returned a different pane"
+            );
+            ensure!(
+                current.agent_status.as_deref() != Some("blocked"),
+                "Created agent needs attention before prompting"
+            );
+            let codex = current.pane.agent.as_deref() == Some("codex")
+                || current
+                    .pane
+                    .agent_session
+                    .as_ref()
+                    .is_some_and(|identity| identity.agent == "codex");
+            if codex && matches!(current.agent_status.as_deref(), Some("idle" | "done")) {
+                break current.pane;
+            }
+            std::thread::sleep(
+                Duration::from_millis(100).min(deadline.saturating_duration_since(Instant::now())),
+            );
+        };
         let link = crate::herdr::Link {
             server: crate::herdr::server_session(),
-            identity: crate::herdr::pane_identity(&pane)?,
-            pane: pane.clone(),
+            identity: crate::herdr::pane_identity(&ready)?,
+            pane: ready,
         };
         db.set_created_agent_link(id, &link)?;
         let _: serde_json::Value =
-            crate::herdr::call(None, &["pane", "run", &pane.pane_id, prompt])
+            crate::herdr::call(None, &["agent", "prompt", &pane.pane_id, prompt])
                 .context("Prompt may have been delivered; inspect the agent before trying again")?;
         let _: serde_json::Value = crate::herdr::call(None, &["tab", "focus", &pane.tab_id])?;
         Ok(())
