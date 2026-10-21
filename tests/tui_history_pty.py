@@ -15,6 +15,8 @@ import termios
 import time
 from pathlib import Path
 
+from terminal_screen import assert_terminal_restored
+
 
 binary, scenario = sys.argv[1:]
 UP = b"\x1b[1;2A"
@@ -165,7 +167,7 @@ with tempfile.TemporaryDirectory(prefix="qqq-history-test-") as folder:
                 break
             screen.extend(chunk)
         output = bytes(pending_stdout) + stdout
-        assert before[3] == termios.tcgetattr(slave)[3], "Terminal flags not restored"
+        assert_terminal_restored(before, termios.tcgetattr(slave))
         assert b"\x1b[?1049l" in screen, "Alternate screen not restored"
         if expect_error:
             assert child.returncode == 1 and output == b"", screen[-2000:]

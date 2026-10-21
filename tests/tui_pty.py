@@ -15,6 +15,8 @@ import termios
 import time
 from pathlib import Path
 
+from terminal_screen import assert_terminal_restored
+
 binary, scenario = sys.argv[1:]
 with tempfile.TemporaryDirectory(prefix="qqq-tui-test-") as folder:
     env = dict(os.environ, HOME=folder, TERM="xterm-256color")
@@ -274,10 +276,7 @@ with tempfile.TemporaryDirectory(prefix="qqq-tui-test-") as folder:
         stdout = bytes(pending_stdout) + stdout
         read_until(b"\x1b[?2004l")
         after = termios.tcgetattr(slave)
-        assert before[3] == after[3], (
-            f"Terminal flags not restored: before={before[3]:#x}, after={after[3]:#x}, "
-            f"changed={before[3] ^ after[3]:#x}"
-        )
+        assert_terminal_restored(before, after)
         assert b"\x1b[?1049l" in screen, "Alternate screen not restored"
         if color:
             assert screen.rfind(b"\x1b[0m") < screen.rfind(b"\x1b[?1049l"), "Colors not reset before leaving alternate screen"

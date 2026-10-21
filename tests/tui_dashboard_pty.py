@@ -20,7 +20,7 @@ import unicodedata
 from pathlib import Path
 
 
-from terminal_screen import TerminalScreen
+from terminal_screen import TerminalScreen, assert_terminal_restored
 
 
 binary, scenario = sys.argv[1:]
@@ -4847,7 +4847,7 @@ print(json.dumps({"result": result}))
             assert child.returncode != 0
             assert b"\x1b[?1000l" in screen and b"\x1b[?1006l" in screen, screen[-2000:]
             assert screen.index(b"\x1b[?1006l") < screen.index(b"\x1b[?1049l")
-            assert before[3] == termios.tcgetattr(slave)[3], "Terminal flags not restored after error"
+            assert_terminal_restored(before, termios.tcgetattr(slave))
         elif scenario == "wheel":
             initial_tasks = cli("list")
             assert "Line01" in visible.text(), visible.text()
@@ -5429,7 +5429,7 @@ print(json.dumps({"result": result}))
         if scenario.startswith("child"):
             assert b"\x1b[>1u" in screen, "Modified-key reporting not requested"
             assert b"\x1b[<1u" in screen, "Keyboard reporting mode not restored"
-        assert before[3] == termios.tcgetattr(slave)[3], "Terminal flags not restored"
+        assert_terminal_restored(before, termios.tcgetattr(slave))
         assert b"\x1b[?1049l" in screen, "Alternate screen not restored"
         assert b"\x1b[?1000l" in screen and b"\x1b[?1006l" in screen, "Mouse capture not restored"
         assert b"\x1b[?2004l" in screen, "Bracketed paste not restored"

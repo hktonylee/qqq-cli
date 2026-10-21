@@ -13,7 +13,7 @@ import termios
 import time
 from pathlib import Path
 
-from terminal_screen import TerminalScreen
+from terminal_screen import TerminalScreen, assert_terminal_restored
 
 
 binary, scenario = sys.argv[1:]
@@ -347,7 +347,7 @@ with tempfile.TemporaryDirectory(prefix="qqq-undo-test-") as directory:
             assert json.loads(stdout)["description"] == "Seed changed", stdout
         else:
             assert stdout == b"", stdout
-        assert termios.tcgetattr(slave) == original_terminal
+        assert_terminal_restored(original_terminal, termios.tcgetattr(slave))
     finally:
         if child.poll() is None:
             child.kill()

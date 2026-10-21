@@ -13,6 +13,8 @@ import tempfile
 import termios
 import time
 
+from terminal_screen import assert_terminal_restored
+
 # Reuse cell emulator without executing dashboard scenario setup.
 namespace = {}
 source = Path(__file__).with_name("tui_dashboard_pty.py").read_text()
@@ -122,7 +124,7 @@ with tempfile.TemporaryDirectory() as directory:
             saved = json.loads(stdout)
             assert saved["description"] == original + " local"
             assert cli("show", "1")["task"] == saved
-        assert before[3] == termios.tcgetattr(slave)[3], "Terminal flags not restored"
+        assert_terminal_restored(before, termios.tcgetattr(slave))
         assert b"\x1b[?1049l" in output and b"\x1b[?2004l" in output
     finally:
         if child.poll() is None:

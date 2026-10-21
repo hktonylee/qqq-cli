@@ -13,7 +13,7 @@ import tempfile
 import termios
 import time
 from pathlib import Path
-from terminal_screen import TerminalScreen
+from terminal_screen import TerminalScreen, assert_terminal_restored
 
 
 binary, scenario = sys.argv[1:]
@@ -164,7 +164,7 @@ with tempfile.TemporaryDirectory(prefix="qqq-bulk-pty-") as folder:
             send(b"\x03")
             assert child.wait(timeout=5) == 0
             assert child.stdout.read() == b""
-            assert termios.tcgetattr(slave) == before_terminal
+            assert_terminal_restored(before_terminal, termios.tcgetattr(slave))
             raise SystemExit(0)
         send(b"\x1b[1;2A")
         contains("Task #3")
@@ -484,7 +484,7 @@ with tempfile.TemporaryDirectory(prefix="qqq-bulk-pty-") as folder:
         send(b"\x03")
         assert child.wait(timeout=5) == 0
         assert child.stdout.read() == b""
-        assert termios.tcgetattr(slave) == before_terminal
+        assert_terminal_restored(before_terminal, termios.tcgetattr(slave))
         if scenario.endswith("no_color"):
             assert b"\x1b[38;" not in captured and b"\x1b[48;" not in captured
     finally:

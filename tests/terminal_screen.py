@@ -1,6 +1,17 @@
 """Shared visible terminal frame decoder for PTY tests."""
 import codecs
+import sys
+import termios
 import unicodedata
+
+
+def assert_terminal_restored(before, after):
+    expected, actual = list(before), list(after)
+    # Darwin sets PENDIN when restoring ICANON: xnu/bsd/kern/tty.c.
+    if sys.platform == "darwin":
+        expected[3] &= ~termios.PENDIN
+        actual[3] &= ~termios.PENDIN
+    assert actual == expected, f"Terminal attributes not restored: {before!r} -> {after!r}"
 
 
 class TerminalScreen:
