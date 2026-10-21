@@ -624,6 +624,57 @@ fn native_codex_keeps_thread_owner_and_displays_session_env() {
 }
 
 #[test]
+fn native_claim_gains_missing_herdr_metadata_without_replacing_assignment() {
+    for (overrides, expected_name, expected_session) in [
+        (vec![], "herdr", "w1:p1"),
+        (
+            vec!["--orchestrator-name", "custom-orchestrator"],
+            "custom-orchestrator",
+            "w1:p1",
+        ),
+        (
+            vec!["--orchestrator-session", "assigned-pane"],
+            "herdr",
+            "assigned-pane",
+        ),
+    ] {
+        let dir = project();
+        let p = dir.path();
+        let mut claim = native(p, "continuing-thread");
+        claim
+            .env("CODEX_SESSION_ID", "original-display")
+            .arg("next")
+            .args(overrides);
+        let first = ok(&mut claim);
+        let before = ok(command(p).args(["show", "1"]));
+        let mut caller = pane(p);
+        caller["agent_session"] = json!({"agent":"codex","kind":"id","value":"continuing-thread"});
+        let response = json!({"result":{"pane":caller}});
+        let repeated = ok(herdr(p, response.clone(), true)
+            .env("CODEX_THREAD_ID", "continuing-thread")
+            .env("CODEX_SESSION_ID", "later-display")
+            .arg("next"));
+        let mut expected = first;
+        expected["orchestrator_name"] = json!(expected_name);
+        expected["orchestrator_session"] = json!(expected_session);
+        assert_eq!(repeated, expected);
+        let after = ok(command(p).args(["show", "1"]));
+        assert_eq!(after["events"], before["events"]);
+        assert_eq!(after["herdr"]["pane"]["pane_id"], "w1:p1");
+        assert_eq!(
+            ok(herdr(p, response.clone(), true)
+                .env("CODEX_SESSION_ID", "later-display")
+                .args(["next", "--wait"])),
+            repeated
+        );
+        assert_eq!(
+            ok(herdr(p, response, true).args(["edit", "1", "--complete"]))["status"],
+            "completed"
+        );
+    }
+}
+
+#[test]
 fn native_codex_session_env_supports_public_completion_without_granting_wrong_owner() {
     let dir = project();
     let p = dir.path();

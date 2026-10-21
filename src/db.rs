@@ -1546,18 +1546,19 @@ impl Db {
             if let Some(link) = link {
                 Self::save_link(&tx, id, link)?;
             }
-            let mut identity = if owned.is_some() {
-                tx.query_row(
-                    &format!("SELECT {TASK_COLUMNS} FROM tasks WHERE id=?"),
-                    [id],
-                    task_row,
-                )?
-                .identity
-            } else {
-                metadata
-                    .cloned()
-                    .unwrap_or_else(|| crate::identity::Identity::for_claim(&session, link))
-            };
+            let mut identity = metadata
+                .cloned()
+                .unwrap_or_else(|| crate::identity::Identity::for_claim(&session, link));
+            if owned.is_some() {
+                let recorded = tx
+                    .query_row(
+                        &format!("SELECT {TASK_COLUMNS} FROM tasks WHERE id=?"),
+                        [id],
+                        task_row,
+                    )?
+                    .identity;
+                identity.overlay(&recorded);
+            }
             identity.overlay(overrides);
             Self::save_identity(&tx, id, &identity)?;
         }

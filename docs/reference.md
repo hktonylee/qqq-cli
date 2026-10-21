@@ -773,7 +773,8 @@ Assignment JSON has `harness_name`, `harness_session`, `orchestrator_name`,
 For Codex, displayed session prefers `CODEX_SESSION_ID`; an explicit
 `--harness-session` overrides it. Herdr orchestrator session is the worker's pane
 ID, not the separately saved server name. Dispatch records the child pane.
-Repeated claims retain metadata unless assignment flags override it.
+Repeated claims retain populated metadata and fill missing fields from newly
+detected identity. Assignment flags override either source.
 
 Completion/release/error marking accepts the original owner key or a uniquely
 matching public harness session; add `--harness-name` when ambiguous.
