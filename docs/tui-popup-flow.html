@@ -4,19 +4,24 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>qqq tui — Popup Flow Audit</title>
-<!-- Palette and diagrams pending the requested style choice. -->
+<!-- Palette: qqq accent Indexed(81), surfaces Indexed(236/238), and selection RGB(15,51,62). Body ink is brightened for document reading.
+Offline font fallbacks: Georgia, system UI sans, and system monospace. No remote assets. -->
+<style>
+:root{color-scheme:dark;--paper:#303030;--surface:#383838;--input:#444444;--ink:#e8e8e8;--muted:#b8b8b8;--soft:#a8a8a8;--rule:#626262;--accent:#5fd7ff;--tint:#0f333e;--link:#9ce6ff;--sans:"Geist",system-ui,-apple-system,"Segoe UI",sans-serif;--mono:"Geist Mono","SFMono-Regular",Consolas,monospace}
+*{box-sizing:border-box}html{scroll-padding-top:24px}body{margin:0;background:var(--paper);color:var(--ink);font:16px/1.65 var(--sans);-webkit-font-smoothing:antialiased}a{color:var(--link);text-underline-offset:4px;text-decoration-thickness:1px}a:hover{color:#fff}a:focus-visible,summary:focus-visible,[tabindex]:focus-visible{outline:2px solid var(--accent);outline-offset:6px}code,kbd{font-family:var(--mono);font-size:.875em;color:var(--ink)}kbd{white-space:nowrap;border:1px solid var(--rule);border-bottom-width:2px;padding:2px 6px;border-radius:4px;background:var(--input)}p,li{text-wrap:pretty}p{max-width:74ch;margin:0 0 20px}h1,h2,h3{text-wrap:balance;line-height:1.12}h1{font:400 80px/1.04 "Instrument Serif",Georgia,serif;letter-spacing:-.025em;margin:28px 0 24px;max-width:12ch}h1 em{font-weight:400;color:var(--accent)}h2{font-size:32px;font-weight:600;letter-spacing:-.025em;margin:0 0 20px}h3{font-size:20px;font-weight:500;margin:0}header,main,footer{width:min(100% - 96px,1280px);margin:auto}header{padding:48px 0 52px;position:relative}header .brand{display:flex;align-items:baseline;gap:16px;color:var(--muted);font-size:16px}header .wordmark{font:600 28px var(--mono);letter-spacing:-.04em;color:var(--accent)}header .lead{font-size:20px;max-width:54ch;color:var(--ink)}header .meta{font:12px/1.8 var(--mono);color:var(--muted);max-width:84ch;margin-bottom:0}.skip{position:absolute;top:12px;left:24px;transform:translateY(-160%);z-index:2;background:var(--paper);padding:12px}.skip:focus{transform:none}nav{border-top:1px solid var(--rule);border-bottom:1px solid var(--rule);padding:20px max(48px,calc((100% - 1280px)/2));display:flex;flex-wrap:wrap;gap:12px 28px;background:var(--paper)}nav a{font-size:14px;color:var(--muted);text-decoration:none}nav a:hover,nav a:focus-visible{color:var(--accent)}section{padding:72px 0;border-bottom:1px solid var(--rule);scroll-margin-top:24px}.sources{font-size:12px;line-height:1.8;color:var(--soft);max-width:112ch;margin:0 0 28px}.sources a{color:var(--muted);text-decoration-color:var(--rule)}.section-intro{font-size:20px;color:var(--muted);margin-bottom:24px;max-width:62ch}.diagram{margin:28px 0 0}.diagram-scroll{overflow-x:auto;overscroll-behavior-x:contain;scrollbar-color:var(--rule) var(--paper)}.diagram svg{display:block;width:100%;min-width:960px;height:auto}.diagram figcaption{font-size:12px;color:var(--muted);padding:16px 0 24px;max-width:96ch}.diagram .edge{fill:none;stroke:var(--soft);stroke-width:1.5}.diagram .edge.return{stroke-dasharray:5 4}.diagram .edge.external{stroke:var(--link)}.diagram .node-box{fill:var(--surface);stroke:var(--muted);stroke-width:1}.diagram .node.focal .node-box{fill:var(--tint);stroke:var(--accent)}.diagram .node.surface .node-box{fill:var(--paper);stroke:var(--soft);stroke-dasharray:4 4}.diagram .node.step .node-box{fill:var(--input);stroke:var(--muted)}.diagram text{fill:var(--ink);font-family:var(--sans)}.diagram .node-tag{font:8px var(--mono);letter-spacing:.08em;fill:var(--muted)}.diagram .node-name{font-size:16px;font-weight:600}.diagram .node-sub{font:12px var(--mono);fill:var(--muted)}.diagram .edge-label{font:12px var(--mono);fill:var(--muted)}.diagram .label-mask{fill:var(--paper)}.diagram .legend text{font-size:12px;fill:var(--muted)}.diagram .legend line{stroke:var(--rule);stroke-width:1}.diagram .legend .key{fill:var(--surface);stroke:var(--muted)}details{border-top:1px solid var(--rule);margin-top:8px;padding-top:20px}summary{cursor:pointer;font-size:16px;font-weight:500;width:fit-content;color:var(--ink);padding:4px 0}summary:hover{color:var(--accent)}details[open] summary{margin-bottom:20px}ul{max-width:76ch;margin:0;padding:0 0 0 24px}li{margin:0 0 16px;padding-left:8px;color:var(--muted)}li::marker{color:var(--soft)}li code{color:var(--ink)}.table-scroll{overflow-x:auto}table{border-collapse:collapse;width:100%;text-align:left;font-size:14px;min-width:720px}caption{text-align:left;color:var(--muted);padding-bottom:20px;font-size:14px}th{color:var(--ink);font-size:12px;font-weight:600;padding:12px 20px 12px 0;border-bottom:1px solid var(--rule)}td{vertical-align:top;color:var(--muted);padding:20px 24px 20px 0;border-bottom:1px solid #494949}td:first-child{color:var(--ink);width:16%;font-weight:500}td:nth-child(2){width:54%}td:last-child{width:30%}tbody tr:last-child td{border-bottom:0}.notice{border:1px solid var(--rule);background:var(--surface);border-radius:8px;padding:24px 28px;max-width:100%;margin-top:32px}.notice strong{color:var(--ink);font-weight:500}.notice p{color:var(--muted);margin:0;max-width:90ch}.route-order{font:14px/2 var(--mono);max-width:100%;color:var(--muted);padding:24px 0;border-top:1px solid var(--rule);border-bottom:1px solid var(--rule)}#review ul{max-width:92ch;list-style:none;padding:0;counter-reset:review}#review li{counter-increment:review;display:grid;grid-template-columns:32px 1fr;gap:16px;padding:20px 0;border-bottom:1px solid #494949;margin:0}#review li:before{content:counter(review);font:16px var(--mono);color:var(--accent);padding-top:4px}footer{padding:32px 0 48px;font:12px/1.8 var(--mono);color:var(--soft)}footer p{max-width:100%;margin:0}.jump-top{float:right} @media(max-width:760px){header,main,footer{width:calc(100% - 40px)}header{padding:32px 0 36px}h1{font-size:52px;margin-top:32px}h2{font-size:28px}header .brand{font-size:12px;gap:12px}header .lead,.section-intro{font-size:18px}nav{padding:16px 20px;gap:8px 20px}nav a{font-size:14px}section{padding:48px 0}.sources{font-size:12px}.diagram-scroll{margin-right:-20px;padding-right:20px}.notice{padding:20px}.jump-top{float:none;display:block;margin-bottom:12px}}@media print{:root{color-scheme:light;--paper:#fff;--surface:#f5f5f5;--input:#ececec;--ink:#202020;--muted:#444;--soft:#555;--rule:#aaa;--accent:#006480;--tint:#eaf8fc;--link:#005a73}body{font-size:12px}header,main,footer{width:100%}h1{font-size:48px}nav,.skip,.jump-top{display:none}section{padding:24px 0}.diagram-scroll{overflow:visible}.diagram svg{min-width:0}details{display:block}details>ul{display:block}summary{display:none}a{color:inherit}figure{break-inside:avoid}}
+</style>
 </head>
 <body>
-<a href="#main">Skip to content</a>
-<header>
-<p>qqq / TUI behavior reference</p>
-<h1>Where every popup leads</h1>
-<p>Keyboard routes, validation, cancellation, and recovery for <code>qqq tui</code>.</p>
-<p>Source snapshot: <code>4f53fad</code>. This document maps current behavior from code; it does not prove the behavior is correct. Shared add/edit footer prompts are identified separately.</p>
+<a class="skip" href="#main">Skip to content</a>
+<header id="top">
+<p class="brand"><span class="wordmark">qqq</span><span>TUI / Behavior reference</span></p>
+<h1>Where every<br>popup <em>leads.</em></h1>
+<p class="lead">Follow every dialog from the task editor to its next state. Review the keys, the exceptions, and every way back.</p>
+<p class="meta">Source snapshot: <code>4f53fad</code>. This document maps current behavior from code; it does not prove the behavior is correct. Shared add/edit footer prompts are identified separately.</p>
 </header>
 <nav aria-label="Popup families">
 <a href="#inventory">Inventory</a>
-<a href="#routing">Routing and key precedence</a>
+<a href="#routing">Key precedence</a>
 <a href="#actions">Single-task actions</a>
 <a href="#tags">Tags</a>
 <a href="#jump">Jump</a>
@@ -25,12 +30,95 @@
 <a href="#conflicts">Content conflict</a>
 <a href="#herdr">Herdr</a>
 <a href="#exit">Exit and discard</a>
-<a href="#review">Review hotspots to display as behavior, not claimed fixes</a>
+<a href="#review">Behaviors to review</a>
 </nav>
 <main id="main">
 <section id="inventory" aria-labelledby="inventory-heading">
 <h2 id="inventory-heading">Inventory</h2>
 <p class="sources">Source: <a href="../src/tui/mod.rs">UI state enums and modal selection, lines 90–277 and 1322–1373</a></p>
+<figure class="diagram" id="overview-figure">
+<div class="diagram-scroll" tabindex="0" role="region" aria-label="The popup routes from the task editor; scroll horizontally on small screens">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 720" role="img" aria-labelledby="overview-title overview-desc">
+<title id="overview-title">The popup routes from the task editor</title>
+<desc id="overview-desc">Seven routes connect the task editor to actions, direct inputs, views, bulk actions, Herdr, conflicts and discard flows. The detail sections expand every grouped dialog.</desc>
+<defs>
+<marker id="overview-arrow" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0,8 3,0 6" fill="var(--soft)"/></marker>
+<marker id="overview-arrow-accent" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0,8 3,0 6" fill="var(--accent)"/></marker>
+<marker id="overview-arrow-link" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0,8 3,0 6" fill="var(--link)"/></marker>
+</defs>
+<path class="edge " data-route="536,272 536,144 304,144" d="M 536 272 L 536 152 A 8 8 0 0 0 528 144 L 304 144" marker-end="url(#overview-arrow)"/>
+<path class="edge " data-route="480,304 304,304" d="M 480 304 L 304 304" marker-end="url(#overview-arrow)"/>
+<path class="edge " data-route="480,344 400,344 400,480 304,480" d="M 480 344 L 408 344 A 8 8 0 0 0 400 352 L 400 472 A 8 8 0 0 1 392 480 L 304 480" marker-end="url(#overview-arrow)"/>
+<path class="edge " data-route="744,272 744,144 976,144" d="M 744 272 L 744 152 A 8 8 0 0 1 752 144 L 976 144" marker-end="url(#overview-arrow)"/>
+<path class="edge " data-route="800,304 976,304" d="M 800 304 L 976 304" marker-end="url(#overview-arrow)"/>
+<path class="edge " data-route="800,344 880,344 880,480 976,480" d="M 800 344 L 872 344 A 8 8 0 0 1 880 352 L 880 472 A 8 8 0 0 0 888 480 L 976 480" marker-end="url(#overview-arrow)"/>
+<path class="edge " data-route="640,368 640,528" d="M 640 368 L 640 528" marker-end="url(#overview-arrow)"/>
+<g class="edge-caption"><rect class="label-mask" x="376" y="112" width="64" height="24" rx="4"/><text class="edge-label" x="408" y="128" text-anchor="middle">CTRL+G</text></g>
+<g class="edge-caption"><rect class="label-mask" x="344" y="272" width="96" height="24" rx="4"/><text class="edge-label" x="392" y="288" text-anchor="middle">CTRL+L / K</text></g>
+<g class="edge-caption"><rect class="label-mask" x="328" y="436" width="64" height="24" rx="4"/><text class="edge-label" x="360.0" y="452" text-anchor="middle">CTRL+B</text></g>
+<g class="edge-caption"><rect class="label-mask" x="824" y="112" width="64" height="24" rx="4"/><text class="edge-label" x="856" y="128" text-anchor="middle">CTRL+G</text></g>
+<g class="edge-caption"><rect class="label-mask" x="856" y="272" width="64" height="24" rx="4"/><text class="edge-label" x="888" y="288" text-anchor="middle">CTRL+H</text></g>
+<g class="edge-caption"><rect class="label-mask" x="836" y="488" width="88" height="24" rx="4"/><text class="edge-label" x="880" y="504" text-anchor="middle">SAVE RACE</text></g>
+<g class="edge-caption"><rect class="label-mask" x="648" y="436" width="104" height="24" rx="4"/><text class="edge-label" x="700.0" y="452" text-anchor="middle">ESC / CTRL+C</text></g>
+<g class="node focal surface" data-box="480,272,320,96">
+<rect class="node-box" x="480" y="272" width="320" height="96" rx="8"/>
+<text class="node-tag" x="496" y="292">SURFACE</text>
+<text class="node-name" x="640" y="320" text-anchor="middle">Task editor</text>
+<text class="node-sub" x="640" y="344" text-anchor="middle">qqq tui</text>
+</g>
+<g class="node " data-box="64,104,240,80">
+<rect class="node-box" x="64" y="104" width="240" height="80" rx="8"/>
+<text class="node-tag" x="80" y="124">FAMILY</text>
+<text class="node-name" x="184" y="144" text-anchor="middle">Single-task actions</text>
+<text class="node-sub" x="184" y="168" text-anchor="middle">menu → input → confirm</text>
+</g>
+<g class="node " data-box="64,272,240,80">
+<rect class="node-box" x="64" y="272" width="240" height="80" rx="8"/>
+<text class="node-tag" x="80" y="292">FAMILY</text>
+<text class="node-name" x="184" y="312" text-anchor="middle">Tags &amp; jump</text>
+<text class="node-sub" x="184" y="336" text-anchor="middle">two direct input flows</text>
+</g>
+<g class="node " data-box="64,440,240,80">
+<rect class="node-box" x="64" y="440" width="240" height="80" rx="8"/>
+<text class="node-tag" x="80" y="460">FAMILY</text>
+<text class="node-name" x="184" y="480" text-anchor="middle">Views</text>
+<text class="node-sub" x="184" y="504" text-anchor="middle">picker → form → templates</text>
+</g>
+<g class="node " data-box="976,104,240,80">
+<rect class="node-box" x="976" y="104" width="240" height="80" rx="8"/>
+<text class="node-tag" x="992" y="124">FAMILY</text>
+<text class="node-name" x="1096" y="144" text-anchor="middle">Bulk changes</text>
+<text class="node-sub" x="1096" y="168" text-anchor="middle">select → preview → apply</text>
+</g>
+<g class="node " data-box="976,272,240,80">
+<rect class="node-box" x="976" y="272" width="240" height="80" rx="8"/>
+<text class="node-tag" x="992" y="292">FAMILY</text>
+<text class="node-name" x="1096" y="312" text-anchor="middle">Herdr</text>
+<text class="node-sub" x="1096" y="336" text-anchor="middle">prompt or linked agent</text>
+</g>
+<g class="node " data-box="976,440,240,80">
+<rect class="node-box" x="976" y="440" width="240" height="80" rx="8"/>
+<text class="node-tag" x="992" y="460">FAMILY</text>
+<text class="node-name" x="1096" y="480" text-anchor="middle">Save conflict</text>
+<text class="node-sub" x="1096" y="504" text-anchor="middle">compare → resolve</text>
+</g>
+<g class="node " data-box="480,528,320,96">
+<rect class="node-box" x="480" y="528" width="320" height="96" rx="8"/>
+<text class="node-tag" x="496" y="548">FAMILY</text>
+<text class="node-name" x="640" y="576" text-anchor="middle">Discard &amp; exit</text>
+<text class="node-sub" x="640" y="600" text-anchor="middle">footer prompts + parked drafts</text>
+</g>
+<g class="legend">
+<line x1="40" y1="660" x2="1240" y2="660"/>
+<rect class="key" x="40" y="680" width="24" height="16" rx="4"/><text x="76" y="692">Dialog / grouped dialogs</text>
+<rect class="key" x="344" y="680" width="24" height="16" rx="4" stroke-dasharray="4 4"/><text x="380" y="692">Editor or footer state</text>
+<text x="720" y="692">Solid: forward · dashed: return / retry</text>
+</g>
+</svg>
+</div>
+<figcaption>Entry routes after higher-priority handlers. Ctrl+G chooses bulk actions whenever the bulk selection is nonempty. Return and failure paths are expanded below.</figcaption>
+</figure>
+<details><summary>Complete popup inventory</summary>
 <div class="table-scroll" tabindex="0" role="region" aria-label="Popup inventory">
 <table>
 <caption>Every modal family and its entry point</caption>
@@ -48,11 +136,13 @@
 </tbody>
 </table>
 </div>
+</details>
+<aside class="notice"><p><strong>Read cancellation paths carefully.</strong> Enter applies an input value but cancels an action confirmation. Uppercase <kbd>Y</kbd> can force an action. A filter can consume the first Escape. These differences are current behavior, highlighted here for review.</p></aside>
 </section>
 <section id="routing" aria-labelledby="routing-heading">
-<h2 id="routing-heading">Routing and key precedence</h2>
+<h2 id="routing-heading">Which handler gets the key?</h2>
 <p class="sources">Source: <a href="../src/tui/mod.rs">Event routing, lines 1460–1640 and 1638–2227</a></p>
-<p><code>mod.rs:1638</code>: agent &gt; view &gt; bulk &gt; jump &gt; conflict &gt; q/Q escape alias for confirmations/menu/error &gt; Ctrl+B opening &gt; local tag cancel &gt; global filter clearing &gt; Ctrl+C ExitBuffers guard &gt; New draft reset &gt; dashboard Escape/Ctrl+C navigation &gt; pending confirmation &gt; Ctrl+H &gt; action UI &gt; direct shortcuts &gt; filter/editor.</p>
+<p class="route-order">Agent → View → Bulk → Jump → Conflict → q/Q alias → Ctrl+B → Tag cancel → Filter clear → Exit guards → Confirmation → Ctrl+H → Action UI → Other shortcuts → Editor</p>
 <ul>
 <li>All mouse events are ignored while any dialog or confirmation is active (<code>mod.rs:1460</code>).</li>
 <li>Paste routes to the active input; menu/error paste does not edit the draft. Confirmations and conflict ignore paste (<code>mod.rs:1499</code>).</li>
@@ -63,8 +153,92 @@
 <section id="actions" aria-labelledby="actions-heading">
 <h2 id="actions-heading">Single-task actions</h2>
 <p class="sources">Source: <a href="../src/tui/mod.rs">Action UI, lines 142–277, 441–502 and 2001–2482</a> · <a href="../src/main.rs">Completion callback, lines 715–742</a> · <a href="../src/tui/completion.rs">Recoverable completion errors, lines 1–32</a></p>
-<!-- ACTIONS FLOWCHART -->
-<p><code>mod.rs:142-277, 441, 2001-2150, 2210-2482</code>; <code>main.rs:715</code>; <code>completion.rs:1-32</code>.</p>
+<p class="section-intro">One task, three paths: choose an action, enter a value, or confirm a change.</p>
+<figure class="diagram" id="actions-figure">
+<div class="diagram-scroll" tabindex="0" role="region" aria-label="Single-task actions: input, confirmation and recovery; scroll horizontally on small screens">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 720" role="img" aria-labelledby="actions-title actions-desc">
+<title id="actions-title">Single-task actions: input, confirmation and recovery</title>
+<desc id="actions-desc">The menu opens value inputs or an action confirmation. Priority and parent may execute directly when clean; failures open Action error except recoverable normal completion failures, which return to confirmation.</desc>
+<defs>
+<marker id="actions-arrow" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0,8 3,0 6" fill="var(--soft)"/></marker>
+<marker id="actions-arrow-accent" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0,8 3,0 6" fill="var(--accent)"/></marker>
+<marker id="actions-arrow-link" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0,8 3,0 6" fill="var(--link)"/></marker>
+</defs>
+<path class="edge " data-route="304,128 384,128" d="M 304 128 L 384 128" marker-end="url(#actions-arrow)"/>
+<path class="edge " data-route="624,128 768,128" d="M 624 128 L 768 128" marker-end="url(#actions-arrow)"/>
+<path class="edge " data-route="504,168 504,288" d="M 504 168 L 504 288" marker-end="url(#actions-arrow)"/>
+<path class="edge " data-route="624,320 704,320 704,160 768,160" d="M 624 320 L 696 320 A 8 8 0 0 0 704 312 L 704 168 A 8 8 0 0 1 712 160 L 768 160" marker-end="url(#actions-arrow)"/>
+<path class="edge " data-route="624,360 768,360" d="M 624 360 L 768 360" marker-end="url(#actions-arrow)"/>
+<path class="edge " data-route="904,184 904,320" d="M 904 184 L 904 320" marker-end="url(#actions-arrow)"/>
+<path class="edge " data-route="1040,360 1120,360 1120,512" d="M 1040 360 L 1112 360 A 8 8 0 0 1 1120 368 L 1120 512" marker-end="url(#actions-arrow)"/>
+<path class="edge " data-route="768,380 688,380 688,552 624,552" d="M 768 380 L 696 380 A 8 8 0 0 0 688 388 L 688 544 A 8 8 0 0 1 680 552 L 624 552" marker-end="url(#actions-arrow)"/>
+<path class="edge return" data-route="960,320 960,248 1120,248 1120,128 1040,128" d="M 960 320 L 960 256 A 8 8 0 0 1 968 248 L 1112 248 A 8 8 0 0 0 1120 240 L 1120 136 A 8 8 0 0 0 1112 128 L 1040 128" marker-end="url(#actions-arrow)"/>
+<path class="edge " data-route="384,144 336,144 336,552 384,552" d="M 384 144 L 344 144 A 8 8 0 0 0 336 152 L 336 544 A 8 8 0 0 0 344 552 L 384 552" marker-end="url(#actions-arrow)"/>
+<path class="edge return" data-route="624,576 960,576" d="M 624 576 L 960 576" marker-end="url(#actions-arrow)"/>
+<path class="edge return" data-route="384,320 352,320 352,424 464,424 464,384" d="M 384 320 L 360 320 A 8 8 0 0 0 352 328 L 352 416 A 8 8 0 0 0 360 424 L 456 424 A 8 8 0 0 0 464 416 L 464 384" marker-end="url(#actions-arrow)"/>
+<g class="edge-caption"><rect class="label-mask" x="312" y="96" width="64" height="24" rx="4"/><text class="edge-label" x="344" y="112" text-anchor="middle">CTRL+G</text></g>
+<g class="edge-caption"><rect class="label-mask" x="640" y="96" width="112" height="24" rx="4"/><text class="edge-label" x="696" y="112" text-anchor="middle">DIRECT ACTION</text></g>
+<g class="edge-caption"><rect class="label-mask" x="512" y="212" width="96" height="24" rx="4"/><text class="edge-label" x="560.0" y="228" text-anchor="middle">EDIT VALUE</text></g>
+<g class="edge-caption"><rect class="label-mask" x="712" y="212" width="120" height="24" rx="4"/><text class="edge-label" x="772.0" y="228" text-anchor="middle">REASON / DIRTY</text></g>
+<g class="edge-caption"><rect class="label-mask" x="644" y="328" width="104" height="24" rx="4"/><text class="edge-label" x="696" y="344" text-anchor="middle">p/d + CLEAN</text></g>
+<g class="edge-caption"><rect class="label-mask" x="912" y="212" width="72" height="24" rx="4"/><text class="edge-label" x="948.0" y="228" text-anchor="middle">CONFIRM</text></g>
+<g class="edge-caption"><rect class="label-mask" x="1128" y="428" width="72" height="24" rx="4"/><text class="edge-label" x="1164.0" y="444" text-anchor="middle">SUCCESS</text></g>
+<g class="edge-caption"><rect class="label-mask" x="608" y="448" width="72" height="24" rx="4"/><text class="edge-label" x="644.0" y="464" text-anchor="middle">FAILURE</text></g>
+<g class="edge-caption"><rect class="label-mask" x="996" y="216" width="104" height="24" rx="4"/><text class="edge-label" x="1048" y="232" text-anchor="middle">OWNER ERROR²</text></g>
+<g class="edge-caption"><rect class="label-mask" x="216" y="396" width="112" height="24" rx="4"/><text class="edge-label" x="272.0" y="412" text-anchor="middle">c SETUP ERROR</text></g>
+<g class="edge-caption"><rect class="label-mask" x="736" y="544" width="112" height="24" rx="4"/><text class="edge-label" x="792" y="560" text-anchor="middle">DISMISS ERROR</text></g>
+<g class="edge-caption"><rect class="label-mask" x="380" y="392" width="72" height="24" rx="4"/><text class="edge-label" x="416" y="408" text-anchor="middle">INVALID</text></g>
+<g class="node surface" data-box="64,88,240,80">
+<rect class="node-box" x="64" y="88" width="240" height="80" rx="8"/>
+<text class="node-tag" x="80" y="108">SURFACE</text>
+<text class="node-name" x="184" y="128" text-anchor="middle">Task editor</text>
+</g>
+<g class="node " data-box="384,88,240,80">
+<rect class="node-box" x="384" y="88" width="240" height="80" rx="8"/>
+<text class="node-tag" x="400" y="108">DIALOG</text>
+<text class="node-name" x="504" y="128" text-anchor="middle">Action menu</text>
+<text class="node-sub" x="504" y="152" text-anchor="middle">Ctrl+G</text>
+</g>
+<g class="node " data-box="384,288,240,96">
+<rect class="node-box" x="384" y="288" width="240" height="96" rx="8"/>
+<text class="node-tag" x="400" y="308">INPUT</text>
+<text class="node-name" x="504" y="336" text-anchor="middle">Priority / parent / reason</text>
+<text class="node-sub" x="504" y="360" text-anchor="middle">Enter validates</text>
+</g>
+<g class="node focal" data-box="768,88,272,96">
+<rect class="node-box" x="768" y="88" width="272" height="96" rx="8"/>
+<text class="node-tag" x="784" y="108">DIALOG</text>
+<text class="node-name" x="904" y="136" text-anchor="middle">Confirm action</text>
+<text class="node-sub" x="904" y="160" text-anchor="middle">y normal · Y force¹</text>
+</g>
+<g class="node step" data-box="768,320,272,80">
+<rect class="node-box" x="768" y="320" width="272" height="80" rx="8"/>
+<text class="node-tag" x="784" y="340">STEP</text>
+<text class="node-name" x="904" y="360" text-anchor="middle">Execute action</text>
+</g>
+<g class="node " data-box="384,512,240,80">
+<rect class="node-box" x="384" y="512" width="240" height="80" rx="8"/>
+<text class="node-tag" x="400" y="532">DIALOG</text>
+<text class="node-name" x="504" y="552" text-anchor="middle">Action error</text>
+<text class="node-sub" x="504" y="576" text-anchor="middle">Enter / Esc closes</text>
+</g>
+<g class="node surface" data-box="960,512,240,80">
+<rect class="node-box" x="960" y="512" width="240" height="80" rx="8"/>
+<text class="node-tag" x="976" y="532">SURFACE</text>
+<text class="node-name" x="1080" y="552" text-anchor="middle">Back to editor</text>
+<text class="node-sub" x="1080" y="576" text-anchor="middle">reload on success</text>
+</g>
+<g class="legend">
+<line x1="40" y1="660" x2="1240" y2="660"/>
+<rect class="key" x="40" y="680" width="24" height="16" rx="4"/><text x="76" y="692">Dialog / grouped dialogs</text>
+<rect class="key" x="344" y="680" width="24" height="16" rx="4" stroke-dasharray="4 4"/><text x="380" y="692">Editor or footer state</text>
+<text x="720" y="692">Solid: forward · dashed: return / retry</text>
+</g>
+</svg>
+</div>
+<figcaption>Cancel closes to the editor, subject to filter and Ctrl+C precedence. ¹ Force applies to complete, reopen and mark error. ² Only normal Complete retains confirmation after identity/ownership failure; the notes cover other errors.</figcaption>
+</figure>
+<details><summary>Keys, guards &amp; failure paths</summary>
 <ul>
 <li>Ctrl+G selects the bulk menu whenever any bulk selection exists, even if a single task is focused.</li>
 <li>Menu Up/Down wraps; Enter activates highlighted item. c=Complete (unless completed), e=Mark error (unless completed/error), r=Retry (error only), o=Reopen (unless error), p=Priority, d=Parent, a=Archive/Unarchive. Menu visibility is not DB validity: New offers Reopen but execution may reject it.</li>
@@ -79,35 +253,219 @@
 <li>Action error Enter/Escape/q/Q closes; Up/k and Down/j scroll. Ctrl+C follows dashboard cancellation before this local handler and can navigate to New or a discard-switch footer for a saved task.</li>
 <li>Ctrl+C on a saved task during a completion confirmation can replace it with discard-switch or navigate to New; reopen/mark-error confirmations instead retain the prompt on Ctrl+C. ExitBuffers ignores Ctrl+C.</li>
 </ul>
+</details>
 </section>
 <section id="tags" aria-labelledby="tags-heading">
 <h2 id="tags-heading">Tags</h2>
 <p class="sources">Source: <a href="../src/tui/mod.rs">Tag input dispatch, lines 1910–1920, 2185–2225 and 2485–2530</a> · <a href="../src/tui/tag_input.rs">Tag editing and autocomplete</a></p>
-<!-- TAGS FLOWCHART -->
-<p><code>mod.rs:1910, 2185-2225, 2485-2530</code>; <code>tag_input.rs</code>.</p>
+<p class="section-intro">Save tags directly. Keep the description you are editing.</p>
+<figure class="diagram" id="tags-figure">
+<div class="diagram-scroll" tabindex="0" role="region" aria-label="Tags: save metadata without replacing the draft; scroll horizontally on small screens">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 720" role="img" aria-labelledby="tags-title tags-desc">
+<title id="tags-title">Tags: save metadata without replacing the draft</title>
+<desc id="tags-desc">Ctrl+L opens multiline tags. Valid Ctrl+S writes saved-task tags or stages New-task tags; validation failure stays in the input, and local cancellation returns to the editor.</desc>
+<defs>
+<marker id="tags-arrow" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0,8 3,0 6" fill="var(--soft)"/></marker>
+<marker id="tags-arrow-accent" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0,8 3,0 6" fill="var(--accent)"/></marker>
+<marker id="tags-arrow-link" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0,8 3,0 6" fill="var(--link)"/></marker>
+</defs>
+<path class="edge " data-route="304,160 480,160" d="M 304 160 L 480 160" marker-end="url(#tags-arrow)"/>
+<path class="edge " data-route="800,160 1080,160 1080,320" d="M 800 160 L 1072 160 A 8 8 0 0 1 1080 168 L 1080 320" marker-end="url(#tags-arrow)"/>
+<path class="edge " data-route="640,216 640,320" d="M 640 216 L 640 320" marker-end="url(#tags-arrow)"/>
+<path class="edge return" data-route="800,192 864,192 864,264 736,264 736,216" d="M 800 192 L 856 192 A 8 8 0 0 1 864 200 L 864 256 A 8 8 0 0 1 856 264 L 744 264 A 8 8 0 0 1 736 256 L 736 216" marker-end="url(#tags-arrow)"/>
+<path class="edge " data-route="480,360 400,360 400,552 304,552" d="M 480 360 L 408 360 A 8 8 0 0 0 400 368 L 400 544 A 8 8 0 0 1 392 552 L 304 552" marker-end="url(#tags-arrow)"/>
+<path class="edge " data-route="1080,400 1080,616 272,616 272,592" d="M 1080 400 L 1080 608 A 8 8 0 0 1 1072 616 L 280 616 A 8 8 0 0 1 272 608 L 272 592" marker-end="url(#tags-arrow)"/>
+<path class="edge return" data-route="480,192 352,192 352,528 304,528" d="M 480 192 L 360 192 A 8 8 0 0 0 352 200 L 352 520 A 8 8 0 0 1 344 528 L 304 528" marker-end="url(#tags-arrow)"/>
+<path class="edge " data-route="184,200 184,320" d="M 184 200 L 184 320" marker-end="url(#tags-arrow)"/>
+<path class="edge return" data-route="184,400 184,512" d="M 184 400 L 184 512" marker-end="url(#tags-arrow)"/>
+<g class="edge-caption"><rect class="label-mask" x="360" y="128" width="64" height="24" rx="4"/><text class="edge-label" x="392" y="144" text-anchor="middle">CTRL+L</text></g>
+<g class="edge-caption"><rect class="label-mask" x="904" y="128" width="96" height="24" rx="4"/><text class="edge-label" x="952" y="144" text-anchor="middle">SAVED TASK</text></g>
+<g class="edge-caption"><rect class="label-mask" x="648" y="252" width="80" height="24" rx="4"/><text class="edge-label" x="688.0" y="268" text-anchor="middle">NEW TASK</text></g>
+<g class="edge-caption"><rect class="label-mask" x="784" y="228" width="72" height="24" rx="4"/><text class="edge-label" x="820.0" y="244" text-anchor="middle">INVALID</text></g>
+<g class="edge-caption"><rect class="label-mask" x="408" y="436" width="64" height="24" rx="4"/><text class="edge-label" x="440.0" y="452" text-anchor="middle">STAGED</text></g>
+<g class="edge-caption"><rect class="label-mask" x="708" y="584" width="56" height="24" rx="4"/><text class="edge-label" x="736" y="600" text-anchor="middle">SAVED</text></g>
+<g class="edge-caption"><rect class="label-mask" x="240" y="236" width="104" height="24" rx="4"/><text class="edge-label" x="292.0" y="252" text-anchor="middle">ESC / CTRL+C</text></g>
+<g class="edge-caption"><rect class="label-mask" x="192" y="268" width="104" height="24" rx="4"/><text class="edge-label" x="244.0" y="284" text-anchor="middle">LOOKUP ERROR</text></g>
+<g class="edge-caption"><rect class="label-mask" x="192" y="444" width="72" height="24" rx="4"/><text class="edge-label" x="228.0" y="460" text-anchor="middle">DISMISS</text></g>
+<g class="node surface" data-box="64,104,240,96">
+<rect class="node-box" x="64" y="104" width="240" height="96" rx="8"/>
+<text class="node-tag" x="80" y="124">SURFACE</text>
+<text class="node-name" x="184" y="152" text-anchor="middle">Task editor</text>
+<text class="node-sub" x="184" y="176" text-anchor="middle">Ctrl+L</text>
+</g>
+<g class="node focal" data-box="480,104,320,112">
+<rect class="node-box" x="480" y="104" width="320" height="112" rx="8"/>
+<text class="node-tag" x="496" y="124">INPUT</text>
+<text class="node-name" x="640" y="152" text-anchor="middle">Multiline tags</text>
+<text class="node-sub" x="640" y="176" text-anchor="middle">Ctrl+S saves · Enter adds line</text>
+</g>
+<g class="node step" data-box="960,320,240,80">
+<rect class="node-box" x="960" y="320" width="240" height="80" rx="8"/>
+<text class="node-tag" x="976" y="340">STEP</text>
+<text class="node-name" x="1080" y="360" text-anchor="middle">Write saved-task tags</text>
+<text class="node-sub" x="1080" y="384" text-anchor="middle">keep description draft</text>
+</g>
+<g class="node step" data-box="480,320,320,80">
+<rect class="node-box" x="480" y="320" width="320" height="80" rx="8"/>
+<text class="node-tag" x="496" y="340">STEP</text>
+<text class="node-name" x="640" y="360" text-anchor="middle">Stage New-task tags</text>
+<text class="node-sub" x="640" y="384" text-anchor="middle">editor Ctrl+S creates task</text>
+</g>
+<g class="node " data-box="64,320,240,80">
+<rect class="node-box" x="64" y="320" width="240" height="80" rx="8"/>
+<text class="node-tag" x="80" y="340">DIALOG</text>
+<text class="node-name" x="184" y="360" text-anchor="middle">Action error</text>
+<text class="node-sub" x="184" y="384" text-anchor="middle">opening task lookup failed</text>
+</g>
+<g class="node surface" data-box="64,512,240,80">
+<rect class="node-box" x="64" y="512" width="240" height="80" rx="8"/>
+<text class="node-tag" x="80" y="532">SURFACE</text>
+<text class="node-name" x="184" y="552" text-anchor="middle">Back to editor</text>
+<text class="node-sub" x="184" y="576" text-anchor="middle">local draft retained</text>
+</g>
+<g class="legend">
+<line x1="40" y1="660" x2="1240" y2="660"/>
+<rect class="key" x="40" y="680" width="24" height="16" rx="4"/><text x="76" y="692">Dialog / grouped dialogs</text>
+<rect class="key" x="344" y="680" width="24" height="16" rx="4" stroke-dasharray="4 4"/><text x="380" y="692">Editor or footer state</text>
+<text x="720" y="692">Solid: forward · dashed: return / retry</text>
+</g>
+</svg>
+</div>
+<figcaption>Autocomplete and inline validation are states inside this input, not separate popups. Tag catalog loading can propagate a command error before opening; saved-task tag write failures remain in the input.</figcaption>
+</figure>
+<details><summary>Keys, guards &amp; failure paths</summary>
 <ul>
 <li>Ctrl+S validates and saves; Enter inserts a line, Tab accepts a project-tag completion, Ctrl+U clears current logical line. Suggestions are part of this dialog, not another popup.</li>
 <li>On saved task, save writes tags directly while retaining dirty description. On New, save stages tags in the draft; editor Ctrl+S creates the task later.</li>
 <li>Parsing/write errors remain inline in tags. Escape/Ctrl+C closes locally, retaining description and filter.</li>
 <li>Failure reading the selected task when opening tags gives Action error. Project-tag catalog load uses <code>?</code>, so its exceptional failure exits the command rather than displaying a popup.</li>
 </ul>
+</details>
 </section>
 <section id="jump" aria-labelledby="jump-heading">
 <h2 id="jump-heading">Jump</h2>
 <p class="sources">Source: <a href="../src/tui/jump.rs">Jump dialog</a> · <a href="../src/tui/mod.rs">Jump loading, lines 1773–1813 and 2530–2545</a></p>
-<!-- JUMP FLOWCHART -->
-<p><code>jump.rs:30</code>; <code>mod.rs:1773-1813, 2530</code>.</p>
+<p class="section-intro">Move to a task without losing the draft you leave behind.</p>
+<figure class="diagram" id="jump-figure">
+<div class="diagram-scroll" tabindex="0" role="region" aria-label="Go to task: validate, load and return; scroll horizontally on small screens">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 720" role="img" aria-labelledby="jump-title jump-desc">
+<title id="jump-title">Go to task: validate, load and return</title>
+<desc id="jump-desc">Ctrl+K opens a task ID input. Enter loads an existing task and restores its draft; invalid input or lookup failure stays in the same dialog. Escape or Ctrl+C cancels locally.</desc>
+<defs>
+<marker id="jump-arrow" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0,8 3,0 6" fill="var(--soft)"/></marker>
+<marker id="jump-arrow-accent" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0,8 3,0 6" fill="var(--accent)"/></marker>
+<marker id="jump-arrow-link" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0,8 3,0 6" fill="var(--link)"/></marker>
+</defs>
+<path class="edge " data-route="320,160 480,160" d="M 320 160 L 480 160" marker-end="url(#jump-arrow)"/>
+<path class="edge " data-route="640,232 640,464" d="M 640 232 L 640 464" marker-end="url(#jump-arrow)"/>
+<path class="edge return" data-route="800,160 912,160 912,304 704,304 704,232" d="M 800 160 L 904 160 A 8 8 0 0 1 912 168 L 912 296 A 8 8 0 0 1 904 304 L 712 304 A 8 8 0 0 1 704 296 L 704 232" marker-end="url(#jump-arrow)"/>
+<path class="edge return" data-route="480,192 400,192 400,280 200,280 200,216" d="M 480 192 L 408 192 A 8 8 0 0 0 400 200 L 400 272 A 8 8 0 0 1 392 280 L 208 280 A 8 8 0 0 1 200 272 L 200 216" marker-end="url(#jump-arrow)"/>
+<g class="edge-caption"><rect class="label-mask" x="368" y="128" width="64" height="24" rx="4"/><text class="edge-label" x="400" y="144" text-anchor="middle">CTRL+K</text></g>
+<g class="edge-caption"><rect class="label-mask" x="648" y="332" width="56" height="24" rx="4"/><text class="edge-label" x="676.0" y="348" text-anchor="middle">FOUND</text></g>
+<g class="edge-caption"><rect class="label-mask" x="744" y="272" width="144" height="24" rx="4"/><text class="edge-label" x="816" y="288" text-anchor="middle">INVALID / MISSING</text></g>
+<g class="edge-caption"><rect class="label-mask" x="204" y="288" width="104" height="24" rx="4"/><text class="edge-label" x="256" y="304" text-anchor="middle">ESC / CTRL+C</text></g>
+<g class="node surface" data-box="80,120,240,96">
+<rect class="node-box" x="80" y="120" width="240" height="96" rx="8"/>
+<text class="node-tag" x="96" y="140">SURFACE</text>
+<text class="node-name" x="200" y="168" text-anchor="middle">Task editor</text>
+<text class="node-sub" x="200" y="192" text-anchor="middle">Ctrl+K</text>
+</g>
+<g class="node focal" data-box="480,120,320,112">
+<rect class="node-box" x="480" y="120" width="320" height="112" rx="8"/>
+<text class="node-tag" x="496" y="140">INPUT</text>
+<text class="node-name" x="640" y="168" text-anchor="middle">Go to task</text>
+<text class="node-sub" x="640" y="192" text-anchor="middle">Enter: positive task ID</text>
+</g>
+<g class="node surface" data-box="480,464,320,96">
+<rect class="node-box" x="480" y="464" width="320" height="96" rx="8"/>
+<text class="node-tag" x="496" y="484">SURFACE</text>
+<text class="node-name" x="640" y="512" text-anchor="middle">Target in editor</text>
+<text class="node-sub" x="640" y="536" text-anchor="middle">current draft is parked</text>
+</g>
+<g class="legend">
+<line x1="40" y1="660" x2="1240" y2="660"/>
+<rect class="key" x="40" y="680" width="24" height="16" rx="4"/><text x="76" y="692">Dialog / grouped dialogs</text>
+<rect class="key" x="344" y="680" width="24" height="16" rx="4" stroke-dasharray="4 4"/><text x="380" y="692">Editor or footer state</text>
+<text x="720" y="692">Solid: forward · dashed: return / retry</text>
+</g>
+</svg>
+</div>
+<figcaption>Loading the target also reveals archived/completed tasks as needed and clears the filter. Cancelling does not navigate away from the current task.</figcaption>
+</figure>
+<details><summary>Keys, guards &amp; failure paths</summary>
 <ul>
 <li>Enter requires positive integer and existing task; bad input or failed lookup stays inline.</li>
 <li>Success parks current draft and loads/restores target draft, enables archive/completed visibility if needed, clears filter and closes dialog.</li>
 <li>Escape/Ctrl+C closes locally. Ctrl+U clears field. q/Q remains input.</li>
 </ul>
+</details>
 </section>
 <section id="views" aria-labelledby="views-heading">
 <h2 id="views-heading">Views</h2>
 <p class="sources">Source: <a href="../src/tui/view_picker.rs">View picker</a> · <a href="../src/tui/view_form.rs">View form</a> · <a href="../src/tui/view_templates.rs">Templates</a> · <a href="../src/tui/mod.rs">View apply/save, lines 1668–1718 and 1886–1910</a></p>
-<!-- VIEWS FLOWCHART -->
-<p><code>view_picker.rs:64-134</code>; <code>view_form.rs:53-112</code>; <code>view_templates.rs</code>; <code>mod.rs:1668-1718, 1886</code>.</p>
+<p class="section-intro">Creating a view and applying it are separate steps.</p>
+<figure class="diagram" id="views-figure">
+<div class="diagram-scroll" tabindex="0" role="region" aria-label="Views: choosing, creating and using a template; scroll horizontally on small screens">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 720" role="img" aria-labelledby="views-title views-desc">
+<title id="views-title">Views: choosing, creating and using a template</title>
+<desc id="views-desc">The picker opens the form with n. The form opens templates with Ctrl+F; save returns to the picker selecting the new view, while Enter in the picker applies it.</desc>
+<defs>
+<marker id="views-arrow" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0,8 3,0 6" fill="var(--soft)"/></marker>
+<marker id="views-arrow-accent" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0,8 3,0 6" fill="var(--accent)"/></marker>
+<marker id="views-arrow-link" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0,8 3,0 6" fill="var(--link)"/></marker>
+</defs>
+<path class="edge " data-route="304,128 432,128" d="M 304 128 L 432 128" marker-end="url(#views-arrow)"/>
+<path class="edge return" data-route="432,176 336,176 336,248 184,248 184,168" d="M 432 176 L 344 176 A 8 8 0 0 0 336 184 L 336 240 A 8 8 0 0 1 328 248 L 192 248 A 8 8 0 0 1 184 240 L 184 168" marker-end="url(#views-arrow)"/>
+<path class="edge " data-route="576,200 576,312" d="M 576 200 L 576 312" marker-end="url(#views-arrow)"/>
+<path class="edge return" data-route="432,344 384,344 384,184 432,184" d="M 432 344 L 392 344 A 8 8 0 0 1 384 336 L 384 192 A 8 8 0 0 1 392 184 L 432 184" marker-end="url(#views-arrow)"/>
+<path class="edge return" data-route="752,344 864,344 864,160 752,160" d="M 752 344 L 856 344 A 8 8 0 0 0 864 336 L 864 168 A 8 8 0 0 0 856 160 L 752 160" marker-end="url(#views-arrow)"/>
+<path class="edge " data-route="752,384 944,384" d="M 752 384 L 944 384" marker-end="url(#views-arrow)"/>
+<path class="edge return" data-route="944,416 752,416" d="M 944 416 L 752 416" marker-end="url(#views-arrow)"/>
+<path class="edge return" data-route="432,384 352,384 352,472 576,472 576,424" d="M 432 384 L 360 384 A 8 8 0 0 0 352 392 L 352 464 A 8 8 0 0 0 360 472 L 568 472 A 8 8 0 0 0 576 464 L 576 424" marker-end="url(#views-arrow)"/>
+<path class="edge return" data-route="624,88 624,40 800,40 800,104 752,104" d="M 624 88 L 624 48 A 8 8 0 0 1 632 40 L 792 40 A 8 8 0 0 1 800 48 L 800 96 A 8 8 0 0 1 792 104 L 752 104" marker-end="url(#views-arrow)"/>
+<g class="edge-caption"><rect class="label-mask" x="336" y="96" width="64" height="24" rx="4"/><text class="edge-label" x="368" y="112" text-anchor="middle">CTRL+B</text></g>
+<g class="edge-caption"><rect class="label-mask" x="252" y="256" width="120" height="24" rx="4"/><text class="edge-label" x="312" y="272" text-anchor="middle">APPLY / CANCEL</text></g>
+<g class="edge-caption"><rect class="label-mask" x="584" y="236" width="104" height="24" rx="4"/><text class="edge-label" x="636.0" y="252" text-anchor="middle">n: NEW VIEW</text></g>
+<g class="edge-caption"><rect class="label-mask" x="272" y="292" width="104" height="24" rx="4"/><text class="edge-label" x="324.0" y="308" text-anchor="middle">CANCEL FORM</text></g>
+<g class="edge-caption"><rect class="label-mask" x="752" y="236" width="104" height="24" rx="4"/><text class="edge-label" x="804.0" y="252" text-anchor="middle">CTRL+S: SAVE</text></g>
+<g class="edge-caption"><rect class="label-mask" x="816" y="352" width="64" height="24" rx="4"/><text class="edge-label" x="848" y="368" text-anchor="middle">CTRL+F</text></g>
+<g class="edge-caption"><rect class="label-mask" x="796" y="424" width="104" height="24" rx="4"/><text class="edge-label" x="848" y="440" text-anchor="middle">USE / CANCEL</text></g>
+<g class="edge-caption"><rect class="label-mask" x="412" y="480" width="104" height="24" rx="4"/><text class="edge-label" x="464" y="496" text-anchor="middle">INVALID / IO</text></g>
+<g class="edge-caption"><rect class="label-mask" x="808" y="44" width="104" height="24" rx="4"/><text class="edge-label" x="860.0" y="60" text-anchor="middle">APPLY ERROR</text></g>
+<g class="node surface" data-box="64,88,240,80">
+<rect class="node-box" x="64" y="88" width="240" height="80" rx="8"/>
+<text class="node-tag" x="80" y="108">SURFACE</text>
+<text class="node-name" x="184" y="128" text-anchor="middle">Task editor</text>
+</g>
+<g class="node focal" data-box="432,88,320,112">
+<rect class="node-box" x="432" y="88" width="320" height="112" rx="8"/>
+<text class="node-tag" x="448" y="108">DIALOG</text>
+<text class="node-name" x="592" y="136" text-anchor="middle">Choose view</text>
+<text class="node-sub" x="592" y="160" text-anchor="middle">Enter applies selection</text>
+</g>
+<g class="node " data-box="432,312,320,112">
+<rect class="node-box" x="432" y="312" width="320" height="112" rx="8"/>
+<text class="node-tag" x="448" y="332">INPUT</text>
+<text class="node-name" x="592" y="360" text-anchor="middle">Create view</text>
+<text class="node-sub" x="592" y="384" text-anchor="middle">Name + Luau script</text>
+</g>
+<g class="node " data-box="944,312,240,112">
+<rect class="node-box" x="944" y="312" width="240" height="112" rx="8"/>
+<text class="node-tag" x="960" y="332">DIALOG</text>
+<text class="node-name" x="1064" y="360" text-anchor="middle">Template picker</text>
+<text class="node-sub" x="1064" y="384" text-anchor="middle">Enter copies script</text>
+</g>
+<g class="legend">
+<line x1="40" y1="660" x2="1240" y2="660"/>
+<rect class="key" x="40" y="680" width="24" height="16" rx="4"/><text x="76" y="692">Dialog / grouped dialogs</text>
+<rect class="key" x="344" y="680" width="24" height="16" rx="4" stroke-dasharray="4 4"/><text x="380" y="692">Editor or footer state</text>
+<text x="720" y="692">Solid: forward · dashed: return / retry</text>
+</g>
+</svg>
+</div>
+<figcaption>Creation saves the view definition; it does not apply it. Esc/Ctrl+C from the form returns one level to the picker; from templates it returns one level to the form. Picker/catalog errors are detailed below.</figcaption>
+</figure>
+<details><summary>Keys, guards &amp; failure paths</summary>
 <ul>
 <li>Ctrl+B catalog load failure is footer error, no dialog. Picker Up/Down/Home/End selects, PageUp/PageDown scrolls script preview; Escape/q/Q/Ctrl+C closes.</li>
 <li>Picker Enter validates/applies view or All tasks, then closes; apply failure stays inline in picker.</li>
@@ -116,12 +474,88 @@
 <li>Ctrl+F from form opens Templates. Enter copies selected template into editable script and returns to form. Escape/q/Q/Ctrl+C returns to form without replacing text.</li>
 <li>Form Escape/Ctrl+C returns to picker, retaining catalog. q/Q remains text in form.</li>
 </ul>
+</details>
 </section>
 <section id="bulk" aria-labelledby="bulk-heading">
 <h2 id="bulk-heading">Bulk</h2>
 <p class="sources">Source: <a href="../src/tui/bulk.rs">Bulk stages and key handling, lines 139–359</a> · <a href="../src/tui/mod.rs">Bulk dispatch, lines 1720–1772 and 2581–2642</a></p>
-<!-- BULK FLOWCHART -->
-<p><code>bulk.rs:139-359</code>; <code>mod.rs:1720-1772, 2581-2642</code>.</p>
+<p class="section-intro">Selection persists through cancellation. Application requires a preview.</p>
+<figure class="diagram" id="bulk-figure">
+<div class="diagram-scroll" tabindex="0" role="region" aria-label="Bulk changes: selection, preview and application; scroll horizontally on small screens">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 720" role="img" aria-labelledby="bulk-title bulk-desc">
+<title id="bulk-title">Bulk changes: selection, preview and application</title>
+<desc id="bulk-desc">Range selection returns to the editor. Ctrl+G opens bulk actions when a selection exists, leading to input or a preview. Confirmed success clears selection; cancellation and errors retain it.</desc>
+<defs>
+<marker id="bulk-arrow" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0,8 3,0 6" fill="var(--soft)"/></marker>
+<marker id="bulk-arrow-accent" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0,8 3,0 6" fill="var(--accent)"/></marker>
+<marker id="bulk-arrow-link" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0,8 3,0 6" fill="var(--link)"/></marker>
+</defs>
+<path class="edge " data-route="144,376 144,200" d="M 144 376 L 144 200" marker-end="url(#bulk-arrow)"/>
+<path class="edge " data-route="224,200 224,376" d="M 224 200 L 224 376" marker-end="url(#bulk-arrow)"/>
+<path class="edge " data-route="304,408 400,408 400,152 480,152" d="M 304 408 L 392 408 A 8 8 0 0 0 400 400 L 400 160 A 8 8 0 0 1 408 152 L 480 152" marker-end="url(#bulk-arrow)"/>
+<path class="edge " data-route="800,152 960,152" d="M 800 152 L 960 152" marker-end="url(#bulk-arrow)"/>
+<path class="edge " data-route="800,184 864,184 864,424 960,424" d="M 800 184 L 856 184 A 8 8 0 0 1 864 192 L 864 416 A 8 8 0 0 0 872 424 L 960 424" marker-end="url(#bulk-arrow)"/>
+<path class="edge " data-route="1080,216 1080,376" d="M 1080 216 L 1080 376" marker-end="url(#bulk-arrow)"/>
+<path class="edge " data-route="960,448 864,448 864,576 800,576" d="M 960 448 L 872 448 A 8 8 0 0 0 864 456 L 864 568 A 8 8 0 0 1 856 576 L 800 576" marker-end="url(#bulk-arrow)"/>
+<path class="edge return" data-route="480,576 352,576 352,448 304,448" d="M 480 576 L 360 576 A 8 8 0 0 1 352 568 L 352 456 A 8 8 0 0 0 344 448 L 304 448" marker-end="url(#bulk-arrow)"/>
+<path class="edge " data-route="1200,448 1232,448 1232,640 272,640 272,472" d="M 1200 448 L 1224 448 A 8 8 0 0 1 1232 456 L 1232 632 A 8 8 0 0 1 1224 640 L 280 640 A 8 8 0 0 1 272 632 L 272 472" marker-end="url(#bulk-arrow)"/>
+<g class="edge-caption"><rect class="label-mask" x="152" y="276" width="64" height="24" rx="4"/><text class="edge-label" x="184.0" y="292" text-anchor="middle">CTRL+D</text></g>
+<g class="edge-caption"><rect class="label-mask" x="232" y="316" width="104" height="24" rx="4"/><text class="edge-label" x="284.0" y="332" text-anchor="middle">VALID RANGE</text></g>
+<g class="edge-caption"><rect class="label-mask" x="328" y="228" width="64" height="24" rx="4"/><text class="edge-label" x="360.0" y="244" text-anchor="middle">CTRL+G</text></g>
+<g class="edge-caption"><rect class="label-mask" x="824" y="120" width="112" height="24" rx="4"/><text class="edge-label" x="880" y="136" text-anchor="middle">t / s / p / r</text></g>
+<g class="edge-caption"><rect class="label-mask" x="800" y="260" width="56" height="24" rx="4"/><text class="edge-label" x="828.0" y="276" text-anchor="middle">a / u</text></g>
+<g class="edge-caption"><rect class="label-mask" x="1088" y="284" width="104" height="24" rx="4"/><text class="edge-label" x="1140.0" y="300" text-anchor="middle">VALID INPUT</text></g>
+<g class="edge-caption"><rect class="label-mask" x="744" y="484" width="112" height="24" rx="4"/><text class="edge-label" x="800.0" y="500" text-anchor="middle">BUILD / APPLY</text></g>
+<g class="edge-caption"><rect class="label-mask" x="360" y="516" width="72" height="24" rx="4"/><text class="edge-label" x="396.0" y="532" text-anchor="middle">DISMISS</text></g>
+<g class="edge-caption"><rect class="label-mask" x="812" y="608" width="72" height="24" rx="4"/><text class="edge-label" x="848" y="624" text-anchor="middle">APPLIED</text></g>
+<g class="node " data-box="64,104,240,96">
+<rect class="node-box" x="64" y="104" width="240" height="96" rx="8"/>
+<text class="node-tag" x="80" y="124">INPUT</text>
+<text class="node-name" x="184" y="152" text-anchor="middle">Range selector</text>
+<text class="node-sub" x="184" y="176" text-anchor="middle">visible IDs only</text>
+</g>
+<g class="node surface" data-box="64,376,240,96">
+<rect class="node-box" x="64" y="376" width="240" height="96" rx="8"/>
+<text class="node-tag" x="80" y="396">SURFACE</text>
+<text class="node-name" x="184" y="424" text-anchor="middle">Task editor</text>
+<text class="node-sub" x="184" y="448" text-anchor="middle">draft is retained</text>
+</g>
+<g class="node " data-box="480,104,320,96">
+<rect class="node-box" x="480" y="104" width="320" height="96" rx="8"/>
+<text class="node-tag" x="496" y="124">DIALOG</text>
+<text class="node-name" x="640" y="152" text-anchor="middle">Bulk action menu</text>
+<text class="node-sub" x="640" y="176" text-anchor="middle">x clears selection &amp; closes</text>
+</g>
+<g class="node " data-box="960,104,240,112">
+<rect class="node-box" x="960" y="104" width="240" height="112" rx="8"/>
+<text class="node-tag" x="976" y="124">DIALOGS</text>
+<text class="node-name" x="1080" y="152" text-anchor="middle">Bulk fields / tags</text>
+<text class="node-sub" x="1080" y="176" text-anchor="middle">add / replace / priority</text>
+<text class="node-sub" x="1080" y="192" text-anchor="middle">remove-tags checklist</text>
+</g>
+<g class="node focal" data-box="960,376,240,96">
+<rect class="node-box" x="960" y="376" width="240" height="96" rx="8"/>
+<text class="node-tag" x="976" y="396">DIALOG</text>
+<text class="node-name" x="1080" y="424" text-anchor="middle">Build &amp; preview</text>
+<text class="node-sub" x="1080" y="448" text-anchor="middle">y / Y applies report</text>
+</g>
+<g class="node " data-box="480,536,320,80">
+<rect class="node-box" x="480" y="536" width="320" height="80" rx="8"/>
+<text class="node-tag" x="496" y="556">DIALOG</text>
+<text class="node-name" x="640" y="576" text-anchor="middle">Bulk error</text>
+<text class="node-sub" x="640" y="600" text-anchor="middle">dismiss to editor</text>
+</g>
+<g class="legend">
+<line x1="40" y1="660" x2="1240" y2="660"/>
+<rect class="key" x="40" y="680" width="24" height="16" rx="4"/><text x="76" y="692">Dialog / grouped dialogs</text>
+<rect class="key" x="344" y="680" width="24" height="16" rx="4" stroke-dasharray="4 4"/><text x="380" y="692">Editor or footer state</text>
+<text x="720" y="692">Solid: forward · dashed: return / retry</text>
+</g>
+</svg>
+</div>
+<figcaption>Esc/Ctrl+C closes any bulk stage; preview n/N/Enter also cancels. These paths retain selection; the menu’s x and a successful apply clear it. Remove-tag loading failures also enter Bulk error. Reopen Ctrl+G for a fresh preview.</figcaption>
+</figure>
+<details><summary>Keys, guards &amp; failure paths</summary>
 <ul>
 <li>Ctrl+D on saved task toggles selection directly. On New it opens range selector over visible IDs.</li>
 <li>Range Enter parses one ID or inclusive range, intersects visible IDs and extends selection. Invalid/no matching IDs stay inline. Success closes to editor; Ctrl+G is a separate step. Escape/Ctrl+C cancels without clearing existing selection.</li>
@@ -133,12 +567,97 @@
 <li>Preview n/N/Enter/Escape/q/Q/Ctrl+C closes without applying. Error Enter/n/N/Escape/q/Q/Ctrl+C closes. Inputs/checklist Escape/Ctrl+C close whole wizard, not return to menu. Selection survives all these cancellations and failures; reopen Ctrl+G for a fresh preview.</li>
 <li>Bulk changes preserve active and parked description drafts. Project-tag catalog load before bulk menu uses <code>?</code>, so its exceptional failure exits the command.</li>
 </ul>
+</details>
 </section>
 <section id="conflicts" aria-labelledby="conflicts-heading">
 <h2 id="conflicts-heading">Content conflict</h2>
 <p class="sources">Source: <a href="../src/tui/conflict.rs">Comparison and nested confirmations, lines 66–176</a> · <a href="../src/tui/mod.rs">Resolution and save, lines 1815–1876 and 2790–2865</a></p>
-<!-- CONFLICTS FLOWCHART -->
-<p><code>conflict.rs:66-176</code>; <code>mod.rs:1815-1876, 2790</code>.</p>
+<p class="section-intro">Keep your draft, reload the database, or confirm an overwrite.</p>
+<figure class="diagram" id="conflicts-figure">
+<div class="diagram-scroll" tabindex="0" role="region" aria-label="Save conflict: keep local, reload or retry overwrite; scroll horizontally on small screens">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 720" role="img" aria-labelledby="conflicts-title conflicts-desc">
+<title id="conflicts-title">Save conflict: keep local, reload or retry overwrite</title>
+<desc id="conflicts-desc">A save race opens DB/local comparison, with nested reload and overwrite confirmations. Reload reads newest DB text; overwrite retries against the captured revision and can conflict again.</desc>
+<defs>
+<marker id="conflicts-arrow" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0,8 3,0 6" fill="var(--soft)"/></marker>
+<marker id="conflicts-arrow-accent" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0,8 3,0 6" fill="var(--accent)"/></marker>
+<marker id="conflicts-arrow-link" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0,8 3,0 6" fill="var(--link)"/></marker>
+</defs>
+<path class="edge " data-route="304,128 432,128" d="M 304 128 L 432 128" marker-end="url(#conflicts-arrow)"/>
+<path class="edge " data-route="576,200 576,312" d="M 576 200 L 576 312" marker-end="url(#conflicts-arrow)"/>
+<path class="edge " data-route="752,128 944,128" d="M 752 128 L 944 128" marker-end="url(#conflicts-arrow)"/>
+<path class="edge " data-route="432,384 352,384 352,552 304,552" d="M 432 384 L 360 384 A 8 8 0 0 0 352 392 L 352 544 A 8 8 0 0 1 344 552 L 304 552" marker-end="url(#conflicts-arrow)"/>
+<path class="edge return" data-route="432,336 384,336 384,184 432,184" d="M 432 336 L 392 336 A 8 8 0 0 1 384 328 L 384 192 A 8 8 0 0 1 392 184 L 432 184" marker-end="url(#conflicts-arrow)"/>
+<path class="edge " data-route="1080,200 1080,312" d="M 1080 200 L 1080 312" marker-end="url(#conflicts-arrow)"/>
+<path class="edge return" data-route="944,176 752,176" d="M 944 176 L 752 176" marker-end="url(#conflicts-arrow)"/>
+<path class="edge " data-route="1184,360 1232,360 1232,624 224,624 224,592" d="M 1184 360 L 1224 360 A 8 8 0 0 1 1232 368 L 1232 616 A 8 8 0 0 1 1224 624 L 232 624 A 8 8 0 0 1 224 616 L 224 592" marker-end="url(#conflicts-arrow)"/>
+<path class="edge return" data-route="1184,336 1216,336 1216,48 688,48 688,88" d="M 1184 336 L 1208 336 A 8 8 0 0 0 1216 328 L 1216 56 A 8 8 0 0 0 1208 48 L 696 48 A 8 8 0 0 0 688 56 L 688 88" marker-end="url(#conflicts-arrow)"/>
+<path class="edge " data-route="1080,408 1080,512" d="M 1080 408 L 1080 512" marker-end="url(#conflicts-arrow)"/>
+<path class="edge return" data-route="432,144 336,144 336,528 304,528" d="M 432 144 L 344 144 A 8 8 0 0 0 336 152 L 336 520 A 8 8 0 0 1 328 528 L 304 528" marker-end="url(#conflicts-arrow)"/>
+<g class="edge-caption"><rect class="label-mask" x="324" y="96" width="88" height="24" rx="4"/><text class="edge-label" x="368" y="112" text-anchor="middle">SAVE RACE</text></g>
+<g class="edge-caption"><rect class="label-mask" x="584" y="236" width="56" height="24" rx="4"/><text class="edge-label" x="612.0" y="252" text-anchor="middle">r / R</text></g>
+<g class="edge-caption"><rect class="label-mask" x="820" y="96" width="56" height="24" rx="4"/><text class="edge-label" x="848" y="112" text-anchor="middle">o / O</text></g>
+<g class="edge-caption"><rect class="label-mask" x="360" y="436" width="112" height="24" rx="4"/><text class="edge-label" x="416.0" y="452" text-anchor="middle">y / Y: RELOAD</text></g>
+<g class="edge-caption"><rect class="label-mask" x="392" y="260" width="104" height="24" rx="4"/><text class="edge-label" x="444.0" y="276" text-anchor="middle">BACK / ERROR</text></g>
+<g class="edge-caption"><rect class="label-mask" x="1088" y="236" width="56" height="24" rx="4"/><text class="edge-label" x="1116.0" y="252" text-anchor="middle">y / Y</text></g>
+<g class="edge-caption"><rect class="label-mask" x="816" y="184" width="64" height="24" rx="4"/><text class="edge-label" x="848" y="200" text-anchor="middle">CANCEL</text></g>
+<g class="edge-caption"><rect class="label-mask" x="708" y="592" width="56" height="24" rx="4"/><text class="edge-label" x="736" y="608" text-anchor="middle">SAVED</text></g>
+<g class="edge-caption"><rect class="label-mask" x="956" y="56" width="104" height="24" rx="4"/><text class="edge-label" x="1008" y="72" text-anchor="middle">NEW CONFLICT</text></g>
+<g class="edge-caption"><rect class="label-mask" x="1088" y="444" width="104" height="24" rx="4"/><text class="edge-label" x="1140.0" y="460" text-anchor="middle">OTHER ERROR</text></g>
+<g class="edge-caption"><rect class="label-mask" x="232" y="276" width="96" height="24" rx="4"/><text class="edge-label" x="280.0" y="292" text-anchor="middle">KEEP LOCAL</text></g>
+<g class="node surface" data-box="64,88,240,80">
+<rect class="node-box" x="64" y="88" width="240" height="80" rx="8"/>
+<text class="node-tag" x="80" y="108">SURFACE</text>
+<text class="node-name" x="184" y="128" text-anchor="middle">Task editor</text>
+<text class="node-sub" x="184" y="152" text-anchor="middle">Ctrl+S</text>
+</g>
+<g class="node focal" data-box="432,88,320,112">
+<rect class="node-box" x="432" y="88" width="320" height="112" rx="8"/>
+<text class="node-tag" x="448" y="108">DIALOG</text>
+<text class="node-name" x="592" y="136" text-anchor="middle">DB / local comparison</text>
+<text class="node-sub" x="592" y="160" text-anchor="middle">Tab switches text</text>
+</g>
+<g class="node " data-box="432,312,320,96">
+<rect class="node-box" x="432" y="312" width="320" height="96" rx="8"/>
+<text class="node-tag" x="448" y="332">DIALOG</text>
+<text class="node-name" x="592" y="360" text-anchor="middle">Confirm reload</text>
+<text class="node-sub" x="592" y="384" text-anchor="middle">discard local + pending images</text>
+</g>
+<g class="node " data-box="944,88,240,112">
+<rect class="node-box" x="944" y="88" width="240" height="112" rx="8"/>
+<text class="node-tag" x="960" y="108">DIALOG</text>
+<text class="node-name" x="1064" y="136" text-anchor="middle">Confirm overwrite</text>
+<text class="node-sub" x="1064" y="160" text-anchor="middle">replace DB with local</text>
+</g>
+<g class="node step" data-box="944,312,240,96">
+<rect class="node-box" x="944" y="312" width="240" height="96" rx="8"/>
+<text class="node-tag" x="960" y="332">STEP</text>
+<text class="node-name" x="1064" y="360" text-anchor="middle">Retry save</text>
+<text class="node-sub" x="1064" y="384" text-anchor="middle">captured revision</text>
+</g>
+<g class="node surface" data-box="64,512,240,80">
+<rect class="node-box" x="64" y="512" width="240" height="80" rx="8"/>
+<text class="node-tag" x="80" y="532">SURFACE</text>
+<text class="node-name" x="184" y="552" text-anchor="middle">Back to editor</text>
+<text class="node-sub" x="184" y="576" text-anchor="middle">kept / reloaded / saved</text>
+</g>
+<g class="node surface" data-box="944,512,240,80">
+<rect class="node-box" x="944" y="512" width="240" height="80" rx="8"/>
+<text class="node-tag" x="960" y="532">SURFACE</text>
+<text class="node-name" x="1064" y="552" text-anchor="middle">Editor + footer error</text>
+<text class="node-sub" x="1064" y="576" text-anchor="middle">local draft kept</text>
+</g>
+<g class="legend">
+<line x1="40" y1="660" x2="1240" y2="660"/>
+<rect class="key" x="40" y="680" width="24" height="16" rx="4"/><text x="76" y="692">Dialog / grouped dialogs</text>
+<rect class="key" x="344" y="680" width="24" height="16" rx="4" stroke-dasharray="4 4"/><text x="380" y="692">Editor or footer state</text>
+<text x="720" y="692">Solid: forward · dashed: return / retry</text>
+</g>
+</svg>
+</div>
+<figcaption>Esc/q/Q cancels the nested confirmation back to comparison; Ctrl+C closes the entire conflict and keeps local text. Deleted tasks disable reload/overwrite. Reload errors return to comparison with a footer message.</figcaption>
+</figure>
+<details><summary>Keys, guards &amp; failure paths</summary>
 <ul>
 <li>Editor Ctrl+S content conflict opens comparison; other save errors stay in footer. Compare DB/local via Tab/BackTab and scroll keys.</li>
 <li>Escape/q/Q/Ctrl+C closes, keeping local draft.</li>
@@ -147,12 +666,92 @@
 <li>Reload y/Y reads newest DB text, discards local text/pending images and closes. Reload failure returns to comparison plus footer error; deleted task removes reload/overwrite options.</li>
 <li>Overwrite y/Y retries save against captured revision. Success closes; another race opens a new comparison; other failure closes modal with footer error, local draft retained.</li>
 </ul>
+</details>
 </section>
 <section id="herdr" aria-labelledby="herdr-heading">
 <h2 id="herdr-heading">Herdr</h2>
 <p class="sources">Source: <a href="../src/tui/agent_create.rs">Editable prompt</a> · <a href="../src/tui/handoff.rs">Startup, prompt and attach, lines 71–213</a> · <a href="../src/tui/mod.rs">Herdr dispatch, lines 1638–1668 and 2150–2185</a></p>
-<!-- HERDR FLOWCHART -->
-<p><code>agent_create.rs:41-65</code>; <code>handoff.rs:71-213</code>; <code>mod.rs:1638-1668, 2150-2185</code>.</p>
+<p class="section-intro">An editable prompt for a new worker; a direct handoff for a linked agent.</p>
+<figure class="diagram" id="herdr-figure">
+<div class="diagram-scroll" tabindex="0" role="region" aria-label="Herdr: create an agent or focus an existing link; scroll horizontally on small screens">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 720" role="img" aria-labelledby="herdr-title herdr-desc">
+<title id="herdr-title">Herdr: create an agent or focus an existing link</title>
+<desc id="herdr-desc">Ctrl+H opens an editable prompt only for a saved New task with no Action UI. Otherwise it focuses an existing link. Creation waits for ready Codex, links the task, submits the prompt, and attaches Herdr.</desc>
+<defs>
+<marker id="herdr-arrow" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0,8 3,0 6" fill="var(--soft)"/></marker>
+<marker id="herdr-arrow-accent" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0,8 3,0 6" fill="var(--accent)"/></marker>
+<marker id="herdr-arrow-link" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0,8 3,0 6" fill="var(--link)"/></marker>
+</defs>
+<path class="edge " data-route="304,144 480,144" d="M 304 144 L 480 144" marker-end="url(#herdr-arrow)"/>
+<path class="edge " data-route="560,200 560,312" d="M 560 200 L 560 312" marker-end="url(#herdr-arrow)"/>
+<path class="edge " data-route="640,144 944,144" d="M 640 144 L 944 144" marker-end="url(#herdr-arrow)"/>
+<path class="edge " data-route="752,360 944,360" d="M 752 360 L 944 360" marker-end="url(#herdr-arrow)"/>
+<path class="edge external" data-route="1080,312 1080,200" d="M 1080 312 L 1080 200" marker-end="url(#herdr-arrow-link)"/>
+<path class="edge " data-route="1120,424 1120,536" d="M 1120 424 L 1120 536" marker-end="url(#herdr-arrow)"/>
+<path class="edge return" data-route="1184,144 1232,144 1232,640 224,640 224,592" d="M 1184 144 L 1224 144 A 8 8 0 0 1 1232 152 L 1232 632 A 8 8 0 0 1 1224 640 L 232 640 A 8 8 0 0 1 224 632 L 224 592" marker-end="url(#herdr-arrow)"/>
+<path class="edge return" data-route="432,384 352,384 352,552 304,552" d="M 432 384 L 360 384 A 8 8 0 0 0 352 392 L 352 544 A 8 8 0 0 1 344 552 L 304 552" marker-end="url(#herdr-arrow)"/>
+<path class="edge " data-route="1184,176 1216,176 1216,576 1184,576" d="M 1184 176 L 1208 176 A 8 8 0 0 1 1216 184 L 1216 568 A 8 8 0 0 1 1208 576 L 1184 576" marker-end="url(#herdr-arrow)"/>
+<g class="edge-caption"><rect class="label-mask" x="360" y="112" width="64" height="24" rx="4"/><text class="edge-label" x="392" y="128" text-anchor="middle">CTRL+H</text></g>
+<g class="edge-caption"><rect class="label-mask" x="568" y="236" width="96" height="24" rx="4"/><text class="edge-label" x="616.0" y="252" text-anchor="middle">SAVED NEW¹</text></g>
+<g class="edge-caption"><rect class="label-mask" x="728" y="112" width="128" height="24" rx="4"/><text class="edge-label" x="792" y="128" text-anchor="middle">OTHER: USE LINK</text></g>
+<g class="edge-caption"><rect class="label-mask" x="816" y="328" width="64" height="24" rx="4"/><text class="edge-label" x="848" y="344" text-anchor="middle">CTRL+H</text></g>
+<g class="edge-caption"><rect class="label-mask" x="1016" y="236" width="56" height="24" rx="4"/><text class="edge-label" x="1044.0" y="252" text-anchor="middle">READY</text></g>
+<g class="edge-caption"><rect class="label-mask" x="1128" y="468" width="72" height="24" rx="4"/><text class="edge-label" x="1164.0" y="484" text-anchor="middle">FAILURE</text></g>
+<g class="edge-caption"><rect class="label-mask" x="704" y="608" width="64" height="24" rx="4"/><text class="edge-label" x="736" y="624" text-anchor="middle">RETURN</text></g>
+<g class="edge-caption"><rect class="label-mask" x="240" y="436" width="104" height="24" rx="4"/><text class="edge-label" x="292.0" y="452" text-anchor="middle">ESC / CTRL+C</text></g>
+<g class="edge-caption"><rect class="label-mask" x="1136" y="500" width="72" height="24" rx="4"/><text class="edge-label" x="1172.0" y="516" text-anchor="middle">FAILURE</text></g>
+<g class="node surface" data-box="64,88,240,80">
+<rect class="node-box" x="64" y="88" width="240" height="80" rx="8"/>
+<text class="node-tag" x="80" y="108">SURFACE</text>
+<text class="node-name" x="184" y="128" text-anchor="middle">Editor / Action UI</text>
+<text class="node-sub" x="184" y="152" text-anchor="middle">Ctrl+H</text>
+</g>
+<g class="node " data-box="480,88,160,112">
+<polygon class="node-box" points="560,88 640,144 560,200 480,144"/>
+<text class="node-name" x="560" y="136" text-anchor="middle">Create</text>
+<text class="node-name" x="560" y="156" text-anchor="middle">route?</text>
+</g>
+<g class="node focal" data-box="432,312,320,112">
+<rect class="node-box" x="432" y="312" width="320" height="112" rx="8"/>
+<text class="node-tag" x="448" y="332">INPUT</text>
+<text class="node-name" x="592" y="360" text-anchor="middle">Create Herdr agent</text>
+<text class="node-sub" x="592" y="384" text-anchor="middle">editable initial prompt</text>
+</g>
+<g class="node step" data-box="944,312,240,112">
+<rect class="node-box" x="944" y="312" width="240" height="112" rx="8"/>
+<text class="node-tag" x="960" y="332">STEP</text>
+<text class="node-name" x="1064" y="360" text-anchor="middle">Create · wait · link</text>
+<text class="node-sub" x="1064" y="384" text-anchor="middle">≤10s ready → agent prompt</text>
+</g>
+<g class="node step" data-box="944,88,240,112">
+<rect class="node-box" x="944" y="88" width="240" height="112" rx="8"/>
+<text class="node-tag" x="960" y="108">STEP</text>
+<text class="node-name" x="1064" y="136" text-anchor="middle">Focus &amp; attach Herdr</text>
+<text class="node-sub" x="1064" y="160" text-anchor="middle">external terminal client</text>
+</g>
+<g class="node surface" data-box="64,512,240,80">
+<rect class="node-box" x="64" y="512" width="240" height="80" rx="8"/>
+<text class="node-tag" x="80" y="532">SURFACE</text>
+<text class="node-name" x="184" y="552" text-anchor="middle">Return to prior UI</text>
+<text class="node-sub" x="184" y="576" text-anchor="middle">footer result</text>
+</g>
+<g class="node surface" data-box="944,536,240,80">
+<rect class="node-box" x="944" y="536" width="240" height="80" rx="8"/>
+<text class="node-tag" x="960" y="556">SURFACE</text>
+<text class="node-name" x="1064" y="576" text-anchor="middle">Prior UI + footer error</text>
+<text class="node-sub" x="1064" y="600" text-anchor="middle">inspect any created pane</text>
+</g>
+<g class="legend">
+<line x1="40" y1="660" x2="1240" y2="660"/>
+<rect class="key" x="40" y="680" width="24" height="16" rx="4"/><text x="76" y="692">Dialog / grouped dialogs</text>
+<rect class="key" x="344" y="680" width="24" height="16" rx="4" stroke-dasharray="4 4"/><text x="380" y="692">Editor or footer state</text>
+<text x="720" y="692">Solid: forward · dashed: return / retry</text>
+</g>
+</svg>
+</div>
+<figcaption>¹ Requires no Action UI open; an existing link does not prevent creation. Blank prompts stay inline; config/root failures remain in the prior UI footer. The ready wait belongs to Herdr startup, not the persistent queue waiter.</figcaption>
+</figure>
+<details><summary>Keys, guards &amp; failure paths</summary>
 <ul>
 <li>Ctrl+H on a saved New task with no Action UI open shows the editable initial prompt even if a Herdr link already exists. Config/project-root error stays in footer. Other saved statuses focus existing linked pane and attach directly; absent link/failed focus is footer error. No selected task gives footer error.</li>
 <li>Ctrl+H runs before the single-task Action UI handler. From its menu, scalar input, tags input, or Action error, it attempts to focus/attach the existing linked agent and retains the open popup on return. This also bypasses the create-prompt route for a saved New task. Other modal families and confirmations consume this key first.</li>
@@ -160,12 +759,105 @@
 <li>Submission leaves TUI terminal, creates project tab/workspace pane, waits at most 10 seconds for detected Codex idle/done, atomically associates eligible New/unclaimed task, invokes <code>herdr agent prompt</code> once, focuses tab and attaches Herdr. Pane shell startup supplies Codex.</li>
 <li>Blocked/timeout/identity/claim/prompt/focus/attach errors return to editor footer, not Action error. Already-created pane remains for inspection; prompt uncertainty warning says inspect before retrying. Returning from Herdr restores TUI with footer result.</li>
 </ul>
+</details>
 </section>
 <section id="exit" aria-labelledby="exit-heading">
 <h2 id="exit-heading">Exit and discard</h2>
 <p class="sources">Source: <a href="../src/tui/mod.rs">Exit states and cancellation, lines 90–139, 1146–1160, 1910–2150 and 2866–2935</a></p>
-<!-- EXIT FLOWCHART -->
-<p><code>mod.rs:90-139, 1146-1160, 1910-2150, 2930</code>.</p>
+<p class="section-intro">Escape, Ctrl+C, and a discard confirmation have different jobs.</p>
+<figure class="diagram" id="exit-figure">
+<div class="diagram-scroll" tabindex="0" role="region" aria-label="Escape: switch drafts, inspect parked buffers or exit; scroll horizontally on small screens">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 720" role="img" aria-labelledby="exit-title exit-desc">
+<title id="exit-title">Escape: switch drafts, inspect parked buffers or exit</title>
+<desc id="exit-desc">After local handlers and filter clearing, Escape returns to general New, asks to discard a dirty draft, or checks parked dirty buffers before exiting. Footer-only prompts are distinguished from actual modal dialogs.</desc>
+<defs>
+<marker id="exit-arrow" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0,8 3,0 6" fill="var(--soft)"/></marker>
+<marker id="exit-arrow-accent" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0,8 3,0 6" fill="var(--accent)"/></marker>
+<marker id="exit-arrow-link" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0,8 3,0 6" fill="var(--link)"/></marker>
+</defs>
+<path class="edge " data-route="304,128 400,128 400,48 576,48 576,88" d="M 304 128 L 392 128 A 8 8 0 0 0 400 120 L 400 56 A 8 8 0 0 1 408 48 L 568 48 A 8 8 0 0 1 576 56 L 576 88" marker-end="url(#exit-arrow)"/>
+<path class="edge " data-route="480,152 352,152 352,376 304,376" d="M 480 152 L 360 152 A 8 8 0 0 0 352 160 L 352 368 A 8 8 0 0 1 344 376 L 304 376" marker-end="url(#exit-arrow)"/>
+<path class="edge " data-route="576,216 576,312" d="M 576 216 L 576 312" marker-end="url(#exit-arrow)"/>
+<path class="edge " data-route="672,376 864,376 864,136 944,136" d="M 672 376 L 856 376 A 8 8 0 0 0 864 368 L 864 144 A 8 8 0 0 1 872 136 L 944 136" marker-end="url(#exit-arrow)"/>
+<path class="edge " data-route="576,440 576,488 1072,488 1072,408" d="M 576 440 L 576 480 A 8 8 0 0 0 584 488 L 1064 488 A 8 8 0 0 0 1072 480 L 1072 408" marker-end="url(#exit-arrow)"/>
+<path class="edge " data-route="1120,312 1120,184" d="M 1120 312 L 1120 184" marker-end="url(#exit-arrow)"/>
+<path class="edge return" data-route="1120,408 1120,536" d="M 1120 408 L 1120 536" marker-end="url(#exit-arrow)"/>
+<path class="edge " data-route="64,376 40,376 40,576 64,576" d="M 64 376 L 48 376 A 8 8 0 0 0 40 384 L 40 568 A 8 8 0 0 0 48 576 L 64 576" marker-end="url(#exit-arrow)"/>
+<path class="edge " data-route="184,440 184,488 560,488 560,536" d="M 184 440 L 184 480 A 8 8 0 0 0 192 488 L 552 488 A 8 8 0 0 1 560 496 L 560 536" marker-end="url(#exit-arrow)"/>
+<path class="edge " data-route="304,560 352,560 352,504 224,504 224,528" d="M 304 560 L 344 560 A 8 8 0 0 0 352 552 L 352 512 A 8 8 0 0 0 344 504 L 232 504 A 8 8 0 0 0 224 512 L 224 528" marker-end="url(#exit-arrow)"/>
+<path class="edge " data-route="304,592 480,592" d="M 304 592 L 480 592" marker-end="url(#exit-arrow)"/>
+<g class="edge-caption"><rect class="label-mask" x="468" y="16" width="40" height="24" rx="4"/><text class="edge-label" x="488" y="32" text-anchor="middle">ESC</text></g>
+<g class="edge-caption"><rect class="label-mask" x="304" y="244" width="40" height="24" rx="4"/><text class="edge-label" x="324.0" y="260" text-anchor="middle">YES</text></g>
+<g class="edge-caption"><rect class="label-mask" x="584" y="252" width="32" height="24" rx="4"/><text class="edge-label" x="600.0" y="268" text-anchor="middle">NO</text></g>
+<g class="edge-caption"><rect class="label-mask" x="768" y="228" width="88" height="24" rx="4"/><text class="edge-label" x="812.0" y="244" text-anchor="middle">NO: CLEAN</text></g>
+<g class="edge-caption"><rect class="label-mask" x="768" y="456" width="96" height="24" rx="4"/><text class="edge-label" x="816" y="472" text-anchor="middle">YES: DIRTY</text></g>
+<g class="edge-caption"><rect class="label-mask" x="1128" y="236" width="56" height="24" rx="4"/><text class="edge-label" x="1156.0" y="252" text-anchor="middle">y / Y</text></g>
+<g class="edge-caption"><rect class="label-mask" x="1128" y="460" width="64" height="24" rx="4"/><text class="edge-label" x="1160.0" y="476" text-anchor="middle">CANCEL</text></g>
+<g class="edge-caption"><rect class="label-mask" x="48" y="460" width="40" height="24" rx="4"/><text class="edge-label" x="68.0" y="476" text-anchor="middle">YES</text></g>
+<g class="edge-caption"><rect class="label-mask" x="344" y="456" width="48" height="24" rx="4"/><text class="edge-label" x="368" y="472" text-anchor="middle">NONE</text></g>
+<g class="edge-caption"><rect class="label-mask" x="360" y="516" width="48" height="24" rx="4"/><text class="edge-label" x="384.0" y="532" text-anchor="middle">MORE</text></g>
+<g class="edge-caption"><rect class="label-mask" x="364" y="560" width="88" height="24" rx="4"/><text class="edge-label" x="408" y="576" text-anchor="middle">LAST: y/Y</text></g>
+<g class="node surface" data-box="64,88,240,96">
+<rect class="node-box" x="64" y="88" width="240" height="96" rx="8"/>
+<text class="node-tag" x="80" y="108">SURFACE</text>
+<text class="node-name" x="184" y="136" text-anchor="middle">Editor: Escape</text>
+<text class="node-sub" x="184" y="160" text-anchor="middle">after local / filter guards</text>
+</g>
+<g class="node " data-box="480,88,192,128">
+<polygon class="node-box" points="576,88 672,152 576,216 480,152"/>
+<text class="node-name" x="576" y="144" text-anchor="middle">Blank general</text>
+<text class="node-name" x="576" y="164" text-anchor="middle">New?</text>
+</g>
+<g class="node " data-box="480,312,192,128">
+<polygon class="node-box" points="576,312 672,376 576,440 480,376"/>
+<text class="node-name" x="576" y="368" text-anchor="middle">Dirty</text>
+<text class="node-name" x="576" y="388" text-anchor="middle">draft?</text>
+</g>
+<g class="node surface" data-box="944,312,240,96">
+<rect class="node-box" x="944" y="312" width="240" height="96" rx="8"/>
+<text class="node-tag" x="960" y="332">FOOTER</text>
+<text class="node-name" x="1064" y="360" text-anchor="middle">Discard &amp; switch?</text>
+<text class="node-sub" x="1064" y="384" text-anchor="middle">footer only · y/Y confirms</text>
+</g>
+<g class="node surface" data-box="944,88,240,96">
+<rect class="node-box" x="944" y="88" width="240" height="96" rx="8"/>
+<text class="node-tag" x="960" y="108">SURFACE</text>
+<text class="node-name" x="1064" y="136" text-anchor="middle">General New editor</text>
+<text class="node-sub" x="1064" y="160" text-anchor="middle">restore parked New draft</text>
+</g>
+<g class="node " data-box="64,312,240,128">
+<polygon class="node-box" points="184,312 304,376 184,440 64,376"/>
+<text class="node-name" x="184" y="368" text-anchor="middle">Parked dirty</text>
+<text class="node-name" x="184" y="388" text-anchor="middle">buffers?</text>
+</g>
+<g class="node focal" data-box="64,528,240,96">
+<rect class="node-box" x="64" y="528" width="240" height="96" rx="8"/>
+<text class="node-tag" x="80" y="548">DIALOG</text>
+<text class="node-name" x="184" y="576" text-anchor="middle">Discard parked draft?</text>
+<text class="node-sub" x="184" y="600" text-anchor="middle">one modal per dirty buffer</text>
+</g>
+<g class="node surface" data-box="480,536,160,80">
+<rect class="node-box" x="480" y="536" width="160" height="80" rx="8"/>
+<text class="node-tag" x="496" y="556">END</text>
+<text class="node-name" x="560" y="576" text-anchor="middle">Exit TUI</text>
+</g>
+<g class="node surface" data-box="944,536,240,80">
+<rect class="node-box" x="944" y="536" width="240" height="80" rx="8"/>
+<text class="node-tag" x="960" y="556">SURFACE</text>
+<text class="node-name" x="1064" y="576" text-anchor="middle">Resume draft</text>
+<text class="node-sub" x="1064" y="600" text-anchor="middle">no discard on cancel</text>
+</g>
+<g class="legend">
+<line x1="40" y1="660" x2="1240" y2="660"/>
+<rect class="key" x="40" y="680" width="24" height="16" rx="4"/><text x="76" y="692">Dialog / grouped dialogs</text>
+<rect class="key" x="344" y="680" width="24" height="16" rx="4" stroke-dasharray="4 4"/><text x="380" y="692">Editor or footer state</text>
+<text x="720" y="692">Solid: forward · dashed: return / retry</text>
+</g>
+</svg>
+</div>
+<figcaption>Cancelling any parked-buffer confirmation preserves every buffer, including earlier approved ones. Ctrl+C has a different route: nonempty New resets immediately; empty New checks parked buffers; saved tasks return to New or ask to discard. ExitBuffers ignores Ctrl+C.</figcaption>
+</figure>
+<details><summary>Keys, guards &amp; failure paths</summary>
 <ul>
 <li>Filter query/focus clears before dashboard Escape/Ctrl+C navigation except local-cancel dialogs and passive reopen/error confirmations.</li>
 <li>Escape from saved task or nonempty/child New: a dirty draft opens footer-only Switch confirmation; a clean draft loads general New (restoring a parked New draft if present).</li>
@@ -175,10 +867,11 @@
 <li>Switch y/Y loads destination; n/N/Enter/Escape/q/Q cancels. Ctrl+C on saved target can recreate Switch via earlier dashboard logic; otherwise pending confirmation retains it.</li>
 <li>Shared <code>Confirmation::Exit</code> is a footer-only non-dashboard add/edit path: Escape on nonempty draft -&gt; Discard draft?; y/Y exits (after buffer checks), n/N/Enter/Escape/q/Q cancels. It is not a distinct dashboard popup entry.</li>
 </ul>
+</details>
 </section>
 <section id="review" aria-labelledby="review-heading">
-<h2 id="review-heading">Review hotspots to display as behavior, not claimed fixes</h2>
-<p class="sources">Source: <a href="../tests/tui.rs">Existing PTY regression scenarios (not run for this documentation draft)</a></p>
+<h2 id="review-heading">Behaviors to review</h2>
+<p class="sources">Source: <a href="../tests/tui.rs">Existing PTY regression scenarios (source references, not runtime proof)</a></p>
 <ul>
 <li>Enter applies values but cancels confirmation dialogs; Y means force only for selected single-task actions.</li>
 <li>Some first Escape/Ctrl+C events clear filter rather than close Action UI.</li>
@@ -190,6 +883,6 @@
 </ul>
 </section>
 </main>
-<footer><p>Read against the pinned source snapshot. Recheck this map when event handlers change.</p></footer>
+<footer><a class="jump-top" href="#top">Back to top ↑</a><p>qqq tui · Source map at 4f53fad · Static HTML / inline SVG / no network dependencies<br>Palette from src/tui/dashboard.rs. Recheck transitions when handlers change.</p></footer>
 </body>
 </html>
