@@ -64,6 +64,7 @@ fn tui_q_alias_only_cancels_non_text_screens() {
                 vec![
                     "q_escape_text",
                     "views",
+                    "view_resize_burst",
                     "content_conflict",
                     "action_error_arrows",
                     "buffers_exit_escape",
@@ -238,6 +239,11 @@ fn tui_dashboard_removed_ctrl_o_keeps_editor_and_filter_input_active() {
 fn tui_dashboard_view_picker_footer_fits_resized_popup() {
     dashboard_scenario("views_footer");
     dashboard_scenario("views_footer_no_color");
+}
+
+#[test]
+fn tui_dashboard_view_picker_keeps_queued_input_after_resize() {
+    dashboard_scenario("view_resize_burst");
 }
 
 #[test]

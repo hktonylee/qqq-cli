@@ -1151,6 +1151,17 @@ print(json.dumps({"result": result}))
             assert cli("list") == initial
             if scenario.endswith("no_color"):
                 assert b"\x1b[38;" not in screen and b"\x1b[48;" not in screen
+        elif scenario == "view_resize_burst":
+            initial = cli("list")
+            send(b"\x02")
+            wait_visible(lambda: "Choose view" in visible.text())
+            fcntl.ioctl(slave, termios.TIOCSWINSZ, struct.pack("HHHH", 24, 80, 0, 0))
+            visible.resize(80, 24)
+            os.kill(child.pid, signal.SIGWINCH)
+            cancel = os.environ.get("QQQ_TEST_ESCAPE_KEY", "\x1b").encode()
+            send(b"\x1b[B" * 1024 + cancel)
+            wait_frame(lambda: "Choose view" not in visible.text() and "New Task" in editor_title())
+            assert cli("list") == initial
         elif scenario.startswith("views"):
             initial = cli("list")
             send(b"\x1b[1;2A")
