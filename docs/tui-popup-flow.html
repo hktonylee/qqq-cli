@@ -1,0 +1,195 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>qqq tui — Popup Flow Audit</title>
+<!-- Palette and diagrams pending the requested style choice. -->
+</head>
+<body>
+<a href="#main">Skip to content</a>
+<header>
+<p>qqq / TUI behavior reference</p>
+<h1>Where every popup leads</h1>
+<p>Keyboard routes, validation, cancellation, and recovery for <code>qqq tui</code>.</p>
+<p>Source snapshot: <code>4f53fad</code>. This document maps current behavior from code; it does not prove the behavior is correct. Shared add/edit footer prompts are identified separately.</p>
+</header>
+<nav aria-label="Popup families">
+<a href="#inventory">Inventory</a>
+<a href="#routing">Routing and key precedence</a>
+<a href="#actions">Single-task actions</a>
+<a href="#tags">Tags</a>
+<a href="#jump">Jump</a>
+<a href="#views">Views</a>
+<a href="#bulk">Bulk</a>
+<a href="#conflicts">Content conflict</a>
+<a href="#herdr">Herdr</a>
+<a href="#exit">Exit and discard</a>
+<a href="#review">Review hotspots to display as behavior, not claimed fixes</a>
+</nav>
+<main id="main">
+<section id="inventory" aria-labelledby="inventory-heading">
+<h2 id="inventory-heading">Inventory</h2>
+<p class="sources">Source: <a href="../src/tui/mod.rs">UI state enums and modal selection, lines 90–277 and 1322–1373</a></p>
+<div class="table-scroll" tabindex="0" role="region" aria-label="Popup inventory">
+<table>
+<caption>Every modal family and its entry point</caption>
+<thead><tr><th scope="col">Family</th><th scope="col">Actual dialogs / states</th><th scope="col">Entry</th></tr></thead>
+<tbody>
+<tr><td>Single task</td><td>Action menu; priority; parent; error reason; action confirmation; action error</td><td>Ctrl+G with no bulk selection and a saved task</td></tr>
+<tr><td>Tags</td><td>Multiline tags with inline autocomplete and validation</td><td>Ctrl+L</td></tr>
+<tr><td>Jump</td><td>Go to task, including inline validation</td><td>Ctrl+K</td></tr>
+<tr><td>Views</td><td>Choose view; create view form; template picker</td><td>Ctrl+B; n; Ctrl+F</td></tr>
+<tr><td>Bulk</td><td>Range selector; action menu; add tags; replace tags; priority; remove tags checklist; preview; error</td><td>Ctrl+D on New; Ctrl+G with selection</td></tr>
+<tr><td>Conflict</td><td>DB/local comparison; reload confirmation; overwrite confirmation</td><td>Ctrl+S with content revision conflict</td></tr>
+<tr><td>Herdr</td><td>Editable initial agent prompt</td><td>Ctrl+H on saved New task</td></tr>
+<tr><td>Discard</td><td>Parked buffer exit confirmation per draft</td><td>Escape from blank general New, with parked dirty buffers</td></tr>
+<tr><td>Footer prompts</td><td>Discard changes and switch; shared non-dashboard discard draft</td><td>Dirty editor Escape; shared add/edit Escape</td></tr>
+</tbody>
+</table>
+</div>
+</section>
+<section id="routing" aria-labelledby="routing-heading">
+<h2 id="routing-heading">Routing and key precedence</h2>
+<p class="sources">Source: <a href="../src/tui/mod.rs">Event routing, lines 1460–1640 and 1638–2227</a></p>
+<p><code>mod.rs:1638</code>: agent &gt; view &gt; bulk &gt; jump &gt; conflict &gt; q/Q escape alias for confirmations/menu/error &gt; Ctrl+B opening &gt; local tag cancel &gt; global filter clearing &gt; Ctrl+C ExitBuffers guard &gt; New draft reset &gt; dashboard Escape/Ctrl+C navigation &gt; pending confirmation &gt; Ctrl+H &gt; action UI &gt; direct shortcuts &gt; filter/editor.</p>
+<ul>
+<li>All mouse events are ignored while any dialog or confirmation is active (<code>mod.rs:1460</code>).</li>
+<li>Paste routes to the active input; menu/error paste does not edit the draft. Confirmations and conflict ignore paste (<code>mod.rs:1499</code>).</li>
+<li>q/Q alias Escape in non-text menus, previews, errors, confirmations and conflict; literal text in input fields and editor.</li>
+<li>Active filter query/focus can consume the first Escape/Ctrl+C while a single-task menu, non-tag input, action error, or completion confirmation remains open. Reopen and mark-error confirmations bypass this filter-clear guard (<code>mod.rs:1910</code>).</li>
+</ul>
+</section>
+<section id="actions" aria-labelledby="actions-heading">
+<h2 id="actions-heading">Single-task actions</h2>
+<p class="sources">Source: <a href="../src/tui/mod.rs">Action UI, lines 142–277, 441–502 and 2001–2482</a> · <a href="../src/main.rs">Completion callback, lines 715–742</a> · <a href="../src/tui/completion.rs">Recoverable completion errors, lines 1–32</a></p>
+<!-- ACTIONS FLOWCHART -->
+<p><code>mod.rs:142-277, 441, 2001-2150, 2210-2482</code>; <code>main.rs:715</code>; <code>completion.rs:1-32</code>.</p>
+<ul>
+<li>Ctrl+G selects the bulk menu whenever any bulk selection exists, even if a single task is focused.</li>
+<li>Menu Up/Down wraps; Enter activates highlighted item. c=Complete (unless completed), e=Mark error (unless completed/error), r=Retry (error only), o=Reopen (unless error), p=Priority, d=Parent, a=Archive/Unarchive. Menu visibility is not DB validity: New offers Reopen but execution may reject it.</li>
+<li>r/o/a always go to action confirmation, even with a clean draft. c also confirms after resolving the completion action; an error in that resolution opens Action error directly.</li>
+<li>p/d open scalar input. Enter validates priority -100..100, or parent ID/none. Validation errors remain inline. Valid input with a clean draft executes directly; a dirty draft goes to confirmation.</li>
+<li>e opens error reason. Enter requires nonblank reason, then always confirms.</li>
+<li>Escape closes the menu or priority/parent/error-reason input directly to the editor, dropping entered values. Inputs do not return to the menu. The earlier filter-clear guard can consume the first Escape; q/Q remains literal text in inputs.</li>
+<li>Confirmation y executes normal action; Y forces Complete, Reopen and Mark error. Other actions y/Y are equivalent. n/N/Enter/Escape cancel. q/Q map to Escape.</li>
+<li>Completion callback initially labels confirmation Complete when this session owns the selected task, otherwise Force complete (also when identity discovery is unavailable). Even a Force complete-labelled confirmation still maps lowercase y to normal Complete; uppercase Y performs the force.</li>
+<li>Successful actions reload task state and discard active unsaved changes after confirmation. Archiving with archives hidden moves to general New.</li>
+<li>A normal Complete failing due to missing identity/dispatch/ownership stays in the same confirmation with error and force option. Other failures, including Force complete, Reopen, Mark error, priority and parent, open the scrollable Action error dialog.</li>
+<li>Action error Enter/Escape/q/Q closes; Up/k and Down/j scroll. Ctrl+C follows dashboard cancellation before this local handler and can navigate to New or a discard-switch footer for a saved task.</li>
+<li>Ctrl+C on a saved task during a completion confirmation can replace it with discard-switch or navigate to New; reopen/mark-error confirmations instead retain the prompt on Ctrl+C. ExitBuffers ignores Ctrl+C.</li>
+</ul>
+</section>
+<section id="tags" aria-labelledby="tags-heading">
+<h2 id="tags-heading">Tags</h2>
+<p class="sources">Source: <a href="../src/tui/mod.rs">Tag input dispatch, lines 1910–1920, 2185–2225 and 2485–2530</a> · <a href="../src/tui/tag_input.rs">Tag editing and autocomplete</a></p>
+<!-- TAGS FLOWCHART -->
+<p><code>mod.rs:1910, 2185-2225, 2485-2530</code>; <code>tag_input.rs</code>.</p>
+<ul>
+<li>Ctrl+S validates and saves; Enter inserts a line, Tab accepts a project-tag completion, Ctrl+U clears current logical line. Suggestions are part of this dialog, not another popup.</li>
+<li>On saved task, save writes tags directly while retaining dirty description. On New, save stages tags in the draft; editor Ctrl+S creates the task later.</li>
+<li>Parsing/write errors remain inline in tags. Escape/Ctrl+C closes locally, retaining description and filter.</li>
+<li>Failure reading the selected task when opening tags gives Action error. Project-tag catalog load uses <code>?</code>, so its exceptional failure exits the command rather than displaying a popup.</li>
+</ul>
+</section>
+<section id="jump" aria-labelledby="jump-heading">
+<h2 id="jump-heading">Jump</h2>
+<p class="sources">Source: <a href="../src/tui/jump.rs">Jump dialog</a> · <a href="../src/tui/mod.rs">Jump loading, lines 1773–1813 and 2530–2545</a></p>
+<!-- JUMP FLOWCHART -->
+<p><code>jump.rs:30</code>; <code>mod.rs:1773-1813, 2530</code>.</p>
+<ul>
+<li>Enter requires positive integer and existing task; bad input or failed lookup stays inline.</li>
+<li>Success parks current draft and loads/restores target draft, enables archive/completed visibility if needed, clears filter and closes dialog.</li>
+<li>Escape/Ctrl+C closes locally. Ctrl+U clears field. q/Q remains input.</li>
+</ul>
+</section>
+<section id="views" aria-labelledby="views-heading">
+<h2 id="views-heading">Views</h2>
+<p class="sources">Source: <a href="../src/tui/view_picker.rs">View picker</a> · <a href="../src/tui/view_form.rs">View form</a> · <a href="../src/tui/view_templates.rs">Templates</a> · <a href="../src/tui/mod.rs">View apply/save, lines 1668–1718 and 1886–1910</a></p>
+<!-- VIEWS FLOWCHART -->
+<p><code>view_picker.rs:64-134</code>; <code>view_form.rs:53-112</code>; <code>view_templates.rs</code>; <code>mod.rs:1668-1718, 1886</code>.</p>
+<ul>
+<li>Ctrl+B catalog load failure is footer error, no dialog. Picker Up/Down/Home/End selects, PageUp/PageDown scrolls script preview; Escape/q/Q/Ctrl+C closes.</li>
+<li>Picker Enter validates/applies view or All tasks, then closes; apply failure stays inline in picker.</li>
+<li>n opens Name + Luau script form. Tab/BackTab toggles fields; Enter in Name moves to Script, Enter in Script inserts newline.</li>
+<li>Ctrl+S validates and writes catalog. Invalid definition/write failure stays inline in form. Success returns to picker selecting the new entry; it does not apply the view.</li>
+<li>Ctrl+F from form opens Templates. Enter copies selected template into editable script and returns to form. Escape/q/Q/Ctrl+C returns to form without replacing text.</li>
+<li>Form Escape/Ctrl+C returns to picker, retaining catalog. q/Q remains text in form.</li>
+</ul>
+</section>
+<section id="bulk" aria-labelledby="bulk-heading">
+<h2 id="bulk-heading">Bulk</h2>
+<p class="sources">Source: <a href="../src/tui/bulk.rs">Bulk stages and key handling, lines 139–359</a> · <a href="../src/tui/mod.rs">Bulk dispatch, lines 1720–1772 and 2581–2642</a></p>
+<!-- BULK FLOWCHART -->
+<p><code>bulk.rs:139-359</code>; <code>mod.rs:1720-1772, 2581-2642</code>.</p>
+<ul>
+<li>Ctrl+D on saved task toggles selection directly. On New it opens range selector over visible IDs.</li>
+<li>Range Enter parses one ID or inclusive range, intersects visible IDs and extends selection. Invalid/no matching IDs stay inline. Success closes to editor; Ctrl+G is a separate step. Escape/Ctrl+C cancels without clearing existing selection.</li>
+<li>Bulk menu t=Add tags, s=Replace tags, p=Priority, r=Remove tags, a=Archive, u=Unarchive, x=Clear selection and close.</li>
+<li>Add/replace tags Ctrl+S parses and requests preview; Enter inserts newline. Priority Enter or Ctrl+S validates and previews. Validation errors remain inline.</li>
+<li>Remove tags loads union of selected tasks&#x27; tags. Space toggles a label; Enter/Ctrl+S previews when at least one checked. Empty/no checked stays inline. Load failure opens Bulk error.</li>
+<li>Archive/unarchive requests preview immediately.</li>
+<li>Preview y/Y applies captured report; successful application closes and clears selection. Apply conflict/failure opens Bulk error and retains selection. Preview building failure also opens Bulk error.</li>
+<li>Preview n/N/Enter/Escape/q/Q/Ctrl+C closes without applying. Error Enter/n/N/Escape/q/Q/Ctrl+C closes. Inputs/checklist Escape/Ctrl+C close whole wizard, not return to menu. Selection survives all these cancellations and failures; reopen Ctrl+G for a fresh preview.</li>
+<li>Bulk changes preserve active and parked description drafts. Project-tag catalog load before bulk menu uses <code>?</code>, so its exceptional failure exits the command.</li>
+</ul>
+</section>
+<section id="conflicts" aria-labelledby="conflicts-heading">
+<h2 id="conflicts-heading">Content conflict</h2>
+<p class="sources">Source: <a href="../src/tui/conflict.rs">Comparison and nested confirmations, lines 66–176</a> · <a href="../src/tui/mod.rs">Resolution and save, lines 1815–1876 and 2790–2865</a></p>
+<!-- CONFLICTS FLOWCHART -->
+<p><code>conflict.rs:66-176</code>; <code>mod.rs:1815-1876, 2790</code>.</p>
+<ul>
+<li>Editor Ctrl+S content conflict opens comparison; other save errors stay in footer. Compare DB/local via Tab/BackTab and scroll keys.</li>
+<li>Escape/q/Q/Ctrl+C closes, keeping local draft.</li>
+<li>r/R and o/O open separate reload/overwrite confirmations only while current task exists. Removed task comparison offers only Keep.</li>
+<li>Nested n/N/Enter/Escape/q/Q returns to comparison. Nested Ctrl+C closes entire conflict and keeps local.</li>
+<li>Reload y/Y reads newest DB text, discards local text/pending images and closes. Reload failure returns to comparison plus footer error; deleted task removes reload/overwrite options.</li>
+<li>Overwrite y/Y retries save against captured revision. Success closes; another race opens a new comparison; other failure closes modal with footer error, local draft retained.</li>
+</ul>
+</section>
+<section id="herdr" aria-labelledby="herdr-heading">
+<h2 id="herdr-heading">Herdr</h2>
+<p class="sources">Source: <a href="../src/tui/agent_create.rs">Editable prompt</a> · <a href="../src/tui/handoff.rs">Startup, prompt and attach, lines 71–213</a> · <a href="../src/tui/mod.rs">Herdr dispatch, lines 1638–1668 and 2150–2185</a></p>
+<!-- HERDR FLOWCHART -->
+<p><code>agent_create.rs:41-65</code>; <code>handoff.rs:71-213</code>; <code>mod.rs:1638-1668, 2150-2185</code>.</p>
+<ul>
+<li>Ctrl+H on a saved New task with no Action UI open shows the editable initial prompt even if a Herdr link already exists. Config/project-root error stays in footer. Other saved statuses focus existing linked pane and attach directly; absent link/failed focus is footer error. No selected task gives footer error.</li>
+<li>Ctrl+H runs before the single-task Action UI handler. From its menu, scalar input, tags input, or Action error, it attempts to focus/attach the existing linked agent and retains the open popup on return. This also bypasses the create-prompt route for a saved New task. Other modal families and confirmations consume this key first.</li>
+<li>Prompt Enter inserts newline, Ctrl+H submits nonblank text; blank stays inline. Ctrl+S does not submit. Escape/Ctrl+C closes locally.</li>
+<li>Submission leaves TUI terminal, creates project tab/workspace pane, waits at most 10 seconds for detected Codex idle/done, atomically associates eligible New/unclaimed task, invokes <code>herdr agent prompt</code> once, focuses tab and attaches Herdr. Pane shell startup supplies Codex.</li>
+<li>Blocked/timeout/identity/claim/prompt/focus/attach errors return to editor footer, not Action error. Already-created pane remains for inspection; prompt uncertainty warning says inspect before retrying. Returning from Herdr restores TUI with footer result.</li>
+</ul>
+</section>
+<section id="exit" aria-labelledby="exit-heading">
+<h2 id="exit-heading">Exit and discard</h2>
+<p class="sources">Source: <a href="../src/tui/mod.rs">Exit states and cancellation, lines 90–139, 1146–1160, 1910–2150 and 2866–2935</a></p>
+<!-- EXIT FLOWCHART -->
+<p><code>mod.rs:90-139, 1146-1160, 1910-2150, 2930</code>.</p>
+<ul>
+<li>Filter query/focus clears before dashboard Escape/Ctrl+C navigation except local-cancel dialogs and passive reopen/error confirmations.</li>
+<li>Escape from saved task or nonempty/child New: a dirty draft opens footer-only Switch confirmation; a clean draft loads general New (restoring a parked New draft if present).</li>
+<li>Dirty means changed text, nonempty staged tags, or pending image atoms (<a href="../src/tui/draft.rs">draft.rs, lines 608–614</a>). Tags-only New drafts therefore take the discard-switch route too.</li>
+<li>Escape from blank general New exits directly if no parked dirty buffers. Otherwise ExitBuffers shows one modal per parked dirty draft with preview. y/Y advances; after last exits. n/N/Enter/Escape/q/Q cancels exit; all retained buffers survive even previously approved ones. If current inspected buffer&#x27;s DB task was removed, cancel restores that retained draft into editor.</li>
+<li>Ctrl+C on nonempty New with no action/confirmation clears current New draft immediately, preserving other parked drafts. Ctrl+C on empty New (including an empty child draft) checks parked buffers and exits, unlike Escape on an empty child which returns to general New. Ctrl+C on saved task navigates to general New or opens dirty Switch confirmation.</li>
+<li>Switch y/Y loads destination; n/N/Enter/Escape/q/Q cancels. Ctrl+C on saved target can recreate Switch via earlier dashboard logic; otherwise pending confirmation retains it.</li>
+<li>Shared <code>Confirmation::Exit</code> is a footer-only non-dashboard add/edit path: Escape on nonempty draft -&gt; Discard draft?; y/Y exits (after buffer checks), n/N/Enter/Escape/q/Q cancels. It is not a distinct dashboard popup entry.</li>
+</ul>
+</section>
+<section id="review" aria-labelledby="review-heading">
+<h2 id="review-heading">Review hotspots to display as behavior, not claimed fixes</h2>
+<p class="sources">Source: <a href="../tests/tui.rs">Existing PTY regression scenarios (not run for this documentation draft)</a></p>
+<ul>
+<li>Enter applies values but cancels confirmation dialogs; Y means force only for selected single-task actions.</li>
+<li>Some first Escape/Ctrl+C events clear filter rather than close Action UI.</li>
+<li>Ctrl+C closes most local dialogs but navigates from saved task Action UI, retains passive confirmations, and ignores ExitBuffers.</li>
+<li>Bulk cancellation closes wizard and retains selection; creating view returns to picker without applying it.</li>
+<li>New draft Ctrl+C discards current draft without confirmation; Escape uses a discard-switch footer.</li>
+<li>Complete&#x27;s normal owner/dispatch error can recover in place via Y; reopen/error failures open Action error instead.</li>
+<li>Force-complete-labelled dialog still requires uppercase Y for force.</li>
+</ul>
+</section>
+</main>
+<footer><p>Read against the pinned source snapshot. Recheck this map when event handlers change.</p></footer>
+</body>
+</html>
