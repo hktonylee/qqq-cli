@@ -339,8 +339,8 @@ final batch state. Other content and claims stay intact.
 ## Complete work
 
 ```sh
-qqq edit 12 --complete --session worker
-qqq edit 12 --complete --session worker --description "Finished" --archive
+qqq edit 12 --complete
+qqq edit 12 --complete --description "Finished" --archive
 ```
 
 Completion requires an in-progress task owned by the supplied/discovered session.
@@ -717,10 +717,10 @@ An archived owned task can be selected even when absent from scoped rows.
 
 ## Agents and recovery
 
-Use one stable, unique session per worker:
+qqq normally detects each worker's identity. Leave `--session` and `QQQ_SESSION`
+unset in normal agent sessions:
 
 ```sh
-export QQQ_SESSION='worker-1'
 qqq next
 qqq message 12 "Running tests"
 qqq edit 12 --complete
@@ -751,6 +751,15 @@ Resolution order:
 2. Exact Herdr pane (`HERDR_PANE_ID`, or `HERDR_ENV=1` with a pane ID).
 3. Native Codex `CODEX_THREAD_ID`, then `CODEX_SESSION_ID`.
 4. Unique Herdr agent at the project root (`foreground_cwd` before `cwd`).
+
+`--session` forces a literal owner ID instead of automatic detection.
+`QQQ_SESSION` has the same effect unless the flag overrides it. Both skip
+automatic Herdr/Codex identity discovery and Herdr linking. Use them only for an
+intentional manual override; do not invent a session ID for normal agent use.
+
+If automatic Herdr lookup fails, check the pane environment and permission to
+connect to the Herdr socket. A manual override can claim work with empty Herdr
+metadata and no link; it does not fix discovery.
 
 `next` always claims for the calling worker and never creates an agent.
 `--local` remains accepted as a compatibility flag with no effect. Explicit/native
@@ -795,8 +804,8 @@ guards prevent a stale check from failing reassigned work.
 ### Return or retry work
 
 ```sh
-qqq edit 12 --set-pending --session worker-1
-qqq edit 12 --set-status error --reason "Missing credentials" --session worker-1
+qqq edit 12 --set-pending
+qqq edit 12 --set-status error --reason "Missing credentials"
 qqq edit 12 --set-status new          # retry an error; no owner needed
 ```
 

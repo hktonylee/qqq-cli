@@ -51,7 +51,7 @@ struct Cli {
     /// Print human-readable text, overriding automatic agent JSON output.
     #[arg(long, global = true, conflicts_with = "json")]
     human: bool,
-    /// Stable owner identity. Falls back to exact Herdr pane, Codex session, then unique Herdr agent at project root.
+    /// Force an owner session ID; bypasses automatic Herdr/Codex identity. Omit for normal agent use.
     #[arg(long, global = true, env = "QQQ_SESSION")]
     session: Option<String>,
     /// Override coding harness name (for example codex).

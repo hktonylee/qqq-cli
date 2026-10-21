@@ -114,8 +114,8 @@ stuck or its task needs recovery.
 Native Codex session discovery can supply identity automatically. Optional
 [Herdr integration](docs/reference.md#herdr) links live agents and lets Ctrl+H
 create a queue worker from a saved New task. `next` always claims for its caller.
-Without automatic identity, set a unique `QQQ_SESSION` (for example,
-`export QQQ_SESSION=worker-1`) or pass `--session worker-1` on worker commands.
+Leave `--session` and `QQQ_SESSION` unset for normal agent use. They force manual
+ownership and bypass automatic session discovery and Herdr linking.
 
 Route specialist workers by stored tags:
 
