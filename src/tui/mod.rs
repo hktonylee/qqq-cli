@@ -3272,6 +3272,33 @@ mod tests {
     }
 
     #[test]
+    fn tui_preview_cap_ignores_blank_description_lines() {
+        let tasks = json!([
+            {"id":1,"description":"\nFirst\n\n \t\nSecond\n\u{2003}\nThird\n\n","status":"new","parent_id":null},
+            {"id":2,"description":"Child first\n\nChild second\n \nChild third\nHidden","status":"new","parent_id":1}
+        ]);
+        for width in [40, 80] {
+            for format in [Format::Tasks, Format::CompactTasks] {
+                let tree = render(format, &tasks, false, Some(width));
+                let rows = super::panel::rows(&tree, width);
+                assert_eq!(rows.len(), 6);
+                for (row, expected) in rows.iter().zip([
+                    "First",
+                    "Second",
+                    "Third",
+                    "Child first",
+                    "Child second",
+                    "Child third...",
+                ]) {
+                    assert!(row.text.ends_with(expected), "{}", row.text);
+                }
+                assert_eq!(super::panel::visible_ids(&rows), vec![1, 2]);
+                assert_eq!(super::panel::scroll_to(&rows, Some(2), 0, 3), 3);
+            }
+        }
+    }
+
+    #[test]
     fn tui_preview_cap_handles_wrapped_text_and_narrow_tree_prefixes() {
         let tasks = json!([
             {"id":1,"description":"ABCDEFGHIJKLMNOPQRSTUVWXYZ".repeat(4),"status":"new","parent_id":null},

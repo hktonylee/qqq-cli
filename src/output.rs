@@ -363,7 +363,13 @@ fn task_tree(
                 .map(|&continues| if continues { "│   " } else { "    " })
                 .collect::<String>()
         );
-        let mut description = task["description"].as_str().unwrap_or("").to_owned();
+        let mut description = task["description"]
+            .as_str()
+            .unwrap_or("")
+            .lines()
+            .filter(|line| !line.trim().is_empty())
+            .collect::<Vec<_>>()
+            .join("\n");
         let tags = crate::tags::prefix(task);
         if !tags.is_empty() {
             description = format!("{tags} {description}");
@@ -645,6 +651,44 @@ mod tests {
     }
 
     #[test]
+    fn task_lists_skip_blank_description_lines() {
+        let descriptions = [
+            (
+                "\n \t\r\nFirst\n\n  indented\n\u{2003}\nLast\n\n",
+                "First\n  indented\nLast",
+            ),
+            ("First\r\n\r\nSecond\r\n", "First\nSecond"),
+            ("\n \t\n", ""),
+        ];
+        for (description, expected) in descriptions {
+            let tasks = json!([
+                {"id":1,"description":description,"status":"error","priority":2,"tags":["work"],"parent_id":null},
+                {"id":2,"description":description,"status":"new","parent_id":1},
+                {"id":3,"description":"Sibling","status":"new","parent_id":1}
+            ]);
+            let mut normalized = tasks.clone();
+            normalized[0]["description"] = json!(expected);
+            normalized[1]["description"] = json!(expected);
+            for color in [false, true] {
+                for columns in [None, Some(20), Some(32), Some(80)] {
+                    for (actual_format, expected_format) in [
+                        (Format::Tasks, Format::Tasks),
+                        (Format::CompactTasks, Format::CompactTasks),
+                        (Format::PriorityTasks, Format::PriorityTasks),
+                        (Format::OnelinePriorityTasks, Format::OnelinePriorityTasks),
+                    ] {
+                        assert_eq!(
+                            render(actual_format, &tasks, color, columns),
+                            render(expected_format, &normalized, color, columns),
+                            "description {description:?}, color {color}, columns {columns:?}"
+                        );
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
     fn tagged_names_wrap_without_splitting_unicode_or_repeating_tags() {
         let tasks = json!([{
             "id":1, "description":"Description\nSecond", "status":"new",
@@ -677,7 +721,7 @@ mod tests {
         assert_eq!(rows[2], format!("{pad}MN"));
         assert_eq!(rows[3], format!("{pad}界界界界界界"));
         assert_eq!(rows[4], format!("{pad}界"));
-        assert_eq!(rows[5], pad);
+        assert_eq!(rows[5], format!("{pad}C\\t\\u{{1b}}"));
         assert!(rendered.contains("C\\t\\u{1b}"));
         assert!(!rendered.contains('\u{1b}'));
         assert!(
