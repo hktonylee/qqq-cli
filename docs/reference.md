@@ -386,6 +386,7 @@ editor. UI goes to stderr; stdout receives the result after exit.
 | Enter / Shift-Enter | Insert newline |
 | Ctrl-V | Paste clipboard text or image; requires desktop clipboard support |
 | Ctrl-W | Delete previous word within the current line |
+| Ctrl-U | Clear the current line, keeping its newline |
 | Alt/Option-Left/Right | Move by word |
 | Ctrl-Z / Ctrl-Y | Undo / redo description edits |
 | Shift-Up/Down | Browse tasks in interactive add |

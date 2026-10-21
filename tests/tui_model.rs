@@ -693,6 +693,78 @@ fn undo_redo_treats_word_and_forward_deletion_as_one_edit() {
 }
 
 #[test]
+fn clear_line_preserves_newlines_and_restores_caret_with_undo() {
+    for (input, cursors, expected, expected_cursor) in [
+        ("first\nmiddle\nlast", 0..=5, "\nmiddle\nlast", 0),
+        ("first\nmiddle\nlast", 6..=12, "first\n\nlast", 6),
+        ("first\nmiddle\nlast", 13..=17, "first\nmiddle\n", 13),
+        ("first\r\nmiddle\r\nlast", 6..=12, "first\r\n\r\nlast", 6),
+        ("界\ne\u{301}👩‍💻\nlast", 2..=4, "界\n\nlast", 2),
+        ("only", 0..=4, "", 0),
+        ("first\n", 6..=6, "first\n", 6),
+        ("first\n\nlast", 6..=6, "first\n\nlast", 6),
+        ("", 0..=0, "", 0),
+    ] {
+        for cursor in cursors {
+            let mut draft = Draft::new(input);
+            draft.set_cursor(cursor);
+            draft.clear_line();
+            assert_eq!(
+                draft.fragments().concat(),
+                expected,
+                "{input:?} at {cursor}"
+            );
+            assert_eq!(draft.cursor(), expected_cursor);
+            if input != expected {
+                assert!(draft.undo());
+                assert_eq!(draft.fragments().concat(), input);
+                assert_eq!(draft.cursor(), cursor);
+                assert!(!draft.undo());
+                assert!(draft.redo());
+                assert_eq!(draft.fragments().concat(), expected);
+                assert_eq!(draft.cursor(), expected_cursor);
+            } else {
+                assert!(!draft.undo());
+            }
+        }
+    }
+}
+
+#[test]
+fn clear_line_keeps_paste_and_image_atoms_in_one_undo_step() {
+    let mut draft = Draft::new("first\n");
+    draft.paste(&format!("{}\r\nsecond line", "界".repeat(1001)));
+    draft
+        .image(ImageInput {
+            name: "x.png".into(),
+            data: b"\x89PNG\r\n\x1a\nbytes".to_vec(),
+        })
+        .unwrap();
+    draft.insert("tail\nlast");
+    let before = draft.finish().unwrap();
+    draft.set_cursor(7);
+    draft.clear_line();
+    assert_eq!(draft.finish().unwrap().description, "first\n\nlast");
+    assert!(draft.finish().unwrap().images.is_empty());
+    assert!(draft.undo());
+    let restored = draft.finish().unwrap();
+    assert_eq!(restored.description, before.description);
+    assert_eq!(restored.images[0].data, before.images[0].data);
+    assert_eq!(draft.cursor(), 7);
+    assert!(draft.redo());
+    assert_eq!(draft.finish().unwrap().description, "first\n\nlast");
+    draft.clear_line();
+    assert!(draft.undo());
+    assert_eq!(draft.finish().unwrap().description, before.description);
+    let mut blank = Draft::new("first\n\nlast");
+    blank.set_cursor(6);
+    blank.insert("temporary");
+    assert!(blank.undo());
+    blank.clear_line();
+    assert!(blank.redo(), "Clearing an empty line must preserve redo");
+}
+
+#[test]
 fn no_op_edits_motion_and_failed_images_preserve_redo() {
     let mut draft = Draft::new("Seed");
     draft.insert("!");

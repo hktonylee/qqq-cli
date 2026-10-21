@@ -528,6 +528,15 @@ impl Draft {
             );
         }
     }
+    pub fn clear_line(&mut self) {
+        let cursor = self.cursor;
+        self.home();
+        let start = self.cursor;
+        self.end();
+        let end = self.cursor;
+        self.cursor = cursor;
+        self.edit(start..end, Vec::new(), start, self.next_image);
+    }
     pub fn left(&mut self) {
         self.cursor = self.cursor.saturating_sub(1);
     }

@@ -2894,6 +2894,14 @@ fn compose_inner(
                             editor_follow_cursor = true;
                             draft.delete_previous_word();
                         }
+                        KeyCode::Char('u')
+                            if !key
+                                .modifiers
+                                .intersects(KeyModifiers::ALT | KeyModifiers::SUPER) =>
+                        {
+                            editor_follow_cursor = true;
+                            draft.clear_line();
+                        }
                         _ => (),
                     }
                     continue;

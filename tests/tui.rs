@@ -1038,6 +1038,12 @@ fn tui_ctrl_w_deletes_previous_word() {
     scenario("ctrl_w");
 }
 #[test]
+fn tui_ctrl_u_clears_current_line_in_add_and_edit() {
+    scenario("ctrl_u");
+    scenario("ctrl_u_edit");
+    undo_scenario("clear_line");
+}
+#[test]
 fn tui_alt_arrows_move_by_word() {
     scenario("alt_words");
 }

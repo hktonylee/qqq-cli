@@ -40,6 +40,9 @@ with tempfile.TemporaryDirectory(prefix="qqq-tui-test-") as folder:
         cli("add", "Original\n\nDetails")
         cli("next", "--local", "--session", "worker")
         args = ["edit", "-1"]
+    if scenario == "ctrl_u_edit":
+        cli("add", "first\n" + "middle" * 16 + "\nlast")
+        args = ["edit", "-1"]
     image = Path(folder) / "test image.png"
     image.write_bytes(base64.b64decode("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aGD8AAAAASUVORK5CYII="))
     if scenario == "edit_image":
@@ -152,6 +155,10 @@ with tempfile.TemporaryDirectory(prefix="qqq-tui-test-") as folder:
             send(b" \r")
         elif scenario == "ctrl_w":
             send(b"alpha beta\x17")
+        elif scenario in ("ctrl_u", "ctrl_u_edit"):
+            if scenario == "ctrl_u":
+                paste("first\n" + "middle" * 16 + "\nlast")
+            send(b"\x01\x1b[D\x1b[D\x15REPLACED")
         elif scenario == "alt_words":
             send(b"alpha beta\x1b[1;3DX\x1b[1;3CY")
         elif scenario == "continuous":
@@ -314,6 +321,8 @@ with tempfile.TemporaryDirectory(prefix="qqq-tui-test-") as folder:
                 assert task["description"] == "Recovered"
             elif scenario == "ctrl_w":
                 assert task["description"] == "alpha "
+            elif scenario in ("ctrl_u", "ctrl_u_edit"):
+                assert task["description"] == "first\nREPLACED\nlast", task
             elif scenario == "alt_words":
                 assert task["description"] == "alpha XbetaY"
             elif scenario == "edit_image":

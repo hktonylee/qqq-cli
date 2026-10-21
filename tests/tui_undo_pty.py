@@ -180,6 +180,18 @@ with tempfile.TemporaryDirectory(prefix="qqq-undo-test-") as directory:
             wait_editor("Seed", 4)
             assert cli("show", "1") == before
 
+        elif scenario == "clear_line":
+            paste("\nmiddle\nlast")
+            wait(lambda: "middle" in visible.text() and "last" in visible.text() and frame_ready())
+            send(b"\x01\x1b[D\x1b[D\x15")
+            wait(lambda: "middle" not in visible.text() and frame_ready())
+            assert cli("show", "1") == before
+            send(b"\x1a")
+            wait(lambda: "middle" in visible.text() and frame_ready())
+            send(b"\x19\x13")
+            wait(lambda: visible.text().splitlines()[-1].startswith("Saved #1") and frame_ready())
+            assert cli("show", "1")["task"]["description"] == "Seed\n\nlast"
+
         elif scenario == "buffers":
             paste(" changed")
             wait_editor("Seed changed", 12)
