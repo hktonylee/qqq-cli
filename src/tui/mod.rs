@@ -1312,14 +1312,14 @@ fn compose_inner(
                 usize::MAX,
             )
             .content;
-            let modal_lines = agent_ui
-                .as_ref()
-                .map(|ui| {
-                    ui.rows(
-                        usize::from(popup_content.width),
-                        usize::from(popup_content.height),
-                    )
-                })
+            let (agent_layout, agent_rows) = match agent_ui.as_ref() {
+                Some(ui) => {
+                    let (popup, rows) = ui.popup(ratatui::layout::Rect::new(0, 0, size.0, size.1));
+                    (Some(popup), Some(rows))
+                }
+                None => (None, None),
+            };
+            let modal_lines = agent_rows
                 .or_else(|| {
                     view_ui.as_mut().map(|ui| {
                         ui.rows(
@@ -1394,7 +1394,11 @@ fn compose_inner(
                             bulk_selected: Some(&bulk_selected),
                             top: &mut list_top,
                             follow_selected: list_follow_selected,
-                            modal_lines: modal_lines.as_deref(),
+                            modal_lines: modal_lines.as_deref().map(|lines| {
+                                (lines, agent_layout.unwrap_or_else(|| {
+                                    dashboard::popup_layout(frame.area(), lines.len())
+                                }))
+                            }),
                             hide_cursor: matches!(
                                 &confirmation,
                                 Some(Confirmation::Action { action, .. })
@@ -1636,11 +1640,8 @@ fn compose_inner(
             }
             Event::Key(mut key) if key.kind != KeyEventKind::Release => {
                 if let Some(mut ui) = agent_ui.take() {
-                    let area = dashboard::popup_layout(
-                        ratatui::layout::Rect::new(0, 0, size.0, size.1),
-                        usize::MAX,
-                    )
-                    .content;
+                    let (popup, _) = ui.popup(ratatui::layout::Rect::new(0, 0, size.0, size.1));
+                    let area = popup.content;
                     match ui.key(key, usize::from(area.width)) {
                         Some(agent_create::Action::Create(prompt)) => {
                             drop(terminal);

@@ -36,7 +36,7 @@ pub struct View<'a> {
     pub bulk_selected: Option<&'a BTreeSet<i64>>,
     pub top: &'a mut usize,
     pub follow_selected: bool,
-    pub modal_lines: Option<&'a [render::PopupRow]>,
+    pub modal_lines: Option<(&'a [render::PopupRow], PopupLayout)>,
     pub hide_cursor: bool,
     pub details: Option<DetailsView<'a>>,
 }
@@ -66,6 +66,34 @@ pub struct PopupLayout {
     pub outer: Rect,
     pub content: Rect,
     bordered: bool,
+}
+
+impl PopupLayout {
+    pub(super) fn enlarged(self, area: Rect) -> Self {
+        let margin = u16::from(self.bordered) * 4;
+        let width = self
+            .outer
+            .width
+            .saturating_add(self.outer.width.div_ceil(2))
+            .min(area.width.saturating_sub(margin));
+        let height = self
+            .outer
+            .height
+            .saturating_add(self.outer.height.div_ceil(2))
+            .min(area.height.saturating_sub(margin));
+        let outer = Rect::new(
+            area.x + (area.width - width) / 2,
+            area.y + (area.height - height) / 2,
+            width,
+            height,
+        );
+        let inset = u16::from(self.bordered);
+        Self {
+            outer,
+            content: outer.inner(Margin::new(inset, inset)),
+            bordered: self.bordered,
+        }
+    }
 }
 
 pub fn popup_layout(area: Rect, rows: usize) -> PopupLayout {
@@ -161,12 +189,23 @@ pub(super) fn popup(
     color: bool,
     show_cursor: bool,
 ) {
+    let layout = popup_layout(frame.area(), lines.len());
+    popup_at(frame, lines, color, show_cursor, layout);
+}
+
+pub(super) fn popup_at(
+    frame: &mut Frame<'_>,
+    lines: &[render::PopupRow],
+    color: bool,
+    show_cursor: bool,
+    layout: PopupLayout,
+) {
     use render::PopupKind;
     let PopupLayout {
         outer,
         content,
         bordered,
-    } = popup_layout(frame.area(), lines.len());
+    } = layout;
     frame.render_widget(Clear, outer);
     let body_style = popup_row_style(PopupKind::Action, false, color);
     let border_style = if color {
@@ -809,7 +848,7 @@ pub fn draw(
     if let Some(cursor) = editor_cursor.filter(|_| !list_view.focused && !list_view.hide_cursor) {
         frame.set_cursor_position(cursor);
     }
-    if let Some(lines) = list_view.modal_lines {
-        popup(frame, lines, color, !list_view.hide_cursor);
+    if let Some((lines, layout)) = list_view.modal_lines {
+        popup_at(frame, lines, color, !list_view.hide_cursor, layout);
     }
 }

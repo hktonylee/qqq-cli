@@ -70,6 +70,26 @@ impl View {
         render::Layout::new(&fragments, &[], width.saturating_sub(3))
     }
 
+    pub fn popup(
+        &self,
+        area: ratatui::layout::Rect,
+    ) -> (super::dashboard::PopupLayout, Vec<PopupRow>) {
+        let content = super::dashboard::popup_layout(area, usize::MAX).content;
+        let rows = self.rows(usize::from(content.width), usize::from(content.height));
+        let popup = super::dashboard::popup_layout(area, rows.len()).enlarged(area);
+        let mut rows = self.rows(
+            usize::from(popup.content.width),
+            usize::from(popup.content.height),
+        );
+        let padding = usize::from(popup.content.height).saturating_sub(rows.len());
+        let footer = rows.len().saturating_sub(1);
+        rows.splice(
+            footer..footer,
+            std::iter::repeat_with(|| PopupRow::new("  ", PopupKind::Input)).take(padding),
+        );
+        (popup, rows)
+    }
+
     pub fn rows(&self, width: usize, height: usize) -> Vec<PopupRow> {
         let heading = usize::from(height >= 3);
         let guidance = usize::from(height >= if self.error.is_empty() { 4 } else { 5 });
@@ -134,6 +154,45 @@ impl View {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn popup_is_half_larger_and_keeps_footer_and_cursor_inside_small_terminals() {
+        use ratatui::{Terminal, backend::TestBackend, layout::Rect};
+        let view = View::new(PathBuf::from("/project"), None);
+        for (width, height, expected_width, expected_height) in [
+            (120, 40, 72, 14),
+            (72, 24, 68, 14),
+            (40, 12, 40, 12),
+            (12, 8, 12, 8),
+        ] {
+            for color in [true, false] {
+                let area = Rect::new(0, 0, width, height);
+                let (popup, rows) = view.popup(area);
+                assert_eq!(popup.outer.width, expected_width);
+                assert_eq!(popup.outer.height, expected_height);
+                assert_eq!(popup.outer.x, (width - expected_width) / 2);
+                assert_eq!(popup.outer.y, (height - expected_height) / 2);
+                assert_eq!(rows.len(), usize::from(popup.content.height));
+                assert_eq!(rows.last().unwrap().kind, PopupKind::Hint);
+                let (row, column) = rows
+                    .iter()
+                    .enumerate()
+                    .find_map(|(row, value)| value.cursor.map(|column| (row, column)))
+                    .unwrap();
+                let expected_cursor = ratatui::layout::Position::new(
+                    popup.content.x + column as u16,
+                    popup.content.y + row as u16,
+                );
+                let mut terminal = Terminal::new(TestBackend::new(width, height)).unwrap();
+                terminal
+                    .draw(|frame| {
+                        super::super::dashboard::popup_at(frame, &rows, color, true, popup)
+                    })
+                    .unwrap();
+                assert_eq!(terminal.get_cursor_position().unwrap(), expected_cursor);
+            }
+        }
+    }
 
     #[test]
     fn ctrl_h_confirms_prompt_and_ctrl_s_leaves_it_open() {

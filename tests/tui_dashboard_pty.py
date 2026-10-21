@@ -739,6 +739,9 @@ print(json.dumps({"result": result}))
             if scenario == "create_agent_compact":
                 fcntl.ioctl(slave, termios.TIOCSWINSZ, struct.pack("HHHH", 12, 40, 0, 0))
                 visible.resize(40, 12)
+            elif scenario == "create_agent_cancel":
+                fcntl.ioctl(slave, termios.TIOCSWINSZ, struct.pack("HHHH", 40, 120, 0, 0))
+                visible.resize(120, 40)
             send(b"\x08")
             if scenario == "create_agent_config_invalid":
                 wait_visible(lambda: "Invalid config" in visible.text().splitlines()[-1])
@@ -748,6 +751,15 @@ print(json.dumps({"result": result}))
                 send(b"\x08")
             wait_visible(lambda: "Create Herdr agent" in visible.text())
             assert not (Path(folder) / "herdr-calls").exists()
+            if scenario == "create_agent_cancel":
+                wait_visible(lambda: "┘" in visible.text() and "Ctrl-H create" in visible.text()
+                             and not visible.pending and not visible.decoder.getstate()[0])
+                rows = visible.text().splitlines()
+                top = next(index for index, row in enumerate(rows) if "┌" in row)
+                bottom = next(index for index, row in enumerate(rows) if "└" in row)
+                assert rows[top].index("┐") - rows[top].index("┌") + 1 == 72, rows
+                assert bottom - top + 1 == 14, rows
+                assert "Ctrl-H create" in rows[bottom - 1], rows
             if scenario != "create_agent_config_empty":
                 wait_visible(lambda: "  /goal " in visible.text())
             if scenario.startswith("create_agent_config") and scenario != "create_agent_config_empty":
@@ -838,6 +850,9 @@ print(json.dumps({"result": result}))
                 }, link
                 assert cli("herdr", "find", "2")["pane_id"] == "wW:p1"
                 assert cli("show", "1")["herdr"] is None
+            if scenario == "create_agent_cancel":
+                fcntl.ioctl(slave, termios.TIOCSWINSZ, struct.pack("HHHH", 24, 72, 0, 0))
+                visible.resize(72, 24)
             if scenario != "create_agent_compact":
                 wait_visible(lambda: editor_title() == title and editor_line() == content
                              and (visible.x, visible.y) == cursor)

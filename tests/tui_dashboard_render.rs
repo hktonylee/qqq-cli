@@ -1,3 +1,4 @@
+#[allow(dead_code)]
 #[path = "../src/tui/dashboard.rs"]
 mod dashboard;
 #[allow(dead_code)]
@@ -700,7 +701,9 @@ fn action_popup_preserves_background_and_clears_overlaid_styles() {
                             focused: false,
                             top: &mut 0,
                             follow_selected: true,
-                            modal_lines,
+                            modal_lines: modal_lines.map(|lines| {
+                                (lines, dashboard::popup_layout(frame.area(), lines.len()))
+                            }),
                             hide_cursor: false,
                             details: None,
                         },
@@ -855,7 +858,10 @@ fn action_popup_input_errors_and_warnings_keep_roles_and_plain_styles() {
                             focused: false,
                             top: &mut 0,
                             follow_selected: true,
-                            modal_lines: Some(modal),
+                            modal_lines: Some((
+                                modal,
+                                dashboard::popup_layout(frame.area(), modal.len()),
+                            )),
                             hide_cursor: false,
                             details: None,
                         },
