@@ -810,9 +810,10 @@ fn action_popup_input_errors_and_warnings_keep_roles_and_plain_styles() {
         vec![
             PopupRow::new("Priority task #1", PopupKind::Heading),
             PopupRow::new("Enter -100..100", PopupKind::Hint),
-            PopupRow::new("  -9", PopupKind::Input),
-            PopupRow::new("  ", PopupKind::Input),
-            PopupRow::new("  > prompt", PopupKind::Input),
+            PopupRow::new("-9", PopupKind::Input),
+            PopupRow::new("", PopupKind::Input),
+            PopupRow::new("> prompt", PopupKind::Input),
+            PopupRow::new("  user indent", PopupKind::Input),
             PopupRow::new("Priority must be -100..100", PopupKind::Error),
             PopupRow::new("Enter apply  Esc cancel", PopupKind::Hint),
         ],
@@ -910,8 +911,10 @@ fn action_popup_input_errors_and_warnings_keep_roles_and_plain_styles() {
                     }
                 );
                 if row.kind == PopupKind::Input {
-                    assert_eq!(buffer[(content.x, y)].symbol(), " ");
-                    assert_eq!(buffer[(content.x + 1, y)].symbol(), " ");
+                    let displayed: String = (content.x..content.right())
+                        .map(|x| buffer[(x, y)].symbol())
+                        .collect();
+                    assert!(displayed.starts_with(&row.text));
                     for x in content.x..content.right() {
                         assert_eq!(
                             buffer[(x, y)].bg,
@@ -923,7 +926,7 @@ fn action_popup_input_errors_and_warnings_keep_roles_and_plain_styles() {
                         );
                     }
                     assert_eq!(
-                        buffer[(content.x + 2, y)].fg,
+                        buffer[(content.x, y)].fg,
                         if color {
                             Color::Indexed(252)
                         } else {

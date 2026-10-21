@@ -227,10 +227,8 @@ pub(super) fn popup_at(
         let text = if row.cursor.is_some() {
             render::clipped(&row.text, width)
         } else if row.kind == PopupKind::Input {
-            let value = row.text.strip_prefix("  ").unwrap_or(&row.text);
-            let safe = render::clipped(value, usize::MAX);
-            let (tail, _) = text_tail(&safe, width.saturating_sub(3));
-            render::clipped(&format!("  {tail}"), width)
+            let safe = render::clipped(&row.text, usize::MAX);
+            text_tail(&safe, width.saturating_sub(1)).0
         } else {
             let marker_width = usize::from(matches!(
                 row.kind,

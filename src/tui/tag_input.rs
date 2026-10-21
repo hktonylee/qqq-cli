@@ -380,20 +380,17 @@ fn focused_row(value: &str, byte: usize, width: usize) -> PopupRow {
     let mut start = 0;
     let mut skipped = 0;
     for (index, grapheme) in safe.grapheme_indices(true) {
-        if caret.saturating_sub(skipped) <= width.saturating_sub(3) {
+        if caret.saturating_sub(skipped) <= width.saturating_sub(1) {
             break;
         }
         start = index + grapheme.len();
         skipped += grapheme.width();
     }
     let mut row = PopupRow::new(
-        format!(
-            "  {}",
-            super::render::clipped(&safe[start..], width.saturating_sub(2))
-        ),
+        super::render::clipped(&safe[start..], width),
         PopupKind::Input,
     );
-    row.cursor = Some((2 + caret.saturating_sub(skipped)).min(width.saturating_sub(1)));
+    row.cursor = Some(caret.saturating_sub(skipped).min(width.saturating_sub(1)));
     row
 }
 
@@ -467,7 +464,7 @@ pub(super) fn rows(
                 if index == active {
                     focused_row(line, cursor.byte - active_start, width)
                 } else {
-                    PopupRow::new(format!("  {line}"), PopupKind::Input)
+                    PopupRow::new(line, PopupKind::Input)
                 }
             }),
     );
@@ -798,10 +795,13 @@ mod tests {
             assert!(tail.cursor.unwrap() < width);
             cursor.home(&value);
             let head = focused_row(&value, cursor.byte, width);
-            assert_eq!(head.cursor, Some(2));
-            assert!(head.text.starts_with("  "));
+            assert_eq!(head.cursor, Some(0));
+            assert!(head.text.starts_with("界"));
             cursor.end(&value);
         }
+        let indented = focused_row("  keep", 2, 46);
+        assert_eq!(indented.text, "  keep");
+        assert_eq!(indented.cursor, Some(2));
     }
 
     #[test]
@@ -827,7 +827,7 @@ mod tests {
                     capacity.height.into(),
                 );
                 let focused = lines.iter().position(|row| row.cursor.is_some()).unwrap();
-                assert_eq!(lines[focused].text, "  tag00");
+                assert_eq!(lines[focused].text, "tag00");
                 let mut terminal =
                     ratatui::Terminal::new(ratatui::backend::TestBackend::new(width, height))
                         .unwrap();
@@ -837,7 +837,7 @@ mod tests {
                 let content = super::super::dashboard::popup_layout(area, lines.len()).content;
                 assert_eq!(
                     terminal.get_cursor_position().unwrap(),
-                    ratatui::layout::Position::new(content.x + 7, content.y + focused as u16)
+                    ratatui::layout::Position::new(content.x + 5, content.y + focused as u16)
                 );
             }
         }

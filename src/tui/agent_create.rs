@@ -66,8 +66,8 @@ impl View {
 
     fn layout(&self, width: usize) -> render::Layout {
         let fragments: Vec<_> = self.value.graphemes(true).map(str::to_owned).collect();
-        // Match the popup's two-cell padding and one-cell caret reservation.
-        render::Layout::new(&fragments, &[], width.saturating_sub(3))
+        // Reserve one cell for the caret.
+        render::Layout::new(&fragments, &[], width.saturating_sub(1))
     }
 
     pub fn popup(
@@ -85,7 +85,7 @@ impl View {
         let footer = rows.len().saturating_sub(1);
         rows.splice(
             footer..footer,
-            std::iter::repeat_with(|| PopupRow::new("  ", PopupKind::Input)).take(padding),
+            std::iter::repeat_with(|| PopupRow::new("", PopupKind::Input)).take(padding),
         );
         (popup, rows)
     }
@@ -125,9 +125,9 @@ impl View {
                 .skip(start)
                 .take(input_height)
                 .map(|(index, text)| {
-                    let mut row = PopupRow::new(format!("  {text}"), PopupKind::Input);
+                    let mut row = PopupRow::new(text, PopupKind::Input);
                     if index == active {
-                        row.cursor = Some((2 + column).min(width.saturating_sub(1)));
+                        row.cursor = Some(column.min(width.saturating_sub(1)));
                     }
                     row
                 }),
@@ -220,7 +220,7 @@ mod tests {
     #[test]
     fn down_reaches_wrapped_row_starting_with_wide_grapheme() {
         let mut view = View::new(PathBuf::from("/project"), None);
-        view.value = format!("{}界bbb", "a".repeat(43));
+        view.value = format!("{}界bbb", "a".repeat(45));
         view.cursor = tag_input::Cursor::at_end(&view.value);
         view.key(KeyEvent::new(KeyCode::Home, KeyModifiers::NONE), 46);
         view.key(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE), 46);
@@ -255,7 +255,7 @@ mod tests {
             let text: String = rows
                 .iter()
                 .filter(|row| row.kind == PopupKind::Input)
-                .map(|row| row.text.strip_prefix("  ").unwrap())
+                .map(|row| row.text.as_str())
                 .collect();
             assert_eq!(text, DEFAULT_PROMPT);
             assert!(rows.iter().any(|row| row.cursor.is_some()));
