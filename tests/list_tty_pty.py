@@ -16,7 +16,7 @@ import time
 binary = sys.argv[1]
 with tempfile.TemporaryDirectory(prefix="qqq-list-tty-") as folder:
     env = dict(os.environ, HOME=folder, TERM="xterm-256color")
-    for key in ("QQQ_SESSION", "HERDR_ENV", "HERDR_PANE_ID", "CODEX_THREAD_ID", "CODEX_SESSION_ID"):
+    for key in ("QQQ_SESSION", "HERDR_ENV", "HERDR_PANE_ID", "CODEX_THREAD_ID", "CODEX_SESSION_ID", "CLAUDE_CODE_SESSION_ID"):
         env.pop(key, None)
 
     def cli(*args):

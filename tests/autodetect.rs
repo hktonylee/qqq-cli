@@ -13,6 +13,7 @@ fn command(dir: &Path) -> Command {
         .env_remove("QQQ_SESSION")
         .env_remove("CODEX_THREAD_ID")
         .env_remove("CODEX_SESSION_ID")
+        .env_remove("CLAUDE_CODE_SESSION_ID")
         .env_remove("HERDR_SOCKET_PATH")
         .env_remove("HERDR_ENV")
         .env_remove("HERDR_PANE_ID");
@@ -592,6 +593,7 @@ fn native_codex_keeps_thread_owner_and_displays_session_env() {
     let dir = project();
     let p = dir.path();
     let task = ok(native(p, "preferred")
+        .env("CLAUDE_CODE_SESSION_ID", "other-harness")
         .env("CODEX_SESSION_ID", "legacy")
         .arg("next"));
     assert_eq!(task["harness_session"], "legacy");
@@ -621,6 +623,140 @@ fn native_codex_keeps_thread_owner_and_displays_session_env() {
         ok(command(p).args(["show", "2"]))["task"]["status"],
         "error"
     );
+}
+
+#[test]
+fn native_claude_claims_waits_releases_and_completes_without_herdr() {
+    let dir = project();
+    let p = dir.path();
+    let claude = || {
+        let mut cmd = command(p);
+        cmd.env("CLAUDE_CODE_SESSION_ID", "claude-session")
+            .env("QQQ_TEST_CALLS", p.join("native-calls"));
+        cmd
+    };
+    let first = ok(claude().arg("next"));
+    assert_eq!(first["harness_name"], "claude");
+    assert_eq!(first["harness_session"], "claude-session");
+    assert!(first["orchestrator_name"].is_null());
+    assert!(first["orchestrator_session"].is_null());
+    let detail = ok(command(p).args(["show", "1"]));
+    assert!(detail["herdr"].is_null());
+    assert_eq!(
+        serde_json::from_str::<Value>(detail["events"][0]["session"].as_str().unwrap()).unwrap(),
+        json!(["claude", "id", "claude-session"])
+    );
+    assert_eq!(ok(claude().args(["next", "--wait"])), first);
+    let wrong = claude()
+        .env("CLAUDE_CODE_SESSION_ID", "other-session")
+        .args(["edit", "1", "--complete"])
+        .output()
+        .unwrap();
+    assert_eq!(wrong.status.code(), Some(1));
+    assert_eq!(ok(command(p).args(["show", "1"]))["task"], first);
+    assert_eq!(
+        ok(claude().args(["edit", "1", "--set-pending"]))["status"],
+        "new"
+    );
+    assert_eq!(ok(claude().arg("next"))["harness_name"], "claude");
+    assert_eq!(
+        ok(claude().args(["edit", "1", "--complete"]))["status"],
+        "completed"
+    );
+    assert!(!p.join("native-calls").exists());
+}
+
+#[test]
+fn herdr_claude_displays_native_session_and_keeps_pane_identity() {
+    for reported in [false, true] {
+        let dir = project();
+        let p = dir.path();
+        let mut caller = pane(p);
+        caller["agent"] = json!("claude");
+        if reported {
+            caller["agent_session"] = json!({"agent":"claude","kind":"id","value":"hook-session"});
+        }
+        let response = json!({"result":{"pane":caller}});
+        let mut claim = herdr(p, response.clone(), true);
+        let task = ok(claim
+            .env("CLAUDE_CODE_SESSION_ID", "claude-session")
+            .env("CODEX_SESSION_ID", " ")
+            .arg("next"));
+        assert_eq!(task["harness_name"], "claude");
+        assert_eq!(task["harness_session"], "claude-session");
+        assert_eq!(task["orchestrator_name"], "herdr");
+        assert_eq!(task["orchestrator_session"], "w1:p1");
+        let detail = ok(command(p).args(["show", "1"]));
+        assert_eq!(detail["herdr"]["identity"]["agent"], "claude");
+        assert_eq!(
+            detail["herdr"]["identity"]["value"],
+            if reported {
+                "hook-session"
+            } else {
+                "terminal-1"
+            }
+        );
+        let repeated = ok(herdr(p, response.clone(), true)
+            .env("CLAUDE_CODE_SESSION_ID", "claude-session")
+            .args(["next", "--harness-session", "public-session"]));
+        assert_eq!(repeated["harness_session"], "public-session");
+        assert_eq!(repeated["orchestrator_session"], "w1:p1");
+        assert_eq!(
+            ok(herdr(p, response, true)
+                .env("CLAUDE_CODE_SESSION_ID", "claude-session")
+                .args(["edit", "1", "--complete"]))["status"],
+            "completed"
+        );
+    }
+}
+
+#[test]
+fn invalid_claude_session_fails_before_native_or_herdr_claim() {
+    use std::os::unix::ffi::OsStringExt;
+    for value in [
+        std::ffi::OsString::from(""),
+        std::ffi::OsString::from(" \t"),
+        std::ffi::OsString::from_vec(vec![0xff]),
+    ] {
+        for exact_herdr in [false, true] {
+            let dir = project();
+            let p = dir.path();
+            let mut caller = pane(p);
+            caller["agent"] = json!("claude");
+            let mut cmd = if exact_herdr {
+                herdr(p, json!({"result":{"pane":caller}}), true)
+            } else {
+                command(p)
+            };
+            let output = cmd
+                .env("CLAUDE_CODE_SESSION_ID", &value)
+                .arg("next")
+                .output()
+                .unwrap();
+            assert_eq!(output.status.code(), Some(1));
+            assert!(String::from_utf8_lossy(&output.stderr).contains("CLAUDE_CODE_SESSION_ID"));
+            let detail = ok(command(p).args(["show", "1"]));
+            assert_eq!(detail["task"]["status"], "new");
+            assert_eq!(detail["events"], json!([]));
+            assert!(detail["herdr"].is_null());
+        }
+    }
+}
+
+#[test]
+fn other_herdr_harness_ignores_claude_session_env() {
+    for agent in ["codex", "opencode"] {
+        let dir = project();
+        let p = dir.path();
+        let mut caller = pane(p);
+        caller["agent"] = json!(agent);
+        let task = ok(herdr(p, json!({"result":{"pane":caller}}), true)
+            .env("CLAUDE_CODE_SESSION_ID", " ")
+            .arg("next"));
+        assert_eq!(task["harness_name"], agent);
+        assert_eq!(task["harness_session"], "terminal-1");
+        assert_eq!(task["orchestrator_session"], "w1:p1");
+    }
 }
 
 #[test]
@@ -708,6 +844,7 @@ fn explicit_cli_and_qqq_environment_override_invalid_automatic_context() {
         let p = dir.path();
         let mut cmd = native(p, " ");
         cmd.env("HERDR_PANE_ID", "")
+            .env("CLAUDE_CODE_SESSION_ID", " ")
             .env("QQQ_SESSION", "env-owner")
             .arg("next");
         if cli_override {

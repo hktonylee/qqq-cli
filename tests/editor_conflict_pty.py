@@ -14,7 +14,7 @@ with tempfile.TemporaryDirectory() as directory:
     root = Path(directory)
     env = os.environ.copy()
     env["HOME"] = directory
-    for key in ("QQQ_SESSION", "HERDR_ENV", "HERDR_PANE_ID", "CODEX_THREAD_ID", "CODEX_SESSION_ID"):
+    for key in ("QQQ_SESSION", "HERDR_ENV", "HERDR_PANE_ID", "CODEX_THREAD_ID", "CODEX_SESSION_ID", "CLAUDE_CODE_SESSION_ID"):
         env.pop(key, None)
 
     def cli(*args):

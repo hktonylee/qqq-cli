@@ -67,7 +67,8 @@ For your own project, run `qqq init` at its root and use the IDs returned by `ad
 Commands also work from subdirectories. Add `.qqq/` to your `.gitignore`.
 
 Recognized agent callers get JSON by default: native Codex sessions
-(`CODEX_THREAD_ID` or `CODEX_SESSION_ID`) and exact Herdr panes reporting an
+(`CODEX_THREAD_ID` or `CODEX_SESSION_ID`), Claude Code sessions
+(`CLAUDE_CODE_SESSION_ID`), and exact Herdr panes reporting an
 agent. Use global `--human` for readable text, or `--json` to request JSON
 explicitly. Ordinary shells keep readable output, including when piped.
 Help and version output stay text.
@@ -111,8 +112,8 @@ limit, but qqq marks tasks `error` when their owner is confirmed dead.
 [Return or retry work](docs/reference.md#return-or-retry-work) when a worker gets
 stuck or its task needs recovery.
 
-Native Codex session discovery can supply identity automatically. Optional
-[Herdr integration](docs/reference.md#herdr) links live agents and lets Ctrl+H
+Native Codex or Claude Code session discovery can supply identity automatically.
+Optional [Herdr integration](docs/reference.md#herdr) links live agents and lets Ctrl+H
 create a queue worker from a saved New task. `next` always claims for its caller.
 Leave `--session` and `QQQ_SESSION` unset for normal agent use. They force manual
 ownership and bypass automatic session discovery and Herdr linking.

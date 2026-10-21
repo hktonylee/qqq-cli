@@ -25,7 +25,7 @@ with tempfile.TemporaryDirectory(prefix="qqq-history-test-") as folder:
     env.pop("NO_COLOR", None)
     if scenario == "status_header_no_color":
         env["NO_COLOR"] = "1"
-    for key in ("EDITOR", "QQQ_SESSION", "HERDR_ENV", "HERDR_PANE_ID", "CODEX_THREAD_ID", "CODEX_SESSION_ID"):
+    for key in ("EDITOR", "QQQ_SESSION", "HERDR_ENV", "HERDR_PANE_ID", "CODEX_THREAD_ID", "CODEX_SESSION_ID", "CLAUDE_CODE_SESSION_ID"):
         env.pop(key, None)
 
     def cli(*args):

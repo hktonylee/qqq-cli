@@ -17,6 +17,7 @@ fn command(root: &Path) -> Command {
         "QQQ_SESSION",
         "CODEX_THREAD_ID",
         "CODEX_SESSION_ID",
+        "CLAUDE_CODE_SESSION_ID",
         "HERDR_ENV",
         "HERDR_PANE_ID",
         "HERDR_SOCKET_PATH",
@@ -108,6 +109,33 @@ fn native_session_marker_also_selects_json_without_thread_marker() {
     let mut cmd = command(root.path());
     cmd.env("CODEX_SESSION_ID", "agent-session");
     assert_eq!(json(cmd.arg("list")), serde_json::json!([]));
+}
+
+#[test]
+fn claude_session_selects_json_for_commands_and_startup_errors() {
+    let root = project();
+    let p = root.path();
+    assert_eq!(
+        json(
+            command(p)
+                .env("CLAUDE_CODE_SESSION_ID", "claude-session")
+                .arg("list")
+        ),
+        serde_json::json!([])
+    );
+    json_error(
+        command(p)
+            .env("CLAUDE_CODE_SESSION_ID", "claude-session")
+            .arg("unknown-command"),
+        2,
+        "INVALID_ARGUMENT",
+    );
+    let human = success(
+        command(p)
+            .env("CLAUDE_CODE_SESSION_ID", "claude-session")
+            .args(["--human", "list"]),
+    );
+    assert!(serde_json::from_slice::<Value>(&human.stdout).is_err());
 }
 
 #[test]
@@ -214,7 +242,11 @@ fn aliases_consuming_output_flags_as_values_keep_agent_default() {
 fn no_agent_context_keeps_human_output_even_when_piped_or_session_supplied() {
     let root = project();
     let p = root.path();
-    for marker in ["CODEX_THREAD_ID", "CODEX_SESSION_ID"] {
+    for marker in [
+        "CODEX_THREAD_ID",
+        "CODEX_SESSION_ID",
+        "CLAUDE_CODE_SESSION_ID",
+    ] {
         let output = success(command(p).env(marker, "  ").arg("list"));
         assert!(serde_json::from_slice::<Value>(&output.stdout).is_err());
     }

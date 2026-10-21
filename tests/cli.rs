@@ -20,6 +20,7 @@ fn human_command(dir: &Path) -> Command {
         .env_remove("QQQ_SESSION")
         .env_remove("CODEX_THREAD_ID")
         .env_remove("CODEX_SESSION_ID")
+        .env_remove("CLAUDE_CODE_SESSION_ID")
         .env_remove("HERDR_ENV")
         .env_remove("HERDR_PANE_ID");
     c

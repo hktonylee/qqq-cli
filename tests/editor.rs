@@ -15,6 +15,7 @@ fn command(dir: &Path) -> Command {
         .env_remove("HERDR_PANE_ID")
         .env_remove("CODEX_THREAD_ID")
         .env_remove("CODEX_SESSION_ID")
+        .env_remove("CLAUDE_CODE_SESSION_ID")
         .env_remove("EDITOR");
     command
 }

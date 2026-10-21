@@ -19,7 +19,7 @@ from terminal_screen import TerminalScreen
 binary, scenario = sys.argv[1:]
 with tempfile.TemporaryDirectory(prefix="qqq-undo-test-") as directory:
     env = dict(os.environ, HOME=directory, TERM="xterm-256color")
-    for key in ("EDITOR", "QQQ_SESSION", "HERDR_ENV", "HERDR_PANE_ID", "CODEX_THREAD_ID", "CODEX_SESSION_ID", "NO_COLOR"):
+    for key in ("EDITOR", "QQQ_SESSION", "HERDR_ENV", "HERDR_PANE_ID", "CODEX_THREAD_ID", "CODEX_SESSION_ID", "CLAUDE_CODE_SESSION_ID", "NO_COLOR"):
         env.pop(key, None)
     if scenario.endswith("no_color"):
         env["NO_COLOR"] = "1"

@@ -91,6 +91,7 @@ esac
             .env_remove("QQQ_SESSION")
             .env_remove("CODEX_THREAD_ID")
             .env_remove("CODEX_SESSION_ID")
+            .env_remove("CLAUDE_CODE_SESSION_ID")
             .env_remove("HERDR_ENV")
             .env_remove("HERDR_PANE_ID")
             .env_remove("HERDR_SOCKET_PATH")
@@ -549,12 +550,13 @@ fn native_command(dir: &TempDir) -> Command {
         .env_remove("QQQ_SESSION")
         .env_remove("CODEX_THREAD_ID")
         .env_remove("CODEX_SESSION_ID")
+        .env_remove("CLAUDE_CODE_SESSION_ID")
         .env_remove("HERDR_ENV")
         .env_remove("HERDR_PANE_ID");
     command
 }
 
-fn native_claim() -> (TempDir, Harness) {
+fn native_claim(agent: &str) -> (TempDir, Harness) {
     let dir = TempDir::new().unwrap();
     for args in [&["init"][..], &["add", "Native task"][..]] {
         assert!(
@@ -582,7 +584,7 @@ fn main() {
     let compile = Command::new(std::env::var_os("RUSTC").unwrap_or_else(|| "rustc".into()))
         .arg(dir.path().join("parent.rs"))
         .arg("-o")
-        .arg(dir.path().join("codex"))
+        .arg(dir.path().join(agent))
         .output()
         .unwrap();
     assert!(
@@ -590,15 +592,24 @@ fn main() {
         "{}",
         String::from_utf8_lossy(&compile.stderr)
     );
-    let mut parent = Command::new(dir.path().join("codex"));
+    let mut parent = Command::new(dir.path().join(agent));
     parent
         .current_dir(dir.path())
         .env("QQQ_BIN", env!("CARGO_BIN_EXE_qqq"))
-        .env("CODEX_THREAD_ID", "native-preflight-owner")
+        .env_remove("CODEX_THREAD_ID")
         .env_remove("CODEX_SESSION_ID")
+        .env_remove("CLAUDE_CODE_SESSION_ID")
         .env_remove("QQQ_SESSION")
         .env_remove("HERDR_ENV")
         .env_remove("HERDR_PANE_ID")
+        .env(
+            if agent == "claude" {
+                "CLAUDE_CODE_SESSION_ID"
+            } else {
+                "CODEX_THREAD_ID"
+            },
+            "native-preflight-owner",
+        )
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
@@ -619,35 +630,38 @@ fn main() {
     }
     let task: Value = serde_json::from_str(&text).unwrap();
     assert_eq!(task["status"], "in_progress");
+    assert_eq!(task["harness_name"], agent);
     (dir, harness)
 }
 
 #[test]
 fn native_harness_death_is_detected_before_command_without_herdr_link() {
-    let (dir, mut harness) = native_claim();
-    let out = native_command(&dir).args(["show", "1"]).output().unwrap();
-    assert!(out.status.success());
-    assert_eq!(
-        serde_json::from_slice::<Value>(&out.stdout).unwrap()["task"]["status"],
-        "in_progress"
-    );
-    harness.0.kill().unwrap();
-    harness.0.wait().unwrap();
-    let out = native_command(&dir).args(["show", "1"]).output().unwrap();
-    assert!(
-        out.status.success(),
-        "{}",
-        String::from_utf8_lossy(&out.stderr)
-    );
-    let shown: Value = serde_json::from_slice(&out.stdout).unwrap();
-    assert_eq!(shown["task"]["status"], "error");
-    assert!(
-        shown["messages"][0]["body"]
-            .as_str()
-            .unwrap()
-            .contains("process")
-    );
-    assert!(shown["herdr"].is_null());
+    for agent in ["codex", "claude"] {
+        let (dir, mut harness) = native_claim(agent);
+        let out = native_command(&dir).args(["show", "1"]).output().unwrap();
+        assert!(out.status.success());
+        assert_eq!(
+            serde_json::from_slice::<Value>(&out.stdout).unwrap()["task"]["status"],
+            "in_progress"
+        );
+        harness.0.kill().unwrap();
+        harness.0.wait().unwrap();
+        let out = native_command(&dir).args(["show", "1"]).output().unwrap();
+        assert!(
+            out.status.success(),
+            "{}",
+            String::from_utf8_lossy(&out.stderr)
+        );
+        let shown: Value = serde_json::from_slice(&out.stdout).unwrap();
+        assert_eq!(shown["task"]["status"], "error");
+        assert!(
+            shown["messages"][0]["body"]
+                .as_str()
+                .unwrap()
+                .contains("process")
+        );
+        assert!(shown["herdr"].is_null());
+    }
 }
 
 #[test]
@@ -766,7 +780,7 @@ fn inspection_preflight_fails_dead_owner_before_preview_without_claiming_work() 
 #[test]
 #[cfg(target_os = "linux")]
 fn legacy_namespace_inode_cannot_prove_owner_process_death() {
-    let (dir, _harness) = native_claim();
+    let (dir, _harness) = native_claim("codex");
     let db = Connection::open(dir.path().join(".qqq/qqq.db")).unwrap();
     let original: String = db
         .query_row("SELECT process_json FROM claim_processes", [], |r| r.get(0))
@@ -791,7 +805,7 @@ fn legacy_namespace_inode_cannot_prove_owner_process_death() {
 #[test]
 fn native_pid_reuse_foreign_machine_and_stale_binding_are_distinguished() {
     for mode in ["reuse", "foreign", "stale-event", "mismatched-key"] {
-        let (dir, _harness) = native_claim();
+        let (dir, _harness) = native_claim("codex");
         let db = Connection::open(dir.path().join(".qqq/qqq.db")).unwrap();
         let original: String = db
             .query_row("SELECT process_json FROM claim_processes", [], |r| r.get(0))
@@ -835,7 +849,7 @@ fn native_pid_reuse_foreign_machine_and_stale_binding_are_distinguished() {
 
 #[test]
 fn retrieving_native_assignment_preserves_original_process_binding() {
-    let (dir, _harness) = native_claim();
+    let (dir, _harness) = native_claim("codex");
     let db = Connection::open(dir.path().join(".qqq/qqq.db")).unwrap();
     let before: String = db
         .query_row("SELECT process_json FROM claim_processes", [], |r| r.get(0))

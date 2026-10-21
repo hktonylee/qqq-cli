@@ -20,9 +20,13 @@ pub fn is_agent_caller() -> bool {
 
 /// Environment-only output hint; never probes process or orchestration state.
 pub fn native_agent_context() -> bool {
-    ["CODEX_THREAD_ID", "CODEX_SESSION_ID"]
-        .iter()
-        .any(|name| env::var(name).is_ok_and(|value| !value.trim().is_empty()))
+    [
+        "CODEX_THREAD_ID",
+        "CODEX_SESSION_ID",
+        "CLAUDE_CODE_SESSION_ID",
+    ]
+    .iter()
+    .any(|name| env::var(name).is_ok_and(|value| !value.trim().is_empty()))
 }
 
 fn env_session(name: &str) -> Result<Option<String>> {
@@ -44,16 +48,24 @@ fn native() -> Result<Option<Owner>> {
     if herdr::has_context() {
         return Ok(None);
     }
-    for name in ["CODEX_THREAD_ID", "CODEX_SESSION_ID"] {
+    for (agent, name) in [
+        ("codex", "CODEX_THREAD_ID"),
+        ("codex", "CODEX_SESSION_ID"),
+        ("claude", "CLAUDE_CODE_SESSION_ID"),
+    ] {
         let Some(value) = env_session(name)? else {
             continue;
         };
-        let display = env_session("CODEX_SESSION_ID")?.unwrap_or_else(|| value.clone());
+        let display = if agent == "codex" {
+            env_session("CODEX_SESSION_ID")?.unwrap_or_else(|| value.clone())
+        } else {
+            value.clone()
+        };
         return Ok(Some(Owner {
-            key: serde_json::to_string(&("codex", "id", &value))?,
+            key: serde_json::to_string(&(agent, "id", &value))?,
             link: None,
             metadata: Some(Identity {
-                harness_name: Some("codex".into()),
+                harness_name: Some(agent.into()),
                 harness_session: Some(display),
                 ..Identity::default()
             }),
@@ -69,18 +81,16 @@ pub fn owner(explicit: Option<&str>, project_dir: &Path, db: &Db) -> Result<Owne
         return Ok(owner);
     }
     let (key, link) = herdr::owner(explicit, project_dir, db)?;
-    let metadata = if link
-        .as_ref()
-        .is_some_and(|link| link.identity.agent == "codex")
-    {
-        env_session("CODEX_SESSION_ID")?.map(|display| {
-            let mut identity = Identity::for_claim(&key, link.as_ref());
-            identity.harness_session = Some(display);
-            identity
-        })
-    } else {
-        None
+    let display = match link.as_ref().map(|link| link.identity.agent.as_str()) {
+        Some("codex") => env_session("CODEX_SESSION_ID")?,
+        Some("claude") => env_session("CLAUDE_CODE_SESSION_ID")?,
+        _ => None,
     };
+    let metadata = display.map(|display| {
+        let mut identity = Identity::for_claim(&key, link.as_ref());
+        identity.harness_session = Some(display);
+        identity
+    });
     Ok(Owner {
         key,
         link,

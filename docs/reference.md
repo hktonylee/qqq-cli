@@ -88,8 +88,8 @@ preflight. Changing a worker's selectors never releases its existing claim.
 
 Global `--json` and `--human` work before or after a command and conflict with
 each other. Without either flag, qqq uses JSON for recognized agent callers:
-nonblank UTF-8 `CODEX_THREAD_ID`/`CODEX_SESSION_ID`, or an exact current Herdr pane
-with agent metadata. Pipes, `QQQ_SESSION` and harness overrides alone do not
+nonblank UTF-8 `CODEX_THREAD_ID`/`CODEX_SESSION_ID`/`CLAUDE_CODE_SESSION_ID`, or an
+exact current Herdr pane with agent metadata. Pipes, `QQQ_SESSION` and harness overrides alone do not
 select JSON. Failed optional caller discovery keeps human output; explicit flags
 skip that lookup.
 
@@ -749,12 +749,13 @@ Resolution order:
 
 1. `--session` / `QQQ_SESSION`, then explicit `--harness-session`.
 2. Exact Herdr pane (`HERDR_PANE_ID`, or `HERDR_ENV=1` with a pane ID).
-3. Native Codex `CODEX_THREAD_ID`, then `CODEX_SESSION_ID`.
+3. Native Codex `CODEX_THREAD_ID`, then `CODEX_SESSION_ID`, then Claude Code
+   `CLAUDE_CODE_SESSION_ID`.
 4. Unique Herdr agent at the project root (`foreground_cwd` before `cwd`).
 
 `--session` forces a literal owner ID instead of automatic detection.
 `QQQ_SESSION` has the same effect unless the flag overrides it. Both skip
-automatic Herdr/Codex identity discovery and Herdr linking. Use them only for an
+automatic harness/Herdr identity discovery and Herdr linking. Use them only for an
 intentional manual override; do not invent a session ID for normal agent use.
 
 If automatic Herdr lookup fails, check the pane environment and permission to
@@ -770,9 +771,13 @@ variables. Missing agent-session hooks fall back to terminal ID plus agent kind.
 Automatic claims save detected identity and a Herdr link when available.
 Assignment JSON has `harness_name`, `harness_session`, `orchestrator_name`,
 `orchestrator_session`; human `next` omits these fields, while JSON/show retains them.
-For Codex, displayed session prefers `CODEX_SESSION_ID`; an explicit
-`--harness-session` overrides it. Herdr orchestrator session is the worker's pane
-ID, not the separately saved server name. Dispatch records the child pane.
+For Codex, displayed session prefers `CODEX_SESSION_ID`. Claude Code uses its documented
+[`CLAUDE_CODE_SESSION_ID`](https://code.claude.com/docs/en/env-vars#variables)
+for native ownership outside Herdr and for the displayed Claude session. Inside
+a Claude Herdr pane, the owner key still comes from Herdr. Other harnesses
+ignore this variable. An explicit `--harness-session`
+overrides either displayed session. Herdr orchestrator session is the worker's
+pane ID, not the separately saved server name. Dispatch records the child pane.
 Repeated claims retain populated metadata and fill missing fields from newly
 detected identity. Assignment flags override either source.
 
@@ -791,8 +796,8 @@ This also precedes inspection/preview commands; their read-only phase does not
 itself clean up owners. Preflight never creates/migrates projects; writable opens
 scan after migration. Idle TUI/watch/wait runs no periodic liveness scan.
 
-Native Codex claims privately record the actual ancestor process and machine
-identity. A missing/reused PID or zombie on the same machine proves death;
+Native Codex and Claude claims privately record the actual ancestor process and
+machine identity. A missing/reused PID or zombie on the same machine proves death;
 foreign or unavailable evidence stays unknown. Linux identity includes the PID
 namespace and PID 1 boot/start fingerprint, avoiding recycled namespace matches;
 older inode-only records remain unknown. Manual tokens alone identify no process.

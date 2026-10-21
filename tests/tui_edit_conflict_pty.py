@@ -23,7 +23,7 @@ binary, scenario = sys.argv[1:]
 with tempfile.TemporaryDirectory() as directory:
     root = Path(directory)
     env = dict(os.environ, HOME=directory, TERM="xterm-256color")
-    for key in ("QQQ_SESSION", "HERDR_ENV", "HERDR_PANE_ID", "CODEX_THREAD_ID", "CODEX_SESSION_ID", "EDITOR"):
+    for key in ("QQQ_SESSION", "HERDR_ENV", "HERDR_PANE_ID", "CODEX_THREAD_ID", "CODEX_SESSION_ID", "CLAUDE_CODE_SESSION_ID", "EDITOR"):
         env.pop(key, None)
     env["NO_COLOR"] = "1"
 

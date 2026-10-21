@@ -16,6 +16,7 @@ fn command(root: &Path) -> Command {
         "QQQ_SESSION",
         "CODEX_THREAD_ID",
         "CODEX_SESSION_ID",
+        "CLAUDE_CODE_SESSION_ID",
         "HERDR_ENV",
         "HERDR_PANE_ID",
         "EDITOR",

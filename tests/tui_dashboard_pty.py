@@ -49,7 +49,7 @@ with tempfile.TemporaryDirectory(prefix="qqq-dashboard-test-") as folder:
         env["TERM"] = "dumb"
     if scenario.startswith(("buffers_", "long_description_", "prerequisites", "dirty_marker", "completed_toggle", "completed_menu", "archived_toggle", "jump", "menu_error_", "menu_quit", "force_complete", "force_reopen", "force_error", "list_selection", "tags", "orphan_reopen", "views", "scroll_multiline")) and scenario.endswith("no_color"):
         env["NO_COLOR"] = "1"
-    for name in ("EDITOR", "QQQ_SESSION", "HERDR_ENV", "HERDR_PANE_ID", "CODEX_THREAD_ID", "CODEX_SESSION_ID"):
+    for name in ("EDITOR", "QQQ_SESSION", "HERDR_ENV", "HERDR_PANE_ID", "CODEX_THREAD_ID", "CODEX_SESSION_ID", "CLAUDE_CODE_SESSION_ID"):
         env.pop(name, None)
 
     def cli(*args):

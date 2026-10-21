@@ -157,19 +157,25 @@ impl Snapshot {
 }
 
 pub(crate) fn capture(session: &str, link: Option<&crate::herdr::Link>) -> Option<Identity> {
-    let codex_context = ["CODEX_THREAD_ID", "CODEX_SESSION_ID"]
+    let native_agent = if ["CODEX_THREAD_ID", "CODEX_SESSION_ID"]
         .iter()
-        .any(|key| std::env::var(key).is_ok_and(|value| !value.trim().is_empty()));
+        .any(|key| std::env::var(key).is_ok_and(|value| !value.trim().is_empty()))
+    {
+        Some("codex")
+    } else if std::env::var("CLAUDE_CODE_SESSION_ID").is_ok_and(|value| !value.trim().is_empty()) {
+        Some("claude")
+    } else {
+        None
+    };
     let agent = if let Some(link) = link {
         // Discovery of another pane does not make caller its owning process.
         if std::env::var("HERDR_PANE_ID").as_deref() != Ok(link.pane.pane_id.as_str()) {
             return None;
         }
         link.identity.agent.as_str()
-    } else if codex_context
-        && (!crate::herdr::has_context() || std::env::var("QQQ_SESSION").as_deref() == Ok(session))
+    } else if !crate::herdr::has_context() || std::env::var("QQQ_SESSION").as_deref() == Ok(session)
     {
-        "codex"
+        native_agent?
     } else {
         return None;
     };
