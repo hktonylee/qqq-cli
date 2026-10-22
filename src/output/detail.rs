@@ -97,17 +97,17 @@ fn collection(label: &str, rows: &[Value], color: bool) -> String {
     )
 }
 
-pub(super) fn render(value: &Value, color: bool) -> String {
+pub(super) fn render(value: &Value, color: bool, description_last: bool) -> String {
     let task = &value["task"];
     let mut sections = vec![format!(
         "{} · {}",
         styled(&format!("#{}", field(task, "id")), color.then_some("1")),
         styled(status(task), status_color(task, color))
     )];
-    if task["description"]
+    let has_description = task["description"]
         .as_str()
-        .is_some_and(|text| !text.is_empty())
-    {
+        .is_some_and(|text| !text.is_empty());
+    if has_description {
         sections.push(format!(
             "{}\n{}",
             heading("Description", color),
@@ -213,6 +213,11 @@ pub(super) fn render(value: &Value, color: bool) -> String {
             field(export, "id"),
             field(export, "path")
         ));
+    }
+    if description_last && has_description {
+        // The optional description follows the task header before sections are joined.
+        let description = sections.remove(1);
+        sections.push(description);
     }
     sections.join("\n\n")
 }

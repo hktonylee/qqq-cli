@@ -203,12 +203,11 @@ mod tests {
         let detail_rows = rows(&value, 1000);
         let rendered = text(&detail_rows, "\n");
         assert!(
-            rendered.starts_with(
-                "#4 · In progress\n\nDescription:\n  Full editable description\n\nMessages: (2)\n"
-            ),
+            rendered.starts_with("#4 · In progress\n\nMessages: (2)\n"),
             "{rendered}"
         );
         assert_eq!(rendered, crate::output::detail_text(&value, false));
+        assert!(rendered.ends_with("\n\nDescription:\n  Full editable description"));
         for title in [
             "Description:",
             "Messages: (2)",
@@ -247,7 +246,7 @@ mod tests {
         );
         assert_eq!(
             styled_text(&detail_rows, DetailKind::Section),
-            "Description:Messages:Details:Assignment:Images:History:Herdr:"
+            "Messages:Details:Assignment:Images:History:Herdr:Description:"
         );
         let muted = styled_text(&detail_rows, DetailKind::Muted);
         assert!(muted.contains("Harness:"));
@@ -279,7 +278,8 @@ mod tests {
         assert!(rendered.contains(
             "Prerequisites:\n  #12345 · error · blocks claim\n  #2 · completed · archived"
         ));
-        assert!(rendered.contains("Full editable description\n\nMessages: None\n\nPrerequisites:"));
+        assert!(rendered.contains("Messages: None\n\nPrerequisites:"));
+        assert!(rendered.ends_with("\n\nDescription:\n  Full editable description"));
         let narrow = rows(&value, 12);
         assert!(
             narrow
@@ -351,11 +351,7 @@ mod tests {
 
     #[test]
     fn empty_collections_and_unicode_controls_keep_show_text_and_roles() {
-        assert!(
-            text(&rows(&value(&[]), 80), "\n").contains(
-                "Description:\n  Full editable description\n\nMessages: None\n\nDetails:"
-            )
-        );
+        assert!(text(&rows(&value(&[]), 80), "\n").contains("Messages: None\n\nDetails:"));
         for width in [12, 80] {
             let rendered = text(&rows(&value(&[]), width), "");
             for empty in [

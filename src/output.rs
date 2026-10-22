@@ -182,7 +182,7 @@ fn status_color(value: &Value, color: bool) -> Option<&'static str> {
 }
 
 pub(crate) fn detail_text(value: &Value, color: bool) -> String {
-    detail::render(value, color)
+    detail::render(value, color, true)
 }
 
 fn styled(text: &str, code: Option<&str>) -> String {
@@ -563,7 +563,7 @@ pub fn render(format: Format, value: &Value, color: bool, columns: Option<usize>
             false,
             true,
         ),
-        Format::Detail => detail::render(value, color),
+        Format::Detail => detail::render(value, color, false),
         Format::Message => format!(
             "Message #{}\nTask: #{}\nAuthor: {}\n{}",
             field(value, "id"),

@@ -236,6 +236,7 @@ fn human_show_includes_messages_images_history_and_export_result() {
     text(p, &["next", "--session", "a"]);
     text(p, &["edit", "1", "--set-status", "new", "--session", "a"]);
     let show = text(p, &["show", "1"]);
+    assert!(show.find("Description:").unwrap() < show.find("Messages:").unwrap());
     for part in [
         "Messages:",
         "Images:",
