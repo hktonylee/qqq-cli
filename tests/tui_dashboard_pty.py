@@ -819,7 +819,7 @@ print(json.dumps({"result": result}))
                                  or "Returned from Herdr" in visible.text())
                     assert not (Path(folder) / "herdr-client-opened").exists()
                 if scenario.endswith("error"):
-                    read_until(b"Created Herdr pane wW:p1", 12 if scenario.startswith("create_agent_startup_") else 5)
+                    read_until(b"Created Herdr pane wW:p1", 22 if scenario.startswith("create_agent_startup_") else 5)
                 else:
                     read_until(b"HERDR_CLIENT")
                     wait_visible(lambda: "Returned from Herdr" in visible.text())

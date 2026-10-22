@@ -898,7 +898,7 @@ Local explicit-session claims do not auto-link.
 Ctrl+H on a saved New task opens the editable agent-creation prompt. Press Ctrl+H
 again to create, Enter for a new line, or Esc to cancel. The dialog uses
 `herdr.initial-prompt` when configured. Its shell profile must start Codex. After
-creating the pane, qqq waits up to 10 seconds for Codex to be idle or done, then
+creating the pane, qqq waits up to 20 seconds for Codex to be idle or done, then
 submits only the edited prompt through `herdr agent prompt`. A blocked agent or
 startup timeout leaves the pane for inspection without sending the prompt.
 `qqq next` claims work for its caller;

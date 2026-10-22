@@ -135,11 +135,11 @@ pub(super) fn create(db: &mut crate::db::Db, id: i64, prompt: &str) -> Result<St
                 "Created tab is in a different workspace"
             );
         }
-        let deadline = Instant::now() + Duration::from_secs(10);
+        let deadline = Instant::now() + Duration::from_secs(20);
         let ready = loop {
             ensure!(
                 Instant::now() < deadline,
-                "Codex did not become ready within 10 seconds"
+                "Codex did not become ready within 20 seconds"
             );
             let current: Current =
                 crate::herdr::call_until(&["pane", "get", &pane.pane_id], deadline)?;
