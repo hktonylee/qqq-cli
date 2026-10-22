@@ -843,6 +843,7 @@ qqq config --get alias.ls             # or: qqq config alias.ls
 qqq config display.max-completed 10
 qqq config tui.after_save_new open_new
 qqq config herdr.initial-prompt '/goal Work through the queue'
+qqq config herdr.initial-env 'AGENT_CLI="claude" AGENT_ARGS="--model sonnet"'
 qqq config --unset alias.ls
 ```
 
@@ -851,6 +852,7 @@ qqq config --unset alias.ls
 | `display.max-completed` | Nonnegative integer; absent means unlimited; applies to human lists |
 | `tui.after_save_new` | `open_saved` (default) or `open_new`; read at TUI startup |
 | `herdr.initial-prompt` | Literal string prefilled when Ctrl+H opens agent creation; absent uses the built-in queue-worker prompt |
+| `herdr.initial-env` | Shell-quoted `KEY=VALUE` assignments passed to each newly created Herdr tab or workspace; absent adds no variables |
 | `alias.NAME` | Command string |
 
 Keys use TOML dotted syntax; quote literal dots, such as `'alias."with.dot"'`.
@@ -862,6 +864,12 @@ Explicit `--max-completed` affects both human and JSON output.
 `herdr.initial-prompt` is read each time the creation dialog opens. It supports
 multiline text; an empty string opens a blank prompt that must be filled before
 creating the agent. Unset the setting to restore the built-in prompt.
+
+`herdr.initial-env` accepts shell-quoted assignments separated by whitespace.
+Quotes group values with spaces, and backslash escapes are parsed as shell words.
+qqq passes each resulting assignment directly to Herdr without shell expansion.
+The variables are available to the shell started in the new tab or workspace,
+so its startup files can launch the agent CLI you use.
 
 ```toml
 [display]
@@ -897,10 +905,11 @@ Local explicit-session claims do not auto-link.
 
 Ctrl+H on a saved New task opens the editable agent-creation prompt. Press Ctrl+H
 again to create, Enter for a new line, or Esc to cancel. The dialog uses
-`herdr.initial-prompt` when configured. Its shell profile must start Codex. After
-creating the pane, qqq waits up to 20 seconds for Codex to be idle or done, then
-submits only the edited prompt through `herdr agent prompt`. A blocked agent or
-startup timeout leaves the pane for inspection without sending the prompt.
+`herdr.initial-prompt` when configured. qqq passes `herdr.initial-env` to the
+new tab or workspace process. After creating the pane, qqq waits up to 20 seconds
+for Herdr to identify an agent and report it idle or done, then submits only the
+edited prompt through `herdr agent prompt`. A blocked agent or startup timeout
+leaves the pane for inspection without sending the prompt.
 `qqq next` claims work for its caller;
 the removed `herdr.next-to-new-agent` setting has no effect.
 

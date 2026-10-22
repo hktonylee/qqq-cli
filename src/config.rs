@@ -14,6 +14,8 @@ pub struct Config {
 pub struct Herdr {
     #[serde(default, rename = "initial-prompt")]
     pub initial_prompt: Option<String>,
+    #[serde(default, rename = "initial-env")]
+    pub initial_env: Option<String>,
 }
 
 #[derive(Default, Deserialize)]

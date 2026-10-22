@@ -676,7 +676,7 @@ Offline font fallbacks: Georgia, system UI sans, and system monospace. No remote
 <div class="diagram-scroll" tabindex="0" role="region" aria-label="Herdr: create an agent or focus an existing link; scroll horizontally on small screens">
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 720" role="img" aria-labelledby="herdr-title herdr-desc">
 <title id="herdr-title">Herdr: create an agent or focus an existing link</title>
-<desc id="herdr-desc">Ctrl+H opens an editable prompt only for a saved New task with no Action UI. Otherwise it focuses an existing link. Creation waits for ready Codex, links the task, submits the prompt, and attaches Herdr.</desc>
+<desc id="herdr-desc">Ctrl+H opens an editable prompt only for a saved New task with no Action UI. Otherwise it focuses an existing link. Creation passes configured environment to the new tab or workspace, waits for a ready Herdr agent, links the task, submits the prompt, and attaches Herdr.</desc>
 <defs>
 <marker id="herdr-arrow" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0,8 3,0 6" fill="var(--soft)"/></marker>
 <marker id="herdr-arrow-accent" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0,8 3,0 6" fill="var(--accent)"/></marker>
@@ -721,7 +721,7 @@ Offline font fallbacks: Georgia, system UI sans, and system monospace. No remote
 <rect class="node-box" x="944" y="312" width="240" height="112" rx="8"/>
 <text class="node-tag" x="960" y="332">STEP</text>
 <text class="node-name" x="1064" y="360" text-anchor="middle">Create · wait · link</text>
-<text class="node-sub" x="1064" y="384" text-anchor="middle">≤10s ready → agent prompt</text>
+<text class="node-sub" x="1064" y="384" text-anchor="middle">≤20s ready → agent prompt</text>
 </g>
 <g class="node step" data-box="944,88,240,112">
 <rect class="node-box" x="944" y="88" width="240" height="112" rx="8"/>
@@ -756,7 +756,7 @@ Offline font fallbacks: Georgia, system UI sans, and system monospace. No remote
 <li>Ctrl+H on a saved New task with no Action UI open shows the editable initial prompt even if a Herdr link already exists. Config/project-root error stays in footer. Other saved statuses focus existing linked pane and attach directly; absent link/failed focus is footer error. No selected task gives footer error.</li>
 <li>Ctrl+H runs before the single-task Action UI handler. From its menu, scalar input, tags input, or Action error, it attempts to focus/attach the existing linked agent and retains the open popup on return. This also bypasses the create-prompt route for a saved New task. Other modal families and confirmations consume this key first.</li>
 <li>Prompt Enter inserts newline, Ctrl+H submits nonblank text; blank stays inline. Ctrl+S does not submit. Escape/Ctrl+C closes locally.</li>
-<li>Submission leaves TUI terminal, creates project tab/workspace pane, waits at most 10 seconds for detected Codex idle/done, atomically associates eligible New/unclaimed task, invokes <code>herdr agent prompt</code> once, focuses tab and attaches Herdr. Pane shell startup supplies Codex.</li>
+<li>Submission leaves TUI terminal, creates project tab/workspace pane with configured <code>herdr.initial-env</code>, waits at most 20 seconds for a detected agent to report idle/done, atomically associates eligible New/unclaimed task, invokes <code>herdr agent prompt</code> once, focuses tab and attaches Herdr. Pane shell startup supplies the agent CLI.</li>
 <li>Blocked/timeout/identity/claim/prompt/focus/attach errors return to editor footer, not Action error. Already-created pane remains for inspection; prompt uncertainty warning says inspect before retrying. Returning from Herdr restores TUI with footer result.</li>
 </ul>
 </details>

@@ -386,6 +386,16 @@ fn tui_dashboard_ctrl_h_creates_queue_agents() {
 }
 
 #[test]
+fn tui_dashboard_ctrl_h_passes_configured_initial_environment() {
+    for name in [
+        "create_agent_initial_env_tab",
+        "create_agent_initial_env_workspace",
+    ] {
+        dashboard_scenario(name);
+    }
+}
+
+#[test]
 fn tui_dashboard_ctrl_h_opens_selected_herdr_agent_and_preserves_editor() {
     dashboard_scenario("handoff_success");
     dashboard_scenario("handoff_terminal");

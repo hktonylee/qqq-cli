@@ -94,8 +94,9 @@ See the [full TUI guide](docs/reference.md#task-tui) for navigation, child tasks
 saved views, bulk selection, and shortcuts.
 
 With optional [Herdr integration](docs/reference.md#herdr), Ctrl+H creates a worker
-for a saved New task or opens its linked agent. Creation requires the pane's shell
-profile to start Codex.
+for a saved New task or opens its linked agent. Set `herdr.initial-env` to pass
+environment variables to the new Herdr tab or workspace so its shell profile can
+start your agent CLI.
 
 For CLI workflows, see [adding and editing](docs/reference.md#add-and-edit),
 [batch imports](docs/reference.md#atomic-batch-import), and

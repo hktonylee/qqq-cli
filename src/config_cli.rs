@@ -73,7 +73,8 @@ fn flatten(value: &toml::Value, path: &[String], result: &mut Map<String, Value>
 fn parse_value(keys: &[Key], value: &str) -> Result<toml_edit::Value> {
     if keys.len() == 2
         && (keys[0].get() == "alias"
-            || (keys[0].get() == "herdr" && keys[1].get() == "initial-prompt"))
+            || (keys[0].get() == "herdr"
+                && matches!(keys[1].get(), "initial-prompt" | "initial-env")))
     {
         return Ok(toml_edit::Value::from(value));
     }

@@ -17,6 +17,38 @@ pub(super) fn project_root(db: &crate::db::Db) -> Result<PathBuf> {
         .context("Cannot resolve queue project directory")
 }
 
+fn parse_initial_env(value: Option<&str>) -> Result<Vec<String>> {
+    let assignments =
+        shlex::split(value.unwrap_or_default()).context("Invalid quoting in herdr.initial-env")?;
+    assignments
+        .into_iter()
+        .map(|assignment| {
+            let (name, _) = assignment.split_once('=').with_context(|| {
+                format!("Invalid herdr.initial-env item '{assignment}'; expected KEY=VALUE")
+            })?;
+            ensure!(
+                valid_env_name(name),
+                "Invalid environment variable name '{name}' in herdr.initial-env"
+            );
+            Ok(assignment)
+        })
+        .collect()
+}
+
+fn valid_env_name(name: &str) -> bool {
+    let mut chars = name.bytes();
+    chars
+        .next()
+        .is_some_and(|ch| ch == b'_' || ch.is_ascii_alphabetic())
+        && chars.all(|ch| ch == b'_' || ch.is_ascii_alphanumeric())
+}
+
+fn append_env_args<'a>(args: &mut Vec<&'a str>, initial_env: &'a [String]) {
+    for assignment in initial_env {
+        args.extend(["--env", assignment.as_str()]);
+    }
+}
+
 fn server_running() -> Result<bool> {
     #[derive(Deserialize)]
     struct Status {
@@ -68,7 +100,12 @@ fn ensure_server() -> Result<()> {
     }
 }
 
-pub(super) fn create(db: &mut crate::db::Db, id: i64, prompt: &str) -> Result<String> {
+pub(super) fn create(
+    db: &mut crate::db::Db,
+    id: i64,
+    prompt: &str,
+    initial_env: Option<&str>,
+) -> Result<String> {
     #[derive(Deserialize)]
     struct Panes {
         panes: Vec<crate::herdr::Pane>,
@@ -88,6 +125,7 @@ pub(super) fn create(db: &mut crate::db::Db, id: i64, prompt: &str) -> Result<St
         agent_status: Option<String>,
     }
     crate::db::nonempty(prompt, "Prompt")?;
+    let initial_env = parse_initial_env(initial_env)?;
     db.task(id)?;
     let root = project_root(db)?;
     let cwd = root.to_str().context("Project directory is not UTF-8")?;
@@ -99,32 +137,29 @@ pub(super) fn create(db: &mut crate::db::Db, id: i64, prompt: &str) -> Result<St
             .is_some_and(|cwd| cwd.is_absolute() && cwd.canonicalize().is_ok_and(|cwd| cwd == root))
     });
     let created: Created = match workspace {
-        Some(pane) => crate::herdr::call(
-            None,
-            &[
+        Some(pane) => {
+            let mut args = vec![
                 "tab",
                 "create",
                 "--workspace",
-                &pane.workspace_id,
+                pane.workspace_id.as_str(),
                 "--cwd",
                 cwd,
-                "--no-focus",
-            ],
-        )?,
-        None => crate::herdr::call(
-            None,
-            &[
-                "workspace",
-                "create",
-                "--cwd",
-                cwd,
-                "--label",
-                root.file_name()
-                    .and_then(|name| name.to_str())
-                    .unwrap_or(cwd),
-                "--no-focus",
-            ],
-        )?,
+            ];
+            append_env_args(&mut args, &initial_env);
+            args.push("--no-focus");
+            crate::herdr::call(None, &args)?
+        }
+        None => {
+            let label = root
+                .file_name()
+                .and_then(|name| name.to_str())
+                .unwrap_or(cwd);
+            let mut args = vec!["workspace", "create", "--cwd", cwd, "--label", label];
+            append_env_args(&mut args, &initial_env);
+            args.push("--no-focus");
+            crate::herdr::call(None, &args)?
+        }
     };
     let pane = created.root_pane;
     crate::db::nonempty(&pane.pane_id, "Created pane ID")?;
@@ -139,7 +174,7 @@ pub(super) fn create(db: &mut crate::db::Db, id: i64, prompt: &str) -> Result<St
         let ready = loop {
             ensure!(
                 Instant::now() < deadline,
-                "Codex did not become ready within 20 seconds"
+                "Agent did not become ready within 20 seconds"
             );
             let current: Current =
                 crate::herdr::call_until(&["pane", "get", &pane.pane_id], deadline)?;
@@ -152,13 +187,7 @@ pub(super) fn create(db: &mut crate::db::Db, id: i64, prompt: &str) -> Result<St
                 current.agent_status.as_deref() != Some("blocked"),
                 "Created agent needs attention before prompting"
             );
-            let codex = current.pane.agent.as_deref() == Some("codex")
-                || current
-                    .pane
-                    .agent_session
-                    .as_ref()
-                    .is_some_and(|identity| identity.agent == "codex");
-            if codex && matches!(current.agent_status.as_deref(), Some("idle" | "done")) {
+            if matches!(current.agent_status.as_deref(), Some("idle" | "done")) {
                 break current.pane;
             }
             std::thread::sleep(

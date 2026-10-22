@@ -394,6 +394,9 @@ print(json.dumps({"result": result}))
         env["PATH"] = os.pathsep.join((folder, os.defpath))
         configured_prompt = "/goal Custom worker 'quotes' $(literal)\nSecond line qQ"
         prompt_config = Path(folder) / ".config/qqq/config.toml"
+        if scenario in ("create_agent_initial_env_tab", "create_agent_initial_env_workspace"):
+            initial_env = r'key1="this is another val" key2="hello ??\\\?" key3="say \"hi\""'
+            cli("config", "herdr.initial-env", initial_env)
         if scenario.startswith("create_agent_config"):
             if scenario == "create_agent_config_invalid":
                 prompt_config.parent.mkdir(parents=True, exist_ok=True)
@@ -424,7 +427,8 @@ if args[:2] == ["--session", "created-server"]:
 pane = {"pane_id": "wW:p1", "tab_id": "wW:t1", "workspace_id": "match", "cwd": str(root),
         "terminal_id": None if scenario == "create_agent_identity_error" else "created-terminal"}
 identity = {"agent": "codex", "kind": "id", "value": "created-session"} if scenario == "create_agent_linked" else None
-agent_pane = dict(pane, agent="codex",
+agent_name = "claude" if scenario in ("create_agent_initial_env_tab", "create_agent_initial_env_workspace") else "codex"
+agent_pane = dict(pane, agent=agent_name,
                   agent_status="blocked" if scenario == "create_agent_blocked_error" else "done",
                   agent_session=identity)
 competing_pane = dict(pane, pane_id="other:p1", agent="codex", terminal_id="other-terminal",
@@ -440,12 +444,19 @@ elif args == ["server"]:
     (root / "server-started").touch()
     sys.exit(0)
 elif args == ["pane", "list"]:
-    panes = [] if scenario in ("create_agent_workspace", "create_agent_server") else [
+    panes = [] if scenario in ("create_agent_workspace", "create_agent_initial_env_workspace", "create_agent_server") else [
         dict(pane, workspace_id="wrong", cwd=str(root / "child"), foreground_cwd=str(root)), pane]
     result = {"panes": panes}
 elif args[:2] in (["tab", "create"], ["workspace", "create"]):
     assert args[args.index("--cwd") + 1] == str(root), args
     assert "--no-focus" in args, args
+    if scenario in ("create_agent_initial_env_tab", "create_agent_initial_env_workspace"):
+        env_values = [args[index + 1] for index, value in enumerate(args[:-1]) if value == "--env"]
+        assert set(env_values) == {
+            "key1=this is another val",
+            r"key2=hello ??\\?",
+            'key3=say "hi"',
+        }, args
     if args[0] == "tab":
         assert args[args.index("--workspace") + 1] == "match", args
     if scenario == "create_agent_claim_race_error":
@@ -837,7 +848,7 @@ print(json.dumps({"result": result}))
                 calls = [json.loads(line) for line in (Path(folder) / "herdr-calls").read_text().splitlines()]
                 create = [call for call in calls if call[:2] in (["tab", "create"], ["workspace", "create"])]
                 assert len(create) == 1, calls
-                assert create[0][0] == ("workspace" if scenario in ("create_agent_workspace", "create_agent_server") else "tab"), calls
+                assert create[0][0] == ("workspace" if scenario in ("create_agent_workspace", "create_agent_initial_env_workspace", "create_agent_server") else "tab"), calls
                 if scenario.endswith("error"):
                     assert (Path(folder) / "herdr-client-opened").exists() == (scenario == "create_agent_attach_error")
                     assert sum(call[:2] == ["agent", "prompt"] for call in calls) == (scenario not in ("create_agent_identity_error", "create_agent_claim_race_error", "create_agent_startup_timeout_error", "create_agent_startup_hang_error", "create_agent_blocked_error"))
@@ -863,7 +874,7 @@ print(json.dumps({"result": result}))
                 assert link["pane"]["pane_id"] == "wW:p1", link
                 assert link["server"] == "created-server", link
                 assert link["identity"] == {
-                    "agent": "codex",
+                    "agent": "claude" if scenario in ("create_agent_initial_env_tab", "create_agent_initial_env_workspace") else "codex",
                     "kind": "id" if scenario == "create_agent_linked" else "terminal",
                     "value": "created-session" if scenario == "create_agent_linked" else "created-terminal",
                 }, link

@@ -825,7 +825,10 @@ impl Mode<'_, '_> {
                 db,
                 dashboard: true,
                 ..
-            } => handoff::create(db, id, prompt),
+            } => {
+                let initial_env = crate::config::load_herdr()?.herdr.initial_env;
+                handoff::create(db, id, prompt, initial_env.as_deref())
+            }
             _ => bail!("Agent creation requires dashboard"),
         }
     }
