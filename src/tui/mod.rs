@@ -1033,6 +1033,7 @@ fn compose_inner(
     let mut show_completed = completed_limit != Some(0);
     let mut message = String::new();
     let mut message_is_error = false;
+    let mut herdr_workspace_warning: Option<(i64, String)> = None;
     let mut confirmation: Option<Confirmation> = None;
     let mut action_ui: Option<ActionUi> = None;
     let mut jump_ui: Option<jump::View> = None;
@@ -1045,6 +1046,16 @@ fn compose_inner(
     let mut saved_any = false;
     let mut buffers = DraftBuffers::default();
     loop {
+        if herdr_workspace_warning
+            .as_ref()
+            .is_some_and(|(id, warning)| target_id != Some(*id) || message != *warning)
+        {
+            herdr_workspace_warning = None;
+        }
+        let message_hint = herdr_workspace_warning
+            .as_ref()
+            .filter(|_| confirmation.is_none())
+            .map(|_| "Press Ctrl-H again to open the Herdr workspace");
         let size = terminal::size()?;
         let filter_visible = dashboard::filter_visible(
             &filter_query,
@@ -1412,6 +1423,7 @@ fn compose_inner(
                             top: &mut top,
                             chrome: &chrome,
                             message_is_error: confirmation.is_none() && message_is_error,
+                            message_hint,
                             follow_cursor: editor_follow_cursor,
                         },
                         terminal.color,
@@ -1465,14 +1477,21 @@ fn compose_inner(
                     && bulk_ui.is_none()
                     && match mouse.kind {
                         MouseEventKind::ScrollUp | MouseEventKind::ScrollDown => {
-                            dashboard::wheel_area(size, mouse.column, mouse.row, filter_visible)
-                                .is_some()
+                            dashboard::wheel_area(
+                                size,
+                                mouse.column,
+                                mouse.row,
+                                filter_visible,
+                                message_hint,
+                            )
+                            .is_some()
                         }
                         MouseEventKind::Down(MouseButton::Left) => dashboard::click_target(
                             size,
                             mouse.column,
                             mouse.row,
                             dashboard::HitState {
+                                message_hint,
                                 rows: &rows,
                                 filter_visible,
                                 list_top,
@@ -1550,7 +1569,13 @@ fn compose_inner(
                     MouseEventKind::ScrollUp => false,
                     _ => continue,
                 };
-                match dashboard::wheel_area(size, mouse.column, mouse.row, filter_visible) {
+                match dashboard::wheel_area(
+                    size,
+                    mouse.column,
+                    mouse.row,
+                    filter_visible,
+                    message_hint,
+                ) {
                     Some(dashboard::WheelArea::List(height)) => {
                         list_follow_selected = false;
                         list_top = panel::wheel_top(list_top, list_row_count, height, down);
@@ -1574,6 +1599,7 @@ fn compose_inner(
                     mouse.column,
                     mouse.row,
                     dashboard::HitState {
+                        message_hint,
                         rows: &rows,
                         filter_visible,
                         list_top,
@@ -2166,7 +2192,15 @@ fn compose_inner(
                     let focus = target_id
                         .ok_or_else(|| anyhow::anyhow!("Select task to open its Herdr agent"))
                         .and_then(|id| {
-                            handoff::focus(mode.db().expect("dashboard has database"), id)
+                            let db = mode.db().expect("dashboard has database");
+                            if herdr_workspace_warning
+                                .take()
+                                .is_some_and(|(task, _)| task == id)
+                            {
+                                handoff::focus_workspace(db, id)
+                            } else {
+                                handoff::focus(db, id)
+                            }
                         });
                     let result = match focus {
                         Ok(server) => {
@@ -2180,11 +2214,22 @@ fn compose_inner(
                         }
                         Err(error) => Err(error),
                     };
+                    let agent_not_live = result.as_ref().is_err_and(|error| {
+                        error
+                            .downcast_ref::<crate::errors::Info>()
+                            .is_some_and(|info| {
+                                info.details.get("reason").and_then(|value| value.as_str())
+                                    == Some("agent_not_live")
+                            })
+                    });
                     message_is_error = result.is_err();
                     message = result.err().map_or_else(
                         || "Returned from Herdr".to_owned(),
                         |error| format!("{error:#}"),
                     );
+                    if agent_not_live {
+                        herdr_workspace_warning = target_id.map(|id| (id, message.clone()));
+                    }
                     continue;
                 }
                 if let Some(mut ui) = action_ui.take() {

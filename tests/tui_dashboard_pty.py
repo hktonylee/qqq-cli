@@ -310,6 +310,8 @@ print(json.dumps({"result": {"pane": pane}}))
             connection.execute("UPDATE tasks SET status='error' WHERE id=2")
             if scenario.startswith("handoff_hint"):
                 connection.execute("UPDATE tasks SET status='error' WHERE id=1")
+        if scenario == "handoff_stale_workspace_mouse":
+            cli("edit", "2", "--description", "Second\n" + "\n".join(f"Line {index:02}" for index in range(1, 21)))
         if scenario == "handoff_scroll":
             cli("edit", "2", "--description", "Second\n" + "\n".join(f"Line {index:02}" for index in range(1, 21)))
             cli("message", "2", "\n".join(f"Message {index:02}" for index in range(1, 31)))
@@ -326,7 +328,8 @@ print(json.dumps({"result": {"pane": pane}}))
         if scenario not in ("handoff_missing", "handoff_no_selection"):
             with sqlite3.connect(Path(folder) / ".qqq/qqq.db") as connection:
                 connection.execute("INSERT INTO herdr_links(task_id,link_json) VALUES(?,?)", (
-                    2, json.dumps({"server": "named", "identity": identity, "pane": cached_pane}),
+                    2, json.dumps({"server": None if scenario == "handoff_stale_workspace_default" else "named",
+                                   "identity": identity, "pane": cached_pane}),
                 ))
         fake = Path(folder) / "herdr"
         fake.write_text(f"#!{sys.executable}\n" + r'''
@@ -335,14 +338,20 @@ from pathlib import Path
 args = sys.argv[1:]
 with open("herdr-calls", "a") as log:
     log.write(json.dumps(args) + "\n")
-assert args[:2] == ["--session", "named"], args
-args = args[2:]
 scenario = os.environ["HANDOFF_SCENARIO"]
+if scenario != "handoff_stale_workspace_default":
+    assert args[:2] == ["--session", "named"], args
+    args = args[2:]
 pane = json.loads(os.environ["HANDOFF_PANE"])
 if args == ["agent", "list"]:
-    agents = ([] if scenario == "handoff_stale" else [pane, pane]
+    agents = ([] if scenario.startswith("handoff_stale") else [pane, pane]
               if scenario == "handoff_ambiguous" else [pane])
     result = {"agents": agents}
+elif args == ["workspace", "focus", "live"]:
+    if scenario == "handoff_stale_workspace_error":
+        print("workspace missing", file=sys.stderr)
+        sys.exit(1)
+    result = {}
 elif args == ["agent", "focus", "live:p2"]:
     if scenario == "handoff_focus_error":
         print("focus denied", file=sys.stderr)
@@ -2838,6 +2847,72 @@ print(json.dumps({"result": result}))
             assert not (Path(folder) / "herdr-calls").exists(), "Hint discovery called Herdr"
             if scenario.endswith("no_color"):
                 assert b"38;" not in screen and b"48;" not in screen, screen[-2000:]
+        elif scenario.startswith("handoff_stale_workspace"):
+            initial = cli("show", "2")
+            send(b"\x1b[1;2A")
+            wait_visible(lambda: "Task #2 (" in editor_title())
+            if scenario == "handoff_stale_workspace_mouse":
+                send(b"\x1b[A" * 20)
+            send(b"\x01Changed ")
+            wait_visible(lambda: editor_line().startswith("Changed Second")
+                         and (visible.x, visible.y) == (8, editor_row() + 1))
+            cursor = (visible.x, visible.y)
+            prefix = [] if scenario == "handoff_stale_workspace_default" else ["--session", "named"]
+            calls_path = Path(folder) / "herdr-calls"
+            opened = Path(folder) / "herdr-client-opened"
+            expected_calls = [prefix + ["agent", "list"]]
+
+            def wait_warning():
+                wait_visible(lambda: visible.text().splitlines()[-2].startswith("Linked Herdr agent session is not live")
+                             and visible.text().splitlines()[-1].startswith("Press Ctrl-H again to open the Herdr workspace")
+                             and (visible.x, visible.y) == cursor)
+
+            send(b"\x08")
+            wait_warning()
+            assert not opened.exists()
+            assert [json.loads(line) for line in calls_path.read_text().splitlines()] == expected_calls
+            if scenario == "handoff_stale_workspace_control":
+                send(b"\x01")
+                wait_visible(lambda: (visible.x, visible.y) == (0, editor_row() + 1))
+                cursor = (visible.x, visible.y)
+                wait_warning()
+            if scenario == "handoff_stale_workspace_mouse":
+                viewport = visible.text()
+                send(b"\x1b[<0;1;23M\x1b[<65;1;23M")
+                settle()
+                assert (visible.x, visible.y) == cursor and visible.text() == viewport, visible.text()
+            if scenario == "handoff_stale_workspace_selection":
+                send(b"\x1b[1;2A")
+                wait_visible(lambda: "Task #1 (" in editor_title())
+                send(b"\x1b[1;2B")
+                wait_visible(lambda: "Task #2 (" in editor_title())
+                send(b"\x08")
+                wait_warning()
+                expected_calls.append(prefix + ["agent", "list"])
+                assert [json.loads(line) for line in calls_path.read_text().splitlines()] == expected_calls
+                assert not opened.exists()
+            clear_capture()
+            send(b"\x1b[104;5u")
+            expected_calls.append(prefix + ["workspace", "focus", "live"])
+            if scenario == "handoff_stale_workspace_error":
+                wait_visible(lambda: visible.text().splitlines()[-1].startswith("Herdr failed: workspace missing")
+                             and (visible.x, visible.y) == cursor)
+                assert not opened.exists()
+            else:
+                read_until(b"HERDR_CLIENT")
+                wait_visible(lambda: visible.text().splitlines()[-1].startswith("Returned from Herdr")
+                             and (visible.x, visible.y) == cursor)
+                expected_calls.append(prefix)
+                assert opened.read_text() == "cooked"
+                assert b"\x1b[?1049l" in screen, "TUI terminal not restored before client"
+            assert [json.loads(line) for line in calls_path.read_text().splitlines()] == expected_calls
+            assert (visible.x, visible.y) == cursor and editor_line().startswith("Changed Second"), visible.text()
+            assert cli("show", "2") == initial
+            send(b"\x08")
+            wait_warning()
+            expected_calls.append(prefix + ["agent", "list"])
+            assert [json.loads(line) for line in calls_path.read_text().splitlines()] == expected_calls
+            assert child.poll() is None
         elif scenario.startswith("handoff_"):
             initial_tasks = cli("list")
             if scenario == "handoff_no_selection":
@@ -2878,7 +2953,7 @@ print(json.dumps({"result": result}))
             expected = errors.get(scenario, "Returned from Herdr")
             if scenario == "handoff_scroll":
                 read_until(b"HERDR_CLIENT")
-            wait_visible(lambda: visible.text().splitlines()[-1].startswith(expected)
+            wait_visible(lambda: visible.text().splitlines()[-2 if scenario == "handoff_stale" else -1].startswith(expected)
                          and (scenario == "handoff_scroll" or (visible.x, visible.y) == cursor))
             if scenario == "handoff_scroll":
                 assert visible.text().splitlines()[:-1] == viewport, visible.text()

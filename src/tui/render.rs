@@ -41,6 +41,7 @@ pub struct DashboardEditor<'a> {
     pub top: &'a mut usize,
     pub chrome: &'a Chrome<'a>,
     pub message_is_error: bool,
+    pub message_hint: Option<&'a str>,
     pub follow_cursor: bool,
 }
 

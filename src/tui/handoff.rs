@@ -196,6 +196,18 @@ pub(super) fn focus(db: &crate::db::Db, id: i64) -> Result<Option<String>> {
     Ok(link.server)
 }
 
+pub(super) fn focus_workspace(db: &crate::db::Db, id: i64) -> Result<Option<String>> {
+    let link = db
+        .link(id)?
+        .context("Task has no Herdr link; run qqq herdr link")?;
+    crate::db::nonempty(&link.pane.workspace_id, "Linked Herdr workspace")?;
+    let _: serde_json::Value = crate::herdr::call(
+        link.server.as_deref(),
+        &["workspace", "focus", &link.pane.workspace_id],
+    )?;
+    Ok(link.server)
+}
+
 pub(super) fn attach(server: Option<&str>) -> Result<()> {
     let mut command = Command::new("herdr");
     if let Some(server) = server {

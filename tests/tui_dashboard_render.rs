@@ -210,6 +210,7 @@ fn task_text_and_tags_keep_colors_across_status_selection_dirty_and_compact_rows
                                         details: None,
                                     },
                                     render::DashboardEditor {
+                                        message_hint: None,
                                         layout: &layout,
                                         cursor: 0,
                                         top: &mut 0,
@@ -333,6 +334,7 @@ fn task_list_selection_reclaims_one_column() {
                                 details: None,
                             },
                             render::DashboardEditor {
+                                message_hint: None,
                                 layout: &layout,
                                 cursor: 0,
                                 top: &mut 0,
@@ -391,6 +393,7 @@ fn completed_filter_button_reserves_query_caret_space() {
                     details: None,
                 },
                 render::DashboardEditor {
+                    message_hint: None,
                     layout: &layout,
                     cursor: 0,
                     top: &mut 0,
@@ -442,6 +445,7 @@ fn visibility_filter_buttons_render_and_hit_cells_agree_at_every_layout() {
                                     details: None,
                                 },
                                 render::DashboardEditor {
+                                    message_hint: None,
                                     layout: &layout,
                                     cursor: 0,
                                     top: &mut 0,
@@ -487,6 +491,7 @@ fn visibility_filter_buttons_render_and_hit_cells_agree_at_every_layout() {
                             column,
                             0,
                             dashboard::HitState {
+                                message_hint: None,
                                 rows: &rows,
                                 filter_visible: true,
                                 list_top: 0,
@@ -511,6 +516,7 @@ fn visibility_filter_buttons_render_and_hit_cells_agree_at_every_layout() {
                             start,
                             1,
                             dashboard::HitState {
+                                message_hint: None,
                                 rows: &rows,
                                 filter_visible: true,
                                 list_top: 0,
@@ -599,6 +605,7 @@ fn hidden_completed_state_keeps_empty_unfocused_filter_bar_visible() {
                     details: None,
                 },
                 render::DashboardEditor {
+                    message_hint: None,
                     layout: &layout,
                     cursor: 1,
                     top: &mut 0,
@@ -632,6 +639,7 @@ fn click(
         column,
         row,
         dashboard::HitState {
+            message_hint: None,
             filter_visible: false,
             rows,
             list_top,
@@ -708,6 +716,7 @@ fn action_popup_preserves_background_and_clears_overlaid_styles() {
                             details: None,
                         },
                         render::DashboardEditor {
+                            message_hint: None,
                             layout: &layout,
                             cursor: 0,
                             top: &mut 0,
@@ -867,6 +876,7 @@ fn action_popup_input_errors_and_warnings_keep_roles_and_plain_styles() {
                             details: None,
                         },
                         render::DashboardEditor {
+                            message_hint: None,
                             layout: &layout,
                             cursor: 0,
                             top: &mut 0,
@@ -980,6 +990,7 @@ fn blank_draft_keeps_details_pane_and_editor_position() {
                     details: None,
                 },
                 render::DashboardEditor {
+                    message_hint: None,
                     layout: &layout,
                     cursor: 0,
                     top: &mut 0,
@@ -1122,6 +1133,7 @@ fn selected_task_renders_details_between_list_and_editor() {
                             }),
                         },
                         render::DashboardEditor {
+                            message_hint: None,
                             layout: &layout,
                             cursor: 0,
                             top: &mut 0,
@@ -1231,6 +1243,7 @@ fn details_scroll_clamps_without_moving_editor() {
                     }),
                 },
                 render::DashboardEditor {
+                    message_hint: None,
                     layout: &layout,
                     cursor: 0,
                     top: &mut editor_top,
@@ -1271,7 +1284,7 @@ fn selected_task_geometry_and_details_hit_test_share_rectangles() {
             }
         }
         assert_eq!(
-            dashboard::wheel_area((72, height), 5, content.y, false),
+            dashboard::wheel_area((72, height), 5, content.y, false, None),
             Some(dashboard::WheelArea::Details(dashboard::details_height(
                 details
             )))
@@ -1279,12 +1292,12 @@ fn selected_task_geometry_and_details_hit_test_share_rectangles() {
         assert!(content.height >= 1);
         assert_eq!(content.width, if details.height >= 3 { 66 } else { 68 });
         assert_eq!(
-            dashboard::wheel_area((72, height), 1, content.y, false),
+            dashboard::wheel_area((72, height), 1, content.y, false, None),
             None
         );
         if details.height >= 3 {
             assert_eq!(
-                dashboard::wheel_area((72, height), 5, details.y, false),
+                dashboard::wheel_area((72, height), 5, details.y, false, None),
                 None
             );
         }
@@ -1296,6 +1309,7 @@ fn selected_task_geometry_and_details_hit_test_share_rectangles() {
                 5,
                 details.y,
                 dashboard::HitState {
+                    message_hint: None,
                     filter_visible: false,
                     rows: &[],
                     list_top: 0,
@@ -1311,6 +1325,7 @@ fn selected_task_geometry_and_details_hit_test_share_rectangles() {
                 2,
                 panes.editor.y + 1,
                 dashboard::HitState {
+                    message_hint: None,
                     filter_visible: false,
                     rows: &[],
                     list_top: 0,
@@ -1326,15 +1341,15 @@ fn selected_task_geometry_and_details_hit_test_share_rectangles() {
 #[test]
 fn new_draft_hit_test_keeps_three_panes() {
     assert_eq!(
-        dashboard::wheel_area((72, 18), 5, 3, false),
+        dashboard::wheel_area((72, 18), 5, 3, false, None),
         Some(dashboard::WheelArea::List(6))
     );
     assert_eq!(
-        dashboard::wheel_area((72, 18), 5, 7, false),
+        dashboard::wheel_area((72, 18), 5, 7, false, None),
         Some(dashboard::WheelArea::Details(2))
     );
     assert_eq!(
-        dashboard::wheel_area((72, 18), 5, 11, false),
+        dashboard::wheel_area((72, 18), 5, 11, false, None),
         Some(dashboard::WheelArea::Editor(6))
     );
 }
@@ -1342,33 +1357,33 @@ fn new_draft_hit_test_keeps_three_panes() {
 #[test]
 fn wheel_hit_test_uses_list_editor_and_excludes_edges() {
     assert_eq!(
-        dashboard::wheel_area((72, 24), 5, 3, false),
+        dashboard::wheel_area((72, 24), 5, 3, false, None),
         Some(dashboard::WheelArea::List(8))
     );
     assert_eq!(
-        dashboard::wheel_area((72, 24), 5, 1, false),
+        dashboard::wheel_area((72, 24), 5, 1, false, None),
         Some(dashboard::WheelArea::List(8))
     );
     assert_eq!(
-        dashboard::wheel_area((72, 24), 5, 7, false),
+        dashboard::wheel_area((72, 24), 5, 7, false, None),
         Some(dashboard::WheelArea::List(8))
     );
     assert_eq!(
-        dashboard::wheel_area((72, 24), 5, 10, false),
+        dashboard::wheel_area((72, 24), 5, 10, false, None),
         Some(dashboard::WheelArea::Details(3))
     );
-    assert_eq!(dashboard::wheel_area((72, 24), 5, 8, false), None);
-    assert_eq!(dashboard::wheel_area((72, 24), 0, 10, false), None);
-    assert_eq!(dashboard::wheel_area((72, 24), 2, 10, false), None);
-    assert_eq!(dashboard::wheel_area((72, 24), 69, 10, false), None);
-    assert_eq!(dashboard::wheel_area((72, 24), 5, 12, false), None);
+    assert_eq!(dashboard::wheel_area((72, 24), 5, 8, false, None), None);
+    assert_eq!(dashboard::wheel_area((72, 24), 0, 10, false, None), None);
+    assert_eq!(dashboard::wheel_area((72, 24), 2, 10, false, None), None);
+    assert_eq!(dashboard::wheel_area((72, 24), 69, 10, false, None), None);
+    assert_eq!(dashboard::wheel_area((72, 24), 5, 12, false, None), None);
     assert_eq!(
-        dashboard::wheel_area((72, 24), 5, 14, false),
+        dashboard::wheel_area((72, 24), 5, 14, false, None),
         Some(dashboard::WheelArea::Editor(9))
     );
-    assert_eq!(dashboard::wheel_area((72, 24), 5, 23, false), None);
-    assert_eq!(dashboard::wheel_area((72, 24), 72, 3, false), None);
-    assert_eq!(dashboard::wheel_area((10, 7), 5, 3, false), None);
+    assert_eq!(dashboard::wheel_area((72, 24), 5, 23, false, None), None);
+    assert_eq!(dashboard::wheel_area((72, 24), 72, 3, false, None), None);
+    assert_eq!(dashboard::wheel_area((10, 7), 5, 3, false, None), None);
 }
 
 #[test]
@@ -1466,6 +1481,7 @@ fn multiline_selection_fits_preview_while_manual_scrolling_keeps_partial_rows() 
                                         details: None,
                                     },
                                     render::DashboardEditor {
+                                        message_hint: None,
                                         layout: &layout,
                                         cursor: 0,
                                         top: &mut 0,
@@ -1534,6 +1550,7 @@ fn manual_list_scroll_does_not_snap_to_selected_task() {
                     details: None,
                 },
                 render::DashboardEditor {
+                    message_hint: None,
                     layout: &layout,
                     cursor: 0,
                     top: &mut 0,
@@ -1567,6 +1584,7 @@ fn manual_list_scroll_does_not_snap_to_selected_task() {
                     details: None,
                 },
                 render::DashboardEditor {
+                    message_hint: None,
                     layout: &layout,
                     cursor: 0,
                     top: &mut 0,
@@ -1585,7 +1603,7 @@ fn manual_list_scroll_does_not_snap_to_selected_task() {
         Some(dashboard::ClickTarget::Task(10))
     );
     assert_eq!(
-        dashboard::wheel_area((72, 24), 5, 7, false),
+        dashboard::wheel_area((72, 24), 5, 7, false, None),
         Some(dashboard::WheelArea::List(8))
     );
     assert_eq!(
@@ -1627,6 +1645,7 @@ fn manual_editor_scroll_keeps_viewport_then_keyboard_reveals_caret() {
                     details: None,
                 },
                 render::DashboardEditor {
+                    message_hint: None,
                     layout: &layout,
                     cursor,
                     top: &mut top,
@@ -1661,6 +1680,7 @@ fn manual_editor_scroll_keeps_viewport_then_keyboard_reveals_caret() {
                     details: None,
                 },
                 render::DashboardEditor {
+                    message_hint: None,
                     layout: &layout,
                     cursor,
                     top: &mut top,
@@ -1722,6 +1742,7 @@ fn manual_offsets_clamp_after_resize() {
                     details: None,
                 },
                 render::DashboardEditor {
+                    message_hint: None,
                     layout: &layout,
                     cursor: 0,
                     top: &mut editor_top,
@@ -1751,6 +1772,7 @@ fn list_mouse_geometry_tracks_filter_visibility() {
                 5,
                 row,
                 dashboard::HitState {
+                    message_hint: None,
                     rows: &rows,
                     filter_visible: visible,
                     list_top: 0,
@@ -1768,7 +1790,7 @@ fn list_mouse_geometry_tracks_filter_visibility() {
             Some(dashboard::ClickTarget::Task(if !visible { 2 } else { 1 }))
         );
         assert_eq!(
-            dashboard::wheel_area((72, 24), 5, 0, visible),
+            dashboard::wheel_area((72, 24), 5, 0, visible, None),
             Some(dashboard::WheelArea::List(if !visible { 8 } else { 7 }))
         );
     }
@@ -1813,6 +1835,7 @@ fn empty_filter_reserves_list_row_while_focused() {
                         details: None,
                     },
                     render::DashboardEditor {
+                        message_hint: None,
                         layout: &layout,
                         cursor: 0,
                         top: &mut 0,
@@ -1869,6 +1892,7 @@ fn filter_bar_shows_empty_result_and_takes_cursor_only_while_focused() {
                                 details: None,
                             },
                             render::DashboardEditor {
+                                message_hint: None,
                                 layout: &layout,
                                 cursor: 0,
                                 top: &mut 0,
@@ -1983,6 +2007,7 @@ fn small_dashboard_keeps_filter_row_and_plain_style() {
                     details: None,
                 },
                 render::DashboardEditor {
+                    message_hint: None,
                     layout: &layout,
                     cursor: 0,
                     top: &mut 0,
@@ -2038,6 +2063,7 @@ fn minimum_dashboard_height_still_shows_selected_task() {
                     details: None,
                 },
                 render::DashboardEditor {
+                    message_hint: None,
                     layout: &layout,
                     cursor: 0,
                     top: &mut 0,
@@ -2088,6 +2114,7 @@ fn split_dashboard_keeps_list_above_editor() {
                     details: None,
                 },
                 render::DashboardEditor {
+                    message_hint: None,
                     layout: &layout,
                     cursor: 0,
                     top: &mut editor_top,
@@ -2145,6 +2172,7 @@ fn narrow_dashboard_shows_plain_resize_hint() {
                     details: None,
                 },
                 render::DashboardEditor {
+                    message_hint: None,
                     layout: &layout,
                     cursor: 0,
                     top: &mut 0,
@@ -2193,6 +2221,7 @@ fn no_color_dashboard_keeps_default_cell_styles() {
                     details: None,
                 },
                 render::DashboardEditor {
+                    message_hint: None,
                     layout: &layout,
                     cursor: 0,
                     top: &mut 0,
@@ -2258,6 +2287,7 @@ fn status_selection_and_editor_images_use_distinct_colors() {
                         details: None,
                     },
                     render::DashboardEditor {
+                        message_hint: None,
                         layout: &layout,
                         cursor: 0,
                         top: &mut 0,
@@ -2344,6 +2374,7 @@ fn dashboard_paste_label_uses_gold_while_body_stays_neutral() {
                     details: None,
                 },
                 render::DashboardEditor {
+                    message_hint: None,
                     layout: &layout,
                     cursor: 0,
                     top: &mut 0,
@@ -2367,16 +2398,23 @@ fn hotkey_footer_colors_shortcuts_and_clears_styles_for_messages() {
         let layout = render::Layout::new(&["Draft".into()], &[], width.into());
         let mut terminal = Terminal::new(TestBackend::new(width, 24)).unwrap();
         for color in [true, false] {
-            for (keys, message, error) in [
-                (render::DASHBOARD_KEYS, "", false),
-                (render::DASHBOARD_HERDR_KEYS, "", false),
-                (render::DASHBOARD_KEYS, "Ctrl-S save failed", true),
-                (render::DASHBOARD_KEYS, "Saved #1. New task", false),
-                (render::FILTER_KEYS, "", false),
-                (render::FILTER_HERDR_KEYS, "", false),
-                (render::KEYS, "", false),
-                (render::NAV_KEYS, "", false),
-                (render::ADD_KEYS, "", false),
+            for (keys, message, error, message_hint) in [
+                (render::DASHBOARD_KEYS, "", false, None),
+                (render::DASHBOARD_HERDR_KEYS, "", false, None),
+                (render::DASHBOARD_KEYS, "Ctrl-S save failed", true, None),
+                (render::DASHBOARD_KEYS, "Saved #1. New task", false, None),
+                (render::FILTER_KEYS, "", false, None),
+                (render::FILTER_HERDR_KEYS, "", false, None),
+                (render::KEYS, "", false, None),
+                (render::NAV_KEYS, "", false, None),
+                (render::ADD_KEYS, "", false, None),
+                (render::KEYS, "Invalid config\nDetails", true, None),
+                (
+                    render::DASHBOARD_HERDR_KEYS,
+                    "Linked Herdr agent session is not live",
+                    true,
+                    Some("Press Ctrl-H again to open the Herdr workspace"),
+                ),
             ] {
                 let chrome = render::Chrome {
                     title: "Task Editor",
@@ -2404,6 +2442,7 @@ fn hotkey_footer_colors_shortcuts_and_clears_styles_for_messages() {
                                 details: None,
                             },
                             render::DashboardEditor {
+                                message_hint,
                                 layout: &layout,
                                 cursor: 0,
                                 top: &mut 0,
@@ -2416,7 +2455,13 @@ fn hotkey_footer_colors_shortcuts_and_clears_styles_for_messages() {
                     })
                     .unwrap();
                 let buffer = terminal.backend().buffer();
-                let text = if message.is_empty() { keys } else { message };
+                if message_hint.is_some() {
+                    assert_eq!(
+                        line(buffer, 22).trim_end(),
+                        render::clipped(message, width.into()).trim_end()
+                    );
+                }
+                let text = message_hint.unwrap_or(if message.is_empty() { keys } else { message });
                 let clipped = render::clipped(text, width.into());
                 assert_eq!(line(buffer, 23).trim_end(), clipped.trim_end());
                 for (x, _) in clipped.chars().enumerate() {
@@ -2500,20 +2545,20 @@ fn compact_dashboard_uses_three_equal_panels_below_60_columns() {
     assert_eq!(panes.details.height, 5);
     assert_eq!(panes.editor.y, 13);
     assert_eq!(
-        dashboard::wheel_area((59, 24), 5, 7, false),
+        dashboard::wheel_area((59, 24), 5, 7, false, None),
         Some(dashboard::WheelArea::List(8))
     );
     assert_eq!(
-        dashboard::wheel_area((59, 24), 5, 7, true),
+        dashboard::wheel_area((59, 24), 5, 7, true, None),
         Some(dashboard::WheelArea::List(7))
     );
     assert_eq!(
-        dashboard::wheel_area((59, 24), 5, 9, false),
+        dashboard::wheel_area((59, 24), 5, 9, false, None),
         Some(dashboard::WheelArea::Details(6))
     );
-    assert_eq!(dashboard::wheel_area((59, 24), 5, 8, false), None);
+    assert_eq!(dashboard::wheel_area((59, 24), 5, 8, false, None), None);
     assert_eq!(
-        dashboard::wheel_area((59, 24), 5, 17, false),
+        dashboard::wheel_area((59, 24), 5, 17, false, None),
         Some(dashboard::WheelArea::Editor(6))
     );
 }
@@ -2562,6 +2607,7 @@ fn compact_details_render_and_scroll_without_moving_draft() {
                             }),
                         },
                         render::DashboardEditor {
+                            message_hint: None,
                             layout: &layout,
                             cursor: 0,
                             top: &mut editor_top,
@@ -2591,7 +2637,7 @@ fn compact_details_render_and_scroll_without_moving_draft() {
                 Position::new(0, panes.editor.y + 1)
             );
             assert_eq!(
-                dashboard::wheel_area((width, height), content.x, content.y, false),
+                dashboard::wheel_area((width, height), content.x, content.y, false, None),
                 Some(dashboard::WheelArea::Details(content.height.into()))
             );
             assert_eq!(
@@ -2640,15 +2686,15 @@ fn wide_dashboard_mouse_routes_list_and_details_by_column() {
     let fragments: Vec<_> = "Draft".chars().map(|ch| ch.to_string()).collect();
     let layout = render::Layout::new(&fragments, &[], 150);
     assert_eq!(
-        dashboard::wheel_area((150, 24), 89, 1, false),
+        dashboard::wheel_area((150, 24), 89, 1, false, None),
         Some(dashboard::WheelArea::List(12))
     );
     assert_eq!(
-        dashboard::wheel_area((150, 24), 89, 1, true),
+        dashboard::wheel_area((150, 24), 89, 1, true, None),
         Some(dashboard::WheelArea::List(11))
     );
     assert_eq!(
-        dashboard::wheel_area((150, 24), 93, 1, false),
+        dashboard::wheel_area((150, 24), 93, 1, false, None),
         Some(dashboard::WheelArea::Details(11))
     );
     for (column, row) in [
@@ -2662,7 +2708,10 @@ fn wide_dashboard_mouse_routes_list_and_details_by_column() {
         (5, 12),
         (89, 12),
     ] {
-        assert_eq!(dashboard::wheel_area((150, 24), column, row, false), None);
+        assert_eq!(
+            dashboard::wheel_area((150, 24), column, row, false, None),
+            None
+        );
         assert_eq!(click((150, 24), column, row, &rows, 0, 0, &layout), None);
     }
     assert_eq!(
@@ -2674,13 +2723,13 @@ fn wide_dashboard_mouse_routes_list_and_details_by_column() {
         click((150, 24), 5, 11, &rows, 0, 0, &layout),
         Some(dashboard::ClickTarget::Task(12))
     );
-    assert_eq!(dashboard::wheel_area((150, 24), 5, 12, true), None);
+    assert_eq!(dashboard::wheel_area((150, 24), 5, 12, true, None), None);
     assert_eq!(
         click((150, 24), 2, 14, &rows, 0, 0, &layout),
         Some(dashboard::ClickTarget::Editor(2))
     );
     assert_eq!(
-        dashboard::wheel_area((150, 24), 149, 14, false),
+        dashboard::wheel_area((150, 24), 149, 14, false, None),
         Some(dashboard::WheelArea::Editor(9))
     );
 }
@@ -2725,6 +2774,7 @@ fn wide_dashboard_keeps_spacer_below_full_selected_list() {
                             details: None,
                         },
                         render::DashboardEditor {
+                            message_hint: None,
                             layout: &layout,
                             cursor: 0,
                             top: &mut 0,
@@ -2793,6 +2843,7 @@ fn wide_dashboard_renders_both_upper_panes_and_full_width_editor() {
                         }),
                     },
                     render::DashboardEditor {
+                        message_hint: None,
                         layout: &layout,
                         cursor: 0,
                         top: &mut 0,
@@ -2858,6 +2909,7 @@ fn failed_save_footer_uses_error_color() {
                     details: None,
                 },
                 render::DashboardEditor {
+                    message_hint: None,
                     layout: &layout,
                     cursor: 0,
                     top: &mut 0,
@@ -2935,6 +2987,7 @@ fn dirty_marker_is_distinct_aligned_and_keeps_task_hit_targets() {
                                 details: None,
                             },
                             render::DashboardEditor {
+                                message_hint: None,
                                 layout: &layout,
                                 cursor: 0,
                                 top: &mut 0,

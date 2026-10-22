@@ -366,6 +366,7 @@ pub fn wheel_area(
     column: u16,
     row: u16,
     filter_visible: bool,
+    message_hint: Option<&str>,
 ) -> Option<WheelArea> {
     if size.0 < 12 || size.1 < 8 || column >= size.0 || row >= size.1 {
         return None;
@@ -375,16 +376,15 @@ pub fn wheel_area(
         details,
         editor,
     } = panes(Rect::new(0, 0, size.0, size.1));
+    let body = editor_body(editor, message_hint);
     if list.contains(Position::new(column, row)) {
         Some(WheelArea::List(usize::from(
             list_content(list, filter_visible).height,
         )))
     } else if details_content(details).contains(Position::new(column, row)) {
         Some(WheelArea::Details(details_height(details)))
-    } else if row >= editor.y && row < editor.y + editor.height - 1 {
-        Some(WheelArea::Editor(usize::from(
-            editor.height.saturating_sub(2),
-        )))
+    } else if row >= editor.y && row < body.y + body.height {
+        Some(WheelArea::Editor(usize::from(body.height)))
     } else {
         None
     }
@@ -396,6 +396,7 @@ pub struct HitState<'a> {
     pub list_top: usize,
     pub editor_top: usize,
     pub layout: &'a render::Layout,
+    pub message_hint: Option<&'a str>,
 }
 
 pub fn click_target(
@@ -419,8 +420,9 @@ pub fn click_target(
         let index = hit.list_top + usize::from(row - content.y);
         return hit.rows.get(index)?.task_id.map(ClickTarget::Task);
     }
-    if row > editor.y && row < editor.y + editor.height - 1 {
-        let layout_row = hit.editor_top + usize::from(row - editor.y - 1);
+    let body = editor_body(editor, hit.message_hint);
+    if body.contains(Position::new(column, row)) {
+        let layout_row = hit.editor_top + usize::from(row - body.y);
         if layout_row < hit.layout.rows.len() {
             return Some(ClickTarget::Editor(
                 hit.layout.nearest(layout_row, usize::from(column)),
@@ -567,13 +569,24 @@ fn hotkey_line(keys: &str, color: bool) -> Line<'static> {
     Line::from(spans)
 }
 
+fn editor_body(area: Rect, message_hint: Option<&str>) -> Rect {
+    let footer_height = 1 + u16::from(area.height > 3 && message_hint.is_some());
+    Rect::new(
+        area.x,
+        area.y + 1,
+        area.width,
+        area.height - 1 - footer_height,
+    )
+}
+
 fn editor(
     frame: &mut Frame<'_>,
     area: Rect,
     editor: render::DashboardEditor<'_>,
     color: bool,
 ) -> Option<Position> {
-    let body = Rect::new(area.x, area.y + 1, area.width, area.height - 2);
+    let body = editor_body(area, editor.message_hint);
+    let footer_height = area.height - 1 - body.height;
     let (row, column) = editor.layout.positions[editor.cursor];
     let body_height = usize::from(body.height);
     *editor.top = (*editor.top).min(editor.layout.rows.len().saturating_sub(body_height));
@@ -607,11 +620,20 @@ fn editor(
         })
         .collect();
     frame.render_widget(Paragraph::new(lines).style(body_style), body);
-    let footer = if editor.chrome.message.is_empty() {
-        hotkey_line(editor.chrome.keys, color)
+    let mut footer = if editor.chrome.message.is_empty() {
+        vec![hotkey_line(editor.chrome.keys, color)]
     } else {
-        Line::from(render::clipped(editor.chrome.message, area.width.into()))
+        vec![Line::from(render::clipped(
+            editor.chrome.message,
+            area.width.into(),
+        ))]
     };
+    if footer_height > 1 {
+        footer.push(Line::from(render::clipped(
+            editor.message_hint.expect("two-row footer has hint"),
+            area.width.into(),
+        )));
+    }
     let footer_style = if !color {
         Style::default()
     } else if editor.chrome.message.is_empty() {
@@ -623,7 +645,12 @@ fn editor(
     };
     frame.render_widget(
         Paragraph::new(footer).style(footer_style),
-        Rect::new(area.x, area.y + area.height - 1, area.width, 1),
+        Rect::new(
+            area.x,
+            area.y + area.height - footer_height,
+            area.width,
+            footer_height,
+        ),
     );
     if row >= *editor.top && row < editor.top.saturating_add(body_height) {
         Some(Position::new(

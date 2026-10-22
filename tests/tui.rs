@@ -401,6 +401,20 @@ fn tui_dashboard_ctrl_h_hint_follows_selected_link_and_external_refresh() {
 }
 
 #[test]
+fn tui_dashboard_ctrl_h_opens_workspace_after_stale_agent_warning() {
+    for scenario in [
+        "handoff_stale_workspace",
+        "handoff_stale_workspace_default",
+        "handoff_stale_workspace_error",
+        "handoff_stale_workspace_selection",
+        "handoff_stale_workspace_control",
+        "handoff_stale_workspace_mouse",
+    ] {
+        dashboard_scenario(scenario);
+    }
+}
+
+#[test]
 fn tui_dashboard_ctrl_h_errors_preserve_editor() {
     for scenario in [
         "handoff_no_selection",
