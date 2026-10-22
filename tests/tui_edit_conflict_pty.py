@@ -116,6 +116,15 @@ with tempfile.TemporaryDirectory() as directory:
                 except OSError:
                     pass
         stdout, _ = child.communicate(timeout=5)
+        # Child exit can precede final PTY read; collect terminal cleanup bytes.
+        while select.select([master], [], [], 0)[0]:
+            try:
+                chunk = os.read(master, 65536)
+            except OSError:
+                break
+            if not chunk:
+                break
+            output.extend(chunk)
         if scenario in ("removed", "reload_removed"):
             assert child.returncode == 1 and stdout == b"", output
             assert cli("list") == []
