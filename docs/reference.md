@@ -393,8 +393,9 @@ editor. UI goes to stderr; stdout receives the result after exit.
 | Esc | Exit blank draft or confirm discard |
 | Ctrl-C | Exit; saved tasks remain committed |
 
-Interactive `add` keeps accepting tasks after each save. Shift-Up loads newest
-then older unarchived tasks; Shift-Down returns toward a blank draft. Switching
+Interactive `add` keeps accepting tasks after each save. Shift-Up/Down cycles
+through unarchived tasks in creation order and the blank draft. From the blank
+draft, Shift-Up loads the newest task and Shift-Down loads the oldest. Switching
 a changed draft asks before discard. New-task parent, prerequisite and priority
 flags apply to every creation; `--image` files attach only to the first successful
 save, including an existing-task update. Inline add, external edit and `edit`
@@ -462,7 +463,7 @@ text or manual scroll. Lists and filters use saved descriptions.
 
 | Key / gesture | Action |
 | --- | --- |
-| Shift-Up/Down or Ctrl-Up/Down | Select tasks in visible tree order, then the general new draft |
+| Shift-Up/Down or Ctrl-Up/Down | Cycle through visible tasks and the general new draft |
 | Click task / editor text | Load the task / place the caret |
 | Mouse wheel | Scroll the pane under the pointer |
 | PgUp/PgDn | Scroll selected-task details from the editor |

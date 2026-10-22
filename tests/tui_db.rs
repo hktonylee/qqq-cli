@@ -753,10 +753,12 @@ fn task_messages_preserve_body_author_order_and_show_contract() {
 #[test]
 fn task_navigation_skips_archived_unless_included() {
     let (mut db, _dir) = database();
+    assert!(db.adjacent_task(None, false, false).unwrap().is_none());
     db.add("First", None, &[]).unwrap();
     db.add("Hidden", None, &[]).unwrap();
     db.add("Third", None, &[]).unwrap();
     db.set_archived(2, true, "cli").unwrap();
+    assert_eq!(db.adjacent_task(None, false, false).unwrap().unwrap().0, 1);
     assert_eq!(db.adjacent_task(None, true, false).unwrap().unwrap().0, 3);
     assert_eq!(
         db.adjacent_task(Some(3), true, false).unwrap().unwrap().0,
@@ -767,6 +769,9 @@ fn task_navigation_skips_archived_unless_included() {
         3
     );
     assert_eq!(db.adjacent_task(Some(3), true, true).unwrap().unwrap().0, 2);
+    db.set_archived(1, true, "cli").unwrap();
+    assert_eq!(db.adjacent_task(None, false, false).unwrap().unwrap().0, 3);
+    assert_eq!(db.adjacent_task(None, false, true).unwrap().unwrap().0, 1);
 }
 
 #[test]

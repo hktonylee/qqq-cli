@@ -324,15 +324,20 @@ with tempfile.TemporaryDirectory(prefix="qqq-history-test-") as folder:
             assert saved["id"] == 2 and saved["description"] == "Second!"
             assert cli("show", "1")["task"]["description"] == "First"
         elif scenario == "oldest_boundary":
+            press(DOWN, b"Task #1")
+            press(DOWN, b"New Task")
+            press(DOWN, b"Task #1")
+            press(UP, b"New Task")
             press(UP, b"Task #1")
             send(b"\x05!")
-            press(UP, b"No older task")
-            assert b"Discard changes and switch?" not in screen
+            press(UP, b"Discard changes and switch? (y/N)")
+            press(b"n", b"Task #1")
             saved = finish(1)[0]
             assert saved["id"] == 1 and saved["description"] == "First!"
         elif scenario == "empty_boundary":
             press(UP, b"No older task")
             send(b"Fresh")
+            press(DOWN, b"Already at new task")
             saved = finish(1)[0]
             assert saved["id"] == 1 and saved["description"] == "Fresh"
         else:

@@ -335,7 +335,25 @@ fn filtered_navigation_skips_hidden_ids_and_reaches_new_draft() {
     assert_eq!(panel::adjacent_visible_id(&ids, Some(3), false), Some(1));
     assert_eq!(panel::adjacent_visible_id(&ids, Some(2), false), Some(4));
     assert_eq!(panel::adjacent_visible_id(&ids, Some(5), false), None);
-    assert_eq!(panel::adjacent_visible_id(&ids, None, false), None);
+    assert_eq!(panel::adjacent_visible_id(&ids, None, false), Some(1));
+}
+
+#[test]
+fn navigation_cycles_through_visible_tasks_and_new_draft() {
+    let ids = [1, 4, 2, 3];
+    for (older, expected) in [
+        (false, [Some(1), Some(4), Some(2), Some(3), None, Some(1)]),
+        (true, [Some(3), Some(2), Some(4), Some(1), None, Some(3)]),
+    ] {
+        let mut current = None;
+        for next in expected {
+            current = panel::adjacent_visible_id(&ids, current, older);
+            assert_eq!(current, next);
+        }
+        assert_eq!(panel::adjacent_visible_id(&[], None, older), None);
+        assert_eq!(panel::adjacent_visible_id(&[7], None, older), Some(7));
+        assert_eq!(panel::adjacent_visible_id(&[7], Some(7), older), None);
+    }
 }
 
 #[test]

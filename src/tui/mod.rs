@@ -613,9 +613,6 @@ fn adjacent_target(
     include_archived: bool,
     visible_ids: Option<&[i64]>,
 ) -> Result<Option<Target>> {
-    if !older && current.is_none() {
-        return Ok(None);
-    }
     let found = if let Some(ids) = visible_ids {
         panel::adjacent_visible_id(ids, current, older)
             .map(|id| {
@@ -628,7 +625,7 @@ fn adjacent_target(
     };
     Ok(match found {
         Some((id, _, _)) => Some(task_target(db, id)?),
-        None if !older => Some(Target::New { parent_id: None }),
+        None if current.is_some() => Some(Target::New { parent_id: None }),
         None => None,
     })
 }

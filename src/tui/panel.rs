@@ -14,8 +14,7 @@ pub fn adjacent_visible_id(ids: &[i64], current: Option<i64>, older: bool) -> Op
         Some(index) if older => index.checked_sub(1).map(|index| ids[index]),
         Some(index) => ids.get(index + 1).copied(),
         None if older => ids.last().copied(),
-        None if current.is_some() => ids.first().copied(),
-        None => None,
+        None => ids.first().copied(),
     }
 }
 

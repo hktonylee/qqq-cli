@@ -1310,7 +1310,11 @@ impl Db {
                 params![id, include_archived],
                 |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
             ),
-            (false, None) => return Ok(None),
+            (false, None) => self.conn.query_row(
+                "SELECT id,description,status FROM tasks WHERE (?1 OR archived=0) ORDER BY id ASC LIMIT 1",
+                [include_archived],
+                |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
+            ),
         };
         Ok(found.optional()?)
     }
