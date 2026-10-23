@@ -203,10 +203,20 @@ pub(super) fn create(
         let _: serde_json::Value =
             crate::herdr::call(None, &["agent", "prompt", &pane.pane_id, prompt])
                 .context("Prompt may have been delivered; inspect the agent before trying again")?;
-        let _: serde_json::Value = crate::herdr::call(None, &["tab", "focus", &pane.tab_id])?;
         Ok(())
     };
-    prepare().with_context(|| {
+    let mut result = prepare();
+    let focused: Result<serde_json::Value> =
+        crate::herdr::call(None, &["tab", "focus", &pane.tab_id]);
+    for next in [focused.map(|_| ()), attach(None)] {
+        if let Err(error) = next {
+            result = Err(match result {
+                Ok(()) => error,
+                Err(previous) => previous.context(format!("{error:#}")),
+            });
+        }
+    }
+    result.with_context(|| {
         format!(
             "Created Herdr pane {}; inspect it before retrying",
             pane.pane_id

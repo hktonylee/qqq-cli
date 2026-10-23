@@ -429,7 +429,7 @@ pane = {"pane_id": "wW:p1", "tab_id": "wW:t1", "workspace_id": "match", "cwd": s
 identity = {"agent": "codex", "kind": "id", "value": "created-session"} if scenario == "create_agent_linked" else None
 agent_name = "claude" if scenario in ("create_agent_initial_env_tab", "create_agent_initial_env_workspace") else "codex"
 agent_pane = dict(pane, agent=agent_name,
-                  agent_status="blocked" if scenario == "create_agent_blocked_error" else "done",
+                  agent_status="blocked" if scenario.startswith("create_agent_blocked") else "done",
                   agent_session=identity)
 competing_pane = dict(pane, pane_id="other:p1", agent="codex", terminal_id="other-terminal",
                       agent_session={"agent": "codex", "kind": "id", "value": "other-session"})
@@ -500,13 +500,16 @@ elif args[:2] == ["agent", "prompt"]:
     (root / "delivered-prompt").write_text(args[3])
     result = {}
 elif args == ["tab", "focus", "wW:t1"]:
+    if scenario == "create_agent_focus_error":
+        print("tab focus denied", file=sys.stderr)
+        sys.exit(1)
     result = {}
 elif not args:
     flags = termios.tcgetattr(0)[3]
     assert flags & termios.ICANON and flags & termios.ECHO, "client inherits raw mode"
     (root / "herdr-client-opened").touch()
     print("\x1b[2JHERDR_CLIENT", flush=True)
-    sys.exit(1 if scenario == "create_agent_attach_error" else 0)
+    sys.exit(1 if scenario in ("create_agent_attach_error", "create_agent_blocked_attach_error") else 0)
 else:
     raise AssertionError(args)
 print(json.dumps({"result": result}))
@@ -515,7 +518,8 @@ print(json.dumps({"result": result}))
 
     master, slave = pty.openpty()
     os.set_blocking(master, False)
-    fcntl.ioctl(slave, termios.TIOCSWINSZ, struct.pack("HHHH", 24, 72, 0, 0))
+    columns = 220 if scenario == "create_agent_blocked_attach_error" else 72
+    fcntl.ioctl(slave, termios.TIOCSWINSZ, struct.pack("HHHH", 24, columns, 0, 0))
     before = termios.tcgetattr(slave)
     os.setsid()
     fcntl.ioctl(slave, termios.TIOCSCTTY, 0)
@@ -540,7 +544,7 @@ print(json.dumps({"result": result}))
     child = subprocess.Popen(args, cwd=launch_dir, env=env, stdin=slave,
                              stderr=slave, stdout=subprocess.PIPE)
     screen = bytearray()
-    visible = TerminalScreen(72, 24)
+    visible = TerminalScreen(columns, 24)
     visible_at_clear = [visible.text()]
 
     def clear_capture():
@@ -837,9 +841,12 @@ print(json.dumps({"result": result}))
                 if scenario == "create_agent_claim_race_error":
                     wait_visible(lambda: "Created Herdr pane wW:p1" in visible.text()
                                  or "Returned from Herdr" in visible.text())
-                    assert not (Path(folder) / "herdr-client-opened").exists()
+                    assert (Path(folder) / "herdr-client-opened").exists()
                 if scenario.endswith("error"):
                     read_until(b"Created Herdr pane wW:p1", 22 if scenario.startswith("create_agent_startup_") else 5)
+                    if scenario == "create_agent_blocked_attach_error":
+                        wait_visible(lambda: "Created agent needs attention before prompting" in visible.text().splitlines()[-1]
+                                     and "Herdr client failed" in visible.text().splitlines()[-1])
                 else:
                     read_until(b"HERDR_CLIENT")
                     wait_visible(lambda: "Returned from Herdr" in visible.text())
@@ -850,8 +857,9 @@ print(json.dumps({"result": result}))
                 assert len(create) == 1, calls
                 assert create[0][0] == ("workspace" if scenario in ("create_agent_workspace", "create_agent_initial_env_workspace", "create_agent_server") else "tab"), calls
                 if scenario.endswith("error"):
-                    assert (Path(folder) / "herdr-client-opened").exists() == (scenario == "create_agent_attach_error")
-                    assert sum(call[:2] == ["agent", "prompt"] for call in calls) == (scenario not in ("create_agent_identity_error", "create_agent_claim_race_error", "create_agent_startup_timeout_error", "create_agent_startup_hang_error", "create_agent_blocked_error"))
+                    assert (Path(folder) / "herdr-client-opened").exists()
+                    assert calls[-2:] == [["tab", "focus", "wW:t1"], []], calls
+                    assert sum(call[:2] == ["agent", "prompt"] for call in calls) == (scenario not in ("create_agent_identity_error", "create_agent_claim_race_error", "create_agent_startup_timeout_error", "create_agent_startup_hang_error", "create_agent_blocked_error", "create_agent_blocked_attach_error"))
                 assert not any(call[:2] in (["pane", "run"], ["agent", "get"], ["agent", "wait"], ["agent", "start"]) for call in calls), calls
                 if scenario == "create_agent_auto":
                     assert int((Path(folder) / "agent-detection-attempts").read_text()) >= 3
@@ -866,7 +874,7 @@ print(json.dumps({"result": result}))
             if scenario == "create_agent_claim_race_error":
                 assert cli("show", "2") == json.loads((Path(folder) / "competing-task.json").read_text())
                 title = title.rstrip().replace("(New)", "(In progress)").ljust(visible.width)
-            elif scenario in ("create_agent_cancel", "create_agent_empty", "create_agent_ctrl_c", "create_agent_identity_error", "create_agent_startup_timeout_error", "create_agent_startup_hang_error", "create_agent_blocked_error"):
+            elif scenario in ("create_agent_cancel", "create_agent_empty", "create_agent_ctrl_c", "create_agent_identity_error", "create_agent_startup_timeout_error", "create_agent_startup_hang_error", "create_agent_blocked_error", "create_agent_blocked_attach_error"):
                 assert link == initial_link
                 assert not (Path(folder) / "delivered-prompt").exists()
             else:

@@ -17,7 +17,7 @@ mod view_picker;
 mod view_templates;
 
 use crate::config::AfterSaveNew;
-use anyhow::{Context, Result, bail, ensure};
+use anyhow::{Result, bail, ensure};
 use buffers::{DraftBuffers, DraftKey, ParkedDraft};
 #[cfg(unix)]
 use crossterm::event::{
@@ -1674,10 +1674,7 @@ fn compose_inner(
                             let result = mode.create_agent(
                                 target_id.expect("agent creation has selected task"),
                                 &prompt,
-                            )
-                            .and_then(|pane| handoff::attach(None).with_context(|| {
-                                format!("Created Herdr pane {pane}; worker started; open it in Herdr")
-                            }));
+                            );
                             terminal = TerminalGuard::enter(dashboard)?;
                             let dashboard_terminal =
                                 dashboard_terminal.as_mut().expect("dashboard has terminal");

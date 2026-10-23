@@ -910,6 +910,8 @@ new tab or workspace process. After creating the pane, qqq waits up to 20 second
 for Herdr to identify an agent and report it idle or done, then submits only the
 edited prompt through `herdr agent prompt`. A blocked agent or startup timeout
 leaves the pane for inspection without sending the prompt.
+After creating a pane, qqq opens its Herdr tab even if the agent needs attention
+or setup fails. The editor shows the error when you return from Herdr.
 `qqq next` claims work for its caller;
 the removed `herdr.next-to-new-agent` setting has no effect.
 
