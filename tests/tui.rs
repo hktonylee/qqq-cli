@@ -660,7 +660,7 @@ fn tui_dashboard_escape_clears_filter_editor_then_exits() {
 }
 
 #[test]
-fn tui_dashboard_ctrl_c_clears_dirty_new_drafts_before_exit() {
+fn tui_dashboard_ctrl_c_confirms_before_clearing_dirty_new_drafts() {
     dashboard_scenario("ctrl_c_new_text");
     dashboard_scenario("ctrl_c_new_filter");
     dashboard_scenario("ctrl_c_new_scroll");

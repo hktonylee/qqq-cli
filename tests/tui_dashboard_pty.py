@@ -2513,6 +2513,9 @@ print(json.dumps({"result": result}))
                 assert "Discard" not in visible.text(), visible.text()
             send(b"\x1b" if scenario == "buffers_exit_escape" else b"\x03")
             if scenario == "buffers_exit_active_new":
+                wait_visible(lambda: visible.text().splitlines()[-1].startswith("Discard draft? (y/N)")
+                             and editor_line().startswith("New unsaved"))
+                send(b"y")
                 wait_visible(lambda: "New Task" in editor_title() and "[*]" not in editor_title()
                              and editor_line().strip() == ""
                              and visible.text().splitlines()[-1].startswith("Ctrl-S Save"))
@@ -2680,6 +2683,9 @@ print(json.dumps({"result": result}))
             send(b"\x1b[1;2B")
             wait_visible(lambda: "New Task" in editor_title() and "[Image #1: retained.png]" in visible.text())
             send(b"\x03")
+            wait_visible(lambda: visible.text().splitlines()[-1].startswith("Discard draft? (y/N)")
+                         and "[Image #1: retained.png]" in visible.text())
+            send(b"y")
             wait_visible(lambda: "New Task" in editor_title() and "[*]" not in editor_title()
                          and editor_line().strip() == ""
                          and visible.text().splitlines()[-1].startswith("Ctrl-S Save"))
@@ -3053,6 +3059,9 @@ print(json.dumps({"result": result}))
                 wait_visible(lambda: "Task 12" in visible.text().splitlines()[2]
                              and "Task 17" in visible.text().splitlines()[7])
                 scrolled_list = visible.text().splitlines()[:list_bottom() + 1]
+            settle()
+            retained_rows = visible.text().splitlines()[:-1]
+            retained_cursor = (visible.x, visible.y)
             clear_capture()
             send(b"\x03")
             if scenario == "ctrl_c_new_filter":
@@ -3069,7 +3078,27 @@ print(json.dumps({"result": result}))
                              and editor_line().startswith("Unsaved draft")
                              and (visible.x, visible.y) == (len("Unsaved draft"), editor_row() + 1))
                 assert child.poll() is None and cli("list") == initial_tasks
+                retained_rows = visible.text().splitlines()[:-1]
+                retained_cursor = (visible.x, visible.y)
                 send(b"\x03")
+            def wait_clear_confirmation():
+                wait_visible(lambda: visible.text().splitlines()[-1].startswith("Discard draft? (y/N)")
+                             and visible.text().splitlines()[:-1] == retained_rows
+                             and (visible.x, visible.y) == retained_cursor)
+
+            wait_clear_confirmation()
+            for cancel_key in (b"n", b"\r", b"\x1b"):
+                send(cancel_key)
+                wait_visible(lambda: visible.text().splitlines()[-1].startswith("Ctrl-S Save")
+                             and visible.text().splitlines()[:-1] == retained_rows
+                             and (visible.x, visible.y) == retained_cursor)
+                assert cli("list") == initial_tasks and child.poll() is None
+                send(b"\x03")
+                wait_clear_confirmation()
+            send(b"\x03\x03")
+            settle()
+            wait_clear_confirmation()
+            send(b"y")
             wait_visible(lambda: "New Task" in editor_title() and "[*]" not in editor_title()
                          and editor_line().strip() == ""
                          and visible.text().splitlines()[-1].startswith("Ctrl-S Save")

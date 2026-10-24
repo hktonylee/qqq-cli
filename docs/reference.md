@@ -595,8 +595,9 @@ In other menus/errors, Esc clears an active filter before closing the popup.
 
 From the editor, Esc clears the active editor before a later press exits; dirty
 drafts ask first. Ctrl-C returns a selected task to a blank draft, asking before
-discarding saved-task edits. In a nonempty new/child draft, Ctrl-C immediately
-clears text, tags, images, paste items and undo history; a child retains its parent.
+discarding saved-task edits. In a nonempty new/child draft, Ctrl-C asks before
+clearing text, tags, images, paste items and undo history; a child retains its parent.
+Press `y` to clear, or `n`, Enter or Esc to keep the draft.
 From an empty new draft it starts exit.
 
 Exit asks about every retained dirty draft, including hidden/deleted tasks.

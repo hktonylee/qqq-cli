@@ -855,7 +855,7 @@ Offline font fallbacks: Georgia, system UI sans, and system monospace. No remote
 </g>
 </svg>
 </div>
-<figcaption>Cancelling any parked-buffer confirmation preserves every buffer, including earlier approved ones. Ctrl+C has a different route: nonempty New resets immediately; empty New checks parked buffers; saved tasks return to New or ask to discard. ExitBuffers ignores Ctrl+C.</figcaption>
+<figcaption>Cancelling any parked-buffer confirmation preserves every buffer, including earlier approved ones. Ctrl+C has a different route: nonempty New asks before resetting; empty New checks parked buffers; saved tasks return to New or ask to discard. ExitBuffers ignores Ctrl+C.</figcaption>
 </figure>
 <details><summary>Keys, guards &amp; failure paths</summary>
 <ul>
@@ -863,7 +863,7 @@ Offline font fallbacks: Georgia, system UI sans, and system monospace. No remote
 <li>Escape from saved task or nonempty/child New: a dirty draft opens footer-only Switch confirmation; a clean draft loads general New (restoring a parked New draft if present).</li>
 <li>Dirty means changed text, nonempty staged tags, or pending image atoms (<a href="../src/tui/draft.rs">draft.rs, lines 608–614</a>). Tags-only New drafts therefore take the discard-switch route too.</li>
 <li>Escape from blank general New exits directly if no parked dirty buffers. Otherwise ExitBuffers shows one modal per parked dirty draft with preview. y/Y advances; after last exits. n/N/Enter/Escape/q/Q cancels exit; all retained buffers survive even previously approved ones. If current inspected buffer&#x27;s DB task was removed, cancel restores that retained draft into editor.</li>
-<li>Ctrl+C on nonempty New with no action/confirmation clears current New draft immediately, preserving other parked drafts. Ctrl+C on empty New (including an empty child draft) checks parked buffers and exits, unlike Escape on an empty child which returns to general New. Ctrl+C on saved task navigates to general New or opens dirty Switch confirmation.</li>
+<li>Ctrl+C on nonempty New with no action/confirmation opens a footer-only discard confirmation. y/Y clears the current draft, preserving a child parent and other parked drafts; n/N/Enter/Escape/q/Q keeps it. Repeated Ctrl+C keeps the prompt open. Ctrl+C on empty New (including an empty child draft) checks parked buffers and exits, unlike Escape on an empty child which returns to general New. Ctrl+C on saved task navigates to general New or opens dirty Switch confirmation.</li>
 <li>Switch y/Y loads destination; n/N/Enter/Escape/q/Q cancels. Ctrl+C on saved target can recreate Switch via earlier dashboard logic; otherwise pending confirmation retains it.</li>
 <li>Shared <code>Confirmation::Exit</code> is a footer-only non-dashboard add/edit path: Escape on nonempty draft -&gt; Discard draft?; y/Y exits (after buffer checks), n/N/Enter/Escape/q/Q cancels. It is not a distinct dashboard popup entry.</li>
 </ul>

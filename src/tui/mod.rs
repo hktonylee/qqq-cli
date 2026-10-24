@@ -89,6 +89,7 @@ enum Target {
 
 enum Confirmation {
     Exit,
+    ClearDraft,
     ExitBuffers {
         keys: Vec<DraftKey>,
         index: usize,
@@ -1157,10 +1158,12 @@ fn compose_inner(
         };
         let footer = match &confirmation {
             Some(Confirmation::ExitBuffers { .. }) => &buffer_footer,
-            Some(Confirmation::Exit) if usize::from(size.0) < "Discard draft? (y/N)".len() => {
+            Some(Confirmation::Exit | Confirmation::ClearDraft)
+                if usize::from(size.0) < "Discard draft? (y/N)".len() =>
+            {
                 "Discard? y/N"
             }
-            Some(Confirmation::Exit) => "Discard draft? (y/N)",
+            Some(Confirmation::Exit | Confirmation::ClearDraft) => "Discard draft? (y/N)",
             Some(Confirmation::Switch { .. })
                 if usize::from(size.0) < "Discard changes and switch? (y/N)".len() =>
             {
@@ -1968,20 +1971,7 @@ fn compose_inner(
                     && action_ui.is_none()
                     && !draft.is_empty()
                 {
-                    editor_follow_cursor = load_target(
-                        Target::New {
-                            parent_id: draft_parent_id,
-                        },
-                        &mut draft,
-                        &mut target_id,
-                        &mut target_status,
-                        &mut draft_parent_id,
-                        &mut baseline,
-                        &mut top,
-                    );
-                    filter_focused = false;
-                    message.clear();
-                    message_is_error = false;
+                    confirmation = Some(Confirmation::ClearDraft);
                     continue;
                 }
                 let editor_escape =
@@ -2037,6 +2027,22 @@ fn compose_inner(
                     {
                         match key.code {
                             KeyCode::Char('y' | 'Y') => match pending {
+                                Confirmation::ClearDraft => {
+                                    editor_follow_cursor = load_target(
+                                        Target::New {
+                                            parent_id: draft_parent_id,
+                                        },
+                                        &mut draft,
+                                        &mut target_id,
+                                        &mut target_status,
+                                        &mut draft_parent_id,
+                                        &mut baseline,
+                                        &mut top,
+                                    );
+                                    filter_focused = false;
+                                    message.clear();
+                                    message_is_error = false;
+                                }
                                 Confirmation::Exit => {
                                     if let Some(pending) = confirm_buffers_exit(&buffers) {
                                         confirmation = Some(pending);
