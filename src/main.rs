@@ -202,64 +202,77 @@ enum Commands {
         #[arg(long, requires = "export_image", value_name = "PATH")]
         output: Option<PathBuf>,
     },
-    /// Edit whole description interactively, or update supplied fields directly.
+    /// Edit a task's content, status, dependencies, or metadata.
+    #[command(
+        after_help = "With no update options, open the description editor. Supplied updates apply\ndirectly; --edit opens $EDITOR with supported fields prefilled.\n\nExamples:\n  qqq edit 12\n  qqq edit 12 --description \"Updated task details\"\n  qqq edit 12 --set-status blocked --reason \"Need the API endpoint\"\n  qqq edit 12 --set-status new\n  qqq edit 12 --complete"
+    )]
     Edit {
         /// Task ID, or negative creation index: -1 is newest, -2 second newest.
         #[arg(allow_negative_numbers = true)]
         id: i64,
-        #[arg(short, long)]
-        description: Option<String>,
-        /// Reject save if description or attachments changed since this content revision.
-        #[arg(long, value_parser = clap::value_parser!(i64).range(1..))]
-        expected_revision: Option<i64>,
-        /// Force $EDITOR with supplied fields prefilled, including attachment edits.
-        #[arg(short, long, conflicts_with_all = ["set_status", "set_pending"])]
-        edit: bool,
-        /// Complete owned task; supplied or discovered session must match owner. Skips editor.
-        #[arg(long, conflicts_with_all = ["reopen", "set_status", "set_pending", "edit"])]
+        /// Complete an in-progress task owned by the current worker.
+        #[arg(long, help_heading = "Task status", conflicts_with_all = ["reopen", "set_status", "set_pending", "edit"])]
         complete: bool,
-        /// Reopen completed/auto-failed task or active task with absent Herdr owner. Skips editor.
-        #[arg(long, conflicts_with_all = ["set_status", "set_pending", "edit"])]
-        reopen: bool,
-        /// Return active/error/blocked task to new, or mark owned task error/blocked with --reason.
-        #[arg(long, value_enum)]
+        /// Return an active/error/blocked task to new, or mark an owned task error/blocked.
+        #[arg(long, value_enum, help_heading = "Task status")]
         set_status: Option<EditStatus>,
-        /// Return active/error/blocked task to queue (new); same as --set-status new.
-        #[arg(long, conflicts_with = "set_status")]
-        set_pending: bool,
-        /// Return active/error/blocked task to new without owner matching.
-        #[arg(long, requires = "set_status")]
-        force: bool,
-        /// Details, required and valid only with --set-status error or blocked.
-        #[arg(long, requires = "set_status")]
+        /// Explain the failure or missing information; required for error/blocked.
+        #[arg(long, help_heading = "Task status", requires = "set_status")]
         reason: Option<String>,
-        /// Change dependency to a task ID, or use none to clear it. Skips editor unless --edit.
-        #[arg(long, value_name = "ID|none")]
+        /// Return an active/error/blocked task to new; same as --set-status new.
+        #[arg(long, help_heading = "Task status", conflicts_with = "set_status")]
+        set_pending: bool,
+        /// Reopen a completed task or one with a confirmed dead/absent owner.
+        #[arg(long, help_heading = "Task status", conflicts_with_all = ["set_status", "set_pending", "edit"])]
+        reopen: bool,
+        /// With --set-status new, bypass owner matching for an active/error/blocked task.
+        #[arg(long, help_heading = "Task status", requires = "set_status")]
+        force: bool,
+        /// Replace the whole description.
+        #[arg(short, long, help_heading = "Content and editor")]
+        description: Option<String>,
+        /// Append image bytes; repeat for multiple images.
+        #[arg(
+            long = "image",
+            help_heading = "Content and editor",
+            value_name = "PATH"
+        )]
+        images: Vec<PathBuf>,
+        /// Open $EDITOR with supplied fields and attachments prefilled.
+        #[arg(short, long, help_heading = "Content and editor", conflicts_with_all = ["set_status", "set_pending"])]
+        edit: bool,
+        /// Reject the save if the description or attachments changed since this revision.
+        #[arg(long, help_heading = "Content and editor", value_parser = clap::value_parser!(i64).range(1..))]
+        expected_revision: Option<i64>,
+        /// Set the parent task, or use none to clear it.
+        #[arg(long, help_heading = "Dependencies", value_name = "ID|none")]
         set_parent: Option<db::ParentChange>,
-        /// Add prerequisite task ID. Repeating an existing edge is an error.
-        #[arg(long, value_name = "ID", conflicts_with = "edit", value_parser = clap::value_parser!(i64).range(1..))]
+        /// Add a prerequisite task; repeat for multiple tasks. Existing links are an error.
+        #[arg(long, help_heading = "Dependencies", value_name = "ID", conflicts_with = "edit", value_parser = clap::value_parser!(i64).range(1..))]
         depends_on: Vec<i64>,
         /// Remove prerequisite task ID; repeat for multiple removals.
-        #[arg(long, value_name = "ID", conflicts_with_all = ["edit", "clear_depends_on"], value_parser = clap::value_parser!(i64).range(1..))]
+        #[arg(long, help_heading = "Dependencies", value_name = "ID", conflicts_with_all = ["edit", "clear_depends_on"], value_parser = clap::value_parser!(i64).range(1..))]
         remove_depends_on: Vec<i64>,
         /// Remove all extra prerequisites; combine with --depends-on to replace.
-        #[arg(long, conflicts_with = "edit")]
+        #[arg(long, help_heading = "Dependencies", conflicts_with = "edit")]
         clear_depends_on: bool,
-        /// Replace comma-separated tags; an empty string clears tags. Skips editor.
-        #[arg(long, value_name = "TAGS", conflicts_with = "edit")]
+        /// Replace comma-separated tags; an empty string clears them.
+        #[arg(
+            long,
+            help_heading = "Tags and priority",
+            value_name = "TAGS",
+            conflicts_with = "edit"
+        )]
         set_tags: Option<String>,
         /// Claim order: -100 through 100, higher first.
-        #[arg(long, allow_hyphen_values = true, value_parser = clap::value_parser!(i64).range(-100..=100))]
+        #[arg(long, help_heading = "Tags and priority", allow_hyphen_values = true, value_parser = clap::value_parser!(i64).range(-100..=100))]
         priority: Option<i64>,
-        /// Hide task from default lists and claims; skips editor.
-        #[arg(long, conflicts_with_all = ["unarchive", "edit"])]
+        /// Hide the task from default lists and pickup.
+        #[arg(long, help_heading = "Visibility", conflicts_with_all = ["unarchive", "edit"])]
         archive: bool,
-        /// Restore archived task to default lists and claims; skips editor.
-        #[arg(long, conflicts_with = "edit")]
+        /// Restore the task to default lists and pickup.
+        #[arg(long, help_heading = "Visibility", conflicts_with = "edit")]
         unarchive: bool,
-        /// Append image file bytes without opening editor. Repeat for multiple images.
-        #[arg(long = "image", value_name = "PATH")]
-        images: Vec<PathBuf>,
     },
     /// Preview or permanently delete an archived task without dependent children.
     Delete {
