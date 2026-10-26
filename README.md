@@ -145,6 +145,7 @@ See [named views, visibility overrides and picker](docs/views.md).
 
 ## Keep going
 
+- [Task state transitions](docs/task-state-transitions.md)
 - [Commands, filters, and JSON](docs/reference.md#list-and-show)
 - [Ownership, failures, and recovery](docs/reference.md#agents-and-recovery)
 - [Images and dependencies](docs/reference.md#dependencies-and-images)
