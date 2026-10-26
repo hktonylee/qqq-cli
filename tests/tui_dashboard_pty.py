@@ -600,7 +600,7 @@ print(json.dumps({"result": result}))
                 return False
             # Toggle scenario keeps ASCII query/editor carets at text end.
             # Match expected final cursor, never an intermediate paint cursor.
-            if visible.text().splitlines()[-1].startswith(("Ctrl-D Select", "Ctrl-H Herdr")):
+            if visible.text().splitlines()[-1].startswith(("Ctrl-X Select", "Ctrl-H Herdr")):
                 query = filter_text().removeprefix("Filter:").lstrip()
                 cursor = (8 + len(query), 0)
             else:
@@ -613,6 +613,8 @@ print(json.dumps({"result": result}))
         wait_visible(ready)
 
     def send(data, alias_escape=False):
+        if os.environ.get("QQQ_TEST_CTRL_D"):
+            data = data.replace(b"\x03", b"\x04")
         if alias_escape and data == b"\x1b" and os.environ.get("QQQ_TEST_ESCAPE_KEY"):
             data = os.environ["QQQ_TEST_ESCAPE_KEY"].encode()
         remaining = memoryview(data)
@@ -1076,7 +1078,7 @@ print(json.dumps({"result": result}))
                          and "Second" not in list_text() and editor_line().startswith("Second retained"))
             if scenario == "views_create_filter":
                 assert filter_text() == "Filter: First", visible.text()
-                assert visible.text().splitlines()[-1].startswith(("Ctrl-D Select", "Ctrl-H Herdr")), visible.text()
+                assert visible.text().splitlines()[-1].startswith(("Ctrl-X Select", "Ctrl-H Herdr")), visible.text()
             else:
                 wait_visible(retained_editor_ready)
             assert cli("list") == initial
@@ -1134,7 +1136,7 @@ print(json.dumps({"result": result}))
             send(b"\x1b[H\r")
             wait_frame(lambda: "View:" not in editor_title() and filter_text() == "Filter: Second" and "No matching tasks." in list_text())
             assert editor_line().startswith("Unsaved"), visible.text()
-            assert visible.text().splitlines()[-1].startswith(("Ctrl-D Select", "Ctrl-H Herdr")), visible.text()
+            assert visible.text().splitlines()[-1].startswith(("Ctrl-X Select", "Ctrl-H Herdr")), visible.text()
         elif scenario.startswith("views_footer"):
             initial = cli("list")
             send(b"\x1b[1;2A")
@@ -1242,7 +1244,7 @@ print(json.dumps({"result": result}))
             send(b"\x1b[B\r")
             wait_frame(lambda: "View: Frontend" in editor_title() and filter_text() == "Filter: Second"
                        and "No matching tasks." in list_text())
-            assert visible.text().splitlines()[-1].startswith(("Ctrl-D Select", "Ctrl-H Herdr")), visible.text()
+            assert visible.text().splitlines()[-1].startswith(("Ctrl-X Select", "Ctrl-H Herdr")), visible.text()
             assert [editor_line(i) for i in range(4)] == before_lines, visible.text()
             # Resize open picker; cancel restores current view and draft.
             send(b"\x02")
@@ -1556,7 +1558,7 @@ print(json.dumps({"result": result}))
                              and (width < 150 or not visible.text().splitlines()[12][:split].strip())
                              and (not selected or editor_line().startswith("Changed Second"))
                              and visible.text().splitlines()[-1].rstrip() ==
-                             ("Ctrl-S Save  Ctrl-H Herdr  Ctrl-D Select  Ctrl-G Menu  Ctrl-L Tags  Ctrl-K Go to Task  Ctrl-P Create Child  Ctrl-B Views  Shift-Up/Dn Switch Tasks  Ctrl-F Filter"
+                             ("Ctrl-S Save  Ctrl-H Herdr  Ctrl-X Select  Ctrl-G Menu  Ctrl-L Tags  Ctrl-K Go to Task  Ctrl-P Create Child  Ctrl-B Views  Shift-Up/Dn Switch Tasks  Ctrl-F Filter"
                               if selected else "Ctrl-S Save  Ctrl-L Tags  Ctrl-K Go to Task  Ctrl-P Create Child  Ctrl-B Views  Ctrl-G Menu  Shift-Up/Dn Switch Tasks  Ctrl-F Filter")[:width].rstrip()
                              and (visible.x, visible.y) == (8 if selected else 0, 14)
                              and not visible.pending and screen.endswith(final_cursor))
@@ -1775,7 +1777,7 @@ print(json.dumps({"result": result}))
             wait_frame(lambda: "Saved #3" in visible.text())
             assert cli("show", "3")["task"]["tags"] == ["frontend"]
 
-            send(b"\x0b2\r\x04\x07")
+            send(b"\x0b2\r\x18\x07")
             wait_popup(lambda: "Bulk actions (1)" in visible.text())
             send(b"tfr")
             wait_popup(lambda: "> framework" in visible.text() and "fr " in popup_text())
@@ -1784,7 +1786,7 @@ print(json.dumps({"result": result}))
             send(b"y")
             wait_frame(lambda: "Bulk applied: 1 tasks" in visible.text())
             assert "framework" in cli("show", "2")["task"]["tags"]
-            send(b"\x04\x07")
+            send(b"\x18\x07")
             wait_popup(lambda: "Bulk actions (1)" in visible.text())
             send(b"s" + "界".encode())
             wait_popup(lambda: "> 界面" in visible.text())
@@ -2795,7 +2797,7 @@ print(json.dumps({"result": result}))
             original_draft = editor_line().rstrip()
             original_cursor = (visible.x, visible.y)
             send(CTRL_SLASH)
-            wait_visible(lambda: visible.text().splitlines()[-1].startswith(("Ctrl-D Select", "Ctrl-H Herdr"))
+            wait_visible(lambda: visible.text().splitlines()[-1].startswith(("Ctrl-X Select", "Ctrl-H Herdr"))
                          and filter_text() == "Filter:"
                          and visible.cursor_visible and (visible.x, visible.y) == (8, 0))
             if scenario.endswith(("cleared", "backspace")):
@@ -2803,7 +2805,7 @@ print(json.dumps({"result": result}))
                 wait_visible(lambda: filter_text() == "Filter: first")
                 send(b"\x7f" * 5 if scenario.endswith("backspace") else b"\x03")
                 wait_visible(lambda: filter_text() == "Filter:"
-                             and visible.text().splitlines()[-1].startswith(("Ctrl-D Select", "Ctrl-H Herdr"))
+                             and visible.text().splitlines()[-1].startswith(("Ctrl-X Select", "Ctrl-H Herdr"))
                              and visible.cursor_visible and (visible.x, visible.y) == (8, 0))
             send(b"\x03" if scenario.startswith("filter_ctrl_c_empty") else b"\x1b")
             wait_visible(lambda: visible.text().splitlines()[-1].startswith("Ctrl-S Save")
@@ -3474,7 +3476,7 @@ print(json.dumps({"result": result}))
             send(b"\x1b[1;2A")
             wait_caret(lambda: "Task #2 (New)" in editor_title(), (6, editor_row() + 1))
             if scenario == "child_reference_marked":
-                send(b"\x04")
+                send(b"\x18")
                 wait_visible(lambda: "Bulk selected: 1" in visible.text())
             send(CTRL_P)
             wait_caret(lambda: "New Task (parent #2)" in editor_title(), (0, editor_row() + 1))
@@ -4920,7 +4922,7 @@ print(json.dumps({"result": result}))
             wait_visible(lambda: visible.text().splitlines()[-1].startswith("Ctrl-S Save"))
             clear_capture()
             send(CTRL_SLASH)
-            wait_visible(lambda: visible.text().splitlines()[-1].startswith(("Ctrl-D Select", "Ctrl-H Herdr")))
+            wait_visible(lambda: visible.text().splitlines()[-1].startswith(("Ctrl-X Select", "Ctrl-H Herdr")))
             clear_capture()
             click(6, task_row("Needle 14"))
             wait_visible(lambda: 'Task #14' in editor_title())
@@ -5227,14 +5229,14 @@ print(json.dumps({"result": result}))
                 clear_capture()
                 unfiltered = visible.text().splitlines()[:list_bottom() + 1]
                 send(shortcut)
-                wait_visible(lambda: visible.text().splitlines()[-1].startswith(("Ctrl-D Select", "Ctrl-H Herdr"))
+                wait_visible(lambda: visible.text().splitlines()[-1].startswith(("Ctrl-X Select", "Ctrl-H Herdr"))
                              and filter_text() == "Filter:"
                              and visible.cursor_visible and (visible.x, visible.y) == (8, 0))
                 assert "Type to Filter" not in visible.text().splitlines()[-1], visible.text()
                 assert visible.text().splitlines()[1:list_bottom() + 1] == unfiltered[:-1], visible.text()
                 send(b"First")
                 wait_visible(lambda: filter_text() == "Filter: First"
-                             and visible.text().splitlines()[-1].startswith(("Ctrl-D Select", "Ctrl-H Herdr"))
+                             and visible.text().splitlines()[-1].startswith(("Ctrl-X Select", "Ctrl-H Herdr"))
                              and visible.cursor_visible)
                 assert "Second" not in visible.text(), visible.text()
                 assert editor_line().startswith("Draft/path"), visible.text()
@@ -5293,10 +5295,10 @@ print(json.dumps({"result": result}))
             clear_capture()
             send(b"\x1b[1;2A")
             wait_visible(lambda: "Task #2 (" in editor_title()
-                         and visible.text().splitlines()[-1].startswith(("Ctrl-D Select", "Ctrl-H Herdr")))
+                         and visible.text().splitlines()[-1].startswith(("Ctrl-X Select", "Ctrl-H Herdr")))
             send(b"\x1b[1;2B")
             wait_visible(lambda: "New Task" in editor_title() and editor_line().startswith("Unsaved")
-                         and visible.text().splitlines()[-1].startswith(("Ctrl-D Select", "Ctrl-H Herdr")))
+                         and visible.text().splitlines()[-1].startswith(("Ctrl-X Select", "Ctrl-H Herdr")))
             clear_capture()
             send(b"/zzzz")
             wait_visible(lambda: filter_text() == "Filter: needle/zzzz"

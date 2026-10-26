@@ -52,6 +52,40 @@ fn undo_scenario(name: &str) {
 }
 
 #[test]
+fn tui_ctrl_d_follows_ctrl_c_cancellation() {
+    for (script, names) in [
+        ("tui_pty.py", vec!["cancel", "continuous"]),
+        (
+            "tui_dashboard_pty.py",
+            vec![
+                "ctrl_c_selected",
+                "ctrl_c_dirty_selected_filter_focused",
+                "ctrl_c_new_text",
+                "filter_ctrl_c_empty",
+                "buffers_exit",
+                "create_agent_ctrl_c",
+            ],
+        ),
+    ] {
+        for name in names {
+            let output = Command::new("python3")
+                .arg(format!("{}/tests/{script}", env!("CARGO_MANIFEST_DIR")))
+                .arg(env!("CARGO_BIN_EXE_qqq"))
+                .arg(name)
+                .env("QQQ_TEST_CTRL_D", "1")
+                .output()
+                .unwrap();
+            assert!(
+                output.status.success(),
+                "{script} {name}: {}\n{}",
+                String::from_utf8_lossy(&output.stdout),
+                String::from_utf8_lossy(&output.stderr)
+            );
+        }
+    }
+}
+
+#[test]
 fn tui_q_alias_only_cancels_non_text_screens() {
     for alias in ["q", "Q"] {
         for (script, names) in [

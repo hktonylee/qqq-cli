@@ -2470,7 +2470,7 @@ fn hotkey_footer_colors_shortcuts_and_clears_styles_for_messages() {
                             "Ctrl-S",
                             "Ctrl-B",
                             "Ctrl-H",
-                            "Ctrl-D",
+                            "Ctrl-X",
                             "Ctrl-L",
                             "Ctrl-K",
                             "Ctrl-P",

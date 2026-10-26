@@ -1668,6 +1668,9 @@ fn compose_inner(
                 }
             }
             Event::Key(mut key) if key.kind != KeyEventKind::Release => {
+                if key.modifiers.contains(KeyModifiers::CONTROL) && key.code == KeyCode::Char('d') {
+                    key.code = KeyCode::Char('c');
+                }
                 if let Some(mut ui) = agent_ui.take() {
                     let (popup, _) = ui.popup(ratatui::layout::Rect::new(0, 0, size.0, size.1));
                     let area = popup.content;
@@ -2624,7 +2627,7 @@ fn compose_inner(
                 }
                 if dashboard
                     && control
-                    && key.code == KeyCode::Char('d')
+                    && key.code == KeyCode::Char('x')
                     && !key
                         .modifiers
                         .intersects(KeyModifiers::ALT | KeyModifiers::SUPER)

@@ -88,6 +88,8 @@ with tempfile.TemporaryDirectory(prefix="qqq-tui-test-") as folder:
                 raise AssertionError(f"Editor exited early: {screen!r}")
 
     def send(data, alias_escape=False):
+        if os.environ.get("QQQ_TEST_CTRL_D"):
+            data = data.replace(b"\x03", b"\x04")
         if alias_escape and data == b"\x1b" and os.environ.get("QQQ_TEST_ESCAPE_KEY"):
             data = os.environ["QQQ_TEST_ESCAPE_KEY"].encode()
         # Real terminals drain output while sending input. Keep redraw backpressure

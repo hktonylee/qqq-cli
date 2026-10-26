@@ -108,7 +108,7 @@ with tempfile.TemporaryDirectory(prefix="qqq-bulk-pty-") as folder:
         contains(f"Bulk applied: {count} tasks")
 
     def remark():
-        send(b"\x04")
+        send(b"\x18")
         contains("Bulk selected: 1")
         send(b"\x1b[1;2A")
         contains("Task #1")
@@ -116,7 +116,7 @@ with tempfile.TemporaryDirectory(prefix="qqq-bulk-pty-") as folder:
         contains("Task #2")
         send(b"\x1b[1;2B")
         contains("Task #3")
-        send(b"\x04")
+        send(b"\x18")
         contains("Bulk selected: 2")
         send(b"\x1b[1;2A")
         contains("Task #2")
@@ -131,7 +131,7 @@ with tempfile.TemporaryDirectory(prefix="qqq-bulk-pty-") as folder:
         contains("New Task")
         if scenario == "range_selection":
             assert "Task #1" not in screen.text(), screen.text()
-            send(b"\x04")
+            send(b"\x18")
             contains("Select task IDs")
             send(b"-2\r")
             contains("Bulk selected: 1")
@@ -139,7 +139,7 @@ with tempfile.TemporaryDirectory(prefix="qqq-bulk-pty-") as folder:
             assert any(row.startswith("+") and "Second" in row for row in rows), screen.text()
             assert not any(row.startswith("+") and "Third" in row for row in rows), screen.text()
 
-            send(b"\x04")
+            send(b"\x18")
             contains("Select task IDs")
             send(b"2-3\r")
             contains("Bulk selected: 2")
@@ -147,7 +147,7 @@ with tempfile.TemporaryDirectory(prefix="qqq-bulk-pty-") as folder:
             assert any(row.startswith("+") and "Second" in row for row in rows), screen.text()
             assert any(row.startswith("+") and "Third" in row for row in rows), screen.text()
 
-            send(b"\x04")
+            send(b"\x18")
             contains("Select task IDs")
             send(b"100-\r")
             contains("No visible tasks match that range")
@@ -168,8 +168,8 @@ with tempfile.TemporaryDirectory(prefix="qqq-bulk-pty-") as folder:
             raise SystemExit(0)
         send(b"\x1b[1;2A")
         contains("Task #3")
-        contains("Ctrl-D Select")
-        send(b"\x04")
+        contains("Ctrl-X Select")
+        send(b"\x18")
         contains("Bulk selected: 1")
         assert any(row.startswith("+") and "Third" in row for row in screen.text().splitlines())
         send(b"\x1b[1;2A")
@@ -193,7 +193,7 @@ with tempfile.TemporaryDirectory(prefix="qqq-bulk-pty-") as folder:
             contains(draft_label)
             assert "[Pasted Content 1001 chars]" in screen.text()
             caret = (screen.x, screen.y)
-        send(b"\x04")
+        send(b"\x18")
         contains("Bulk selected: 2")
         final_priority = 0
         if os.environ.get("QQQ_TEST_ESCAPE_KEY"):
@@ -410,7 +410,7 @@ with tempfile.TemporaryDirectory(prefix="qqq-bulk-pty-") as folder:
             for task_id in range(4, 14):
                 cli("add", f"Extra {task_id}")
                 jump(task_id)
-                send(b"\x04")
+                send(b"\x18")
                 contains(f"Bulk selected: {task_id-1}")
             send(b"\x1b[<64;2;3M")
             wait(lambda: not screen.text().splitlines()[0].startswith("+6"))

@@ -472,7 +472,7 @@ text or manual scroll. Lists and filters use saved descriptions.
 | Ctrl-K | Jump to a positive task ID |
 | Ctrl-B | Open saved views; `n` creates one |
 | Ctrl-L | Edit task or draft tags |
-| Ctrl-D | Toggle a saved task's bulk-selection mark |
+| Ctrl-X | Toggle a saved task's bulk-selection mark |
 | Ctrl-G | Open task actions, or bulk actions while tasks are marked |
 | Ctrl-H | Open the linked live Herdr agent; detach to return |
 | Ctrl+F or Ctrl+/ | Focus the description filter |
@@ -524,7 +524,7 @@ work for discard prompts. Bulk add/replace tag inputs use the same completion.
 
 ### Bulk selection
 
-Ctrl-D marks tasks with `+`; marks survive filtering and refresh. Ctrl-G opens
+Ctrl-X marks tasks with `+`; marks survive filtering and refresh. Ctrl-G opens
 add/remove/replace tags, priority and archive/unarchive actions for the exact
 marked IDs. `x` clears marks.
 
@@ -592,6 +592,8 @@ automatically. Action-error text scrolls with Up/Down or `j`/`k`; Enter closes i
 In other menus/errors, Esc clears an active filter before closing the popup.
 
 ### Clearing and exit
+
+Ctrl-D has the same effect as Ctrl-C throughout the built-in editor and its popups.
 
 From the editor, Esc clears the active editor before a later press exits; dirty
 drafts ask first. Ctrl-C returns a selected task to a blank draft, asking before
