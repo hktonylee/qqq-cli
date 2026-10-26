@@ -74,7 +74,7 @@ fn failed_task_needs_explicit_manual_retry_and_retains_details() {
     let before = ok(&d, &["show", "1"]);
     let failed = fail(&d, "1", "worker");
     assert_eq!(failed["status"], "error");
-    assert!(failed["harness_session"].is_null());
+    assert_eq!(failed["harness_session"], before["task"]["harness_session"]);
     assert!(ok(&d, &["next", "--local", "--session", "worker"]).is_null());
     let detail = ok(&d, &["show", "1"]);
     assert_eq!(detail["task"]["created_at"], before["task"]["created_at"]);

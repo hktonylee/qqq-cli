@@ -227,7 +227,7 @@ fn dead_harness_fails_before_show_preserving_data_and_exactly_one_reason() {
         "orchestrator_name",
         "orchestrator_session",
     ] {
-        assert!(after["task"][field].is_null(), "{field}");
+        assert_eq!(after["task"][field], before["task"][field], "{field}");
     }
     assert_eq!(after["herdr"], before["herdr"]);
     assert_eq!(after["images"], before["images"]);

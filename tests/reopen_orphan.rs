@@ -165,7 +165,7 @@ fn orphaned_terminal_and_reported_session_reopen_preserves_task_and_can_reclaim(
             "orchestrator_name",
             "orchestrator_session",
         ] {
-            assert!(reopened[field].is_null(), "{field}");
+            assert_eq!(reopened[field], before["task"][field], "{field}");
         }
         let after = fixture.show();
         for field in ["images", "herdr"] {

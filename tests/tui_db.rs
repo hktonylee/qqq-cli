@@ -247,7 +247,7 @@ fn force_completion_rolls_back_status_and_ownership_if_audit_insert_fails() {
 }
 
 #[test]
-fn force_reopen_preserves_content_and_history_and_clears_assignment() {
+fn force_reopen_preserves_content_history_and_assignment() {
     for state in ["completed", "in_progress", "error"] {
         let (mut db, dir) = database();
         let parent = db.add("Parent", None, &[]).unwrap();
@@ -323,7 +323,10 @@ fn force_reopen_preserves_content_and_history_and_clears_assignment() {
             "orchestrator_name",
             "orchestrator_session",
         ] {
-            assert!(after["task"][field].is_null(), "{state}: {field}");
+            assert_eq!(
+                after["task"][field], before["task"][field],
+                "{state}: {field}"
+            );
         }
         assert!(db.owned_with_name("foreign", None).unwrap().is_none());
         let mut events = after["events"].as_array().unwrap().clone();
@@ -485,7 +488,7 @@ fn force_error_preserves_content_links_and_records_reason_with_actor() {
             "orchestrator_name",
             "orchestrator_session",
         ] {
-            assert!(after["task"][field].is_null());
+            assert_eq!(after["task"][field], before["task"][field]);
         }
         assert!(db.owned_with_name("foreign", None).unwrap().is_none());
         let mut events = after["events"].as_array().unwrap().clone();

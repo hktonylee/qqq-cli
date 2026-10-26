@@ -579,9 +579,9 @@ is dirty. Rejected actions keep the draft and display the error.
 | Reopen | Apply normal completed/orphaned-owner checks | Force a completed or active task to new |
 | Mark error | Require the current owner of an in-progress task | Force a new or active task to error |
 
-Force is always explicit and skips owner/Herdr lookup. Completion retains
-assignment metadata and the saved link; reopen/error clear assignment. Error
-marking records the reason message and error event. Content and dependency
+Force is always explicit and skips owner/Herdr lookup. Status changes retain
+assignment metadata and the saved link; leaving in progress clears active ownership.
+Error marking records the reason message and error event. Content and dependency
 edges stay intact; archive/dependency guards still apply where required.
 
 `n`, Enter or Esc cancels confirmation. Reopen/Mark-error confirmations hide the
@@ -787,15 +787,17 @@ detected identity. Assignment flags override either source.
 
 Completion/release/error marking accepts the original owner key or a uniquely
 matching public harness session; add `--harness-name` when ambiguous.
-Completion keeps assignment for log lookup; release/error/reopen clears it.
-Saved links remain until replaced. Session IDs coordinate local agents and do
-not authenticate users; local callers may edit content or add messages.
+Status changes keep assignment metadata and saved links for log lookup. A fresh
+claim replaces them with the new worker identity; leaving in progress clears active
+ownership. Session IDs coordinate local agents and do not authenticate users; local
+callers may edit content or add messages.
 
 ### Owner liveness before commands
 
 qqq checks active project owners synchronously before commands and TUI/watch
-startup. Confirmed dead owners become `error`: assignment clears, a reason
-message and `qqq-preflight` event are recorded, and content/history/link remain.
+startup. Confirmed dead owners become `error`: active ownership clears, a reason
+message and `qqq-preflight` event are recorded, and assignment metadata, content,
+history and the saved link remain.
 This also precedes inspection/preview commands; their read-only phase does not
 itself clean up owners. Preflight never creates/migrates projects; writable opens
 scan after migration. Idle TUI/watch/wait runs no periodic liveness scan.
@@ -821,7 +823,8 @@ qqq edit 12 --set-status new          # retry an error; no owner needed
 
 `--set-pending` equals `--set-status new`. Returning an active task or marking
 it error requires its owner. Error marking requires a nonblank reason, records
-it as a message, and clears assignment. These flags skip the editor.
+it as a message, and clears active ownership while retaining assignment metadata.
+These flags skip the editor.
 Preflight-generated errors can also use `--reopen`.
 
 Inspect abandoned work before forcing it back to the queue:

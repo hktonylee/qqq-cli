@@ -718,7 +718,7 @@ fn edit_new_updates_fields_and_release_history_atomically() {
         ],
     );
     assert_eq!(updated["status"], "new");
-    assert!(updated["harness_session"].is_null());
+    assert_eq!(updated["harness_session"], "a");
     assert_eq!(updated["description"], "New\n\n");
     let after = ok(p, &["show", "1"]);
     assert_eq!(after["events"].as_array().unwrap().len(), 2);
@@ -961,7 +961,7 @@ fn edit_lifecycle_flags_apply_metadata_and_archive_atomically() {
     assert_eq!(reopened["priority"], 3);
     assert_eq!(reopened["tags"], serde_json::json!(["retry"]));
     assert_eq!(reopened["archived"], false);
-    assert!(reopened["harness_session"].is_null());
+    assert_eq!(reopened["harness_session"], claimed["harness_session"]);
     let events = ok(p, &["show", "1"])["events"].clone();
     assert_eq!(events[3]["action"], "reopen");
     assert_eq!(events[3]["session"], "reviewer");

@@ -71,7 +71,7 @@ fn task_responses_use_harness_and_orchestrator_fields() {
     );
     assignment(
         &ok(&d, &["edit", "1", "--set-status", "new", "--session", "a"]),
-        Value::Null,
+        json!("a"),
     );
     assignment(&ok(&d, &["next", "--session", "b"]), json!("b"));
     assignment(
@@ -389,6 +389,7 @@ fn completed_identity_stays_visible_without_resurrecting_claims() {
         .success()
     );
     assert_eq!(ok(&d, &["show", "3"])["task"], third);
+    let before_reopen = ok(&d, &["show", "1"]);
     let reopened = ok(&d, &["edit", "--reopen", "1", "--session", "reviewer"]);
     for field in [
         "harness_name",
@@ -396,7 +397,7 @@ fn completed_identity_stays_visible_without_resurrecting_claims() {
         "orchestrator_name",
         "orchestrator_session",
     ] {
-        assert!(reopened[field].is_null());
+        assert_eq!(reopened[field], before_reopen["task"][field]);
     }
     let replacement = ok(
         &d,
@@ -419,7 +420,7 @@ fn completed_identity_stays_visible_without_resurrecting_claims() {
 }
 
 #[test]
-fn identity_is_preserved_by_edits_and_cleared_on_release_and_error() {
+fn identity_is_preserved_by_edits_release_and_error() {
     let d = TempDir::new().unwrap();
     ok(&d, &["init"]);
     ok(&d, &["add", "Task"]);
@@ -468,7 +469,18 @@ fn identity_is_preserved_by_edits_and_cleared_on_release_and_error() {
             "orchestrator_name",
             "orchestrator_session",
         ] {
-            assert!(after[field].is_null());
+            assert_eq!(after[field], before[field]);
+        }
+        if status == "error" {
+            let retried = ok(&d, &["edit", "1", "--set-status", "new"]);
+            for field in [
+                "harness_name",
+                "harness_session",
+                "orchestrator_name",
+                "orchestrator_session",
+            ] {
+                assert_eq!(retried[field], before[field]);
+            }
         }
     }
 }

@@ -425,7 +425,10 @@ fn invalid_attachments_leave_creation_fields_status_and_events_unchanged() {
     let after = ok(p, &["show", "1"]);
     assert_eq!(after["task"]["description"], "Changed");
     assert_eq!(after["task"]["status"], "new");
-    assert!(after["task"]["harness_session"].is_null());
+    assert_eq!(
+        after["task"]["harness_session"],
+        before["task"]["harness_session"]
+    );
     assert_eq!(after["events"].as_array().unwrap().len(), 2);
     assert_eq!(after["images"].as_array().unwrap().len(), 2);
 }

@@ -1172,7 +1172,7 @@ impl Db {
                 nonempty(session, "Session")?;
                 ensure!(
                     tx.execute(
-                        "UPDATE tasks SET status='new',claim_key=NULL,harness_name=NULL,harness_session=NULL,orchestrator_name=NULL,orchestrator_session=NULL WHERE id=? AND status IN ('in_progress','error')",
+                        "UPDATE tasks SET status='new',claim_key=NULL WHERE id=? AND status IN ('in_progress','error')",
                         [id]
                     )? == 1,
                     transition_error(&tx, id, &["in_progress", "error"], None, format!("Task {id} is not in progress or error"))?
@@ -1186,7 +1186,7 @@ impl Db {
                 nonempty(session, "Session")?;
                 ensure!(
                     tx.execute(
-                        "UPDATE tasks SET status='new',claim_key=NULL,harness_name=NULL,harness_session=NULL,orchestrator_name=NULL,orchestrator_session=NULL WHERE id=? AND status='error'",
+                        "UPDATE tasks SET status='new',claim_key=NULL WHERE id=? AND status='error'",
                         [id]
                     )? == 1,
                     transition_error(&tx, id, &["error"], None, format!("Task {id} is no longer in error; inspect its current status before retrying"))?
@@ -1203,7 +1203,7 @@ impl Db {
             }) => {
                 let session = Self::owner_key(&tx, session, harness_name)?;
                 nonempty(reason, "Error reason")?;
-                ensure!(tx.execute("UPDATE tasks SET status='error',claim_key=NULL,harness_name=NULL,harness_session=NULL,orchestrator_name=NULL,orchestrator_session=NULL WHERE id=? AND status='in_progress' AND claim_key=?",params![id,session])?==1,Self::transition_error_for_owner(&tx, id, &session)?);
+                ensure!(tx.execute("UPDATE tasks SET status='error',claim_key=NULL WHERE id=? AND status='in_progress' AND claim_key=?",params![id,session])?==1,Self::transition_error_for_owner(&tx, id, &session)?);
                 tx.execute(
                     "INSERT INTO events(task_id,session,action) VALUES (?,?,'error')",
                     params![id, session],
@@ -1368,7 +1368,7 @@ impl Db {
     }
     fn release_claim(conn: &Connection, id: i64, session: &str) -> Result<()> {
         nonempty(session, "Session")?;
-        ensure!(conn.execute("UPDATE tasks SET status='new',claim_key=NULL,harness_name=NULL,harness_session=NULL,orchestrator_name=NULL,orchestrator_session=NULL WHERE id=? AND status='in_progress' AND claim_key=?",params![id,session])?==1,Self::transition_error_for_owner(conn, id, session)?);
+        ensure!(conn.execute("UPDATE tasks SET status='new',claim_key=NULL WHERE id=? AND status='in_progress' AND claim_key=?",params![id,session])?==1,Self::transition_error_for_owner(conn, id, session)?);
         conn.execute(
             "INSERT INTO events(task_id,session,action) VALUES (?,?,'release')",
             params![id, session],
@@ -1646,8 +1646,7 @@ impl Db {
             .transaction_with_behavior(TransactionBehavior::Immediate)?;
         ensure!(
             tx.execute(
-                "UPDATE tasks SET status='error',claim_key=NULL,harness_name=NULL,
-            harness_session=NULL,orchestrator_name=NULL,orchestrator_session=NULL,
+                "UPDATE tasks SET status='error',claim_key=NULL,
             updated_at=strftime('%Y-%m-%dT%H:%M:%fZ','now')
             WHERE id=? AND status IN ('new','in_progress','completed')",
                 [id]
@@ -1743,7 +1742,7 @@ impl Db {
             Self::ensure_orphaned_claim(conn, &task)?;
         }
         conn.execute(
-            "UPDATE tasks SET status='new',claim_key=NULL,harness_name=NULL,harness_session=NULL,orchestrator_name=NULL,orchestrator_session=NULL,updated_at=strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE id=?",
+            "UPDATE tasks SET status='new',claim_key=NULL,updated_at=strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE id=?",
             [id],
         )?;
         conn.execute(

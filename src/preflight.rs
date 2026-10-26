@@ -183,8 +183,7 @@ fn apply(conn: &mut Connection, deaths: Vec<Death>) -> Result<()> {
     let tx = conn.transaction_with_behavior(TransactionBehavior::Immediate)?;
     for Death { claim, reason } in deaths {
         let changed = tx.execute(
-            "UPDATE tasks SET status='error',claim_key=NULL,harness_name=NULL,harness_session=NULL,
-             orchestrator_name=NULL,orchestrator_session=NULL,updated_at=strftime('%Y-%m-%dT%H:%M:%fZ','now')
+            "UPDATE tasks SET status='error',claim_key=NULL,updated_at=strftime('%Y-%m-%dT%H:%M:%fZ','now')
              WHERE id=?1 AND status='in_progress' AND claim_key=?2
              AND COALESCE((SELECT MAX(id) FROM events WHERE task_id=?1 AND action='claim'),0)=?3
              AND (SELECT link_json FROM herdr_links WHERE task_id=?1) IS ?4

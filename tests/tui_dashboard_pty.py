@@ -3839,7 +3839,7 @@ print(json.dumps({"result": result}))
                 for field in ("description", "priority", "parent_id", "content_revision"):
                     assert task[field] == initial_detail["task"][field]
                 for field in ("harness_name", "harness_session", "orchestrator_name", "orchestrator_session"):
-                    assert task[field] is None
+                    assert task[field] == initial_detail["task"][field]
                 assert detail["images"] == initial_detail["images"]
                 assert len(detail["events"]) == len(initial_detail["events"]) + 1
                 assert detail["events"][-1]["action"] == "error"
@@ -3928,7 +3928,7 @@ print(json.dumps({"result": result}))
                     assert after_error["messages"][-1]["body"] == reason
                     assert after_error["messages"][-1]["session"] == after_error["events"][-1]["session"]
                     for field in ("harness_name", "harness_session", "orchestrator_name", "orchestrator_session"):
-                        assert after_error["task"][field] is None
+                        assert after_error["task"][field] == before_error["task"][field]
                     assert cli("next", "--local", "--session", "probe", "--filter", f"id == {task_id}") is None
             if scenario.endswith("no_color"):
                 assert b"\x1b[38;" not in screen and b"\x1b[48;" not in screen
@@ -3996,7 +3996,7 @@ print(json.dumps({"result": result}))
                 assert detail["events"][-1]["action"] == "reopen"
                 assert detail["events"][-1]["session"] == "worker"
                 for field in ("harness_name", "harness_session", "orchestrator_name", "orchestrator_session"):
-                    assert detail["task"][field] is None
+                    assert detail["task"][field] == initial_detail["task"][field]
                 open_reopen()
                 send(b"\x03")
                 settle()

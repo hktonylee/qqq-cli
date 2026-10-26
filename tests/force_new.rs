@@ -68,7 +68,7 @@ fn claimed() -> TempDir {
     );
     dir
 }
-fn assert_released(task: &Value) {
+fn assert_released(task: &Value, before: &Value) {
     assert_eq!(task["status"], "new");
     for key in [
         "harness_name",
@@ -76,7 +76,7 @@ fn assert_released(task: &Value) {
         "orchestrator_name",
         "orchestrator_session",
     ] {
-        assert_eq!(task.get(key), Some(&Value::Null), "{key} was not cleared");
+        assert_eq!(task[key], before[key], "{key} was not preserved");
     }
 }
 
@@ -106,7 +106,7 @@ fn force_without_session_or_herdr_preserves_details_and_releases_claim() {
             .output()
             .unwrap(),
     );
-    assert_released(&released);
+    assert_released(&released, &before["task"]);
     assert!(
         conn.query_row(
             "SELECT claim_key IS NULL FROM tasks WHERE id=2",
@@ -134,6 +134,7 @@ fn force_accepts_mismatched_explicit_and_environment_sessions_as_authors() {
     for explicit in [false, true] {
         let d = claimed();
         let p = d.path();
+        let before = ok(p, &["show", "1"]);
         let mut cmd = command(p);
         cmd.env("PATH", p.join("missing-bin"))
             .env("QQQ_SESSION", "wrong-env")
@@ -142,7 +143,7 @@ fn force_accepts_mismatched_explicit_and_environment_sessions_as_authors() {
             cmd.args(["--session", "wrong-explicit"]);
         }
         let released = parsed(cmd.output().unwrap());
-        assert_released(&released);
+        assert_released(&released, &before["task"]);
         assert_eq!(
             ok(p, &["show", "1"])["events"][1]["session"],
             if explicit {
@@ -174,6 +175,7 @@ fn force_skips_ambiguous_harness_owner_matching_and_records_session_author() {
             ],
         );
     }
+    let before = ok(p, &["show", "1"]);
     let released = parsed(
         command(p)
             .env("PATH", p.join("missing-bin"))
@@ -189,7 +191,7 @@ fn force_skips_ambiguous_harness_owner_matching_and_records_session_author() {
             .output()
             .unwrap(),
     );
-    assert_released(&released);
+    assert_released(&released, &before["task"]);
     assert_eq!(ok(p, &["show", "1"])["events"][1]["session"], "shared");
     assert_eq!(ok(p, &["show", "2"])["task"]["status"], "in_progress");
 }
@@ -296,7 +298,7 @@ fn force_combined_edits_and_release_history_roll_back_on_image_failure() {
     assert_eq!(ok(p, &["show", "1"]), before);
     conn.execute_batch("DROP TRIGGER reject_image").unwrap();
     let released = ok(p, &args);
-    assert_released(&released);
+    assert_released(&released, &before["task"]);
     assert_eq!(released["description"], "Changed");
     assert_eq!(released["parent_id"], 2);
     let detail = ok(p, &["show", "1"]);
