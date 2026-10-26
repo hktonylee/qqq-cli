@@ -64,6 +64,7 @@ fn event(value: &Value, color: bool) -> String {
             "release" => Some("33"),
             "complete" => Some("90"),
             "error" => Some("31"),
+            "blocked" => Some("33"),
             _ => None,
         }
     } else {

@@ -12,8 +12,8 @@ commits, Git blob IDs and SHA-256 hashes for frozen source bytes.
 | --- | --- | --- |
 | Normal-open DBs | `user_version` 1–9 | SQL definitions frozen from v0.1.1 |
 | Normal-open DBs | 10–11 | SQL definitions frozen from v0.4.0 |
-| Normal-open DBs | 12–13 | v0.4.0 base plus pinned introducing SQL |
-| Portable snapshots | Format 1, DB schemas 9–13 | Frozen format definitions, deterministic synthetic GNU tar |
+| Normal-open DBs | 12–14 | v0.4.0 base plus pinned introducing SQL |
+| Portable snapshots | Format 1, DB schemas 9–14 | Frozen format definitions, deterministic synthetic GNU tar |
 
 Verified release inventory:
 
@@ -29,6 +29,7 @@ schemas 9 and 11. Schema 12 has no release tag in this inventory: its extension
 comes from commit `6c67d0ddac81faffceb94104d4486ceaf57cd78d`, package version
 0.4.0. Schema13 adds private claim process bindings from commit
 `4ed6e3d1f6193f6ce1b28c712bf43150fc9f4972`, package version0.5.0.
+Schema 14 adds Blocked task status from commit `7a7585ddfce0f67b9bffa47d0718ea6ffb723fab`.
 Catalog explicitly marks development provenance. Snapshots are
 source-derived synthetic archives, not recordings of released binaries.
 
@@ -44,7 +45,7 @@ Every DB has multiline Unicode descriptions; task IDs 3, 8, 13, 21, 34, 55,
 linked/bare identities. Fields appear when their historical schema supports
 them: parents (2), error (4), structured identity (5), file images (6), priority
 (7), archive (8), reopen events (9), revisions (10), extra prerequisites (11),
-tags (12). Earlier DBs contain embedded PNG/GIF bytes. Later DBs carry matching
+tags (12), Blocked status (14). Earlier DBs contain embedded PNG/GIF bytes. Later DBs carry matching
 image files. All timestamps and session/project values are synthetic.
 
 SQLite sequences reserve tasks=233, images=31, messages=37, events=89, beyond
@@ -98,7 +99,7 @@ remains schema9. Initialization/current-schema/read-only commands save no archiv
 Published support table in [reference](../../../docs/reference.md#data) is checked
 against this catalog and emitted DB/portable/recovery archive versions. Focused
 documentation gate also executes marked shell examples against temporary copies:
-portable example on schemas 9–13, recovery example on every source schema 1–12.
+portable example on schemas 9–14, recovery example on every source schema 1–13.
 It verifies SQLite inspection happens before normal-open upgrade and canonical
 task/image/claim/readiness state survives. Both CI OSes and publication run gate.
 New schemas require fixtures, catalog support and published table to update

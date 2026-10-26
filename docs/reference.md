@@ -65,7 +65,7 @@ roots. Hidden archived completions do not consume the completed-task limit.
 | Selector | Match |
 | --- | --- |
 | `--query TEXT` | Substring anywhere in the full description, using Unicode lowercase comparison |
-| `--status STATUS` | `new`, `in_progress`, `completed` or `error`; repeat for OR |
+| `--status STATUS` | `new`, `in_progress`, `completed`, `error` or `blocked`; repeat for OR |
 | `--tag LABEL` | Whole stored label, with exact case and Unicode; repeat to require every tag |
 | `--filter EXPR` | Typed Luau expression compiled to SQLite with bound values |
 | `--readiness ready\|blocked` | Shared dependency eligibility; blocked means new, unarchived and not ready |
@@ -562,8 +562,9 @@ Ctrl-G's task menu supports arrows/Enter or letter shortcuts:
 | Key | Action |
 | --- | --- |
 | `c` | Complete; hidden on completed tasks |
-| `e` | Mark error with a nonblank reason; hidden on error/completed tasks |
-| `r` | Retry an error task |
+| `e` | Mark error with a nonblank reason; hidden on Error/Blocked/completed tasks |
+| `b` | Mark an owned in-progress task Blocked with the information or help needed |
+| `r` | Return an Error or Blocked task to New |
 | `o` | Reopen a non-error task |
 | `p` | Set priority (-100..100) |
 | `d` | Set parent to a positive ID or `none` |
@@ -693,7 +694,8 @@ age never expires claims.
 | `tasks` | Diagnostic rows in ascending task ID order |
 | `explanation` | Selection detail for explain; null for status |
 
-`ready + blocked = new`; archived new tasks count as blocked when included.
+`blocked` counts tasks waiting for user help plus New tasks waiting on dependencies.
+Archived New tasks also count as blocked when included.
 `matching_ready` applies selectors to ready tasks. Archived is a subset, not a
 status. Mixed unavailable queues and completed-only queues use `no_ready`.
 
@@ -703,7 +705,7 @@ all ready tasks, otherwise null), `reasons`, `owner` (active claim key or null),
 extra prerequisites, regardless of archive scope.
 
 Reason codes are `archived`, `parent_not_completed`, `prerequisite_not_completed`,
-`in_progress`, `error`, `completed`, `filter_excluded`, `tag_excluded`. A ready
+`in_progress`, `error`, `blocked`, `completed`, `filter_excluded`, `tag_excluded`. A ready
 matching task has no reasons. Tag exclusion can coexist with dependency blockers;
 failed predicates inside Luau use `filter_excluded`.
 
@@ -818,13 +820,21 @@ guards prevent a stale check from failing reassigned work.
 ```sh
 qqq edit 12 --set-pending
 qqq edit 12 --set-status error --reason "Missing credentials"
-qqq edit 12 --set-status new          # retry an error; no owner needed
+qqq edit 12 --set-status blocked --reason "Which API should I use?"
+qqq edit 12 --set-status new          # retry Error or Blocked; no owner needed
 ```
 
 `--set-pending` equals `--set-status new`. Returning an active task or marking
 it error requires its owner. Error marking requires a nonblank reason, records
 it as a message, and clears active ownership while retaining assignment metadata.
 These flags skip the editor.
+Blocked means the agent needs user information or help. It is excluded from pickup
+until the user returns it to New with `--set-status new` or `--set-pending`.
+Marking Blocked requires the current owner and a nonblank `--reason`, recorded in
+the task history and messages. It releases the active claim and retains session
+metadata. A Blocked parent or prerequisite continues to block its dependents.
+Dependency readiness (`--readiness blocked`) still selects New tasks waiting
+on prerequisites; use `--status blocked` for tasks waiting on user help.
 Preflight-generated errors can also use `--reopen`.
 
 Inspect abandoned work before forcing it back to the queue:
@@ -982,13 +992,13 @@ are separate. The fixture matrix and runtime checks enforce this support table:
 <!-- compatibility-support:start -->
 | Contract | Supported value |
 | --- | --- |
-| Current DB schema | `13` |
-| Normal-open DB schemas | `1–13` |
-| Automatic upgrade source schemas | `1–12` |
+| Current DB schema | `14` |
+| Normal-open DB schemas | `1–14` |
+| Automatic upgrade source schemas | `1–13` |
 | Portable snapshot format | `1` |
-| Portable snapshot DB schemas | `9–13` |
+| Portable snapshot DB schemas | `9–14` |
 | Upgrade recovery format | `2` |
-| Upgrade recovery source schemas | `1–12` |
+| Upgrade recovery source schemas | `1–13` |
 | Initialization-only schema | `0` |
 | Manual-conversion layouts | `title`, `pending` |
 <!-- compatibility-support:end -->

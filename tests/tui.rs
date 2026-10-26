@@ -905,6 +905,13 @@ fn tui_dashboard_force_reopen_distinguishes_uppercase_confirmation() {
 }
 
 #[test]
+fn tui_dashboard_blocked_reason_confirmation_and_retry_preserve_sessions() {
+    for name in ["blocked", "blocked_filter", "blocked_no_color"] {
+        dashboard_scenario(name);
+    }
+}
+
+#[test]
 fn tui_dashboard_mark_error_requires_reason_and_confirmation() {
     for name in ["menu_error_success", "menu_error_success_no_color"] {
         dashboard_scenario(name);

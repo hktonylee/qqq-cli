@@ -143,6 +143,7 @@ fn buffer_exit_lines(key: DraftKey, buffers: &DraftBuffers, width: usize) -> Vec
 pub enum TaskAction {
     Complete(i64),
     MarkError(i64, String),
+    MarkBlocked(i64, String),
     ForceMarkError(i64, String),
     ForceComplete(i64),
     Retry(i64),
@@ -165,11 +166,15 @@ impl TaskAction {
     fn is_error_marking(&self) -> bool {
         matches!(self, Self::MarkError(..) | Self::ForceMarkError(..))
     }
+    fn is_blocking(&self) -> bool {
+        matches!(self, Self::MarkBlocked(..))
+    }
 
     fn id(&self) -> i64 {
         match self {
             Self::Complete(id)
             | Self::MarkError(id, _)
+            | Self::MarkBlocked(id, _)
             | Self::ForceMarkError(id, _)
             | Self::ForceComplete(id)
             | Self::Retry(id)
@@ -186,6 +191,7 @@ impl TaskAction {
         match self {
             Self::Complete(_) => "Complete",
             Self::MarkError(..) => "Mark error",
+            Self::MarkBlocked(..) => "Mark blocked",
             Self::ForceMarkError(..) => "Force mark error",
             Self::ForceComplete(_) => "Force complete",
             Self::Retry(_) => "Retry",
@@ -203,6 +209,7 @@ impl TaskAction {
         match self {
             Self::Complete(id) | Self::ForceComplete(id) => format!("Completed #{id}"),
             Self::MarkError(id, _) | Self::ForceMarkError(id, _) => format!("Marked error #{id}"),
+            Self::MarkBlocked(id, _) => format!("Marked blocked #{id}"),
             Self::Retry(id) => format!("Retried #{id}"),
             Self::Reopen(id) | Self::ForceReopen(id) => format!("Reopened #{id}"),
             Self::SetArchived(id, true) => format!("Archived #{id}"),
@@ -222,6 +229,7 @@ enum ActionInputKind {
     Priority,
     Parent,
     ErrorReason,
+    BlockedReason,
     Tags,
 }
 
@@ -229,7 +237,8 @@ const ACTION_MENU_GROUPS: [&[(char, &str)]; 3] = [
     &[
         ('c', "Complete"),
         ('e', "Mark error"),
-        ('r', "Retry error"),
+        ('b', "Mark blocked"),
+        ('r', "Retry"),
         ('o', "Reopen"),
     ],
     &[('p', "Priority"), ('d', "Set parent")],
@@ -239,9 +248,10 @@ const ACTION_MENU_GROUPS: [&[(char, &str)]; 3] = [
 fn action_menu_available(key: char, status: &str) -> bool {
     match key {
         'c' => status != "completed",
-        'e' => !matches!(status, "completed" | "error"),
-        'r' => status == "error",
-        'o' => status != "error",
+        'e' => !matches!(status, "completed" | "error" | "blocked"),
+        'b' => status == "in_progress",
+        'r' => matches!(status, "error" | "blocked"),
+        'o' => !matches!(status, "error" | "blocked"),
         _ => true,
     }
 }
@@ -409,6 +419,10 @@ fn action_lines(ui: &ActionUi, width: usize, height: usize) -> Vec<render::Popup
                     PopupRow::new(format!("Error task {task_label}"), PopupKind::Heading),
                     PopupRow::new("Enter error reason", PopupKind::Hint),
                 ],
+                ActionInputKind::BlockedReason => vec![
+                    PopupRow::new(format!("Block task {task_label}"), PopupKind::Heading),
+                    PopupRow::new("What information or help is needed?", PopupKind::Hint),
+                ],
             };
             lines.push(PopupRow::new(value, PopupKind::Input));
             if !error.is_empty() {
@@ -468,7 +482,10 @@ fn action_confirmation_lines(
                 .map(|text| PopupRow::new(text, PopupKind::Warning)),
         );
     }
-    if let TaskAction::MarkError(_, reason) | TaskAction::ForceMarkError(_, reason) = action {
+    if let TaskAction::MarkError(_, reason)
+    | TaskAction::ForceMarkError(_, reason)
+    | TaskAction::MarkBlocked(_, reason) = action
+    {
         rows.extend(
             wrap_modal(&format!("Reason: {reason}"), width)
                 .into_iter()
@@ -548,6 +565,13 @@ fn parse_action_input(
                 return Err("Error reason cannot be empty".into());
             }
             Ok(TaskAction::MarkError(id, reason.to_owned()))
+        }
+        ActionInputKind::BlockedReason => {
+            let reason = value.trim();
+            if reason.is_empty() {
+                return Err("Blocked reason cannot be empty".into());
+            }
+            Ok(TaskAction::MarkBlocked(id, reason.to_owned()))
         }
     }
 }
@@ -1418,7 +1442,7 @@ fn compose_inner(
                             hide_cursor: matches!(
                                 &confirmation,
                                 Some(Confirmation::Action { action, .. })
-                                    if action.is_completion() || action.is_reopening() || action.is_error_marking()
+                                    if action.is_completion() || action.is_reopening() || action.is_error_marking() || action.is_blocking()
                             ) || matches!(&action_ui, Some(ActionUi::Error { .. })),
                             details: target_id.map(|_| dashboard::DetailsView {
                                 rows: &details_rows,
@@ -1543,7 +1567,11 @@ fn compose_inner(
                     } else {
                         value.extend(text.chars().filter_map(|ch| {
                             if ch.is_control() {
-                                matches!(kind, ActionInputKind::ErrorReason).then_some(' ')
+                                matches!(
+                                    kind,
+                                    ActionInputKind::ErrorReason | ActionInputKind::BlockedReason
+                                )
+                                .then_some(' ')
                             } else {
                                 Some(ch)
                             }
@@ -1938,7 +1966,7 @@ fn compose_inner(
                 }
                 let cancel_key = control && key.code == KeyCode::Char('c');
                 let passive_action = matches!(&confirmation,
-                    Some(Confirmation::Action { action, .. }) if action.is_reopening() || action.is_error_marking());
+                    Some(Confirmation::Action { action, .. }) if action.is_reopening() || action.is_error_marking() || action.is_blocking());
                 if matches!(
                     action_ui,
                     Some(ActionUi::Input {
@@ -2367,6 +2395,16 @@ fn compose_inner(
                                     });
                                     None
                                 }
+                                KeyCode::Char('b') => {
+                                    action_ui = Some(ActionUi::Input {
+                                        id: Some(id),
+                                        kind: ActionInputKind::BlockedReason,
+                                        value: String::new(),
+                                        error: String::new(),
+                                        cursor: tag_input::Cursor::at_end(""),
+                                    });
+                                    None
+                                }
                                 KeyCode::Esc | KeyCode::Char('q') => None,
                                 _ => {
                                     action_ui = Some(ActionUi::Menu {
@@ -2465,8 +2503,10 @@ fn compose_inner(
                                     }
                                 }
                                 Ok(action)
-                                    if matches!(action, TaskAction::MarkError(..))
-                                        || draft.is_dirty_against(&baseline.description) =>
+                                    if matches!(
+                                        action,
+                                        TaskAction::MarkError(..) | TaskAction::MarkBlocked(..)
+                                    ) || draft.is_dirty_against(&baseline.description) =>
                                 {
                                     confirmation = Some(action_confirmation(
                                         action,
@@ -3227,7 +3267,7 @@ mod tests {
     #[test]
     fn grouped_action_menu_labels_separators_and_selection() {
         use super::{ActionUi, action_lines, action_menu_items, render::PopupKind};
-        for status in ["new", "in_progress", "error", "completed"] {
+        for status in ["new", "in_progress", "error", "blocked", "completed"] {
             for archived in [false, true] {
                 let mut expected = vec!["Task actions #1"];
                 if status != "completed" {
@@ -3236,8 +3276,11 @@ mod tests {
                 if matches!(status, "new" | "in_progress") {
                     expected.push("e Mark error");
                 }
-                expected.push(if status == "error" {
-                    "r Retry error"
+                if status == "in_progress" {
+                    expected.push("b Mark blocked");
+                }
+                expected.push(if matches!(status, "error" | "blocked") {
+                    "r Retry"
                 } else {
                     "o Reopen"
                 });
@@ -3284,7 +3327,7 @@ mod tests {
     #[test]
     fn grouped_action_menu_keeps_selected_action_visible_at_small_heights() {
         use super::{ActionUi, action_lines, action_menu_items, render::PopupKind};
-        for status in ["new", "in_progress", "error", "completed"] {
+        for status in ["new", "in_progress", "error", "blocked", "completed"] {
             for height in 1..=12 {
                 for selected in 0..action_menu_items(status).count() {
                     let rows = action_lines(
@@ -3301,7 +3344,7 @@ mod tests {
                         rows.len() <= height,
                         "height {height}, selection {selected}"
                     );
-                    if matches!(status, "error" | "completed") {
+                    if matches!(status, "error" | "blocked" | "completed") {
                         assert!(rows.iter().all(|row| !row.text.starts_with("e ")));
                     }
                     let selected_rows = rows

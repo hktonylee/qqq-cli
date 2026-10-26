@@ -98,30 +98,31 @@ impl Waiter {
 }
 
 #[test]
-fn wait_skips_error_until_user_retries() {
-    let dir = project();
-    let path = dir.path();
-    ok(path, &["add", "Task"]);
-    ok(path, &["next", "--local", "--session", "worker"]);
-    ok(
-        path,
-        &[
-            "edit",
-            "1",
-            "--set-status",
-            "error",
-            "--reason",
-            "Needs input",
-            "--session",
-            "worker",
-        ],
-    );
-    let mut waiter = Waiter::spawn(path, "worker", true);
-    waiter.assert_waiting();
-    ok(path, &["edit", "1", "--set-status", "new"]);
-    assert_eq!(waiter.task()["id"], 1);
+fn wait_skips_error_and_blocked_until_user_retries() {
+    for status in ["error", "blocked"] {
+        let dir = project();
+        let path = dir.path();
+        ok(path, &["add", "Task"]);
+        ok(path, &["next", "--local", "--session", "worker"]);
+        ok(
+            path,
+            &[
+                "edit",
+                "1",
+                "--set-status",
+                status,
+                "--reason",
+                "Needs input",
+                "--session",
+                "worker",
+            ],
+        );
+        let mut waiter = Waiter::spawn(path, "worker", true);
+        waiter.assert_waiting();
+        ok(path, &["edit", "1", "--set-status", "new"]);
+        assert_eq!(waiter.task()["id"], 1);
+    }
 }
-
 #[test]
 fn wait_claims_child_after_user_clears_parent() {
     let dir = project();

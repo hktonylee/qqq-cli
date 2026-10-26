@@ -10,6 +10,7 @@ pub enum ListStatus {
     InProgress,
     Completed,
     Error,
+    Blocked,
 }
 
 impl ListStatus {
@@ -19,6 +20,7 @@ impl ListStatus {
             Self::InProgress => "in_progress",
             Self::Completed => "completed",
             Self::Error => "error",
+            Self::Blocked => "blocked",
         }
     }
 }

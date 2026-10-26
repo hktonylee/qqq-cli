@@ -160,6 +160,7 @@ pub fn status_label(status: &str) -> &'static str {
         "in_progress" => "In progress",
         "completed" => "Completed",
         "error" => "Error",
+        "blocked" => "Blocked",
         _ => "Unknown",
     }
 }
@@ -169,6 +170,7 @@ pub(crate) fn status_color_code(status: &str) -> Option<&'static str> {
         "in_progress" => Some("36"),
         "completed" => Some("90"),
         "error" => Some("31"),
+        "blocked" => Some("33"),
         _ => None,
     }
 }

@@ -26,7 +26,7 @@ pub(crate) fn filter_evaluation_error() -> crate::errors::Info {
 
 pub const DB_NAME: &str = "qqq.db";
 const PROJECT_DIR_NAME: &str = ".qqq";
-pub(crate) const SCHEMA_VERSION: i64 = 13;
+pub(crate) const SCHEMA_VERSION: i64 = 14;
 pub(crate) const READY_TASK_PREDICATE: &str = "tasks.status='new' AND tasks.archived=0 AND
     (tasks.parent_id IS NULL OR EXISTS
     (SELECT 1 FROM tasks parent WHERE parent.id=tasks.parent_id AND parent.status='completed')) AND NOT EXISTS (
@@ -59,8 +59,13 @@ pub enum EditTransition<'a> {
         harness_name: Option<&'a str>,
     },
     ForceNew(&'a str),
-    RetryError(&'a str),
+    Retry(&'a str),
     Error {
+        session: &'a str,
+        reason: &'a str,
+        harness_name: Option<&'a str>,
+    },
+    Blocked {
         session: &'a str,
         reason: &'a str,
         harness_name: Option<&'a str>,
@@ -509,10 +514,7 @@ impl Db {
         if version < SCHEMA_VERSION {
             // Rebuild CHECK constraints without changing references to tasks.
             // SQLite requires foreign_keys to change outside a transaction.
-            let disable_foreign_keys = version < 6;
-            if disable_foreign_keys {
-                conn.pragma_update(None, "foreign_keys", "OFF")?;
-            }
+            conn.pragma_update(None, "foreign_keys", "OFF")?;
             let tx = conn.transaction_with_behavior(TransactionBehavior::Immediate)?;
             let mut pending = PendingFiles::new();
             let mut had_images = false;
@@ -598,10 +600,15 @@ impl Db {
             if version < 13 {
                 tx.execute_batch(include_str!("sql/migrate_v13.sql"))?;
             }
-            commit_with_files(tx, &mut pending)?;
-            if disable_foreign_keys {
-                conn.pragma_update(None, "foreign_keys", "ON")?;
+            if version < 14 {
+                tx.execute_batch(include_str!("sql/migrate_v14.sql"))?;
+                ensure!(
+                    !tx.prepare("PRAGMA foreign_key_check")?.exists([])?,
+                    "Database migration found invalid foreign key references"
+                );
             }
+            commit_with_files(tx, &mut pending)?;
+            conn.pragma_update(None, "foreign_keys", "ON")?;
             if had_images && let Err(error) = conn.execute_batch("VACUUM") {
                 eprintln!("Warning: migrated image bytes; SQLite compaction failed: {error}");
             }
@@ -1172,24 +1179,24 @@ impl Db {
                 nonempty(session, "Session")?;
                 ensure!(
                     tx.execute(
-                        "UPDATE tasks SET status='new',claim_key=NULL WHERE id=? AND status IN ('in_progress','error')",
+                        "UPDATE tasks SET status='new',claim_key=NULL WHERE id=? AND status IN ('in_progress','error','blocked')",
                         [id]
                     )? == 1,
-                    transition_error(&tx, id, &["in_progress", "error"], None, format!("Task {id} is not in progress or error"))?
+                    transition_error(&tx, id, &["in_progress", "error", "blocked"], None, format!("Task {id} is not in progress, error or blocked"))?
                 );
                 tx.execute(
                     "INSERT INTO events(task_id,session,action) VALUES (?,?,'release')",
                     params![id, session],
                 )?;
             }
-            Some(EditTransition::RetryError(session)) => {
+            Some(EditTransition::Retry(session)) => {
                 nonempty(session, "Session")?;
                 ensure!(
                     tx.execute(
-                        "UPDATE tasks SET status='new',claim_key=NULL WHERE id=? AND status='error'",
+                        "UPDATE tasks SET status='new',claim_key=NULL WHERE id=? AND status IN ('error','blocked')",
                         [id]
                     )? == 1,
-                    transition_error(&tx, id, &["error"], None, format!("Task {id} is no longer in error; inspect its current status before retrying"))?
+                    transition_error(&tx, id, &["error", "blocked"], None, format!("Task {id} is no longer in error or blocked; inspect its current status before retrying"))?
                 );
                 tx.execute(
                     "INSERT INTO events(task_id,session,action) VALUES (?,?,'release')",
@@ -1200,13 +1207,30 @@ impl Db {
                 session,
                 reason,
                 harness_name,
+            })
+            | Some(EditTransition::Blocked {
+                session,
+                reason,
+                harness_name,
             }) => {
+                let status = if matches!(transition, Some(EditTransition::Blocked { .. })) {
+                    "blocked"
+                } else {
+                    "error"
+                };
                 let session = Self::owner_key(&tx, session, harness_name)?;
-                nonempty(reason, "Error reason")?;
-                ensure!(tx.execute("UPDATE tasks SET status='error',claim_key=NULL WHERE id=? AND status='in_progress' AND claim_key=?",params![id,session])?==1,Self::transition_error_for_owner(&tx, id, &session)?);
+                nonempty(
+                    reason,
+                    if status == "blocked" {
+                        "Blocked reason"
+                    } else {
+                        "Error reason"
+                    },
+                )?;
+                ensure!(tx.execute("UPDATE tasks SET status=?,claim_key=NULL WHERE id=? AND status='in_progress' AND claim_key=?",params![status,id,session])?==1,Self::transition_error_for_owner(&tx, id, &session)?);
                 tx.execute(
-                    "INSERT INTO events(task_id,session,action) VALUES (?,?,'error')",
-                    params![id, session],
+                    "INSERT INTO events(task_id,session,action) VALUES (?,?,?)",
+                    params![id, session, status],
                 )?;
                 tx.execute(
                     "INSERT INTO messages(task_id,body,session) VALUES (?,?,?)",
@@ -1613,11 +1637,11 @@ impl Db {
             .conn
             .transaction_with_behavior(TransactionBehavior::Immediate)?;
         ensure!(
-            tx.execute("UPDATE tasks SET status='completed',claim_key=NULL,updated_at=strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE id=? AND status IN ('new','in_progress','error')", [id])? == 1,
+            tx.execute("UPDATE tasks SET status='completed',claim_key=NULL,updated_at=strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE id=? AND status IN ('new','in_progress','error','blocked')", [id])? == 1,
             transition_error(
                 &tx,
                 id,
-                &["new", "in_progress", "error"],
+                &["new", "in_progress", "error", "blocked"],
                 None,
                 format!("Task {id} must be unfinished to force complete"),
             )?
@@ -1709,7 +1733,7 @@ impl Db {
             .optional()?
             .with_context(|| crate::errors::Info::missing_task(id))?;
         ensure!(
-            task.status == "completed" || task.status == "in_progress"
+            task.status == "completed" || task.status == "in_progress" || (task.status == "blocked" && force)
                 || (task.status == "error" && (force || conn.query_row(
                     "SELECT EXISTS(SELECT 1 FROM events WHERE task_id=?1 AND action='error' AND session=?2
                      AND id=(SELECT MAX(id) FROM events WHERE task_id=?1
@@ -1718,7 +1742,7 @@ impl Db {
             crate::errors::Info::transition(
                 id,
                 &task.status,
-                if force { &["completed", "in_progress", "error"] } else { &["completed"] },
+                if force { &["completed", "in_progress", "error", "blocked"] } else { &["completed"] },
                 if force {
                     format!("Task {id} must be completed, in progress or error to force reopen")
                 } else {

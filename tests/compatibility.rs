@@ -110,7 +110,10 @@ fn historical_sources_and_artifacts_match_recorded_provenance() {
                     .unwrap()
                     .starts_with("src/")
             );
-            if path.starts_with("sources/schema12/") || path.starts_with("sources/schema13/") {
+            if path.starts_with("sources/schema12/")
+                || path.starts_with("sources/schema13/")
+                || path.starts_with("sources/schema14/")
+            {
                 assert!(source["release"].is_null());
             } else {
                 assert!(source["release"].as_str().unwrap().starts_with('v'));
@@ -119,7 +122,7 @@ fn historical_sources_and_artifacts_match_recorded_provenance() {
             path.to_owned()
         })
         .collect();
-    assert_eq!(sources.len(), 26);
+    assert_eq!(sources.len(), 27);
     let releases = provenance["releases"].as_array().unwrap();
     assert_eq!(
         releases

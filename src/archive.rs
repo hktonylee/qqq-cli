@@ -19,7 +19,7 @@ pub(crate) fn validate(
             Info::transition(
                 task.id,
                 &task.status,
-                &["new", "error", "completed"],
+                &["new", "error", "blocked", "completed"],
                 format!("Task {} is in progress and cannot be archived", task.id)
             )
         );

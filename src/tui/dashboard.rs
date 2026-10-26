@@ -479,6 +479,7 @@ fn row_style(status: Option<&str>, selected: bool, color: bool) -> Style {
         Some("in_progress") => Style::default().fg(ACCENT),
         Some("completed") => Style::default().fg(Color::DarkGray),
         Some("error") => Style::default().fg(Color::Red),
+        Some("blocked") => Style::default().fg(Color::Yellow),
         _ => Style::default(),
     };
     if selected {

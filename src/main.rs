@@ -73,6 +73,7 @@ struct Cli {
 enum EditStatus {
     New,
     Error,
+    Blocked,
 }
 
 #[derive(Subcommand)]
@@ -220,16 +221,16 @@ enum Commands {
         /// Reopen completed/auto-failed task or active task with absent Herdr owner. Skips editor.
         #[arg(long, conflicts_with_all = ["set_status", "set_pending", "edit"])]
         reopen: bool,
-        /// Return owned task/error to new, or mark owned task error with --reason. Skips editor.
+        /// Return active/error/blocked task to new, or mark owned task error/blocked with --reason.
         #[arg(long, value_enum)]
         set_status: Option<EditStatus>,
-        /// Return owned task/error to execution queue (new); same as --set-status new.
+        /// Return active/error/blocked task to queue (new); same as --set-status new.
         #[arg(long, conflicts_with = "set_status")]
         set_pending: bool,
-        /// Return active/error task to new without session discovery or owner matching.
+        /// Return active/error/blocked task to new without owner matching.
         #[arg(long, requires = "set_status")]
         force: bool,
-        /// Failure details, required and valid only with --set-status error.
+        /// Details, required and valid only with --set-status error or blocked.
         #[arg(long, requires = "set_status")]
         reason: Option<String>,
         /// Change dependency to a task ID, or use none to clear it. Skips editor unless --edit.
@@ -755,6 +756,21 @@ fn execute(
                             None,
                         )
                     }
+                    tui::TaskAction::MarkBlocked(id, reason) => {
+                        let owner = resolved_owner(session_input, project_dir, db)?;
+                        db.edit_with_priority(
+                            id,
+                            None,
+                            Some(db::EditTransition::Blocked {
+                                session: &owner.key,
+                                reason: &reason,
+                                harness_name: overrides.harness_name.as_deref(),
+                            }),
+                            &[],
+                            None,
+                            None,
+                        )
+                    }
                     tui::TaskAction::ForceComplete(id) => {
                         db.force_complete(id, session_input.unwrap_or("manual"))
                     }
@@ -764,9 +780,7 @@ fn execute(
                     tui::TaskAction::Retry(id) => db.edit_with_priority(
                         id,
                         None,
-                        Some(db::EditTransition::RetryError(
-                            session_input.unwrap_or("manual"),
-                        )),
+                        Some(db::EditTransition::Retry(session_input.unwrap_or("manual"))),
                         &[],
                         None,
                         None,
@@ -914,19 +928,24 @@ fn execute(
                 }
             } else {
                 ensure!(
-                    reason.is_none() || matches!(set_status, Some(EditStatus::Error)),
+                    reason.is_none()
+                        || matches!(set_status, Some(EditStatus::Error | EditStatus::Blocked)),
                     errors::Info::invalid_argument(
                         "--reason",
-                        "--reason is only valid with --set-status error"
+                        "--reason is only valid with --set-status error or blocked"
                     )
                 );
-                if matches!(set_status, Some(EditStatus::Error)) {
+                if matches!(set_status, Some(EditStatus::Error | EditStatus::Blocked)) {
                     db::nonempty(
                         reason.as_deref().context(errors::Info::invalid_argument(
                             "--reason",
-                            "--set-status error requires --reason",
+                            "--set-status error or blocked requires --reason",
                         ))?,
-                        "Error reason",
+                        if matches!(set_status, Some(EditStatus::Blocked)) {
+                            "Blocked reason"
+                        } else {
+                            "Error reason"
+                        },
                     )?;
                 }
                 let session = if complete {
@@ -936,10 +955,12 @@ fn execute(
                         Some(EditStatus::New) if force => {
                             Some(session_input.unwrap_or("manual").to_owned())
                         }
-                        Some(EditStatus::New) if task.status == "error" => {
+                        Some(EditStatus::New)
+                            if matches!(task.status.as_str(), "error" | "blocked") =>
+                        {
                             Some(session_input.unwrap_or("manual").to_owned())
                         }
-                        Some(EditStatus::New | EditStatus::Error) => {
+                        Some(EditStatus::New | EditStatus::Error | EditStatus::Blocked) => {
                             Some(resolved_owner(session_input, project_dir, &db)?.key)
                         }
                         None => None,
@@ -960,14 +981,21 @@ fn execute(
                         Some(EditStatus::New) if force => {
                             Some(db::EditTransition::ForceNew(session.as_deref().unwrap()))
                         }
-                        Some(EditStatus::New) if task.status == "error" => {
-                            Some(db::EditTransition::RetryError(session.as_deref().unwrap()))
+                        Some(EditStatus::New)
+                            if matches!(task.status.as_str(), "error" | "blocked") =>
+                        {
+                            Some(db::EditTransition::Retry(session.as_deref().unwrap()))
                         }
                         Some(EditStatus::New) => Some(db::EditTransition::New {
                             session: session.as_deref().unwrap(),
                             harness_name: overrides.harness_name.as_deref(),
                         }),
                         Some(EditStatus::Error) => Some(db::EditTransition::Error {
+                            session: session.as_deref().unwrap(),
+                            reason: reason.as_deref().unwrap(),
+                            harness_name: overrides.harness_name.as_deref(),
+                        }),
+                        Some(EditStatus::Blocked) => Some(db::EditTransition::Blocked {
                             session: session.as_deref().unwrap(),
                             reason: reason.as_deref().unwrap(),
                             harness_name: overrides.harness_name.as_deref(),

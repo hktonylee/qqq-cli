@@ -312,7 +312,7 @@ fn migration_and_snapshot_round_trip_preserve_ownership_content_and_dependency_e
             .unwrap()
             .pragma_query_value(None, "user_version", |r| r.get::<_, i64>(0))
             .unwrap(),
-        13
+        14
     );
     ok(p, &["add", "Extra"]);
     ok(p, &["edit", "2", "--depends-on", "3"]);

@@ -32,7 +32,7 @@ pub enum State {
 
 impl Counts {
     fn state(&self) -> State {
-        let unfinished = self.new + self.in_progress + self.error;
+        let unfinished = self.total - self.completed;
         match () {
             _ if self.total == 0 => State::Empty,
             _ if self.matching_ready > 0 => State::Ready,
@@ -53,6 +53,7 @@ enum Reason {
     PrerequisiteNotCompleted,
     InProgress,
     Error,
+    Blocked,
     Completed,
     FilterExcluded,
     TagExcluded,
@@ -292,6 +293,10 @@ fn report_with_activity(
                 "error" => {
                     counts.error += 1;
                     reasons.push(Reason::Error);
+                }
+                "blocked" => {
+                    counts.blocked += 1;
+                    reasons.push(Reason::Blocked);
                 }
                 "completed" => {
                     counts.completed += 1;

@@ -244,6 +244,12 @@ print(json.dumps({"result": {"pane": pane}}))
         cli("next", "--local", "--session", "worker", "--harness-name", "codex",
             "--harness-session", "00000000-0000-0000-0000-000000000000",
             "--orchestrator-name", "herdr", "--orchestrator-session", "default")
+    if scenario.startswith("blocked"):
+        cli("next", "--session", "worker", "--filter", "id == 2",
+            "--harness-name", "codex", "--harness-session", "blocked-worker",
+            "--orchestrator-name", "herdr", "--orchestrator-session", "w1:p1")
+        if scenario.endswith("no_color"):
+            env["NO_COLOR"] = "1"
     if scenario in ("scroll", "wheel", "live_refresh_scroll", "ctrl_c_new_scroll") or scenario.startswith("scroll_multiline"):
         for index in range(3, 21):
             description = ("\n".join(f"Line{line:02}" for line in range(1, 16))
@@ -531,7 +537,7 @@ print(json.dumps({"result": result}))
         args.extend(["--session", "native-display"])
     elif scenario.startswith("orphan_reopen"):
         args.extend(["--session", "reviewer"])
-    elif scenario != "force_error_sessionless" and (scenario in ("actions_basic", "actions_rejected", "actions_narrow") or scenario.startswith(("menu_retry_", "menu_error_", "force_reopen", "force_error")) or (scenario.startswith("force_complete") and not scenario.startswith("force_complete_herdr_") and scenario not in ("force_complete_sessionless", "force_complete_owner_db_error"))):
+    elif scenario != "force_error_sessionless" and (scenario in ("actions_basic", "actions_rejected", "actions_narrow") or scenario.startswith(("menu_retry_", "menu_error_", "force_reopen", "force_error", "blocked")) or (scenario.startswith("force_complete") and not scenario.startswith("force_complete_herdr_") and scenario not in ("force_complete_sessionless", "force_complete_owner_db_error"))):
         args.extend(["--session", "other" if scenario == "menu_error_rejected" else "worker"])
     if scenario in ("archive_included", "actions_basic", "actions_rejected", "archived_toggle_included"):
         args.append("--include-archived")
@@ -3024,6 +3030,52 @@ print(json.dumps({"result": result}))
                 send(b"\x13")
                 wait_visible(lambda: visible.text().splitlines()[-1].startswith("Saved #2"))
                 assert cli("show", "2")["task"]["description"] == "ChangedSecond"
+        elif scenario.startswith("blocked"):
+            initial = cli("show", "2")
+            send(b"\x0b2\r")
+            wait_frame(lambda: "Task #2 (In progress)" in editor_title())
+            send(b"\x01Unsaved ")
+            wait_caret(lambda: editor_line().startswith("Unsaved Second"), (8, editor_row() + 1))
+            if scenario == "blocked_filter":
+                send(CTRL_SLASH + b"first")
+                wait_visible(lambda: filter_text() == "Filter: first")
+            send(b"\x07b")
+            wait_visible(lambda: "Block task #2" in visible.text())
+            send(b"\r")
+            wait_visible(lambda: "Blocked reason cannot be empty" in visible.text())
+            reason = "Which API should I use?"
+            send(reason.encode() + b"\r")
+            wait_visible(lambda: "Mark blocked task #2?" in visible.text())
+            send(b"\x04")
+            settle()
+            assert "Mark blocked task #2?" in visible.text(), visible.text()
+            assert cli("show", "2") == initial
+            send(b"n")
+            wait_caret(lambda: "Mark blocked task #2?" not in visible.text()
+                       and editor_line().startswith("Unsaved Second"),
+                       (13, 0) if scenario == "blocked_filter" else (8, editor_row() + 1))
+            send(b"\x07b")
+            wait_visible(lambda: "Block task #2" in visible.text())
+            send(reason.encode() + b"\ry")
+            wait_caret(lambda: "Task #2 (Blocked)" in editor_title()
+                       and "Marked blocked #2" in visible.text(),
+                       (13, 0) if scenario == "blocked_filter" else (6, editor_row() + 1))
+            blocked = cli("show", "2")
+            assert blocked["task"]["description"] == "Second"
+            assert blocked["events"][-1]["action"] == "blocked"
+            assert blocked["messages"][-1]["body"] == reason
+            for field in ("harness_name", "harness_session", "orchestrator_name", "orchestrator_session"):
+                assert blocked["task"][field] == initial["task"][field]
+            assert cli("next", "--session", "probe", "--filter", "id == 2") is None
+            send(b"\x07")
+            wait_visible(lambda: "r Retry" in visible.text() and "b Mark blocked" not in visible.text())
+            send(b"r")
+            wait_visible(lambda: "Retry task #2?" in visible.text())
+            send(b"y")
+            wait_caret(lambda: "Task #2 (New)" in editor_title() and "Retried #2" in visible.text(),
+                       (13, 0) if scenario == "blocked_filter" else (6, editor_row() + 1))
+            if scenario.endswith("no_color"):
+                assert b"\x1b[38;" not in screen and b"\x1b[48;" not in screen
         elif scenario.startswith("ctrl_c_new_"):
             initial_tasks = cli("list")
             if scenario == "ctrl_c_new_child":
@@ -3851,7 +3903,7 @@ print(json.dumps({"result": result}))
                     assert connection.execute("SELECT claim_key FROM tasks WHERE id=?", (task_id,)).fetchone() == (None,)
                 assert cli("next", "--local", "--session", "probe", "--filter", f"id == {task_id}") is None
                 send(b"\x07")
-                wait_visible(lambda: "r Retry error" in visible.text())
+                wait_visible(lambda: "r Retry" in visible.text())
                 send(b"\x1b")
                 wait_frame(lambda: "Task actions" not in visible.text() and editor_line().startswith(label))
             if scenario.endswith("no_color"):
@@ -4013,7 +4065,7 @@ print(json.dumps({"result": result}))
                     wait_visible(lambda: f"Task #{task_id} ({status}" in editor_title())
                     before_recovery = cli("show", str(task_id))
                     send(b"\x07")
-                    wait_visible(lambda: ("r Retry error" if shortcut == b"r" else "o Reopen") in visible.text())
+                    wait_visible(lambda: ("r Retry" if shortcut == b"r" else "o Reopen") in visible.text())
                     send(shortcut)
                     wait_visible(lambda: f"{action} task #{task_id}?" in visible.text())
                     send(b"y")
@@ -4035,7 +4087,7 @@ print(json.dumps({"result": result}))
             wait_visible(lambda: f"Task #1 ({expected_status})" in editor_title())
             initial_detail = cli("show", "1")
             send(b"\x07")
-            wait_visible(lambda: ("o Reopen" if live else "r Retry error") in visible.text())
+            wait_visible(lambda: ("o Reopen" if live else "r Retry") in visible.text())
             send(shortcut)
             wait_visible(lambda: f"{action} task #1?" in visible.text())
             send(b"n")
@@ -4043,7 +4095,7 @@ print(json.dumps({"result": result}))
                          and f"Task #1 ({expected_status})" in editor_title())
             assert cli("show", "1") == initial_detail
             send(b"\x07")
-            wait_visible(lambda: ("o Reopen" if live else "r Retry error") in visible.text())
+            wait_visible(lambda: ("o Reopen" if live else "r Retry") in visible.text())
             send(shortcut)
             wait_visible(lambda: f"{action} task #1?" in visible.text())
             if scenario.endswith("live"):
@@ -4057,7 +4109,7 @@ print(json.dumps({"result": result}))
                 wait_visible(lambda: "Action error" not in visible.text())
                 if scenario == "orphan_reopen_force_live":
                     send(b"\x07")
-                    wait_visible(lambda: ("o Reopen" if live else "r Retry error") in visible.text())
+                    wait_visible(lambda: ("o Reopen" if live else "r Retry") in visible.text())
                     send(shortcut)
                     wait_visible(lambda: f"{action} task #1?" in visible.text())
                     send(b"Y")
@@ -4111,7 +4163,7 @@ print(json.dumps({"result": result}))
 
             open_menu()
             settle()
-            for label in ("c Complete", "e Mark error", "r Retry error"):
+            for label in ("c Complete", "e Mark error", "r Retry"):
                 assert label not in visible.text(), visible.text()
             for key in (b"c", b"e"):
                 send(key)
@@ -4182,14 +4234,14 @@ print(json.dumps({"result": result}))
 
             open_menu()
             settle()
-            assert ("r Retry error" in visible.text()) == (status == "error"), visible.text()
+            assert ("r Retry" in visible.text()) == (status == "error"), visible.text()
             assert ("o Reopen" in visible.text()) == (status != "error"), visible.text()
             assert ("e Mark error" in visible.text()) == (status in ("new", "in_progress")), visible.text()
             if scenario == "menu_retry_live":
                 send(b"\x1b[B")
                 wait_visible(lambda: selected_action("r"))
                 cli("edit", str(task_id), "--set-status", "new")
-                wait_visible(lambda: "r Retry error" not in visible.text()
+                wait_visible(lambda: "r Retry" not in visible.text()
                              and "e Mark error" in visible.text() and selected_action("e"))
                 send(b"r")
                 settle()
@@ -4198,7 +4250,7 @@ print(json.dumps({"result": result}))
                 assert cli("next", "--local", "--session", "external")["id"] == task_id
                 cli("edit", str(task_id), "--set-status", "error",
                     "--reason", "Failed again", "--session", "external")
-                wait_visible(lambda: "r Retry error" in visible.text()
+                wait_visible(lambda: "r Retry" in visible.text()
                              and "o Reopen" not in visible.text()
                              and "e Mark error" not in visible.text() and selected_action("r"))
                 error_detail = cli("show", str(task_id))
@@ -4213,7 +4265,7 @@ print(json.dumps({"result": result}))
                 assert "Retry task" not in visible.text(), visible.text()
                 assert selected_action("o" if status == "completed" else "c"), visible.text()
                 if status != "completed":
-                    send(b"\x1b[B" * 2)
+                    send(b"\x1b[B" * (3 if status == "in_progress" else 2))
             else:
                 # Hidden status shortcuts stay inactive; arrows skip removed action.
                 error_detail = cli("show", str(task_id))
@@ -4245,7 +4297,7 @@ print(json.dumps({"result": result}))
                 assert cli("show", str(task_id))["task"]["status"] == "new"
                 open_menu()
                 settle()
-                assert "r Retry error" not in visible.text(), visible.text()
+                assert "r Retry" not in visible.text(), visible.text()
                 send(b"\x1b[B" * 2)
                 wait_visible(lambda: selected_action("o"))
                 send(b"\x1b")
@@ -4606,7 +4658,7 @@ print(json.dumps({"result": result}))
             def action(letter, prompt):
                 clear_capture()
                 send(b"\x07")
-                status_action = "r Retry error" if letter == "r" else "o Reopen"
+                status_action = "r Retry" if letter == "r" else "o Reopen"
                 wait_visible(lambda: "Task actions" in visible.text() and status_action in visible.text())
                 clear_capture()
                 send(letter.encode())
@@ -4829,7 +4881,9 @@ print(json.dumps({"result": result}))
             settle()
             send(b"\x07")
             wait_visible(lambda: "c Complete" in visible.text() and
-                         "d Set par" in visible.text() and "Up/Dn Enter" in visible.text())
+                         "b Mark blo" in visible.text() and "Up/Dn Enter" in visible.text())
+            send(b"\x1b[B" * 5)
+            wait_visible(lambda: "> d Set par" in visible.text() and "Up/Dn Enter" in visible.text())
             send(b"p")
             wait_visible(lambda: "Enter -100" in visible.text())
             send(b"5\r")

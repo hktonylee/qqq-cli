@@ -82,7 +82,7 @@ fn healthy_doctor_reports_counts_without_changing_project() {
         let (status, result) = report(path);
         assert_eq!(status, 0);
         assert_eq!(result["ok"], true);
-        assert_eq!(result["schema_version"], 13);
+        assert_eq!(result["schema_version"], 14);
         assert_eq!(result["tasks"], 1);
         assert_eq!(result["images"], 1);
         assert_eq!(result["issues"], serde_json::json!([]));
@@ -252,7 +252,7 @@ fn doctor_reports_foreign_key_schema_and_sidecar_damage() {
             .iter()
             .any(|issue| issue["code"] == "DB_SCHEMA")
     );
-    conn.pragma_update(None, "user_version", 13).unwrap();
+    conn.pragma_update(None, "user_version", 14).unwrap();
     let sidecar = path.join(".qqq/qqq.db-wal");
     fs::write(&sidecar, b"simulated").unwrap();
     let (status, result) = report(path);

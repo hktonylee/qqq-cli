@@ -263,6 +263,15 @@
       "path": "sources/schema13/migrate_v13.sql",
       "release": null,
       "sha256": "fac161c37bbd7571b2817d4daa506da517410fb007a4069afb54fd4684d70014"
+    },
+    {
+      "commit": "7a7585ddfce0f67b9bffa47d0718ea6ffb723fab",
+      "git_blob": "e3bfd505c5554919d8901bd3ce53165c151c2f94",
+      "original_path": "src/sql/migrate_v14.sql",
+      "package_version": "0.13.0",
+      "path": "sources/schema14/migrate_v14.sql",
+      "release": null,
+      "sha256": "dd7b6bc5bb602e34c274defe858b663f782d8aaec0b4dc4739ba4c9c5148ad5c"
     }
   ],
   "version": 1

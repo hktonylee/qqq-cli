@@ -142,7 +142,7 @@ fn plan(conn: &Connection, db_path: &Path, id: i64) -> Result<Plan> {
         crate::errors::Info::transition(
             id,
             &task.status,
-            &["new", "error", "completed"],
+            &["new", "error", "blocked", "completed"],
             format!(
                 "Task {id} is in progress; release or complete it before archiving and deletion"
             )
@@ -153,7 +153,7 @@ fn plan(conn: &Connection, db_path: &Path, id: i64) -> Result<Plan> {
         crate::errors::Info::transition(
             id,
             &task.status,
-            &["new", "error", "completed"],
+            &["new", "error", "blocked", "completed"],
             format!("Task {id} is not archived; archive it before deletion")
         )
         .detail("actual_archived", false)
@@ -171,7 +171,7 @@ fn plan(conn: &Connection, db_path: &Path, id: i64) -> Result<Plan> {
         crate::errors::Info::transition(
             id,
             &task.status,
-            &["new", "error", "completed"],
+            &["new", "error", "blocked", "completed"],
             format!(
                 "Task {id} has dependent child #{}; delete or reparent child first",
                 child.unwrap_or_default()
@@ -186,7 +186,7 @@ fn plan(conn: &Connection, db_path: &Path, id: i64) -> Result<Plan> {
         Info::transition(
             id,
             &task.status,
-            &["new", "error", "completed"],
+            &["new", "error", "blocked", "completed"],
             format!(
                 "Task {id} is a prerequisite of task #{}; remove prerequisite edge first",
                 dependent.unwrap_or_default()

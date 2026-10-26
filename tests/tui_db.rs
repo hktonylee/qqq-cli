@@ -75,6 +75,8 @@ fn database() -> (Db, tempfile::TempDir) {
         .unwrap();
     conn.execute_batch(include_str!("../src/sql/migrate_v13.sql"))
         .unwrap();
+    conn.execute_batch(include_str!("../src/sql/migrate_v14.sql"))
+        .unwrap();
     (
         Db {
             conn,

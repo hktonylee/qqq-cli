@@ -326,10 +326,16 @@ fn failed_sql_and_image_migrations_retain_original_recovery_records() {
                 "ALTER TABLE tasks DROP COLUMN tags",
                 "duplicate column",
             )
-        } else {
+        } else if entry.schema_version < 13 {
             (
                 "CREATE TABLE claim_processes(sentinel TEXT)",
                 "DROP TABLE claim_processes",
+                "already exists",
+            )
+        } else {
+            (
+                "CREATE TABLE tasks_v14(sentinel TEXT)",
+                "DROP TABLE tasks_v14",
                 "already exists",
             )
         };

@@ -238,7 +238,7 @@ fn schema_eleven_migrates_tasks_to_empty_tags() {
     assert_eq!(
         conn.pragma_query_value(None, "user_version", |r| r.get::<_, i64>(0))
             .unwrap(),
-        13
+        14
     );
 }
 

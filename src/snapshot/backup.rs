@@ -188,8 +188,10 @@ pub(crate) fn validate_database_for(path: &Path, recovery: bool) -> Result<i64> 
     };
     let statuses = if version < 4 {
         "'new','in_progress','completed'"
-    } else {
+    } else if version < 14 {
         "'new','in_progress','completed','error'"
+    } else {
+        "'new','in_progress','completed','error','blocked'"
     };
     let mut invalid_task = conn
         .query_row(

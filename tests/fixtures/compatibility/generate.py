@@ -63,6 +63,8 @@ def task_rows(version: int) -> list[dict[str, object]]:
         if version >= 6 and task_id in (3, 13):
             image_id, extension = (7, "png") if task_id == 3 else (19, "gif")
             description += f"\n![pixel](.qqq/images/{task_id}/{image_id}.{extension})"
+        if version >= 14 and task_id == 21:
+            status = "blocked"
         row = {
             "id": task_id, "description": description, "status": status,
             "claim_key": owner, "created_at": TIMESTAMP, "updated_at": TIMESTAMP,
@@ -78,6 +80,9 @@ def task_rows(version: int) -> list[dict[str, object]]:
             "content_revision": revisions[task_id] if version >= 10 else 1,
             "tags": ["fixture", f"id-{task_id}", "界"] if version >= 12 else [],
         }
+        if version >= 14 and task_id == 21:
+            row.update(harness_name="codex", harness_session="fixture-blocked-owner",
+                       orchestrator_name="herdr", orchestrator_session="fixture:blocked")
         rows.append(row)
     return rows
 
@@ -97,6 +102,10 @@ def history(version: int) -> tuple[list[dict[str, object]], list[dict[str, objec
                         (38, 3, "fixture-archiver", "unarchive")])
     if version >= 9:
         actions.append((47, 144, "fixture-reopener", "reopen"))
+    if version >= 14:
+        actions.extend([(48, 21, "fixture-blocked-owner", "claim"),
+                        (49, 21, "fixture-blocked-owner", "blocked")])
+        messages.append({"id": 20, "task_id": 21, "body": "Need a user decision", "session": "fixture-blocked-owner", "created_at": TIMESTAMP})
     events = [{"id": event_id, "task_id": task_id, "session": session,
                "action": action, "created_at": TIMESTAMP}
               for event_id, task_id, session, action in actions]
@@ -128,7 +137,7 @@ def expectations(version: int) -> dict[str, object]:
                    key=lambda task: (-task["priority"], task["id"]))
     return {
         "canonical": {
-            "schema_version": 13, "tasks": tasks, "messages": messages, "events": events,
+            "schema_version": 14, "tasks": tasks, "messages": messages, "events": events,
             "images": [{"id": image_id, "task_id": task_id, "name": name,
                         "media_type": media_type, "bytes": len(data)}
                        for image_id, task_id, name, media_type, _, data in PIXELS],
@@ -156,6 +165,8 @@ def sql_paths(version: int) -> tuple[str, list[str]]:
         paths.append("sources/schema12/migrate_v12.sql")
     if version >= 13:
         paths.append("sources/schema13/migrate_v13.sql")
+    if version >= 14:
+        paths.append("sources/schema14/migrate_v14.sql")
     return release, paths
 
 
@@ -254,18 +265,18 @@ def generate(output: Path) -> None:
         assert digest((ROOT / source["path"]).read_bytes()) == source["sha256"], source["path"]
     for _, _, name, _, _, data in PIXELS:
         write(output / "assets" / name, data)
-    databases = [seed_database(output, version) for version in range(1, 14)]
+    databases = [seed_database(output, version) for version in range(1, 15)]
     snapshots = [snapshot(output, entry) for entry in databases if entry["schema_version"] >= 9]
     manifest = {
         "version": 1, "sqlite_generation_version": SQLITE_VERSION,
         "source_provenance": "provenance.json", "source_provenance_sha256": digest(provenance_data),
-        "support": {"current_schema": 13, "normal_open_schemas": list(range(1, 14)),
-                    "snapshot_database_schemas": list(range(9, 14)), "snapshot_format_versions": [1],
+        "support": {"current_schema": 14, "normal_open_schemas": list(range(1, 15)),
+                    "snapshot_database_schemas": list(range(9, 15)), "snapshot_format_versions": [1],
                     "released_snapshot_schemas": [9, 11],
                     "exclusions": ["version0-initialization-only", "legacy-title-manual-conversion",
                                    "legacy-pending-manual-conversion", "future-schema-unsupported"],
                     "provenance_notes": ["Schema10 accepted intermediate definition; tagged releases emitted9/11.",
-                                         "Schemas12/13 have no release tag; released base plus pinned introducing SQL."]},
+                                         "Schemas12/13/14 have no release tag; released base plus pinned introducing SQL."]},
         "databases": databases, "snapshots": snapshots,
     }
     write(output / "manifest.json", json_bytes(manifest))
