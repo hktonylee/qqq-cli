@@ -1137,8 +1137,10 @@ fn compose_inner(
             } else {
                 (None, None, None, Vec::new(), false)
             };
-        let can_create_agent =
-            dashboard && target_id.is_some() && target_status.as_deref() == Some("new");
+        let can_create_agent = dashboard
+            && target_id.is_some()
+            && target_status.as_deref() == Some("new")
+            && !has_herdr_link;
         let has_herdr_action = has_herdr_link || can_create_agent;
         let buffer_footer = match &confirmation {
             Some(Confirmation::ExitBuffers { keys, index }) => {

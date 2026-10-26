@@ -306,8 +306,15 @@ print(json.dumps({"result": {"pane": pane}}))
         cli("edit", "2", "--description", "\n".join(f"Line{index:02}" for index in range(1, 21)))
 
     if scenario.startswith("handoff_"):
+        if scenario == "handoff_reopened":
+            cli("next", "--session", "previous-worker", "--filter", "id == 2",
+                "--harness-name", "codex", "--harness-session", "linked-agent",
+                "--orchestrator-name", "herdr", "--orchestrator-session", "cached:p1")
+            cli("edit", "2", "--complete", "--session", "previous-worker")
+            cli("edit", "2", "--reopen")
         with sqlite3.connect(Path(folder) / ".qqq/qqq.db") as connection:
-            connection.execute("UPDATE tasks SET status='error' WHERE id=2")
+            if not scenario.startswith("handoff_new") and scenario != "handoff_reopened":
+                connection.execute("UPDATE tasks SET status='error' WHERE id=2")
             if scenario.startswith("handoff_hint"):
                 connection.execute("UPDATE tasks SET status='error' WHERE id=1")
         if scenario == "handoff_stale_workspace_mouse":
@@ -406,11 +413,6 @@ print(json.dumps({"result": result}))
                 if scenario == "create_agent_config_alias":
                     with prompt_config.open("a") as config:
                         config.write("\n[alias]\ninvalid = 123\n")
-        if scenario == "create_agent_linked":
-            pane = {"pane_id": "previous:p1", "workspace_id": "previous", "tab_id": "previous:t1"}
-            with sqlite3.connect(Path(folder) / ".qqq/qqq.db") as connection:
-                connection.execute("INSERT INTO herdr_links(task_id,link_json) VALUES(2,?)", (
-                    json.dumps({"server": "named", "identity": {"agent": "codex", "kind": "id", "value": "previous"}, "pane": pane}),))
         if scenario.endswith("no_color"):
             env["NO_COLOR"] = "1"
         fake = Path(folder) / "herdr"
@@ -426,7 +428,7 @@ if args[:2] == ["--session", "created-server"]:
     args = args[2:]
 pane = {"pane_id": "wW:p1", "tab_id": "wW:t1", "workspace_id": "match", "cwd": str(root),
         "terminal_id": None if scenario == "create_agent_identity_error" else "created-terminal"}
-identity = {"agent": "codex", "kind": "id", "value": "created-session"} if scenario == "create_agent_linked" else None
+identity = {"agent": "codex", "kind": "id", "value": "created-session"} if scenario == "create_agent_reported_identity" else None
 agent_name = "claude" if scenario in ("create_agent_initial_env_tab", "create_agent_initial_env_workspace") else "codex"
 agent_pane = dict(pane, agent=agent_name,
                   agent_status="blocked" if scenario.startswith("create_agent_blocked") else "done",
@@ -885,8 +887,8 @@ print(json.dumps({"result": result}))
                 assert link["server"] == "created-server", link
                 assert link["identity"] == {
                     "agent": "claude" if scenario in ("create_agent_initial_env_tab", "create_agent_initial_env_workspace") else "codex",
-                    "kind": "id" if scenario == "create_agent_linked" else "terminal",
-                    "value": "created-session" if scenario == "create_agent_linked" else "created-terminal",
+                    "kind": "id" if scenario == "create_agent_reported_identity" else "terminal",
+                    "value": "created-session" if scenario == "create_agent_reported_identity" else "created-terminal",
                 }, link
                 assert cli("herdr", "find", "2")["pane_id"] == "wW:p1"
                 assert cli("show", "1")["herdr"] is None
@@ -2958,7 +2960,7 @@ print(json.dumps({"result": result}))
                 send(b"\x01Changed ")
                 wait_visible(lambda: editor_line().startswith("Changed Second")
                              and (visible.x, visible.y) == (8, editor_row() + 1))
-            if scenario == "handoff_filter":
+            if scenario in ("handoff_filter", "handoff_new_filter"):
                 send(CTRL_SLASH + b"first")
                 wait_visible(lambda: filter_text() == "Filter: first"
                              and (visible.x, visible.y) == (13, 0))
@@ -3006,7 +3008,7 @@ print(json.dumps({"result": result}))
             if scenario not in errors and scenario != "handoff_scroll":
                 assert opened.read_text() == "cooked"
                 assert b"\x1b[?1049l" in screen, "TUI terminal not restored before client"
-                if scenario == "handoff_filter":
+                if scenario in ("handoff_filter", "handoff_new_filter"):
                     assert filter_text() == "Filter: first"
                     send(b"\t")
                     wait_visible(lambda: (visible.x, visible.y) == (8, editor_row() + 1))

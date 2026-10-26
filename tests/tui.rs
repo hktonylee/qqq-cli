@@ -391,6 +391,13 @@ fn tui_dashboard_ctrl_h_initial_prompt_uses_configuration() {
 }
 
 #[test]
+fn tui_dashboard_ctrl_h_opens_linked_new_tasks() {
+    for name in ["handoff_new", "handoff_new_filter", "handoff_reopened"] {
+        dashboard_scenario(name);
+    }
+}
+
+#[test]
 fn tui_dashboard_ctrl_h_creates_queue_agents() {
     for name in [
         "create_agent_reuse",
@@ -414,7 +421,7 @@ fn tui_dashboard_ctrl_h_creates_queue_agents() {
         "create_agent_focus_error",
         "create_agent_attach_error",
         "create_agent_filter",
-        "create_agent_linked",
+        "create_agent_reported_identity",
         "create_agent_ctrl_c",
     ] {
         dashboard_scenario(name);
